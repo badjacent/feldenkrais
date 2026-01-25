@@ -94,3 +94,10 @@ cython_debug/
 
 # Project specific
 private_examples/
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/.terraform.lock.hcl
+terraform/*.zip

@@ -489,7 +489,7 @@ GROQ_API_KEY=...
 | Python runtime | 3.12 |
 | Lambda memory | 512MB |
 | Lambda timeout | 2 min |
-| Lambda concurrency | 1 (reserved) |
+| Lambda concurrency | Unrestricted (see note) |
 | Bucket naming | `feldenkrais-{env}` (e.g., `feldenkrais-dev`, `feldenkrais-prod`) |
 
 ### S3 Event Trigger
@@ -509,6 +509,17 @@ GROQ_API_KEY=...
 - logs:CreateLogStream
 - logs:PutLogEvents
 ```
+
+### Race Condition Handling (TODO)
+
+Lambda concurrency=1 would prevent race conditions when multiple S3 events trigger simultaneously, but requires sufficient account concurrency quota (min 10 unreserved).
+
+**Alternative approaches to implement:**
+- DynamoDB-based lock/semaphore
+- SQS FIFO queue with deduplication
+- Global semaphore pattern in Lambda
+
+For now, race conditions are possible if file + sidecar arrive near-simultaneously. Low risk for single-user system with manual uploads.
 
 ---
 
