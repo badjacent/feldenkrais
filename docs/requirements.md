@@ -478,6 +478,40 @@ GROQ_API_KEY=...
 
 ---
 
+## AWS Infrastructure
+
+### Decisions
+
+| Setting | Value |
+|---------|-------|
+| Region | us-east-1 |
+| IaC tool | Terraform |
+| Python runtime | 3.12 |
+| Lambda memory | 512MB |
+| Lambda timeout | 2 min |
+| Lambda concurrency | 1 (reserved) |
+| Bucket naming | `feldenkrais-{env}` (e.g., `feldenkrais-dev`, `feldenkrais-prod`) |
+
+### S3 Event Trigger
+
+- Trigger on: `s3:ObjectCreated:*`
+- Prefix filter: `staging/`
+- Triggers loader Lambda for any file (including `.json` sidecars)
+
+### IAM (Lambda Execution Role)
+
+```
+- s3:GetObject      (staging/*, archive/*, db/*)
+- s3:PutObject      (archive/*, errors/*, db/*)
+- s3:DeleteObject   (staging/*)
+- s3:ListBucket     (staging/*)
+- logs:CreateLogGroup
+- logs:CreateLogStream
+- logs:PutLogEvents
+```
+
+---
+
 ## Open Questions
 
 1. **Chunking strategy**: By character count, sentences, paragraphs?
