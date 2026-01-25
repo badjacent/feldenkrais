@@ -116,7 +116,8 @@ class TestTranscriptionIntegration:
 
         assert url is not None
         assert "test-presigned.wav" in url
-        assert "X-Amz-Signature" in url
+        # Check for signature (v2 uses "Signature=", v4 uses "X-Amz-Signature=")
+        assert "Signature" in url or "X-Amz-Signature" in url
 
     def test_untranscribed_documents_query(self, db, storage, test_audio_content):
         """Test querying for documents needing transcription."""
