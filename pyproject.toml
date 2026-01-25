@@ -7,6 +7,7 @@ requires-python = ">=3.11"
 dependencies = [
     "beautifulsoup4>=4.14.3",
     "boto3>=1.42.34",
+    "groq>=1.0.0",
     "requests>=2.32.5",
 ]
 

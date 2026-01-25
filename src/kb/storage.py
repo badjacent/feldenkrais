@@ -107,3 +107,11 @@ class Storage:
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
             logger.error(f"Failed to parse sidecar {key}: {e}")
             return None
+
+    def generate_presigned_url(self, key: str, expiry_seconds: int = 3600) -> str:
+        """Generate a pre-signed URL for an object."""
+        return self.s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": self.bucket, "Key": key},
+            ExpiresIn=expiry_seconds,
+        )
