@@ -6,6 +6,7 @@ Triggered by S3 events on staging/*.
 
 import json
 import logging
+import sqlite3
 from pathlib import Path
 from typing import Optional
 from uuid import uuid4
@@ -88,6 +89,24 @@ def process_file(
     type_id = sidecar.get("type_id", 1)
     tags = json.dumps(sidecar.get("tags", []))
 
+    # Preserve metadata from sidecar
+    metadata = {}
+    if sidecar.get("chunk_metadata"):
+        metadata["chunk"] = sidecar["chunk_metadata"]
+    if sidecar.get("scraper_metadata"):
+        metadata["scraper"] = sidecar["scraper_metadata"]
+    if sidecar.get("youtube_metadata"):
+        metadata["youtube"] = sidecar["youtube_metadata"]
+    metadata_json = json.dumps(metadata) if metadata else None
+
+    # Check for duplicate document
+    if db.document_exists(title, source_url):
+        logger.info(f"Skipping duplicate: {title}")
+        # Clean up staging files
+        storage.delete_object(main_key)
+        storage.delete_object(sidecar_key)
+        return {"status": "skipped", "reason": "duplicate"}
+
     # Generate document ID and archive key
     doc_id = str(uuid4())
     extension = get_file_extension(main_key)
@@ -107,6 +126,7 @@ def process_file(
             type_id=type_id,
             source_url=source_url,
             tags=tags,
+            metadata=metadata_json,
         )
 
         # Delete from staging
@@ -120,6 +140,15 @@ def process_file(
             "document_id": doc_id,
             "archive_key": archive_key,
         }
+
+    except sqlite3.IntegrityError as e:
+        # Duplicate detected by UNIQUE constraint - another Lambda already created this document
+        logger.info(f"Duplicate detected (race condition): {title}")
+        # Clean up - delete staged files and the archive copy we made
+        storage.delete_object(main_key)
+        storage.delete_object(sidecar_key)
+        storage.delete_object(archive_key)
+        return {"status": "skipped", "reason": "duplicate_race"}
 
     except Exception as e:
         logger.error(f"Failed to process {main_key}: {e}")
@@ -138,6 +167,45 @@ def process_file(
             except Exception as cleanup_error:
                 logger.error(f"Failed to move to errors: {cleanup_error}")
             return {"status": "error", "reason": str(e)}
+
+
+LOCK_KEY = "db/loader.lock"
+LOCK_TIMEOUT_SECONDS = 300  # Lock expires after 5 minutes (auto-release if Lambda crashes)
+
+
+def acquire_lock(storage: Storage) -> bool:
+    """
+    Try to acquire the processing lock.
+
+    Returns True if lock acquired, False if another process holds it.
+    Stale locks (older than LOCK_TIMEOUT_SECONDS) are automatically released.
+    """
+    import time
+
+    # Check if lock exists and is not stale
+    if storage.object_exists(LOCK_KEY):
+        lock_age = storage.get_object_age_seconds(LOCK_KEY)
+        if lock_age is not None and lock_age < LOCK_TIMEOUT_SECONDS:
+            logger.info(f"Lock held by another process (age: {lock_age:.0f}s)")
+            return False
+        else:
+            logger.info(f"Releasing stale lock (age: {lock_age}s)")
+            storage.delete_object(LOCK_KEY)
+
+    # Create lock with timestamp
+    lock_content = json.dumps({"timestamp": time.time()}).encode()
+    storage.put_object(LOCK_KEY, lock_content)
+    logger.info("Lock acquired")
+    return True
+
+
+def release_lock(storage: Storage):
+    """Release the processing lock."""
+    try:
+        storage.delete_object(LOCK_KEY)
+        logger.info("Lock released")
+    except Exception as e:
+        logger.error(f"Failed to release lock: {e}")
 
 
 def sync_db_from_s3(storage: Storage, db_path: str):
@@ -164,52 +232,65 @@ def handler(event, context):
     config = Config.from_env()
     storage = Storage(config.bucket)
 
-    # Sync DB from S3
-    sync_db_from_s3(storage, config.db_path)
+    # Try to acquire lock - if another Lambda is processing, skip
+    if not acquire_lock(storage):
+        logger.info("Another Lambda is processing, skipping")
+        return {
+            "statusCode": 200,
+            "body": json.dumps({"status": "skipped", "reason": "lock_held"}),
+        }
 
-    # Initialize DB
-    db = Database(config.db_path)
-    db.initialize()
+    try:
+        # Sync DB from S3
+        sync_db_from_s3(storage, config.db_path)
 
-    # Build set of main files to process from the event
-    main_files = set()
-    for record in event.get("Records", []):
-        key = record["s3"]["object"]["key"]
-        main_key = get_main_file_key(key)
-        # Skip folder markers
-        if not main_key.endswith("/"):
-            main_files.add(main_key)
+        # Initialize DB
+        db = Database(config.db_path)
+        db.initialize()
 
-    logger.info(f"Files to process: {main_files}")
+        # List ALL files in staging/ (not just from the event)
+        # This ensures we process everything when we have the lock
+        staging_objects = storage.list_objects("staging/")
+        main_files = set()
+        for obj in staging_objects:
+            key = obj["key"]
+            # Skip sidecars (we'll find them via main file)
+            if not key.endswith(".json"):
+                main_files.add(key)
 
-    # Process each file
-    results = []
-    for main_key in main_files:
-        result = process_file(
-            storage=storage,
-            db=db,
-            main_key=main_key,
-            grace_period_seconds=config.grace_period_seconds,
-        )
-        result["staging_key"] = main_key
-        results.append(result)
+        logger.info(f"Files to process from staging/: {len(main_files)}")
 
-    # Sync DB back to S3
-    db.close()
-    sync_db_to_s3(storage, config.db_path)
+        # Process each file
+        results = []
+        for main_key in main_files:
+            result = process_file(
+                storage=storage,
+                db=db,
+                main_key=main_key,
+                grace_period_seconds=config.grace_period_seconds,
+            )
+            result["staging_key"] = main_key
+            results.append(result)
 
-    # Summarize results
-    loaded = [r for r in results if r["status"] == "loaded"]
-    skipped = [r for r in results if r["status"] == "skipped"]
-    errors = [r for r in results if r["status"] == "error"]
+        # Sync DB back to S3
+        db.close()
+        sync_db_to_s3(storage, config.db_path)
 
-    logger.info(f"Results: {len(loaded)} loaded, {len(skipped)} skipped, {len(errors)} errors")
+        # Summarize results
+        loaded = [r for r in results if r["status"] == "loaded"]
+        skipped = [r for r in results if r["status"] == "skipped"]
+        errors = [r for r in results if r["status"] == "error"]
 
-    return {
-        "statusCode": 200,
-        "body": json.dumps({
-            "loaded": loaded,
-            "skipped": skipped,
-            "errors": errors,
-        }),
-    }
+        logger.info(f"Results: {len(loaded)} loaded, {len(skipped)} skipped, {len(errors)} errors")
+
+        return {
+            "statusCode": 200,
+            "body": json.dumps({
+                "loaded": loaded,
+                "skipped": skipped,
+                "errors": errors,
+            }),
+        }
+
+    finally:
+        release_lock(storage)

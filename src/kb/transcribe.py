@@ -2,10 +2,12 @@
 Transcription module: converts audio documents to text using Groq's Whisper API.
 
 Uses the Batch API for cost savings (50% discount).
+Handles large files by chunking them locally before batch submission.
 """
 
 import json
 import logging
+import shutil
 import tempfile
 import time
 from dataclasses import dataclass
@@ -38,6 +40,10 @@ DEFAULT_MAX_RETRIES = 3
 DEFAULT_COMPLETION_WINDOW = "24h"
 DEFAULT_PRESIGNED_URL_EXPIRY = 86400  # 24 hours
 
+# Lock configuration
+LOCK_KEY = "db/transcription.lock"
+LOCK_TIMEOUT_SECONDS = 960  # 16 minutes (longer than Lambda timeout of 15 min)
+
 
 @dataclass
 class TranscriptionConfig:
@@ -46,6 +52,36 @@ class TranscriptionConfig:
     max_retries: int = DEFAULT_MAX_RETRIES
     completion_window: str = DEFAULT_COMPLETION_WINDOW
     presigned_url_expiry: int = DEFAULT_PRESIGNED_URL_EXPIRY
+    max_documents_per_batch: int = 10  # Limit documents per Lambda run to avoid timeout
+
+
+def acquire_lock(storage: Storage) -> bool:
+    """
+    Try to acquire the transcription processing lock.
+    Returns True if lock acquired, False if another process holds it.
+    """
+    if storage.object_exists(LOCK_KEY):
+        lock_age = storage.get_object_age_seconds(LOCK_KEY)
+        if lock_age is not None and lock_age < LOCK_TIMEOUT_SECONDS:
+            logger.info(f"Lock held by another process (age: {lock_age:.0f}s)")
+            return False
+        else:
+            logger.info(f"Releasing stale lock (age: {lock_age}s)")
+            storage.delete_object(LOCK_KEY)
+
+    lock_content = json.dumps({"timestamp": time.time()}).encode()
+    storage.put_object(LOCK_KEY, lock_content)
+    logger.info("Transcription lock acquired")
+    return True
+
+
+def release_lock(storage: Storage):
+    """Release the transcription processing lock."""
+    try:
+        storage.delete_object(LOCK_KEY)
+        logger.info("Transcription lock released")
+    except Exception as e:
+        logger.error(f"Failed to release lock: {e}")
 
 
 def create_batch_request(
@@ -105,6 +141,9 @@ class TranscriptionService:
         """
         Create a transcription batch for documents.
 
+        Downloads files, chunks if needed (>20MB), uploads chunks to temp S3,
+        and submits batch with pre-signed URLs.
+
         If document_ids is None, processes all untranscribed documents.
         Returns the Groq batch ID, or None if no documents to process.
         """
@@ -122,95 +161,132 @@ class TranscriptionService:
             logger.info("No documents to transcribe")
             return None
 
+        # Limit documents per batch to avoid Lambda timeout
+        if len(documents) > self.config.max_documents_per_batch:
+            logger.info(f"Limiting batch to {self.config.max_documents_per_batch} of {len(documents)} documents")
+            documents = documents[:self.config.max_documents_per_batch]
+
         logger.info(f"Creating batch for {len(documents)} documents")
 
-        # Generate pre-signed URLs and create batch requests
+        # Process each document: download, chunk if needed, upload chunks
         requests = []
-        jobs_to_create = []
-
-        for doc in documents:
-            s3_key = doc["s3_key"]
-            doc_id = doc["id"]
-
-            # Generate pre-signed URL
-            presigned_url = self.storage.generate_presigned_url(
-                s3_key,
-                expiry_seconds=self.config.presigned_url_expiry,
-            )
-
-            # Check if there's a failed job to update vs create new
-            failed_job = self.db.get_failed_transcription_job(doc_id)
-
-            requests.append(create_batch_request(
-                document_id=doc_id,
-                audio_url=presigned_url,
-                model=self.config.model,
-            ))
-
-            jobs_to_create.append({
-                "document_id": doc_id,
-                "failed_job": failed_job,
-            })
-
-        # Create JSONL batch file
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            suffix=".jsonl",
-            delete=False
-        ) as f:
-            for req in requests:
-                f.write(json.dumps(req) + "\n")
-            batch_file_path = f.name
+        jobs_created = []
+        temp_dirs = []
 
         try:
-            # Upload batch file to Groq
-            logger.info("Uploading batch file to Groq")
-            with open(batch_file_path, "rb") as f:
-                file_response = self.groq.files.create(
-                    file=f,
-                    purpose="batch",
+            for doc in documents:
+                s3_key = doc["s3_key"]
+                doc_id = doc["id"]
+
+                # Create temp directory for this document
+                temp_dir = tempfile.mkdtemp(prefix=f"transcribe_{doc_id}_")
+                temp_dirs.append(temp_dir)
+
+                # Download file
+                extension = Path(s3_key).suffix or ".mp3"
+                local_path = Path(temp_dir) / f"original{extension}"
+                logger.info(f"Downloading {s3_key} to {local_path}")
+                self.storage.download_file(s3_key, str(local_path))
+
+                # Chunk if needed
+                chunks = prepare_audio_for_transcription(
+                    str(local_path),
+                    output_dir=str(Path(temp_dir) / "chunks"),
                 )
-            file_id = file_response.id
-            logger.info(f"Uploaded file: {file_id}")
+                total_chunks = len(chunks)
+                logger.info(f"Document {doc_id}: {total_chunks} chunk(s)")
 
-            # Create batch job
-            logger.info("Creating batch job")
-            batch_response = self.groq.batches.create(
-                input_file_id=file_id,
-                endpoint="/v1/audio/transcriptions",
-                completion_window=self.config.completion_window,
-            )
-            batch_id = batch_response.id
-            logger.info(f"Created batch: {batch_id}")
+                # Upload chunks to temp S3 location and create jobs
+                for chunk in chunks:
+                    chunk_filename = Path(chunk.path).name
+                    chunk_s3_key = f"temp/transcription/{doc_id}/{chunk_filename}"
 
-            # Create or update transcription jobs in DB
-            for job_info in jobs_to_create:
-                doc_id = job_info["document_id"]
-                failed_job = job_info["failed_job"]
+                    # Upload chunk to S3
+                    with open(chunk.path, "rb") as f:
+                        self.storage.put_object(chunk_s3_key, f.read())
+                    logger.info(f"Uploaded chunk to {chunk_s3_key}")
 
-                if failed_job:
-                    # Update existing failed job
-                    self.db.update_transcription_job(
-                        job_id=failed_job["id"],
-                        status="pending",
-                        batch_id=batch_id,
-                        error=None,
-                        increment_attempts=True,
-                    )
-                    logger.info(f"Updated job {failed_job['id']} for document {doc_id}")
-                else:
-                    # Create new job
+                    # Create transcription job
                     job_id = self.db.create_transcription_job(
                         document_id=doc_id,
+                        chunk_index=chunk.index,
+                        chunk_offset_seconds=chunk.offset_seconds,
+                        total_chunks=total_chunks,
+                    )
+
+                    # Generate pre-signed URL
+                    presigned_url = self.storage.generate_presigned_url(
+                        chunk_s3_key,
+                        expiry_seconds=self.config.presigned_url_expiry,
+                    )
+
+                    # Create batch request using job_id as custom_id
+                    requests.append(create_batch_request(
+                        document_id=job_id,  # Use job_id to identify chunk
+                        audio_url=presigned_url,
+                        model=self.config.model,
+                    ))
+
+                    jobs_created.append({
+                        "job_id": job_id,
+                        "document_id": doc_id,
+                        "chunk_s3_key": chunk_s3_key,
+                    })
+
+            if not requests:
+                logger.info("No requests to submit")
+                return None
+
+            # Create JSONL batch file
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                suffix=".jsonl",
+                delete=False
+            ) as f:
+                for req in requests:
+                    f.write(json.dumps(req) + "\n")
+                batch_file_path = f.name
+
+            try:
+                # Upload batch file to Groq
+                logger.info(f"Uploading batch file to Groq ({len(requests)} requests)")
+                with open(batch_file_path, "rb") as f:
+                    file_response = self.groq.files.create(
+                        file=f,
+                        purpose="batch",
+                    )
+                file_id = file_response.id
+                logger.info(f"Uploaded file: {file_id}")
+
+                # Create batch job
+                logger.info("Creating batch job")
+                batch_response = self.groq.batches.create(
+                    input_file_id=file_id,
+                    endpoint="/v1/audio/transcriptions",
+                    completion_window=self.config.completion_window,
+                )
+                batch_id = batch_response.id
+                logger.info(f"Created batch: {batch_id}")
+
+                # Update all jobs with batch_id
+                for job_info in jobs_created:
+                    self.db.update_transcription_job(
+                        job_id=job_info["job_id"],
                         batch_id=batch_id,
                     )
-                    logger.info(f"Created job {job_id} for document {doc_id}")
 
-            return batch_id
+                return batch_id
+
+            finally:
+                Path(batch_file_path).unlink(missing_ok=True)
 
         finally:
-            # Clean up temp file
-            Path(batch_file_path).unlink(missing_ok=True)
+            # Clean up temp directories
+            for temp_dir in temp_dirs:
+                try:
+                    shutil.rmtree(temp_dir)
+                except Exception as e:
+                    logger.warning(f"Failed to clean up {temp_dir}: {e}")
 
     def check_batch_status(self, batch_id: str) -> dict:
         """Check the status of a batch."""
@@ -234,6 +310,9 @@ class TranscriptionService:
         """
         Process results from a completed batch.
 
+        Handles chunk reassembly: stores individual chunk results, then
+        reassembles when all chunks for a document are complete.
+
         Returns summary of processed results.
         """
         # Get batch status
@@ -247,8 +326,9 @@ class TranscriptionService:
 
         results = {
             "batch_id": batch_id,
-            "completed": [],
-            "failed": [],
+            "jobs_completed": [],
+            "jobs_failed": [],
+            "documents_completed": [],
         }
 
         # Process successful results
@@ -259,53 +339,38 @@ class TranscriptionService:
                     continue
 
                 result = json.loads(line)
-                custom_id = result["custom_id"]  # This is our document_id
+                job_id = result["custom_id"]  # This is our job_id (not document_id)
                 response = result.get("response", {})
 
                 if response.get("status_code") == 200:
                     body = response.get("body", {})
 
-                    # Create analysis record
-                    analysis_data = {
-                        "text": body.get("text", ""),
-                        "segments": body.get("segments", []),
-                        "language": body.get("language"),
-                        "model": self.config.model,
-                        "batch_id": batch_id,
-                        "transcribed_at": datetime.utcnow().isoformat(),
-                    }
-
-                    self.db.create_analysis(
-                        document_id=custom_id,
-                        type_id=TRANSCRIPTION_TYPE_ID,
-                        data=json.dumps(analysis_data),
+                    # Update job with result
+                    self.db.update_transcription_job(
+                        job_id=job_id,
+                        status="completed",
+                        result_data=json.dumps(body),
                     )
 
-                    # Update job status
-                    jobs = self.db.get_transcription_jobs_by_batch(batch_id)
-                    for job in jobs:
-                        if job["document_id"] == custom_id:
-                            self.db.update_transcription_job(
-                                job_id=job["id"],
-                                status="completed",
-                                result_data=json.dumps(body),
-                            )
-                            break
-
-                    results["completed"].append({
-                        "document_id": custom_id,
+                    results["jobs_completed"].append({
+                        "job_id": job_id,
                         "text_length": len(body.get("text", "")),
                     })
-                    logger.info(f"Processed transcription for document {custom_id}")
+                    logger.info(f"Job {job_id} completed")
 
                 else:
                     # API returned error
                     error_msg = response.get("body", {}).get("error", {}).get("message", "Unknown error")
-                    self._mark_job_failed(batch_id, custom_id, error_msg)
-                    results["failed"].append({
-                        "document_id": custom_id,
+                    self.db.update_transcription_job(
+                        job_id=job_id,
+                        status="failed",
+                        error=error_msg,
+                    )
+                    results["jobs_failed"].append({
+                        "job_id": job_id,
                         "error": error_msg,
                     })
+                    logger.warning(f"Job {job_id} failed: {error_msg}")
 
         # Process error file if present
         if batch.error_file_id:
@@ -315,30 +380,151 @@ class TranscriptionService:
                     continue
 
                 error_result = json.loads(line)
-                custom_id = error_result.get("custom_id")
+                job_id = error_result.get("custom_id")
                 error_msg = error_result.get("error", {}).get("message", "Unknown error")
 
-                if custom_id:
-                    self._mark_job_failed(batch_id, custom_id, error_msg)
-                    results["failed"].append({
-                        "document_id": custom_id,
+                if job_id:
+                    self.db.update_transcription_job(
+                        job_id=job_id,
+                        status="failed",
+                        error=error_msg,
+                    )
+                    results["jobs_failed"].append({
+                        "job_id": job_id,
                         "error": error_msg,
                     })
 
+        # Check for documents where all chunks are complete and reassemble
+        completed_docs = self._reassemble_completed_documents(batch_id)
+        results["documents_completed"] = completed_docs
+
+        # Clean up temp chunks from S3
+        self._cleanup_temp_chunks(batch_id)
+
         return results
 
-    def _mark_job_failed(self, batch_id: str, document_id: str, error: str):
-        """Mark a transcription job as failed."""
+    def _reassemble_completed_documents(self, batch_id: str) -> list[dict]:
+        """
+        Find documents where all chunks are complete and create analysis records.
+
+        Returns list of completed documents.
+        """
         jobs = self.db.get_transcription_jobs_by_batch(batch_id)
+        if not jobs:
+            return []
+
+        # Group jobs by document_id
+        doc_jobs = {}
         for job in jobs:
-            if job["document_id"] == document_id:
-                self.db.update_transcription_job(
-                    job_id=job["id"],
-                    status="failed",
-                    error=error,
-                )
-                logger.warning(f"Job failed for document {document_id}: {error}")
-                break
+            doc_id = job["document_id"]
+            if doc_id not in doc_jobs:
+                doc_jobs[doc_id] = []
+            doc_jobs[doc_id].append(job)
+
+        completed_docs = []
+
+        for doc_id, doc_job_list in doc_jobs.items():
+            # Check if document already has an analysis
+            existing = self.db.get_analysis(doc_id, TRANSCRIPTION_TYPE_ID)
+            if existing:
+                logger.info(f"Document {doc_id} already has transcription, skipping")
+                continue
+
+            # Check if all jobs are complete
+            all_complete = all(j["status"] == "completed" for j in doc_job_list)
+            any_failed = any(j["status"] == "failed" for j in doc_job_list)
+
+            if any_failed:
+                logger.warning(f"Document {doc_id} has failed chunks, cannot complete")
+                continue
+
+            if not all_complete:
+                logger.info(f"Document {doc_id} still has pending chunks")
+                continue
+
+            # All chunks complete - reassemble
+            total_chunks = doc_job_list[0].get("total_chunks") or len(doc_job_list)
+
+            if len(doc_job_list) != total_chunks:
+                logger.warning(f"Document {doc_id} has {len(doc_job_list)} jobs but expected {total_chunks}")
+                continue
+
+            # Sort by chunk_index
+            doc_job_list.sort(key=lambda j: j.get("chunk_index") or 0)
+
+            # Extract chunk results and offsets
+            chunk_results = []
+            chunk_offsets = []
+
+            for job in doc_job_list:
+                result_data = job.get("result_data")
+                if not result_data:
+                    logger.error(f"Job {job['id']} has no result_data")
+                    continue
+
+                body = json.loads(result_data)
+                chunk_results.append({
+                    "text": body.get("text", ""),
+                    "segments": body.get("segments", []),
+                })
+                chunk_offsets.append(job.get("chunk_offset_seconds") or 0)
+
+            if len(chunk_results) != total_chunks:
+                logger.error(f"Document {doc_id} missing chunk results")
+                continue
+
+            # Reassemble
+            if total_chunks > 1:
+                combined = reassemble_transcriptions(chunk_results, chunk_offsets)
+                text = combined["text"]
+                segments = combined["segments"]
+            else:
+                text = chunk_results[0]["text"]
+                segments = chunk_results[0]["segments"]
+
+            # Create analysis record
+            analysis_data = {
+                "text": text,
+                "segments": segments,
+                "language": "en",  # TODO: get from first chunk
+                "model": self.config.model,
+                "batch_id": batch_id,
+                "chunk_count": total_chunks,
+                "transcribed_at": datetime.utcnow().isoformat(),
+            }
+
+            self.db.create_analysis(
+                document_id=doc_id,
+                type_id=TRANSCRIPTION_TYPE_ID,
+                data=json.dumps(analysis_data),
+            )
+
+            logger.info(f"Created transcription for document {doc_id} ({total_chunks} chunks)")
+            completed_docs.append({
+                "document_id": doc_id,
+                "text_length": len(text),
+                "chunk_count": total_chunks,
+            })
+
+        return completed_docs
+
+    def _cleanup_temp_chunks(self, batch_id: str):
+        """Clean up temporary chunk files from S3 after processing."""
+        jobs = self.db.get_transcription_jobs_by_batch(batch_id)
+
+        # Get unique document IDs
+        doc_ids = set(job["document_id"] for job in jobs)
+
+        for doc_id in doc_ids:
+            temp_prefix = f"temp/transcription/{doc_id}/"
+            try:
+                # List and delete temp files
+                temp_objects = self.storage.list_objects(temp_prefix)
+                for obj in temp_objects:
+                    self.storage.delete_object(obj["key"])
+                    logger.info(f"Deleted temp file: {obj['key']}")
+            except Exception as e:
+                logger.warning(f"Failed to clean up temp chunks for {doc_id}: {e}")
 
     def poll_and_process(self, batch_id: str, timeout: int = 3600, interval: int = 30) -> dict:
         """
@@ -388,7 +574,7 @@ class TranscriptionService:
                     result = self.process_batch_results(batch_id)
                     result["batch_id"] = batch_id
                     results.append(result)
-                    logger.info(f"Processed batch {batch_id}: {len(result.get('completed', []))} completed, {len(result.get('failed', []))} failed")
+                    logger.info(f"Processed batch {batch_id}: {len(result.get('jobs_completed', []))} jobs completed, {len(result.get('documents_completed', []))} documents assembled")
 
             except Exception as e:
                 logger.error(f"Error checking batch {batch_id}: {e}")
@@ -491,22 +677,29 @@ def handler(event, context):
     """Lambda handler for transcription operations."""
     logger.info(f"Received event: {json.dumps(event)}")
 
-    # Default to create_batch (uses batch API - files should be pre-chunked by scraper)
-    # Use transcribe_pending for sync API with runtime chunking (fallback for large files)
+    # Default to create_batch (uses batch API - handles chunking internally)
     action = event.get("action", "create_batch")
     config = Config.from_env()
-
-    # Sync DB from S3
     storage = Storage(config.bucket)
-    from loader import sync_db_from_s3, sync_db_to_s3
-    sync_db_from_s3(storage, config.db_path)
 
-    db = Database(config.db_path)
-    db.initialize()
-
-    service = TranscriptionService(db=db, storage=storage)
+    # Try to acquire lock - if another Lambda is processing, skip
+    if not acquire_lock(storage):
+        logger.info("Another Lambda is processing, skipping")
+        return {
+            "statusCode": 200,
+            "body": json.dumps({"status": "skipped", "reason": "lock_held"}),
+        }
 
     try:
+        # Sync DB from S3
+        from loader import sync_db_from_s3, sync_db_to_s3
+        sync_db_from_s3(storage, config.db_path)
+
+        db = Database(config.db_path)
+        db.initialize()
+
+        service = TranscriptionService(db=db, storage=storage)
+
         if action == "create_batch":
             # First, process any completed batches
             completed_results = service.process_completed_batches()
@@ -537,34 +730,19 @@ def handler(event, context):
                 return {"statusCode": 400, "body": json.dumps({"error": "document_id required"})}
             result = service.transcribe_single(document_id)
 
-        elif action == "transcribe_pending":
-            # Transcribe all pending documents (used by scheduled trigger)
-            max_docs = event.get("max_docs", 5)  # Limit per invocation
-            docs = db.get_untranscribed_documents()[:max_docs]
-            results = []
-            for doc in docs:
-                try:
-                    r = service.transcribe_single(doc["id"])
-                    results.append(r)
-                except Exception as e:
-                    logger.error(f"Failed to transcribe {doc['id']}: {e}")
-                    results.append({"document_id": doc["id"], "error": str(e)})
-            result = {"action": "transcribe_pending", "processed": len(results), "results": results}
-
         else:
-            # Default action for scheduled events: transcribe pending
+            # Default action for scheduled events: use batch API
             if "source" in event and event["source"] == "aws.events":
-                max_docs = 5
-                docs = db.get_untranscribed_documents()[:max_docs]
-                results = []
-                for doc in docs:
-                    try:
-                        r = service.transcribe_single(doc["id"])
-                        results.append(r)
-                    except Exception as e:
-                        logger.error(f"Failed to transcribe {doc['id']}: {e}")
-                        results.append({"document_id": doc["id"], "error": str(e)})
-                result = {"action": "transcribe_pending", "processed": len(results), "results": results}
+                # First, process any completed batches
+                completed_results = service.process_completed_batches()
+
+                # Then create a new batch if there are untranscribed documents
+                batch_id = service.create_batch()
+                result = {
+                    "action": "scheduled_batch",
+                    "batch_id": batch_id,
+                    "completed_batches": completed_results,
+                }
             else:
                 return {"statusCode": 400, "body": json.dumps({"error": f"Unknown action: {action}"})}
 
@@ -576,8 +754,10 @@ def handler(event, context):
 
     except Exception as e:
         logger.error(f"Error: {e}")
-        db.close()
         return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
+
+    finally:
+        release_lock(storage)
 
 
 if __name__ == "__main__":

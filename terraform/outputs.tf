@@ -32,3 +32,13 @@ output "scraper_lambda_arn" {
   description = "Scraper Lambda function ARN"
   value       = aws_lambda_function.scraper.arn
 }
+
+output "youtube_lambda_name" {
+  description = "YouTube importer Lambda function name"
+  value       = length(aws_lambda_function.youtube) > 0 ? aws_lambda_function.youtube[0].function_name : null
+}
+
+output "youtube_lambda_arn" {
+  description = "YouTube importer Lambda function ARN"
+  value       = length(aws_lambda_function.youtube) > 0 ? aws_lambda_function.youtube[0].arn : null
+}

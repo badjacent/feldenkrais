@@ -132,8 +132,8 @@ resource "aws_lambda_function" "loader" {
   memory_size      = 512
 
   # Note: reserved_concurrent_executions = 1 would prevent race conditions,
-  # but requires sufficient account concurrency quota. Removed for now.
-  # reserved_concurrent_executions = 1
+  # but requires sufficient account concurrency quota.
+  # Instead, we use a UNIQUE constraint in the database.
 
   environment {
     variables = {
@@ -166,6 +166,27 @@ resource "aws_s3_bucket_notification" "staging_trigger" {
   }
 
   depends_on = [aws_lambda_permission.allow_s3]
+}
+
+# Scheduled trigger to process any remaining files in staging/
+resource "aws_cloudwatch_event_rule" "loader_schedule" {
+  name                = "feldenkrais-loader-${var.environment}"
+  description         = "Trigger loader Lambda periodically to process remaining files"
+  schedule_expression = "rate(1 minute)"
+}
+
+resource "aws_cloudwatch_event_target" "loader_target" {
+  rule      = aws_cloudwatch_event_rule.loader_schedule.name
+  target_id = "loader"
+  arn       = aws_lambda_function.loader.arn
+}
+
+resource "aws_lambda_permission" "allow_eventbridge_loader" {
+  statement_id  = "AllowEventBridgeInvokeLoader"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.loader.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.loader_schedule.arn
 }
 
 # -----------------------------------------------------------------------------
@@ -365,4 +386,119 @@ resource "aws_lambda_function" "scraper" {
       PATH      = "/opt/bin:/var/lang/bin:/usr/local/bin:/usr/bin:/bin"
     }
   }
+}
+
+# -----------------------------------------------------------------------------
+# YouTube Importer Lambda
+# -----------------------------------------------------------------------------
+
+resource "aws_iam_role" "youtube_lambda" {
+  name = "feldenkrais-youtube-${var.environment}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "youtube_lambda_s3" {
+  name = "s3-access"
+  role = aws_iam_role.youtube_lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          aws_s3_bucket.main.arn,
+          "${aws_s3_bucket.main.arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "youtube_lambda_logs" {
+  role       = aws_iam_role.youtube_lambda.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+data "archive_file" "youtube_lambda" {
+  type        = "zip"
+  source_dir  = "${path.module}/../src/kb"
+  output_path = "${path.module}/lambda_youtube.zip"
+}
+
+resource "aws_lambda_function" "youtube" {
+  count = var.groq_api_key != "" ? 1 : 0  # Reuse same condition as transcription
+
+  filename         = data.archive_file.youtube_lambda.output_path
+  function_name    = "feldenkrais-youtube-${var.environment}"
+  role             = aws_iam_role.youtube_lambda.arn
+  handler          = "youtube.handler"
+  source_code_hash = data.archive_file.youtube_lambda.output_base64sha256
+  runtime          = "python3.12"
+  timeout          = 900  # 15 minutes max for large video downloads
+  memory_size      = 1024
+
+  # Use Python deps layer (includes yt-dlp) and ffmpeg for audio extraction
+  layers = compact([
+    length(aws_lambda_layer_version.python_deps) > 0 ? aws_lambda_layer_version.python_deps[0].arn : null,
+    var.ffmpeg_layer_arn != "" ? var.ffmpeg_layer_arn : null
+  ])
+
+  environment {
+    variables = {
+      KB_BUCKET = aws_s3_bucket.main.id
+      KB_ENV    = var.environment
+      PATH      = "/opt/bin:/var/lang/bin:/usr/local/bin:/usr/bin:/bin"
+    }
+  }
+}
+
+# EventBridge rule to process YouTube queue periodically
+resource "aws_cloudwatch_event_rule" "youtube_schedule" {
+  count = var.groq_api_key != "" ? 1 : 0
+
+  name                = "feldenkrais-youtube-${var.environment}"
+  description         = "Trigger YouTube importer Lambda periodically to process queue"
+  schedule_expression = "rate(5 minutes)"
+}
+
+resource "aws_cloudwatch_event_target" "youtube_target" {
+  count = var.groq_api_key != "" ? 1 : 0
+
+  rule      = aws_cloudwatch_event_rule.youtube_schedule[0].name
+  target_id = "youtube"
+  arn       = aws_lambda_function.youtube[0].arn
+
+  input = jsonencode({
+    action = "process"
+    limit  = 1
+  })
+}
+
+resource "aws_lambda_permission" "allow_eventbridge_youtube" {
+  count = var.groq_api_key != "" ? 1 : 0
+
+  statement_id  = "AllowEventBridgeInvokeYouTube"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.youtube[0].function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.youtube_schedule[0].arn
 }
