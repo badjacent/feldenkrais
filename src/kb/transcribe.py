@@ -19,10 +19,12 @@ try:
     from config import Config
     from database import Database
     from storage import Storage
+    from audio import prepare_audio_for_transcription, reassemble_transcriptions
 except ImportError:
     from .config import Config
     from .database import Database
     from .storage import Storage
+    from .audio import prepare_audio_for_transcription, reassemble_transcriptions
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -366,50 +368,91 @@ class TranscriptionService:
         """
         Transcribe a single document synchronously (for testing).
 
-        Uses the sync API instead of batch.
+        Uses the sync API with chunking for large files.
         """
         doc = self.db.get_document(document_id)
         if not doc:
             return {"error": "Document not found"}
 
-        # Generate pre-signed URL
-        presigned_url = self.storage.generate_presigned_url(
-            doc["s3_key"],
-            expiry_seconds=3600,
-        )
+        s3_key = doc["s3_key"]
+        logger.info(f"Transcribing document {document_id} ({s3_key})")
 
-        logger.info(f"Transcribing document {document_id}")
+        # Download file from S3
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+            local_path = f.name
 
-        # Call sync API
-        response = self.groq.audio.transcriptions.create(
-            model=self.config.model,
-            url=presigned_url,
-            response_format="verbose_json",
-            language="en",
-        )
+        try:
+            self.storage.download_file(s3_key, local_path)
+            file_size = Path(local_path).stat().st_size
+            logger.info(f"Downloaded {file_size} bytes to {local_path}")
 
-        # Create analysis record
-        analysis_data = {
-            "text": response.text,
-            "segments": [s.model_dump() for s in (response.segments or [])],
-            "language": response.language,
-            "model": self.config.model,
-            "transcribed_at": datetime.utcnow().isoformat(),
-        }
+            # Prepare audio (chunk if needed)
+            chunks = prepare_audio_for_transcription(local_path)
+            logger.info(f"Prepared {len(chunks)} chunk(s) for transcription")
 
-        self.db.create_analysis(
-            document_id=document_id,
-            type_id=TRANSCRIPTION_TYPE_ID,
-            data=json.dumps(analysis_data),
-        )
+            # Transcribe each chunk
+            chunk_results = []
+            chunk_offsets = []
 
-        logger.info(f"Transcription complete for document {document_id}")
+            for chunk in chunks:
+                logger.info(f"Transcribing chunk {chunk.index} ({chunk.size_bytes} bytes)")
 
-        return {
-            "document_id": document_id,
-            "text_length": len(response.text),
-            "text_preview": response.text[:200] + "..." if len(response.text) > 200 else response.text,
-        }
+                with open(chunk.path, "rb") as audio_file:
+                    response = self.groq.audio.transcriptions.create(
+                        file=audio_file,
+                        model=self.config.model,
+                        response_format="verbose_json",
+                        language="en",
+                    )
+
+                # Handle segments - may be dicts or objects depending on API
+                segments = response.segments or []
+                if segments and hasattr(segments[0], 'model_dump'):
+                    segments = [s.model_dump() for s in segments]
+
+                chunk_results.append({
+                    "text": response.text,
+                    "segments": segments,
+                })
+                chunk_offsets.append(chunk.offset_seconds)
+
+            # Reassemble if multiple chunks
+            if len(chunks) > 1:
+                combined = reassemble_transcriptions(chunk_results, chunk_offsets)
+                text = combined["text"]
+                segments = combined["segments"]
+            else:
+                text = chunk_results[0]["text"]
+                segments = chunk_results[0]["segments"]
+
+            # Create analysis record
+            analysis_data = {
+                "text": text,
+                "segments": segments,
+                "language": response.language,
+                "model": self.config.model,
+                "chunk_count": len(chunks),
+                "transcribed_at": datetime.utcnow().isoformat(),
+            }
+
+            self.db.create_analysis(
+                document_id=document_id,
+                type_id=TRANSCRIPTION_TYPE_ID,
+                data=json.dumps(analysis_data),
+            )
+
+            logger.info(f"Transcription complete for document {document_id}")
+
+            return {
+                "document_id": document_id,
+                "text_length": len(text),
+                "chunk_count": len(chunks),
+                "text_preview": text[:200] + "..." if len(text) > 200 else text,
+            }
+
+        finally:
+            # Cleanup temp files
+            Path(local_path).unlink(missing_ok=True)
 
 
 def handler(event, context):
