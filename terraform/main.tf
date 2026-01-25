@@ -289,3 +289,76 @@ resource "aws_lambda_permission" "allow_eventbridge" {
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.transcription_schedule[0].arn
 }
+
+# -----------------------------------------------------------------------------
+# Scraper Lambda
+# -----------------------------------------------------------------------------
+
+resource "aws_iam_role" "scraper_lambda" {
+  name = "feldenkrais-scraper-${var.environment}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "scraper_lambda_s3" {
+  name = "s3-access"
+  role = aws_iam_role.scraper_lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject"
+        ]
+        Resource = [
+          "${aws_s3_bucket.main.arn}/staging/*"
+        ]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "scraper_lambda_logs" {
+  role       = aws_iam_role.scraper_lambda.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+data "archive_file" "scraper_lambda" {
+  type        = "zip"
+  source_dir  = "${path.module}/../src/kb"
+  output_path = "${path.module}/lambda_scraper.zip"
+}
+
+resource "aws_lambda_function" "scraper" {
+  filename         = data.archive_file.scraper_lambda.output_path
+  function_name    = "feldenkrais-scraper-${var.environment}"
+  role             = aws_iam_role.scraper_lambda.arn
+  handler          = "scraper.handler"
+  source_code_hash = data.archive_file.scraper_lambda.output_base64sha256
+  runtime          = "python3.12"
+  timeout          = 300  # 5 minutes for large downloads
+  memory_size      = 512
+
+  # Use Python deps layer (requests, beautifulsoup4)
+  layers = length(aws_lambda_layer_version.python_deps) > 0 ? [aws_lambda_layer_version.python_deps[0].arn] : []
+
+  environment {
+    variables = {
+      KB_BUCKET = aws_s3_bucket.main.id
+      KB_ENV    = var.environment
+    }
+  }
+}

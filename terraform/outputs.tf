@@ -22,3 +22,13 @@ output "transcription_lambda_arn" {
   description = "Transcription Lambda function ARN"
   value       = length(aws_lambda_function.transcription) > 0 ? aws_lambda_function.transcription[0].arn : null
 }
+
+output "scraper_lambda_name" {
+  description = "Scraper Lambda function name"
+  value       = aws_lambda_function.scraper.function_name
+}
+
+output "scraper_lambda_arn" {
+  description = "Scraper Lambda function ARN"
+  value       = aws_lambda_function.scraper.arn
+}
