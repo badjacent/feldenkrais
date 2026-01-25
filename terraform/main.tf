@@ -269,7 +269,7 @@ resource "aws_cloudwatch_event_rule" "transcription_schedule" {
 
   name                = "feldenkrais-transcription-${var.environment}"
   description         = "Trigger transcription Lambda periodically"
-  schedule_expression = "rate(1 hour)"
+  schedule_expression = "rate(1 minute)"
 }
 
 resource "aws_cloudwatch_event_target" "transcription_target" {
@@ -349,16 +349,20 @@ resource "aws_lambda_function" "scraper" {
   handler          = "scraper.handler"
   source_code_hash = data.archive_file.scraper_lambda.output_base64sha256
   runtime          = "python3.12"
-  timeout          = 300  # 5 minutes for large downloads
-  memory_size      = 512
+  timeout          = 600  # 10 minutes for large downloads + chunking
+  memory_size      = 1024  # More memory for ffmpeg chunking
 
-  # Use Python deps layer (requests, beautifulsoup4)
-  layers = length(aws_lambda_layer_version.python_deps) > 0 ? [aws_lambda_layer_version.python_deps[0].arn] : []
+  # Use Python deps layer (requests, beautifulsoup4) and ffmpeg for chunking
+  layers = compact([
+    length(aws_lambda_layer_version.python_deps) > 0 ? aws_lambda_layer_version.python_deps[0].arn : null,
+    var.ffmpeg_layer_arn != "" ? var.ffmpeg_layer_arn : null
+  ])
 
   environment {
     variables = {
       KB_BUCKET = aws_s3_bucket.main.id
       KB_ENV    = var.environment
+      PATH      = "/opt/bin:/var/lang/bin:/usr/local/bin:/usr/bin:/bin"
     }
   }
 }

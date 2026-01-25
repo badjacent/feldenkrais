@@ -5,11 +5,16 @@ Supports:
 - Squarespace audio blocks (sqs-audio-embed)
 - Direct audio/video links
 - HTML5 audio/video tags
+
+Large files (>20MB) are automatically chunked before staging
+to stay under the Groq 25MB limit for batch API.
 """
 
 import json
 import logging
+import os
 import re
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -21,9 +26,11 @@ from bs4 import BeautifulSoup
 try:
     from config import Config
     from storage import Storage
+    from audio import prepare_audio_for_transcription, AudioChunk
 except ImportError:
     from .config import Config
     from .storage import Storage
+    from .audio import prepare_audio_for_transcription, AudioChunk
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -31,6 +38,9 @@ logger.setLevel(logging.INFO)
 AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac"}
 VIDEO_EXTENSIONS = {".mp4", ".webm", ".mov", ".avi", ".mkv"}
 MEDIA_EXTENSIONS = AUDIO_EXTENSIONS | VIDEO_EXTENSIONS
+
+# Files larger than this will be chunked before staging (20MB, under Groq's 25MB limit)
+MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024
 
 DEFAULT_USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -248,38 +258,140 @@ def stage_media(
     source_id: int,
     type_id: int,
     tags: Optional[list[str]] = None,
-) -> str:
+) -> list[str]:
     """
     Stage a media file with its sidecar JSON.
 
-    Returns the staging key.
+    Large audio files are automatically chunked before staging.
+
+    Returns list of staging keys (one for small files, multiple for chunked).
     """
-    staging_key = f"staging/{media.filename}"
-    sidecar_key = f"{staging_key}.json"
-
-    # Determine title
     title = media.title or page_title
+    file_size = len(content)
+    staging_keys = []
 
-    # Create sidecar
-    sidecar = {
-        "title": title,
-        "source_url": source_url,
-        "source_id": source_id,
-        "type_id": type_id,
-        "tags": tags or [],
-        "scraper_metadata": {
-            "media_url": media.url,
-            "original_filename": media.filename,
-            "page_title": page_title,
+    # Check if chunking is needed for audio files
+    needs_chunking = (
+        file_size > MAX_FILE_SIZE_BYTES and
+        media.media_type == "audio"
+    )
+
+    if needs_chunking:
+        logger.info(f"File {media.filename} is {file_size} bytes, chunking before staging...")
+        staging_keys = _stage_chunked_media(
+            storage=storage,
+            media=media,
+            content=content,
+            source_url=source_url,
+            page_title=page_title,
+            title=title,
+            source_id=source_id,
+            type_id=type_id,
+            tags=tags,
+        )
+    else:
+        # Stage as single file
+        staging_key = f"staging/{media.filename}"
+        sidecar_key = f"{staging_key}.json"
+
+        sidecar = {
+            "title": title,
+            "source_url": source_url,
+            "source_id": source_id,
+            "type_id": type_id,
+            "tags": tags or [],
+            "scraper_metadata": {
+                "media_url": media.url,
+                "original_filename": media.filename,
+                "page_title": page_title,
+            }
         }
-    }
 
-    # Upload sidecar first, then media
-    logger.info(f"Staging: {staging_key}")
-    storage.put_object(sidecar_key, json.dumps(sidecar, indent=2).encode())
-    storage.put_object(staging_key, content)
+        logger.info(f"Staging: {staging_key}")
+        storage.put_object(sidecar_key, json.dumps(sidecar, indent=2).encode())
+        storage.put_object(staging_key, content)
+        staging_keys = [staging_key]
 
-    return staging_key
+    return staging_keys
+
+
+def _stage_chunked_media(
+    storage: Storage,
+    media: MediaFile,
+    content: bytes,
+    source_url: str,
+    page_title: str,
+    title: str,
+    source_id: int,
+    type_id: int,
+    tags: Optional[list[str]] = None,
+) -> list[str]:
+    """
+    Chunk a large audio file and stage each chunk separately.
+
+    Each chunk gets its own sidecar with chunk metadata for later reassembly.
+    """
+    staging_keys = []
+
+    # Write content to temp file for ffmpeg processing
+    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+        f.write(content)
+        temp_path = f.name
+
+    try:
+        # Use audio module to chunk the file
+        chunks = prepare_audio_for_transcription(temp_path)
+        chunk_count = len(chunks)
+
+        logger.info(f"Split {media.filename} into {chunk_count} chunks")
+
+        # Get base filename without extension
+        base_name = Path(media.filename).stem
+        ext = Path(media.filename).suffix
+
+        for chunk in chunks:
+            chunk_filename = f"{base_name}_chunk{chunk.index:03d}{ext}"
+            staging_key = f"staging/{chunk_filename}"
+            sidecar_key = f"{staging_key}.json"
+
+            # Read chunk content
+            with open(chunk.path, "rb") as f:
+                chunk_content = f.read()
+
+            # Create sidecar with chunk metadata
+            sidecar = {
+                "title": f"{title} (Part {chunk.index + 1}/{chunk_count})",
+                "source_url": source_url,
+                "source_id": source_id,
+                "type_id": type_id,
+                "tags": tags or [],
+                "scraper_metadata": {
+                    "media_url": media.url,
+                    "original_filename": media.filename,
+                    "page_title": page_title,
+                },
+                "chunk_metadata": {
+                    "parent_filename": media.filename,
+                    "parent_title": title,
+                    "chunk_index": chunk.index,
+                    "chunk_count": chunk_count,
+                    "offset_seconds": chunk.offset_seconds,
+                }
+            }
+
+            logger.info(f"Staging chunk: {staging_key} ({len(chunk_content)} bytes)")
+            storage.put_object(sidecar_key, json.dumps(sidecar, indent=2).encode())
+            storage.put_object(staging_key, chunk_content)
+            staging_keys.append(staging_key)
+
+    finally:
+        # Cleanup temp files
+        Path(temp_path).unlink(missing_ok=True)
+        # Cleanup chunk files created by prepare_audio_for_transcription
+        for chunk in chunks:
+            Path(chunk.path).unlink(missing_ok=True)
+
+    return staging_keys
 
 
 def scrape(
@@ -327,7 +439,7 @@ def scrape(
         for media in media_files:
             try:
                 content = download_media(media)
-                staging_key = stage_media(
+                staging_keys = stage_media(
                     storage=storage,
                     media=media,
                     content=content,
@@ -339,7 +451,8 @@ def scrape(
                 )
                 results["staged"].append({
                     "filename": media.filename,
-                    "staging_key": staging_key,
+                    "staging_keys": staging_keys,
+                    "chunks": len(staging_keys),
                     "title": media.title or page_title,
                 })
             except Exception as e:

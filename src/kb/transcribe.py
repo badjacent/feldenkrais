@@ -254,7 +254,7 @@ class TranscriptionService:
         # Process successful results
         if batch.output_file_id:
             output_content = self.groq.files.content(batch.output_file_id)
-            for line in output_content.text.strip().split("\n"):
+            for line in output_content.text().strip().split("\n"):
                 if not line:
                     continue
 
@@ -310,7 +310,7 @@ class TranscriptionService:
         # Process error file if present
         if batch.error_file_id:
             error_content = self.groq.files.content(batch.error_file_id)
-            for line in error_content.text.strip().split("\n"):
+            for line in error_content.text().strip().split("\n"):
                 if not line:
                     continue
 
@@ -363,6 +363,38 @@ class TranscriptionService:
             time.sleep(interval)
 
         return {"status": "timeout", "batch_id": batch_id}
+
+    def process_completed_batches(self) -> list[dict]:
+        """
+        Check all pending batches and process any that are completed.
+
+        Returns list of processing results.
+        """
+        # Get unique batch IDs from pending jobs
+        batch_ids = self.db.get_pending_batches()
+
+        if not batch_ids:
+            return []
+
+        logger.info(f"Checking {len(batch_ids)} pending batches")
+        results = []
+
+        for batch_id in batch_ids:
+            try:
+                status = self.check_batch_status(batch_id)
+                logger.info(f"Batch {batch_id}: {status['status']}")
+
+                if status["status"] in ("completed", "failed", "expired"):
+                    result = self.process_batch_results(batch_id)
+                    result["batch_id"] = batch_id
+                    results.append(result)
+                    logger.info(f"Processed batch {batch_id}: {len(result.get('completed', []))} completed, {len(result.get('failed', []))} failed")
+
+            except Exception as e:
+                logger.error(f"Error checking batch {batch_id}: {e}")
+                results.append({"batch_id": batch_id, "error": str(e)})
+
+        return results
 
     def transcribe_single(self, document_id: str) -> dict:
         """
@@ -459,9 +491,9 @@ def handler(event, context):
     """Lambda handler for transcription operations."""
     logger.info(f"Received event: {json.dumps(event)}")
 
-    # Default to transcribe_pending (uses sync API with chunking)
-    # Use create_batch explicitly if you want the batch API (no chunking, files must be <25MB)
-    action = event.get("action", "transcribe_pending")
+    # Default to create_batch (uses batch API - files should be pre-chunked by scraper)
+    # Use transcribe_pending for sync API with runtime chunking (fallback for large files)
+    action = event.get("action", "create_batch")
     config = Config.from_env()
 
     # Sync DB from S3
@@ -476,8 +508,16 @@ def handler(event, context):
 
     try:
         if action == "create_batch":
+            # First, process any completed batches
+            completed_results = service.process_completed_batches()
+
+            # Then create a new batch if there are untranscribed documents
             batch_id = service.create_batch()
-            result = {"action": "create_batch", "batch_id": batch_id}
+            result = {
+                "action": "create_batch",
+                "batch_id": batch_id,
+                "completed_batches": completed_results,
+            }
 
         elif action == "check_status":
             batch_id = event.get("batch_id")
