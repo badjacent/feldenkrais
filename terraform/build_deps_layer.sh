@@ -13,12 +13,14 @@ echo "Building Python dependencies layer..."
 rm -rf python lambda_deps.zip
 
 # Install dependencies for Lambda (Linux x86_64)
-pip install \
+# Use pip3 with platform flags for cross-platform install
+python3 -m pip install \
     -r lambda_requirements.txt \
     -t python \
     --platform manylinux2014_x86_64 \
     --only-binary=:all: \
-    --python-version 3.12
+    --python-version 3.12 \
+    --implementation cp
 
 # Create zip
 zip -r lambda_deps.zip python

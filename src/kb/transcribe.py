@@ -459,7 +459,9 @@ def handler(event, context):
     """Lambda handler for transcription operations."""
     logger.info(f"Received event: {json.dumps(event)}")
 
-    action = event.get("action", "create_batch")
+    # Default to transcribe_pending (uses sync API with chunking)
+    # Use create_batch explicitly if you want the batch API (no chunking, files must be <25MB)
+    action = event.get("action", "transcribe_pending")
     config = Config.from_env()
 
     # Sync DB from S3
