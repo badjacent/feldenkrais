@@ -12,3 +12,13 @@ output "lambda_function_arn" {
   description = "Loader Lambda function ARN"
   value       = aws_lambda_function.loader.arn
 }
+
+output "transcription_lambda_name" {
+  description = "Transcription Lambda function name"
+  value       = length(aws_lambda_function.transcription) > 0 ? aws_lambda_function.transcription[0].function_name : null
+}
+
+output "transcription_lambda_arn" {
+  description = "Transcription Lambda function ARN"
+  value       = length(aws_lambda_function.transcription) > 0 ? aws_lambda_function.transcription[0].arn : null
+}

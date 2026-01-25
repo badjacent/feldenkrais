@@ -5,6 +5,8 @@ Handles compression and chunking of audio files for transcription.
 """
 
 import logging
+import os
+import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -16,6 +18,30 @@ logger = logging.getLogger(__name__)
 # 20MB threshold (safe margin under 25MB limit)
 DEFAULT_MAX_SIZE_BYTES = 20 * 1024 * 1024
 DEFAULT_CHUNK_DURATION_SECONDS = 1200  # 20 minutes
+
+
+def _find_ffmpeg() -> str:
+    """Find ffmpeg binary, checking Lambda layer path first."""
+    # Lambda layer puts binaries in /opt/bin
+    lambda_path = "/opt/bin/ffmpeg"
+    if os.path.exists(lambda_path):
+        return lambda_path
+    # Fall back to system PATH
+    found = shutil.which("ffmpeg")
+    if found:
+        return found
+    return "ffmpeg"  # Let it fail with clear error
+
+
+def _find_ffprobe() -> str:
+    """Find ffprobe binary, checking Lambda layer path first."""
+    lambda_path = "/opt/bin/ffprobe"
+    if os.path.exists(lambda_path):
+        return lambda_path
+    found = shutil.which("ffprobe")
+    if found:
+        return found
+    return "ffprobe"
 
 
 @dataclass
@@ -32,7 +58,7 @@ def get_audio_duration(file_path: str) -> Optional[float]:
     try:
         result = subprocess.run(
             [
-                "ffprobe", "-v", "error",
+                _find_ffprobe(), "-v", "error",
                 "-show_entries", "format=duration",
                 "-of", "default=noprint_wrappers=1:nokey=1",
                 file_path
@@ -61,7 +87,7 @@ def compress_audio(
     try:
         subprocess.run(
             [
-                "ffmpeg", "-y", "-i", input_path,
+                _find_ffmpeg(), "-y", "-i", input_path,
                 "-ac", "1",  # Mono
                 "-ab", bitrate,
                 "-ar", str(sample_rate),
@@ -98,7 +124,7 @@ def split_audio(
     input_name = Path(input_path).stem
 
     # Build ffmpeg command
-    cmd = ["ffmpeg", "-y", "-i", input_path]
+    cmd = [_find_ffmpeg(), "-y", "-i", input_path]
 
     if compress:
         cmd.extend(["-ac", "1", "-ab", bitrate, "-ar", str(sample_rate)])

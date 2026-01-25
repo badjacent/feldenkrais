@@ -495,8 +495,36 @@ def handler(event, context):
                 return {"statusCode": 400, "body": json.dumps({"error": "document_id required"})}
             result = service.transcribe_single(document_id)
 
+        elif action == "transcribe_pending":
+            # Transcribe all pending documents (used by scheduled trigger)
+            max_docs = event.get("max_docs", 5)  # Limit per invocation
+            docs = db.get_untranscribed_documents()[:max_docs]
+            results = []
+            for doc in docs:
+                try:
+                    r = service.transcribe_single(doc["id"])
+                    results.append(r)
+                except Exception as e:
+                    logger.error(f"Failed to transcribe {doc['id']}: {e}")
+                    results.append({"document_id": doc["id"], "error": str(e)})
+            result = {"action": "transcribe_pending", "processed": len(results), "results": results}
+
         else:
-            return {"statusCode": 400, "body": json.dumps({"error": f"Unknown action: {action}"})}
+            # Default action for scheduled events: transcribe pending
+            if "source" in event and event["source"] == "aws.events":
+                max_docs = 5
+                docs = db.get_untranscribed_documents()[:max_docs]
+                results = []
+                for doc in docs:
+                    try:
+                        r = service.transcribe_single(doc["id"])
+                        results.append(r)
+                    except Exception as e:
+                        logger.error(f"Failed to transcribe {doc['id']}: {e}")
+                        results.append({"document_id": doc["id"], "error": str(e)})
+                result = {"action": "transcribe_pending", "processed": len(results), "results": results}
+            else:
+                return {"statusCode": 400, "body": json.dumps({"error": f"Unknown action: {action}"})}
 
         # Sync DB back to S3
         db.close()

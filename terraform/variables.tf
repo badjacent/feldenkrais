@@ -15,3 +15,16 @@ variable "grace_period_seconds" {
   type        = number
   default     = 300
 }
+
+variable "groq_api_key" {
+  description = "Groq API key for transcription"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "ffmpeg_layer_arn" {
+  description = "ARN of FFmpeg Lambda layer (deploy from serverlessrepo or use public layer)"
+  type        = string
+  default     = ""
+}
