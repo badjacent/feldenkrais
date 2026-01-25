@@ -523,6 +523,187 @@ For now, race conditions are possible if file + sidecar arrive near-simultaneous
 
 ---
 
+## Scraper
+
+A utility that takes a URL, discovers media files on the page, and stages them for ingestion.
+
+### Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        SCRAPER                               │
+│                                                              │
+│  URL ──► Fetch Page ──► Find Media ──► Download ──► staging/ │
+│                              │                         │     │
+│                              │                         └──► .json sidecar
+│                              ▼                               │
+│                    ┌─────────────────┐                       │
+│                    │ Media Discovery │                       │
+│                    ├─────────────────┤                       │
+│                    │ • Direct links  │                       │
+│                    │ • <audio> tags  │                       │
+│                    │ • <video> tags  │                       │
+│                    │ • Embedded players                      │
+│                    │ • iframe embeds │                       │
+│                    └─────────────────┘                       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Input
+
+```json
+{
+  "url": "https://example.com/recordings/session-1",
+  "source_id": 1,
+  "type_id": 2,
+  "tags": ["workshop", "2024"],
+  "title_override": null
+}
+```
+
+- **url** (required): Page to scrape for media
+- **source_id** (required): Document source enum ID
+- **type_id** (required): Document type enum ID (AUDIO=2, VIDEO=3)
+- **tags** (optional): Tags to apply to all discovered media
+- **title_override** (optional): If set, use this title; otherwise extract from page
+
+### Output
+
+For each media file discovered:
+1. Download media file to `staging/{filename}`
+2. Create sidecar `staging/{filename}.json` with metadata
+
+The loader Lambda then processes these normally.
+
+### Media Discovery
+
+**Direct Links** - Scan page for links to media files:
+- Audio: `.mp3`, `.wav`, `.m4a`, `.ogg`, `.flac`, `.aac`
+- Video: `.mp4`, `.webm`, `.mov`, `.avi`, `.mkv`
+
+**HTML5 Media Tags**:
+```html
+<audio src="...">
+<video src="...">
+<source src="...">
+```
+
+**Squarespace Audio Blocks**:
+```html
+<div class="sqs-audio-embed" data-url="https://static1.squarespace.com/static/...mp3/original/file.mp3">
+```
+- Look for elements with class `sqs-audio-embed`
+- Extract audio URL from `data-url` attribute (or similar)
+- URL pattern: `https://static1.squarespace.com/static/{site-id}/t/{content-id}/{timestamp}/{filename}.mp3/original/{filename}.mp3`
+
+**Other Embedded Players** (future):
+- YouTube (`youtube.com`, `youtu.be`) - requires yt-dlp
+- Vimeo (`vimeo.com`)
+- SoundCloud (`soundcloud.com`)
+
+### Metadata Extraction
+
+For each media file, extract:
+- **title**: From page `<title>`, `<h1>`, or filename
+- **source_url**: Original page URL (not direct media URL)
+- **filename**: Sanitized from URL or page title
+
+### Sidecar Generation
+
+```json
+{
+  "title": "Session 1 - Workshop Recording",
+  "source_url": "https://example.com/recordings/session-1",
+  "source_id": 1,
+  "type_id": 2,
+  "tags": ["workshop", "2024"],
+  "scraper_metadata": {
+    "media_url": "https://example.com/media/session1.mp3",
+    "discovered_at": "2024-01-15T10:30:00Z",
+    "page_title": "Session 1 - Workshop Recording"
+  }
+}
+```
+
+### Configuration
+
+```
+SCRAPER_USER_AGENT=Mozilla/5.0 ...
+SCRAPER_TIMEOUT=30
+SCRAPER_MAX_FILE_SIZE=500MB
+```
+
+### Authentication (future)
+
+Some sites require login to access media. Options:
+- Cookie-based auth (provide cookies via config)
+- Session auth (provide credentials, scraper logs in)
+- Header auth (provide auth headers)
+
+Not implemented initially - start with public URLs only.
+
+### CLI Usage
+
+```bash
+# Scrape a single URL
+python -m kb.scrape "https://example.com/recordings/page" \
+  --source-id 1 \
+  --type-id 2 \
+  --tags workshop,2024
+
+# Dry run (list media without downloading)
+python -m kb.scrape "https://example.com/..." --dry-run
+
+# Scrape multiple URLs from file
+python -m kb.scrape --urls-file urls.txt --source-id 1 --type-id 2
+```
+
+### Lambda Integration (future)
+
+Could be exposed as Lambda for API access:
+```json
+// Request
+{
+  "url": "https://example.com/recordings/page",
+  "source_id": 1,
+  "type_id": 2
+}
+
+// Response
+{
+  "staged": [
+    {"filename": "session1.mp3", "staging_key": "staging/session1.mp3"},
+    {"filename": "session2.mp3", "staging_key": "staging/session2.mp3"}
+  ],
+  "errors": []
+}
+```
+
+### Limitations
+
+- No JavaScript rendering (static HTML only)
+- No authentication initially
+- Single page at a time (no crawling/following links)
+- Media must be directly downloadable (no streaming-only content)
+
+### Example Site Analysis: AHSE Convention Recordings
+
+Investigated `associationforhannasomaticeducation.com`:
+- Site uses Squarespace with audio embedded via `sqs-audio-embed` blocks
+- Audio URLs hosted on `static1.squarespace.com/static/...`
+- Convention recordings have clear URL patterns: `/convention-recordings/{presenter}-{date}`
+- Multiple audio tracks per page possible
+
+**Scraping approach:**
+1. Fetch page HTML
+2. Parse for `sqs-audio-embed` elements
+3. Extract `data-url` or similar attribute containing MP3 URL
+4. Download from Squarespace static CDN
+
+Note: Standard HTML parsing tools may miss these if they convert to markdown first. Need raw HTML parsing (BeautifulSoup, lxml).
+
+---
+
 ## Open Questions
 
 1. **Chunking strategy**: By character count, sentences, paragraphs?
