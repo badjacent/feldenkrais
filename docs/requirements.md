@@ -542,15 +542,23 @@ GROQ_MAX_RETRIES=3
 S3_PRESIGNED_URL_EXPIRY=86400  # 24 hours, must be >= completion window
 ```
 
-### Lambda Integration (future)
+### Lambda Integration (TODO)
 
-**Option A**: Scheduled Lambda
-- Runs daily/hourly
-- Creates batches, polls for results
+Automate transcription workflow for production. Options:
 
-**Option B**: Step Functions
-- State machine for batch lifecycle
-- Wait states for polling
+**Option A**: Scheduled Lambda (simpler)
+- CloudWatch Events triggers Lambda hourly
+- Lambda checks pending batches, processes results
+- Lambda checks for untranscribed docs, creates new batch
+
+**Option B**: Step Functions (more sophisticated)
+- S3 event triggers state machine when new audio arrives
+- Wait states for batch completion (no polling cost)
+- Clear workflow visualization
+
+**Option C**: External cron
+- Run CLI from server/local machine
+- Simple but requires always-on machine
 
 ### Chunking (Large Files)
 
