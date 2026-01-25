@@ -365,6 +365,367 @@ TBD - Options:
 
 ---
 
+## Groq Transcription (Audio-to-Text)
+
+Transcribes audio documents using Groq's Whisper API. Uses the **Batch API** for cost savings (50% discount).
+
+### Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      TRANSCRIPTION FLOW                                  │
+│                                                                          │
+│  1. SELECT untranscribed audio documents from DB                         │
+│                           │                                              │
+│                           ▼                                              │
+│  2. GENERATE pre-signed S3 URLs for each audio file                      │
+│                           │                                              │
+│                           ▼                                              │
+│  3. CREATE batch JSONL file with transcription requests                  │
+│                           │                                              │
+│                           ▼                                              │
+│  4. UPLOAD batch file to Groq                                            │
+│                           │                                              │
+│                           ▼                                              │
+│  5. CREATE batch job (async, 24hr completion window)                     │
+│                           │                                              │
+│                           ▼                                              │
+│  6. POLL for completion (or webhook callback)                            │
+│                           │                                              │
+│                           ▼                                              │
+│  7. DOWNLOAD results, store as analysis records in DB                    │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Groq API Details
+
+**Endpoint**: `https://api.groq.com/openai/v1/audio/transcriptions`
+
+**Models**:
+| Model | Cost | Speed | Accuracy |
+|-------|------|-------|----------|
+| `whisper-large-v3-turbo` | $0.04/hr | 216x realtime | 12% WER |
+| `whisper-large-v3` | $0.111/hr | 189x realtime | 10.3% WER |
+
+**File Limits**:
+- Free tier: 25 MB
+- Dev tier: 100 MB
+- Supported formats: mp3, wav, flac, m4a, ogg, mp4, mpeg, mpga, webm
+
+**Batch API** (50% discount):
+- Must use `url` parameter (not file upload)
+- JSONL format, max 50,000 requests per batch
+- Completion window: 24 hours to 7 days
+
+### Batch Request Format
+
+```jsonl
+{"custom_id": "doc-uuid-1", "method": "POST", "url": "/v1/audio/transcriptions", "body": {"model": "whisper-large-v3-turbo", "url": "https://s3.amazonaws.com/bucket/archive/uuid1.mp3?signed...", "response_format": "verbose_json", "language": "en"}}
+{"custom_id": "doc-uuid-2", "method": "POST", "url": "/v1/audio/transcriptions", "body": {"model": "whisper-large-v3-turbo", "url": "https://s3.amazonaws.com/bucket/archive/uuid2.mp3?signed...", "response_format": "verbose_json", "language": "en"}}
+```
+
+### Batch Response Format
+
+```jsonl
+{"id": "...", "custom_id": "doc-uuid-1", "response": {"status_code": 200, "body": {"text": "transcribed text...", "segments": [...], "language": "en"}}}
+```
+
+### Job Tracking
+
+Track transcription jobs to handle async workflow and retries:
+
+```sql
+CREATE TABLE transcription_job (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    document_id INTEGER NOT NULL REFERENCES document(id),
+    batch_id TEXT,              -- Groq batch ID
+    status TEXT NOT NULL,       -- pending, completed, failed
+    attempts INTEGER DEFAULT 1,
+    error TEXT,                 -- Error message if failed
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_transcription_job_document ON transcription_job(document_id);
+CREATE INDEX idx_transcription_job_status ON transcription_job(status);
+CREATE INDEX idx_transcription_job_batch ON transcription_job(batch_id);
+```
+
+**Status values**:
+- `pending`: Submitted to Groq, awaiting result
+- `completed`: Successfully transcribed, analysis record created
+- `failed`: Groq returned error (may retry if under max attempts)
+
+**Query for documents needing transcription**:
+```sql
+SELECT d.* FROM document d
+WHERE d.type_id IN (2, 3)  -- AUDIO, VIDEO
+-- No successful transcription yet
+AND NOT EXISTS (
+    SELECT 1 FROM analysis a
+    WHERE a.document_id = d.id AND a.type_id = 1
+)
+-- Not currently pending
+AND NOT EXISTS (
+    SELECT 1 FROM transcription_job j
+    WHERE j.document_id = d.id AND j.status = 'pending'
+)
+-- Not permanently failed (under max retries)
+AND NOT EXISTS (
+    SELECT 1 FROM transcription_job j
+    WHERE j.document_id = d.id
+    AND j.status = 'failed'
+    AND j.attempts >= 3
+)
+```
+
+### Storage
+
+Transcriptions stored as `analysis` records:
+- `document_id`: Reference to source audio document
+- `type_id`: TRANSCRIPTION (1)
+- `data`: JSON with full transcription result
+
+```json
+{
+  "text": "Full transcription text...",
+  "segments": [
+    {"start": 0.0, "end": 5.2, "text": "First segment..."},
+    {"start": 5.2, "end": 10.1, "text": "Second segment..."}
+  ],
+  "model": "whisper-large-v3-turbo",
+  "language": "en",
+  "batch_id": "batch_abc123",
+  "transcribed_at": "2024-01-15T10:30:00Z"
+}
+```
+
+### Process Components
+
+**1. Batch Creator** (runs on demand or scheduled):
+- Query DB for audio documents without transcription analysis
+- Generate pre-signed S3 URLs (valid for batch completion window)
+- Create JSONL batch file
+- Upload to Groq Files API
+- Create batch job
+- Store batch job ID for tracking
+
+**2. Batch Poller** (scheduled or event-driven):
+- Check status of pending batches
+- On completion: download results, parse, store analysis records
+- Handle failures: retry or mark as failed
+
+### CLI Usage
+
+```bash
+# Create a transcription batch for all untranscribed audio
+python -m kb.transcribe create-batch
+
+# Check batch status
+python -m kb.transcribe status <batch_id>
+
+# Process completed batch results
+python -m kb.transcribe process-results <batch_id>
+
+# Transcribe a single file (sync, for testing)
+python -m kb.transcribe single <document_id>
+```
+
+### Configuration
+
+```
+GROQ_API_KEY=...
+GROQ_TRANSCRIPTION_MODEL=whisper-large-v3-turbo
+GROQ_BATCH_COMPLETION_WINDOW=24h
+GROQ_MAX_RETRIES=3
+S3_PRESIGNED_URL_EXPIRY=86400  # 24 hours, must be >= completion window
+```
+
+### Lambda Integration (future)
+
+**Option A**: Scheduled Lambda
+- Runs daily/hourly
+- Creates batches, polls for results
+
+**Option B**: Step Functions
+- State machine for batch lifecycle
+- Wait states for polling
+
+### Chunking (Large Files)
+
+For files exceeding 100MB (dev tier limit), split into chunks before submission.
+
+**Strategy**: Split by size with small overlap to avoid cutting words.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    CHUNKING FLOW                             │
+│                                                              │
+│  Original: 150MB audio file                                  │
+│                     │                                        │
+│                     ▼                                        │
+│  1. CHECK size > 100MB? Yes                                  │
+│                     │                                        │
+│                     ▼                                        │
+│  2. SPLIT using ffmpeg into ~80MB chunks with 5s overlap     │
+│     ├── chunk_0.mp3 (0:00 - 1:00:05)                        │
+│     ├── chunk_1.mp3 (1:00:00 - 2:00:05)                     │
+│     └── chunk_2.mp3 (2:00:00 - end)                         │
+│                     │                                        │
+│                     ▼                                        │
+│  3. SUBMIT each chunk as separate transcription job          │
+│                     │                                        │
+│                     ▼                                        │
+│  4. REASSEMBLE transcriptions:                               │
+│     - Adjust timestamps by chunk offset                      │
+│     - Deduplicate overlap regions                            │
+│     - Concatenate text                                       │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Chunk tracking** - extend `transcription_job` table:
+```sql
+ALTER TABLE transcription_job ADD COLUMN chunk_index INTEGER;  -- NULL if not chunked
+ALTER TABLE transcription_job ADD COLUMN chunk_offset_seconds REAL;  -- Start time of chunk
+ALTER TABLE transcription_job ADD COLUMN total_chunks INTEGER;  -- NULL if not chunked
+```
+
+**Reassembly query**:
+```sql
+-- Get all completed chunks for a document, ordered
+SELECT * FROM transcription_job
+WHERE document_id = ? AND status = 'completed'
+ORDER BY chunk_index;
+```
+
+**Reassembly logic**:
+```python
+def reassemble_chunks(chunks: list[TranscriptionJob]) -> dict:
+    full_text = []
+    full_segments = []
+
+    for chunk in chunks:
+        result = json.loads(chunk.result_data)
+        offset = chunk.chunk_offset_seconds
+
+        # Adjust segment timestamps
+        for segment in result["segments"]:
+            segment["start"] += offset
+            segment["end"] += offset
+
+            # Skip segments in overlap region (already covered by previous chunk)
+            if chunk.chunk_index > 0 and segment["start"] < offset + OVERLAP_SECONDS:
+                continue
+
+            full_segments.append(segment)
+
+        full_text.append(result["text"])
+
+    return {
+        "text": " ".join(full_text),
+        "segments": full_segments
+    }
+```
+
+**Configuration**:
+```
+GROQ_MAX_FILE_SIZE_MB=100    # Dev tier limit
+GROQ_CHUNK_SIZE_MB=80        # Target chunk size (with headroom)
+GROQ_CHUNK_OVERLAP_SECONDS=5 # Overlap to avoid word cutoffs
+```
+
+**ffmpeg command**:
+```bash
+# Split into 80MB chunks with 5s overlap
+ffmpeg -i input.mp3 -f segment -segment_time 3600 -segment_start_number 0 \
+  -c copy chunk_%d.mp3
+```
+
+### Audio Preprocessing (Optional)
+
+Before transcription, optionally compress to reduce size and avoid chunking:
+
+```bash
+# Convert to 64kbps mono MP3 (good for voice)
+ffmpeg -i input.mp3 -ac 1 -ab 64k -ar 16000 output.mp3
+```
+
+| Original | After compression |
+|----------|-------------------|
+| 2hr stereo 128kbps (115MB) | 2hr mono 64kbps (58MB) |
+
+This is optional - Groq downsamples to 16kHz mono anyway. But preprocessing locally:
+- Reduces upload time to Groq
+- Avoids chunking in most cases
+- No quality loss for transcription (Whisper doesn't need high bitrate)
+
+**When to preprocess**:
+- File > 80MB and not already low bitrate
+- High bandwidth cost is a concern
+
+### Error Handling
+
+- **File too large**: Skip, log warning, mark as failed with "file_too_large" error
+- **Unsupported format**: Skip, mark as failed with "unsupported_format" error
+- **Groq transient failure**: Increment attempts, set status=failed, retry in next batch if under max
+- **Groq permanent failure**: Mark as failed, won't retry (e.g., invalid audio)
+- **API rate limits**: Back off, retry batch submission
+
+**Retry logic**:
+```
+MAX_RETRIES = 3
+
+On batch result:
+  for each item:
+    if success:
+      create analysis record
+      update job: status=completed
+    if failure:
+      update job: status=failed, attempts++, error=message
+      if attempts < MAX_RETRIES:
+        (will be picked up by next batch run)
+      else:
+        (permanently failed, requires manual intervention)
+```
+
+### Testing
+
+**Unit tests** (mocked Groq API):
+- Query logic for untranscribed documents
+- Job state transitions (pending → completed/failed)
+- Retry logic (attempts < max)
+- Chunk reassembly with timestamp adjustment
+
+**Integration test** (real Groq, minimal cost):
+```python
+def test_transcription_batch_of_one():
+    # 1. Upload short test audio to S3 (5-10 seconds)
+    # 2. Create document record
+    # 3. Run batch creator (creates batch of 1)
+    # 4. Poll until complete (or timeout)
+    # 5. Verify:
+    #    - transcription_job.status == 'completed'
+    #    - analysis record exists with transcription text
+```
+
+**Test audio file**: Include a short spoken audio file in `tests/fixtures/test_audio.mp3` (~10 seconds, ~50KB).
+
+**Cost**: ~$0.001 per test run (10 seconds at $0.02/hr after batch discount).
+
+### Cost Estimation
+
+At $0.04/hr (turbo) with 50% batch discount = $0.02/hr
+
+| Audio Volume | Estimated Cost |
+|--------------|----------------|
+| 10 hours | $0.20 |
+| 100 hours | $2.00 |
+| 1000 hours | $20.00 |
+
+---
+
 ## Groq TTS Processor
 
 A separate process/module that converts document text to speech. Operates independently from the core knowledge base.
