@@ -3,6 +3,23 @@ Transcription module: converts audio documents to text using Groq's Whisper API.
 
 Uses the Batch API for cost savings (50% discount).
 Handles large files by chunking them locally before batch submission.
+
+Lambda Actions (via event["action"]):
+  - (default/scheduled): Process completed batches, then create new batch for untranscribed docs
+  - "create_batch": Create a new transcription batch
+  - "check_status": Check status of a batch (requires batch_id)
+  - "process_results": Process results of a completed batch (requires batch_id)
+  - "retry_failed": Reset failed jobs to pending for retry (max 3 attempts)
+  - "transcribe_single": Sync transcribe one document (requires document_id, for testing)
+
+Example invocations:
+  aws lambda invoke --function-name feldenkrais-transcription-prod \\
+    --cli-binary-format raw-in-base64-out \\
+    --payload '{"action": "retry_failed"}' /tmp/out.json
+
+  aws lambda invoke --function-name feldenkrais-transcription-prod \\
+    --cli-binary-format raw-in-base64-out \\
+    --payload '{"action": "process_results", "batch_id": "batch_xxx"}' /tmp/out.json
 """
 
 import json
@@ -348,7 +365,7 @@ class TranscriptionService:
         # Process successful results
         if batch.output_file_id:
             output_content = self.groq.files.content(batch.output_file_id)
-            for line in output_content.text().strip().split("\n"):
+            for line in output_content.read().decode().strip().split("\n"):
                 if not line:
                     continue
 
@@ -389,13 +406,18 @@ class TranscriptionService:
         # Process error file if present
         if batch.error_file_id:
             error_content = self.groq.files.content(batch.error_file_id)
-            for line in error_content.text().strip().split("\n"):
+            for line in error_content.read().decode().strip().split("\n"):
                 if not line:
                     continue
 
                 error_result = json.loads(line)
                 job_id = error_result.get("custom_id")
-                error_msg = error_result.get("error", {}).get("message", "Unknown error")
+                # Error can be in top-level "error" or in "response.body.error"
+                error_msg = "Unknown error"
+                if error_result.get("error"):
+                    error_msg = error_result["error"].get("message", "Unknown error")
+                elif error_result.get("response", {}).get("body", {}).get("error"):
+                    error_msg = error_result["response"]["body"]["error"].get("message", "Unknown error")
 
                 if job_id:
                     self.db.update_transcription_job(
@@ -748,6 +770,16 @@ def handler(event, context):
             if not document_id:
                 return {"statusCode": 400, "body": json.dumps({"error": "document_id required"})}
             result = service.transcribe_single(document_id)
+
+        elif action == "retry_failed":
+            max_attempts = event.get("max_attempts", 3)
+            reset_jobs = db.reset_failed_jobs_for_retry(max_attempts)
+            result = {
+                "action": "retry_failed",
+                "jobs_reset": len(reset_jobs),
+                "jobs": reset_jobs,
+            }
+            logger.info(f"Reset {len(reset_jobs)} failed jobs for retry")
 
         else:
             # Default action for scheduled events: use batch API

@@ -175,23 +175,26 @@ resource "aws_s3_bucket_notification" "staging_trigger" {
 
 # Scheduled trigger to process any remaining files in staging/
 resource "aws_cloudwatch_event_rule" "loader_schedule" {
+  count               = var.enable_scheduled_triggers ? 1 : 0
   name                = "feldenkrais-loader-${var.environment}"
   description         = "Trigger loader Lambda periodically to process remaining files"
   schedule_expression = "rate(1 minute)"
 }
 
 resource "aws_cloudwatch_event_target" "loader_target" {
-  rule      = aws_cloudwatch_event_rule.loader_schedule.name
+  count     = var.enable_scheduled_triggers ? 1 : 0
+  rule      = aws_cloudwatch_event_rule.loader_schedule[0].name
   target_id = "loader"
   arn       = aws_lambda_function.loader.arn
 }
 
 resource "aws_lambda_permission" "allow_eventbridge_loader" {
+  count         = var.enable_scheduled_triggers ? 1 : 0
   statement_id  = "AllowEventBridgeInvokeLoader"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.loader.function_name
   principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.loader_schedule.arn
+  source_arn    = aws_cloudwatch_event_rule.loader_schedule[0].arn
 }
 
 # -----------------------------------------------------------------------------
@@ -300,7 +303,7 @@ resource "aws_lambda_function" "transcription" {
 
 # EventBridge rule to trigger transcription periodically
 resource "aws_cloudwatch_event_rule" "transcription_schedule" {
-  count = var.groq_api_key != "" ? 1 : 0
+  count = var.groq_api_key != "" && var.enable_scheduled_triggers ? 1 : 0
 
   name                = "feldenkrais-transcription-${var.environment}"
   description         = "Trigger transcription Lambda periodically"
@@ -308,7 +311,7 @@ resource "aws_cloudwatch_event_rule" "transcription_schedule" {
 }
 
 resource "aws_cloudwatch_event_target" "transcription_target" {
-  count = var.groq_api_key != "" ? 1 : 0
+  count = var.groq_api_key != "" && var.enable_scheduled_triggers ? 1 : 0
 
   rule      = aws_cloudwatch_event_rule.transcription_schedule[0].name
   target_id = "transcription"
@@ -316,7 +319,7 @@ resource "aws_cloudwatch_event_target" "transcription_target" {
 }
 
 resource "aws_lambda_permission" "allow_eventbridge" {
-  count = var.groq_api_key != "" ? 1 : 0
+  count = var.groq_api_key != "" && var.enable_scheduled_triggers ? 1 : 0
 
   statement_id  = "AllowEventBridgeInvoke"
   action        = "lambda:InvokeFunction"
@@ -489,7 +492,7 @@ resource "aws_lambda_function" "youtube" {
 
 # EventBridge rule to process YouTube queue periodically
 resource "aws_cloudwatch_event_rule" "youtube_schedule" {
-  count = var.groq_api_key != "" ? 1 : 0
+  count = var.groq_api_key != "" && var.enable_scheduled_triggers ? 1 : 0
 
   name                = "feldenkrais-youtube-${var.environment}"
   description         = "Trigger YouTube importer Lambda periodically to process queue"
@@ -497,7 +500,7 @@ resource "aws_cloudwatch_event_rule" "youtube_schedule" {
 }
 
 resource "aws_cloudwatch_event_target" "youtube_target" {
-  count = var.groq_api_key != "" ? 1 : 0
+  count = var.groq_api_key != "" && var.enable_scheduled_triggers ? 1 : 0
 
   rule      = aws_cloudwatch_event_rule.youtube_schedule[0].name
   target_id = "youtube"
@@ -510,7 +513,7 @@ resource "aws_cloudwatch_event_target" "youtube_target" {
 }
 
 resource "aws_lambda_permission" "allow_eventbridge_youtube" {
-  count = var.groq_api_key != "" ? 1 : 0
+  count = var.groq_api_key != "" && var.enable_scheduled_triggers ? 1 : 0
 
   statement_id  = "AllowEventBridgeInvokeYouTube"
   action        = "lambda:InvokeFunction"

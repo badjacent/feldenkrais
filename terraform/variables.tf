@@ -35,3 +35,9 @@ variable "database_url" {
   sensitive   = true
   default     = ""
 }
+
+variable "enable_scheduled_triggers" {
+  description = "Enable scheduled EventBridge triggers for all Lambdas. Set to false to disable all schedules."
+  type        = bool
+  default     = true
+}

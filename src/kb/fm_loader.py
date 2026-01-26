@@ -390,13 +390,19 @@ def process_videos(
     """
     Stage videos to S3.
 
+    Skips videos already marked as completed in the database.
     If download_missing=True, downloads videos not found locally.
     """
     storage = get_storage(bucket)
 
+    # Get already-completed lessons to skip
+    completed_urls = db.get_completed_fm_lessons()
+    pending_videos = [v for v in videos if v.lesson_url not in completed_urls]
+    logger.info(f"Skipping {len(videos) - len(pending_videos)} already-completed lessons")
+
     # Separate into local and missing
-    local_videos = [v for v in videos if v.local_path]
-    missing_videos = [v for v in videos if not v.local_path]
+    local_videos = [v for v in pending_videos if v.local_path]
+    missing_videos = [v for v in pending_videos if not v.local_path]
 
     to_process = list(local_videos)
 
@@ -463,6 +469,8 @@ def process_videos(
 
     return {
         'total_on_site': len(videos),
+        'already_completed': len(videos) - len(pending_videos),
+        'pending': len(pending_videos),
         'local_available': len(local_videos),
         'missing': len(missing_videos),
         'processed': len(to_process),

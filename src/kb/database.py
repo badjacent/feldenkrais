@@ -432,6 +432,24 @@ class Database:
                 (job_id,),
             )
 
+    def reset_failed_jobs_for_retry(self, max_attempts: int = 3) -> list[dict]:
+        """
+        Reset failed jobs to pending for retry.
+
+        Only resets jobs under max_attempts. Returns list of reset jobs.
+        """
+        with self.get_cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE transcription_job
+                SET status = 'pending', batch_id = NULL, error = NULL
+                WHERE status = 'failed' AND attempts < %s
+                RETURNING id, document_id, chunk_index, attempts
+                """,
+                (max_attempts,),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
     def get_failed_transcription_job(self, document_id: str) -> Optional[dict]:
         """Get the most recent failed transcription job for a document."""
         with self.get_cursor(commit=False) as cursor:
