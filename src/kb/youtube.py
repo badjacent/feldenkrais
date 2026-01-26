@@ -383,23 +383,6 @@ def process_queue(
 # Lambda Handler
 # =============================================================================
 
-def sync_db_from_s3(storage, db_path: str):
-    """Download DB from S3 if it exists."""
-    db_key = "db/knowledge.db"
-    if storage.object_exists(db_key):
-        logger.info(f"Downloading DB from s3://{storage.bucket}/{db_key}")
-        storage.download_file(db_key, db_path)
-    else:
-        logger.info("No existing DB in S3, will create new one")
-
-
-def sync_db_to_s3(storage, db_path: str):
-    """Upload DB to S3."""
-    db_key = "db/knowledge.db"
-    logger.info(f"Uploading DB to s3://{storage.bucket}/{db_key}")
-    storage.upload_file(db_path, db_key)
-
-
 def handler(event, context):
     """
     Lambda handler for YouTube importer.
@@ -424,12 +407,19 @@ def handler(event, context):
 
     action = event.get("action", "process")
 
-    # Sync DB from S3
-    sync_db_from_s3(storage, config.db_path)
-
-    # Initialize DB
-    db = Database(config.db_path)
+    # Initialize DB with PostgreSQL connection
+    db = Database(config.database_url)
     db.initialize()
+
+    # For process action, acquire advisory lock to prevent concurrent runs
+    lock_acquired = False
+    if action == "process":
+        lock_acquired = db.try_acquire_lock(Database.LOCK_YOUTUBE)
+        if not lock_acquired:
+            logger.info("Another YouTube Lambda is processing, skipping")
+            db.close()
+            return {"statusCode": 200, "body": json.dumps({"message": "Skipped - another instance running"})}
+        logger.info("Acquired YouTube lock")
 
     try:
         if action == "add":
@@ -440,9 +430,6 @@ def handler(event, context):
                     "body": json.dumps({"error": "No URLs provided"}),
                 }
             result = add_urls(db, urls)
-            # Sync DB back after adding URLs
-            db.close()
-            sync_db_to_s3(storage, config.db_path)
             return {
                 "statusCode": 200,
                 "body": json.dumps(result),
@@ -455,10 +442,6 @@ def handler(event, context):
 
             result = process_queue(db, storage, limit=limit, tags=tags)
 
-            # Sync DB back after processing
-            db.close()
-            sync_db_to_s3(storage, config.db_path)
-
             return {
                 "statusCode": 200,
                 "body": json.dumps(result),
@@ -466,7 +449,6 @@ def handler(event, context):
 
         elif action == "status":
             stats = db.get_youtube_queue_stats()
-            db.close()
             return {
                 "statusCode": 200,
                 "body": json.dumps(stats),
@@ -475,12 +457,11 @@ def handler(event, context):
         elif action == "list":
             status_filter = event.get("status")
             items = db.list_youtube_queue(status=status_filter)
-            db.close()
             # Convert to serializable format
             result = []
             for item in items:
                 result.append({
-                    "id": item["id"],
+                    "id": str(item["id"]),
                     "url": item["url"],
                     "status": item["status"],
                     "video_id": item.get("video_id"),
@@ -501,11 +482,16 @@ def handler(event, context):
 
     except Exception as e:
         logger.error(f"Handler error: {e}")
-        db.close()
         return {
             "statusCode": 500,
             "body": json.dumps({"error": str(e)}),
         }
+
+    finally:
+        if lock_acquired:
+            db.release_lock(Database.LOCK_YOUTUBE)
+            logger.info("Released YouTube lock")
+        db.close()
 
 
 if __name__ == "__main__":
@@ -546,46 +532,48 @@ if __name__ == "__main__":
 
     # Initialize database
     config = Config.from_env()
-    db = Database(config.db_path)
+    db = Database(config.database_url)
     db.initialize()
 
-    if args.command == "add":
-        urls = list(args.urls) if args.urls else []
+    try:
+        if args.command == "add":
+            urls = list(args.urls) if args.urls else []
 
-        if args.file:
-            with open(args.file) as f:
-                urls.extend(line.strip() for line in f if line.strip())
+            if args.file:
+                with open(args.file) as f:
+                    urls.extend(line.strip() for line in f if line.strip())
 
-        if not urls:
-            print("No URLs provided")
-            sys.exit(1)
+            if not urls:
+                print("No URLs provided")
+                sys.exit(1)
 
-        result = add_urls(db, urls)
-        print(json.dumps(result, indent=2))
+            result = add_urls(db, urls)
+            print(json.dumps(result, indent=2))
 
-    elif args.command == "process":
-        bucket = args.bucket or config.bucket
-        if not bucket:
-            print("Error: bucket required (--bucket or KB_BUCKET env var)")
-            sys.exit(1)
+        elif args.command == "process":
+            bucket = args.bucket or config.bucket
+            if not bucket:
+                print("Error: bucket required (--bucket or KB_BUCKET env var)")
+                sys.exit(1)
 
-        storage = get_storage(bucket)
-        tags = args.tags.split(",") if args.tags else None
+            storage = get_storage(bucket)
+            tags = args.tags.split(",") if args.tags else None
 
-        result = process_queue(db, storage, limit=args.limit, tags=tags)
-        print(json.dumps(result, indent=2))
+            result = process_queue(db, storage, limit=args.limit, tags=tags)
+            print(json.dumps(result, indent=2))
 
-    elif args.command == "status":
-        stats = db.get_youtube_queue_stats()
-        print(json.dumps(stats, indent=2))
+        elif args.command == "status":
+            stats = db.get_youtube_queue_stats()
+            print(json.dumps(stats, indent=2))
 
-    elif args.command == "list":
-        items = db.list_youtube_queue(status=args.status)
-        for item in items:
-            print(f"{item['status']:12} {item['url']}")
-            if item.get('video_title'):
-                print(f"             {item['video_title']} ({item['channel_name']})")
-            if item.get('error'):
-                print(f"             Error: {item['error'][:80]}")
+        elif args.command == "list":
+            items = db.list_youtube_queue(status=args.status)
+            for item in items:
+                print(f"{item['status']:12} {item['url']}")
+                if item.get('video_title'):
+                    print(f"             {item['video_title']} ({item['channel_name']})")
+                if item.get('error'):
+                    print(f"             Error: {item['error'][:80]}")
 
-    db.close()
+    finally:
+        db.close()

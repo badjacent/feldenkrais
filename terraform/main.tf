@@ -131,6 +131,10 @@ resource "aws_lambda_function" "loader" {
   timeout          = 120
   memory_size      = 512
 
+  layers = compact([
+    length(aws_lambda_layer_version.python_deps) > 0 ? aws_lambda_layer_version.python_deps[0].arn : null,
+  ])
+
   # Note: reserved_concurrent_executions = 1 would prevent race conditions,
   # but requires sufficient account concurrency quota.
   # Instead, we use a UNIQUE constraint in the database.
@@ -140,6 +144,7 @@ resource "aws_lambda_function" "loader" {
       KB_BUCKET         = aws_s3_bucket.main.id
       KB_ENV            = var.environment
       KB_GRACE_PERIOD   = var.grace_period_seconds
+      DATABASE_URL      = var.database_url
     }
   }
 }
@@ -194,9 +199,9 @@ resource "aws_lambda_permission" "allow_eventbridge_loader" {
 # -----------------------------------------------------------------------------
 
 # Build Python dependencies layer
-# Run: ./build_deps_layer.sh before terraform apply (for transcription Lambda)
+# Run: ./build_deps_layer.sh before terraform apply
 resource "aws_lambda_layer_version" "python_deps" {
-  count = var.groq_api_key != "" && fileexists("${path.module}/lambda_deps.zip") ? 1 : 0
+  count = fileexists("${path.module}/lambda_deps.zip") ? 1 : 0
 
   filename            = "${path.module}/lambda_deps.zip"
   layer_name          = "feldenkrais-deps-${var.environment}"
@@ -269,6 +274,14 @@ resource "aws_lambda_function" "transcription" {
   timeout          = 900  # 15 minutes max for long transcriptions
   memory_size      = 1024
 
+  ephemeral_storage {
+    size = 2048  # 2GB for downloading and chunking multiple audio files
+  }
+
+  # Note: reserved_concurrent_executions = 1 would prevent race conditions,
+  # but account lacks sufficient concurrency quota. Using database-level
+  # locking instead (transcription_job records prevent duplicate processing).
+
   layers = compact([
     length(aws_lambda_layer_version.python_deps) > 0 ? aws_lambda_layer_version.python_deps[0].arn : null,
     var.ffmpeg_layer_arn != "" ? var.ffmpeg_layer_arn : null
@@ -279,6 +292,7 @@ resource "aws_lambda_function" "transcription" {
       KB_BUCKET     = aws_s3_bucket.main.id
       KB_ENV        = var.environment
       GROQ_API_KEY  = var.groq_api_key
+      DATABASE_URL  = var.database_url
       PATH          = "/opt/bin:/var/lang/bin:/usr/local/bin:/usr/bin:/bin"
     }
   }
@@ -381,9 +395,10 @@ resource "aws_lambda_function" "scraper" {
 
   environment {
     variables = {
-      KB_BUCKET = aws_s3_bucket.main.id
-      KB_ENV    = var.environment
-      PATH      = "/opt/bin:/var/lang/bin:/usr/local/bin:/usr/bin:/bin"
+      KB_BUCKET    = aws_s3_bucket.main.id
+      KB_ENV       = var.environment
+      DATABASE_URL = var.database_url
+      PATH         = "/opt/bin:/var/lang/bin:/usr/local/bin:/usr/bin:/bin"
     }
   }
 }
@@ -464,9 +479,10 @@ resource "aws_lambda_function" "youtube" {
 
   environment {
     variables = {
-      KB_BUCKET = aws_s3_bucket.main.id
-      KB_ENV    = var.environment
-      PATH      = "/opt/bin:/var/lang/bin:/usr/local/bin:/usr/bin:/bin"
+      KB_BUCKET    = aws_s3_bucket.main.id
+      KB_ENV       = var.environment
+      DATABASE_URL = var.database_url
+      PATH         = "/opt/bin:/var/lang/bin:/usr/local/bin:/usr/bin:/bin"
     }
   }
 }

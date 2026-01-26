@@ -486,7 +486,7 @@ def main():
     parser.add_argument("--password", default=os.environ.get("FM_PASSWORD"), help="Login password")
     parser.add_argument("--local-dir", help="Directory with local video files")
     parser.add_argument("--bucket", default=os.environ.get("KB_BUCKET"), help="S3 bucket")
-    parser.add_argument("--db-path", default=os.environ.get("KB_DB_PATH", "/tmp/knowledge.db"), help="Database path")
+    parser.add_argument("--database-url", default=os.environ.get("DATABASE_URL", ""), help="PostgreSQL connection URL")
     parser.add_argument("--limit", type=int, help="Limit number of videos to process")
     parser.add_argument("--download-missing", action="store_true", help="Download videos not found locally")
     parser.add_argument("--scrape-only", action="store_true", help="Only scrape, don't stage")
@@ -499,7 +499,10 @@ def main():
         parser.error("Email and password required (use --email/--password or FM_EMAIL/FM_PASSWORD env vars)")
 
     # Initialize database
-    db = Database(args.db_path)
+    database_url = args.database_url or os.environ.get("DATABASE_URL", "")
+    if not database_url:
+        parser.error("Database URL required (use --database-url or DATABASE_URL env var)")
+    db = Database(database_url)
     db.initialize()
 
     # Scrape (uses cache for known lessons)

@@ -6,10 +6,10 @@ Triggered by S3 events on staging/*.
 
 import json
 import logging
-import sqlite3
 from pathlib import Path
-from typing import Optional
 from uuid import uuid4
+
+import psycopg2.errors
 
 try:
     # Lambda environment (flat structure)
@@ -141,7 +141,7 @@ def process_file(
             "archive_key": archive_key,
         }
 
-    except sqlite3.IntegrityError as e:
+    except psycopg2.errors.UniqueViolation:
         # Duplicate detected by UNIQUE constraint - another Lambda already created this document
         logger.info(f"Duplicate detected (race condition): {title}")
         # Clean up - delete staged files and the archive copy we made
@@ -169,62 +169,6 @@ def process_file(
             return {"status": "error", "reason": str(e)}
 
 
-LOCK_KEY = "db/loader.lock"
-LOCK_TIMEOUT_SECONDS = 300  # Lock expires after 5 minutes (auto-release if Lambda crashes)
-
-
-def acquire_lock(storage: Storage) -> bool:
-    """
-    Try to acquire the processing lock.
-
-    Returns True if lock acquired, False if another process holds it.
-    Stale locks (older than LOCK_TIMEOUT_SECONDS) are automatically released.
-    """
-    import time
-
-    # Check if lock exists and is not stale
-    if storage.object_exists(LOCK_KEY):
-        lock_age = storage.get_object_age_seconds(LOCK_KEY)
-        if lock_age is not None and lock_age < LOCK_TIMEOUT_SECONDS:
-            logger.info(f"Lock held by another process (age: {lock_age:.0f}s)")
-            return False
-        else:
-            logger.info(f"Releasing stale lock (age: {lock_age}s)")
-            storage.delete_object(LOCK_KEY)
-
-    # Create lock with timestamp
-    lock_content = json.dumps({"timestamp": time.time()}).encode()
-    storage.put_object(LOCK_KEY, lock_content)
-    logger.info("Lock acquired")
-    return True
-
-
-def release_lock(storage: Storage):
-    """Release the processing lock."""
-    try:
-        storage.delete_object(LOCK_KEY)
-        logger.info("Lock released")
-    except Exception as e:
-        logger.error(f"Failed to release lock: {e}")
-
-
-def sync_db_from_s3(storage: Storage, db_path: str):
-    """Download DB from S3 if it exists."""
-    db_key = "db/knowledge.db"
-    if storage.object_exists(db_key):
-        logger.info(f"Downloading DB from s3://{storage.bucket}/{db_key}")
-        storage.download_file(db_key, db_path)
-    else:
-        logger.info("No existing DB in S3, will create new one")
-
-
-def sync_db_to_s3(storage: Storage, db_path: str):
-    """Upload DB to S3."""
-    db_key = "db/knowledge.db"
-    logger.info(f"Uploading DB to s3://{storage.bucket}/{db_key}")
-    storage.upload_file(db_path, db_key)
-
-
 def handler(event, context):
     """Lambda handler for S3 events on staging/."""
     logger.info(f"Received event: {json.dumps(event)}")
@@ -232,24 +176,21 @@ def handler(event, context):
     config = Config.from_env()
     storage = Storage(config.bucket)
 
-    # Try to acquire lock - if another Lambda is processing, skip
-    if not acquire_lock(storage):
-        logger.info("Another Lambda is processing, skipping")
-        return {
-            "statusCode": 200,
-            "body": json.dumps({"status": "skipped", "reason": "lock_held"}),
-        }
+    # Initialize DB with PostgreSQL connection
+    db = Database(config.database_url)
+    db.initialize()
+
+    # Acquire advisory lock to prevent concurrent runs
+    lock_acquired = db.try_acquire_lock(Database.LOCK_LOADER)
+    if not lock_acquired:
+        logger.info("Another loader Lambda is running, skipping")
+        db.close()
+        return {"statusCode": 200, "body": json.dumps({"message": "Skipped - another instance running"})}
+    logger.info("Acquired loader lock")
 
     try:
-        # Sync DB from S3
-        sync_db_from_s3(storage, config.db_path)
-
-        # Initialize DB
-        db = Database(config.db_path)
-        db.initialize()
-
         # List ALL files in staging/ (not just from the event)
-        # This ensures we process everything when we have the lock
+        # This ensures we process everything
         staging_objects = storage.list_objects("staging/")
         main_files = set()
         for obj in staging_objects:
@@ -272,10 +213,6 @@ def handler(event, context):
             result["staging_key"] = main_key
             results.append(result)
 
-        # Sync DB back to S3
-        db.close()
-        sync_db_to_s3(storage, config.db_path)
-
         # Summarize results
         loaded = [r for r in results if r["status"] == "loaded"]
         skipped = [r for r in results if r["status"] == "skipped"]
@@ -293,4 +230,7 @@ def handler(event, context):
         }
 
     finally:
-        release_lock(storage)
+        if lock_acquired:
+            db.release_lock(Database.LOCK_LOADER)
+            logger.info("Released loader lock")
+        db.close()

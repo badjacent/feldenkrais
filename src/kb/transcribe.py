@@ -40,10 +40,6 @@ DEFAULT_MAX_RETRIES = 3
 DEFAULT_COMPLETION_WINDOW = "24h"
 DEFAULT_PRESIGNED_URL_EXPIRY = 86400  # 24 hours
 
-# Lock configuration
-LOCK_KEY = "db/transcription.lock"
-LOCK_TIMEOUT_SECONDS = 960  # 16 minutes (longer than Lambda timeout of 15 min)
-
 
 @dataclass
 class TranscriptionConfig:
@@ -53,35 +49,6 @@ class TranscriptionConfig:
     completion_window: str = DEFAULT_COMPLETION_WINDOW
     presigned_url_expiry: int = DEFAULT_PRESIGNED_URL_EXPIRY
     max_documents_per_batch: int = 10  # Limit documents per Lambda run to avoid timeout
-
-
-def acquire_lock(storage: Storage) -> bool:
-    """
-    Try to acquire the transcription processing lock.
-    Returns True if lock acquired, False if another process holds it.
-    """
-    if storage.object_exists(LOCK_KEY):
-        lock_age = storage.get_object_age_seconds(LOCK_KEY)
-        if lock_age is not None and lock_age < LOCK_TIMEOUT_SECONDS:
-            logger.info(f"Lock held by another process (age: {lock_age:.0f}s)")
-            return False
-        else:
-            logger.info(f"Releasing stale lock (age: {lock_age}s)")
-            storage.delete_object(LOCK_KEY)
-
-    lock_content = json.dumps({"timestamp": time.time()}).encode()
-    storage.put_object(LOCK_KEY, lock_content)
-    logger.info("Transcription lock acquired")
-    return True
-
-
-def release_lock(storage: Storage):
-    """Release the transcription processing lock."""
-    try:
-        storage.delete_object(LOCK_KEY)
-        logger.info("Transcription lock released")
-    except Exception as e:
-        logger.error(f"Failed to release lock: {e}")
 
 
 def create_batch_request(
@@ -168,6 +135,31 @@ class TranscriptionService:
 
         logger.info(f"Creating batch for {len(documents)} documents")
 
+        # Create placeholder jobs FIRST to claim documents (prevents race conditions)
+        # Other Lambda instances will skip documents that already have pending jobs
+        placeholder_jobs = {}
+        for doc in documents:
+            doc_id = doc["id"]
+            try:
+                placeholder_id = self.db.create_transcription_job(
+                    document_id=doc_id,
+                    chunk_index=0,
+                    total_chunks=1,  # Will be updated after chunking
+                )
+                placeholder_jobs[doc_id] = placeholder_id
+                logger.info(f"Claimed document {doc_id} with placeholder job {placeholder_id}")
+            except Exception as e:
+                # Document may have been claimed by another Lambda
+                logger.warning(f"Could not claim document {doc_id}: {e}")
+
+        # Filter to only documents we successfully claimed
+        documents = [doc for doc in documents if doc["id"] in placeholder_jobs]
+        if not documents:
+            logger.info("No documents claimed (all may be in progress)")
+            return None
+
+        logger.info(f"Processing {len(documents)} claimed documents")
+
         # Process each document: download, chunk if needed, upload chunks
         requests = []
         jobs_created = []
@@ -177,6 +169,7 @@ class TranscriptionService:
             for doc in documents:
                 s3_key = doc["s3_key"]
                 doc_id = doc["id"]
+                placeholder_id = placeholder_jobs[doc_id]
 
                 # Create temp directory for this document
                 temp_dir = tempfile.mkdtemp(prefix=f"transcribe_{doc_id}_")
@@ -196,6 +189,24 @@ class TranscriptionService:
                 total_chunks = len(chunks)
                 logger.info(f"Document {doc_id}: {total_chunks} chunk(s)")
 
+                # Handle the placeholder job:
+                # - If single chunk: update the placeholder with correct info
+                # - If multiple chunks: delete placeholder and create new jobs
+                if total_chunks == 1:
+                    # Update placeholder job with actual chunk info
+                    chunk = chunks[0]
+                    self.db.update_transcription_job(
+                        job_id=placeholder_id,
+                        chunk_index=chunk.index,
+                        chunk_offset_seconds=chunk.offset_seconds,
+                        total_chunks=1,
+                    )
+                    first_job_id = placeholder_id
+                else:
+                    # Delete placeholder and create proper jobs for each chunk
+                    self.db.delete_transcription_job(placeholder_id)
+                    first_job_id = None
+
                 # Upload chunks to temp S3 location and create jobs
                 for chunk in chunks:
                     chunk_filename = Path(chunk.path).name
@@ -206,13 +217,16 @@ class TranscriptionService:
                         self.storage.put_object(chunk_s3_key, f.read())
                     logger.info(f"Uploaded chunk to {chunk_s3_key}")
 
-                    # Create transcription job
-                    job_id = self.db.create_transcription_job(
-                        document_id=doc_id,
-                        chunk_index=chunk.index,
-                        chunk_offset_seconds=chunk.offset_seconds,
-                        total_chunks=total_chunks,
-                    )
+                    # Create or use existing job
+                    if chunk.index == 0 and first_job_id:
+                        job_id = first_job_id
+                    else:
+                        job_id = self.db.create_transcription_job(
+                            document_id=doc_id,
+                            chunk_index=chunk.index,
+                            chunk_offset_seconds=chunk.offset_seconds,
+                            total_chunks=total_chunks,
+                        )
 
                     # Generate pre-signed URL
                     presigned_url = self.storage.generate_presigned_url(
@@ -462,7 +476,11 @@ class TranscriptionService:
                     logger.error(f"Job {job['id']} has no result_data")
                     continue
 
-                body = json.loads(result_data)
+                # Handle both string and dict result_data (PostgreSQL returns dict for JSONB)
+                if isinstance(result_data, str):
+                    body = json.loads(result_data)
+                else:
+                    body = result_data
                 chunk_results.append({
                     "text": body.get("text", ""),
                     "segments": body.get("segments", []),
@@ -682,22 +700,23 @@ def handler(event, context):
     config = Config.from_env()
     storage = Storage(config.bucket)
 
-    # Try to acquire lock - if another Lambda is processing, skip
-    if not acquire_lock(storage):
-        logger.info("Another Lambda is processing, skipping")
-        return {
-            "statusCode": 200,
-            "body": json.dumps({"status": "skipped", "reason": "lock_held"}),
-        }
+    # Initialize DB with PostgreSQL connection
+    db = Database(config.database_url)
+    db.initialize()
+
+    # For scheduled events, acquire advisory lock to prevent concurrent runs
+    is_scheduled = "source" in event and event["source"] == "aws.events"
+    lock_acquired = False
+
+    if is_scheduled:
+        lock_acquired = db.try_acquire_lock(Database.LOCK_TRANSCRIPTION)
+        if not lock_acquired:
+            logger.info("Another transcription Lambda is running, skipping")
+            db.close()
+            return {"statusCode": 200, "body": json.dumps({"message": "Skipped - another instance running"})}
+        logger.info("Acquired transcription lock")
 
     try:
-        # Sync DB from S3
-        from loader import sync_db_from_s3, sync_db_to_s3
-        sync_db_from_s3(storage, config.db_path)
-
-        db = Database(config.db_path)
-        db.initialize()
-
         service = TranscriptionService(db=db, storage=storage)
 
         if action == "create_batch":
@@ -732,7 +751,7 @@ def handler(event, context):
 
         else:
             # Default action for scheduled events: use batch API
-            if "source" in event and event["source"] == "aws.events":
+            if is_scheduled:
                 # First, process any completed batches
                 completed_results = service.process_completed_batches()
 
@@ -746,10 +765,6 @@ def handler(event, context):
             else:
                 return {"statusCode": 400, "body": json.dumps({"error": f"Unknown action: {action}"})}
 
-        # Sync DB back to S3
-        db.close()
-        sync_db_to_s3(storage, config.db_path)
-
         return {"statusCode": 200, "body": json.dumps(result)}
 
     except Exception as e:
@@ -757,7 +772,10 @@ def handler(event, context):
         return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
 
     finally:
-        release_lock(storage)
+        if lock_acquired:
+            db.release_lock(Database.LOCK_TRANSCRIPTION)
+            logger.info("Released transcription lock")
+        db.close()
 
 
 if __name__ == "__main__":
@@ -799,7 +817,6 @@ if __name__ == "__main__":
 
     # Common arguments
     parser.add_argument("--bucket", help="S3 bucket (overrides KB_BUCKET)")
-    parser.add_argument("--db-path", help="Database path (for local mode)")
 
     args = parser.parse_args()
 
@@ -811,25 +828,19 @@ if __name__ == "__main__":
     config = Config.from_env()
     bucket = args.bucket or config.bucket
 
-    if config.db_mode == "s3":
-        storage = Storage(bucket)
-        from kb.loader import sync_db_from_s3, sync_db_to_s3
-        sync_db_from_s3(storage, config.db_path)
-        db_path = config.db_path
-    else:
-        storage = Storage(bucket) if bucket else None
-        db_path = args.db_path or config.db_path
-
-    db = Database(db_path)
+    db = Database(config.database_url)
     db.initialize()
+    storage = Storage(bucket) if bucket else None
 
     if args.command == "list-pending":
         docs = db.get_untranscribed_documents()
-        print(json.dumps([{"id": d["id"], "title": d["title"], "s3_key": d["s3_key"]} for d in docs], indent=2))
+        print(json.dumps([{"id": str(d["id"]), "title": d["title"], "s3_key": d["s3_key"]} for d in docs], indent=2))
+        db.close()
         exit(0)
 
     if not storage:
         print("Error: S3 bucket required")
+        db.close()
         exit(1)
 
     service = TranscriptionService(db=db, storage=storage)
@@ -865,5 +876,3 @@ if __name__ == "__main__":
 
     finally:
         db.close()
-        if config.db_mode == "s3":
-            sync_db_to_s3(storage, config.db_path)

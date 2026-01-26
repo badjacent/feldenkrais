@@ -28,3 +28,10 @@ variable "ffmpeg_layer_arn" {
   type        = string
   default     = ""
 }
+
+variable "database_url" {
+  description = "Neon PostgreSQL connection string"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
