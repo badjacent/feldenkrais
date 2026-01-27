@@ -67,15 +67,40 @@ def load_router() -> tuple[str, dict]:
 
 
 def load_protocol(framework: str = "vl1") -> tuple[str, dict]:
-    """Load the protocol markdown and its JSON schema for a given framework."""
-    # For now, only VL-1 is implemented (washing.md)
-    protocol_path = DATA_DIR / "washing.md"
-    schema_path = DATA_DIR / "washing.schema.json"
+    """Load the protocol markdown and its JSON schema for a given framework.
 
-    protocol = protocol_path.read_text() if protocol_path.exists() else ""
+    The protocol is assembled from:
+    1. core_protocol.md - shared SPIFFER-Q and Negotiation State logic
+    2. vl{N}.md - framework-specific lens (Primary Inquiry, Striver/Foundation modes, Goal)
+    """
+    # Load core protocol
+    core_path = DATA_DIR / "core_protocol.md"
+    core_protocol = core_path.read_text() if core_path.exists() else ""
+
+    # Load VL-specific module
+    vl_map = {
+        "VL-1": "vl1.md",
+        "VL-2": "vl2.md",
+        "VL-3": "vl3.md",
+        "VL-4": "vl4.md",
+        "VL-5": "vl5.md",
+    }
+    vl_file = vl_map.get(framework, "vl1.md")
+    vl_path = DATA_DIR / vl_file
+    vl_module = vl_path.read_text() if vl_path.exists() else ""
+
+    # Combine: core protocol + VL-specific framework section
+    protocol = core_protocol + "\n\n---\n\n## Framework: " + framework + "\n\n" + vl_module
+
+    # Schema is shared across all VL frameworks
+    schema_path = DATA_DIR / "washing.schema.json"
     schema = json.loads(schema_path.read_text()) if schema_path.exists() else {}
 
     return protocol, schema
+
+
+# Threshold for running a VL analysis (score must be >= this)
+VL_ANALYSIS_THRESHOLD = 0.5
 
 
 def get_llm() -> LLM:
@@ -180,6 +205,44 @@ def run_router(lesson_text: str) -> dict:
     return classification
 
 
+def get_active_frameworks(router_result: dict, threshold: float = VL_ANALYSIS_THRESHOLD) -> list[str]:
+    """Get list of VL frameworks that scored above the threshold."""
+    classifications = router_result.get("classifications", {})
+
+    # Map classification keys to framework names
+    key_to_framework = {
+        "vl1_vertical_self": "VL-1",
+        "vl2_homunculus": "VL-2",
+        "vl3_steering": "VL-3",
+        "vl4_proximal_distal": "VL-4",
+        "vl5_folding": "VL-5",
+    }
+
+    active = []
+    for key, framework in key_to_framework.items():
+        score = classifications.get(key, 0)
+        if score >= threshold:
+            active.append((framework, score))
+
+    # Sort by score descending, return framework names
+    active.sort(key=lambda x: -x[1])
+    return [f for f, s in active]
+
+
+def run_vl_analysis(lesson_text: str, framework: str) -> dict:
+    """Run analysis for a specific VL framework."""
+    protocol, schema = load_protocol(framework)
+    prompt = protocol + "\n\n---\n\n## Lesson Text:\n\n" + lesson_text
+
+    llm = get_llm()
+    analysis = llm.complete_structured_json(
+        prompt,
+        schema,
+        system=ANALYSIS_SYSTEM_PROMPT,
+    )
+    return analysis
+
+
 def process_job(job_id: str) -> None:
     """Process a pending job (called by async Lambda invocation)."""
     job = load_job(job_id)
@@ -193,35 +256,37 @@ def process_job(job_id: str) -> None:
         router_result = run_router(lesson_text)
         job["router_result"] = router_result
 
-        # Step 2: Run analysis based on primary framework
-        primary = router_result.get("primary_framework", "VL-1")
+        # Step 2: Determine which frameworks to analyze
+        active_frameworks = get_active_frameworks(router_result)
 
-        # For now, only VL-1 is implemented
-        if primary != "VL-1":
-            # Store partial result and note that analysis is not yet available
-            job["status"] = "complete"
-            job["result"] = None
-            job["analysis_note"] = f"Analysis for {primary} is not yet implemented. Only VL-1 analysis is currently available."
-            save_job(job_id, job)
-            return
+        if not active_frameworks:
+            # Fallback to primary if nothing above threshold
+            primary = router_result.get("primary_framework", "VL-1")
+            active_frameworks = [primary]
 
-        # Load protocol and schema for VL-1
-        protocol, schema = load_protocol("vl1")
+        # Step 3: Run analysis for each active framework
+        # Store results keyed by framework name
+        job["vl_analyses"] = {}
 
-        # Build prompt
-        prompt = protocol + "\n\n---\n\n## Lesson Text:\n\n" + lesson_text
+        for framework in active_frameworks:
+            try:
+                analysis = run_vl_analysis(lesson_text, framework)
+                job["vl_analyses"][framework] = {
+                    "status": "complete",
+                    "result": analysis
+                }
+            except Exception as e:
+                job["vl_analyses"][framework] = {
+                    "status": "error",
+                    "error": str(e)
+                }
 
-        # Get structured analysis
-        llm = get_llm()
-        analysis = llm.complete_structured_json(
-            prompt,
-            schema,
-            system=ANALYSIS_SYSTEM_PROMPT,
-        )
+        # For backwards compatibility, also store primary result in "result"
+        primary = active_frameworks[0] if active_frameworks else "VL-1"
+        if primary in job["vl_analyses"] and job["vl_analyses"][primary].get("status") == "complete":
+            job["result"] = job["vl_analyses"][primary]["result"]
 
-        # Update job with result
         job["status"] = "complete"
-        job["result"] = analysis
         save_job(job_id, job)
 
     except Exception as e:
@@ -289,6 +354,78 @@ def render_router_result(router_result: dict) -> str:
         html.append("</ul></details>")
 
     html.append("</div>")
+    return "\n".join(html)
+
+
+def render_multi_vl_analyses(vl_analyses: dict, schema: dict) -> str:
+    """Render multiple VL analyses with tabs for switching between them."""
+    if not vl_analyses:
+        return ""
+
+    frameworks = list(vl_analyses.keys())
+
+    if len(frameworks) == 1:
+        # Single framework, no tabs needed
+        framework = frameworks[0]
+        entry = vl_analyses[framework]
+        if entry.get("status") == "complete" and entry.get("result"):
+            return f'<h2>{framework} Analysis</h2>' + render_analysis(entry["result"], schema)
+        elif entry.get("status") == "error":
+            return f'<div class="error"><strong>{framework}:</strong> {entry.get("error", "Unknown error")}</div>'
+        return ""
+
+    # Multiple frameworks - use tabs
+    html = []
+
+    # Tab buttons
+    html.append('<div class="vl-tabs" style="margin-bottom: 20px;">')
+    for i, framework in enumerate(frameworks):
+        active = "background: #007bff; color: white;" if i == 0 else "background: #e9ecef; color: #333;"
+        html.append(f'''
+            <button onclick="showVLTab('{framework}')" id="tab-{framework}"
+                    style="padding: 10px 20px; border: none; cursor: pointer; {active} border-radius: 4px 4px 0 0; margin-right: 2px;">
+                {framework}
+            </button>
+        ''')
+    html.append('</div>')
+
+    # Tab content
+    for i, framework in enumerate(frameworks):
+        display = "block" if i == 0 else "none"
+        entry = vl_analyses[framework]
+
+        html.append(f'<div id="content-{framework}" class="vl-content" style="display: {display};">')
+        html.append(f'<h2>{framework} Analysis</h2>')
+
+        if entry.get("status") == "complete" and entry.get("result"):
+            html.append(render_analysis(entry["result"], schema))
+        elif entry.get("status") == "error":
+            html.append(f'<div class="error">Error: {entry.get("error", "Unknown error")}</div>')
+        else:
+            html.append('<p>No analysis available.</p>')
+
+        html.append('</div>')
+
+    # Tab switching JavaScript
+    html.append('''
+        <script>
+        function showVLTab(framework) {
+            // Hide all content
+            document.querySelectorAll('.vl-content').forEach(el => el.style.display = 'none');
+            // Deactivate all tabs
+            document.querySelectorAll('.vl-tabs button').forEach(el => {
+                el.style.background = '#e9ecef';
+                el.style.color = '#333';
+            });
+            // Show selected content
+            document.getElementById('content-' + framework).style.display = 'block';
+            // Activate selected tab
+            document.getElementById('tab-' + framework).style.background = '#007bff';
+            document.getElementById('tab-' + framework).style.color = 'white';
+        }
+        </script>
+    ''')
+
     return "\n".join(html)
 
 
@@ -746,15 +883,16 @@ def build_result_html(job: dict | None, job_id: str, schema: dict) -> str:
 
     # status == "complete"
     router_result = job.get("router_result", {})
-    result = job.get("result", {})
-    analysis_note = job.get("analysis_note", "")
+    vl_analyses = job.get("vl_analyses", {})
 
     router_html = render_router_result(router_result)
 
-    if result:
-        analysis_html = render_analysis(result, schema)
-    elif analysis_note:
-        analysis_html = f'<div class="info" style="background: #fff3cd; padding: 15px; border-radius: 8px;"><strong>Note:</strong> {analysis_note}</div>'
+    # Use multi-VL renderer if we have vl_analyses, otherwise fall back to legacy result
+    if vl_analyses:
+        analysis_html = render_multi_vl_analyses(vl_analyses, schema)
+    elif job.get("result"):
+        # Legacy single-result format
+        analysis_html = render_analysis(job["result"], schema)
     else:
         analysis_html = ""
 
@@ -853,21 +991,24 @@ async def api_analyze(
         router_result = run_router(text)
         router_html = render_router_result(router_result)
 
-        # Step 2: Run analysis if VL-1 (only implemented framework)
-        primary = router_result.get("primary_framework", "VL-1")
+        # Step 2: Get active frameworks and run analyses
+        active_frameworks = get_active_frameworks(router_result)
+        if not active_frameworks:
+            primary = router_result.get("primary_framework", "VL-1")
+            active_frameworks = [primary]
 
-        if primary != "VL-1":
-            analysis_html = f'<div class="info" style="background: #fff3cd; padding: 15px; border-radius: 8px;"><strong>Note:</strong> Analysis for {primary} is not yet implemented. Only VL-1 analysis is currently available.</div>'
-        else:
-            protocol, schema = load_protocol()
-            prompt = protocol + "\n\n---\n\n## Lesson Text:\n\n" + text
-            llm = get_llm()
-            analysis = llm.complete_structured_json(
-                prompt,
-                schema,
-                system=ANALYSIS_SYSTEM_PROMPT,
-            )
-            analysis_html = render_analysis(analysis, schema)
+        # Step 3: Run analysis for each active framework
+        _, schema = load_protocol()  # Schema is shared
+        vl_analyses = {}
+
+        for framework in active_frameworks:
+            try:
+                analysis = run_vl_analysis(text, framework)
+                vl_analyses[framework] = {"status": "complete", "result": analysis}
+            except Exception as e:
+                vl_analyses[framework] = {"status": "error", "error": str(e)}
+
+        analysis_html = render_multi_vl_analyses(vl_analyses, schema)
 
         return JSONResponse({
             "status": "complete",
@@ -897,15 +1038,14 @@ async def api_status(job_id: str):
     else:  # complete
         _, schema = load_protocol()
         router_result = job.get("router_result", {})
-        result = job.get("result", {})
-        analysis_note = job.get("analysis_note", "")
+        vl_analyses = job.get("vl_analyses", {})
 
         router_html = render_router_result(router_result)
 
-        if result:
-            analysis_html = render_analysis(result, schema)
-        elif analysis_note:
-            analysis_html = f'<div class="info" style="background: #fff3cd; padding: 15px; border-radius: 8px;"><strong>Note:</strong> {analysis_note}</div>'
+        if vl_analyses:
+            analysis_html = render_multi_vl_analyses(vl_analyses, schema)
+        elif job.get("result"):
+            analysis_html = render_analysis(job["result"], schema)
         else:
             analysis_html = ""
 
@@ -932,22 +1072,24 @@ async def analyze(
         router_result = run_router(text)
         router_html = render_router_result(router_result)
 
-        # Step 2: Run analysis if VL-1 (only implemented framework)
-        primary = router_result.get("primary_framework", "VL-1")
+        # Step 2: Get active frameworks and run analyses
+        active_frameworks = get_active_frameworks(router_result)
+        if not active_frameworks:
+            primary = router_result.get("primary_framework", "VL-1")
+            active_frameworks = [primary]
 
-        if primary != "VL-1":
-            analysis_html = f'<div class="info" style="background: #fff3cd; padding: 15px; border-radius: 8px;"><strong>Note:</strong> Analysis for {primary} is not yet implemented. Only VL-1 analysis is currently available.</div>'
-        else:
-            protocol, schema = load_protocol()
-            prompt = protocol + "\n\n---\n\n## Lesson Text:\n\n" + text
-            llm = get_llm()
-            analysis = llm.complete_structured_json(
-                prompt,
-                schema,
-                system=ANALYSIS_SYSTEM_PROMPT,
-            )
-            analysis_html = render_analysis(analysis, schema)
+        # Step 3: Run analysis for each active framework
+        _, schema = load_protocol()
+        vl_analyses = {}
 
+        for framework in active_frameworks:
+            try:
+                analysis = run_vl_analysis(text, framework)
+                vl_analyses[framework] = {"status": "complete", "result": analysis}
+            except Exception as e:
+                vl_analyses[framework] = {"status": "error", "error": str(e)}
+
+        analysis_html = render_multi_vl_analyses(vl_analyses, schema)
         result_html = f'<div class="result">{router_html}{analysis_html}</div>'
 
     except Exception as e:
