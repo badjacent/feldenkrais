@@ -558,6 +558,44 @@ resource "aws_iam_role_policy_attachment" "web_lambda_logs" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+# S3 access for web Lambda (for async job storage)
+resource "aws_iam_role_policy" "web_lambda_s3" {
+  name = "s3-access"
+  role = aws_iam_role.web_lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject"
+        ]
+        Resource = "${aws_s3_bucket.main.arn}/web-jobs/*"
+      }
+    ]
+  })
+}
+
+# Allow web Lambda to invoke itself asynchronously
+resource "aws_iam_role_policy" "web_lambda_invoke" {
+  name = "lambda-invoke"
+  role = aws_iam_role.web_lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = "lambda:InvokeFunction"
+        Resource = aws_lambda_function.web.arn
+      }
+    ]
+  })
+}
+
 # Package web Lambda code (web.py, llm.py, schemas.py, and data files)
 data "archive_file" "web_lambda" {
   type        = "zip"
@@ -613,6 +651,8 @@ resource "aws_lambda_function" "web" {
       GOOGLE_API_KEY    = var.google_api_key
       ANTHROPIC_API_KEY = var.anthropic_api_key
       OPENAI_API_KEY    = var.openai_api_key
+      KB_BUCKET         = aws_s3_bucket.main.id
+      AWS_LAMBDA_FUNCTION_NAME_SELF = "feldenkrais-web-${var.environment}"
     }
   }
 }
