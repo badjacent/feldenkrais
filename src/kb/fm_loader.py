@@ -73,6 +73,8 @@ class LessonVideo:
     youtube_title: Optional[str] = None
     youtube_channel: Optional[str] = None
     duration_seconds: Optional[int] = None
+    lesson_date: Optional[str] = None
+    lesson_index: Optional[str] = None
 
 
 def create_session(email: str, password: str) -> requests.Session:
@@ -139,25 +141,69 @@ def extract_youtube_id_from_page(html: str) -> Optional[str]:
     return None
 
 
-def parse_lesson_title(title: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
-    """Extract segment, day, and chapter from lesson title."""
-    segment = None
-    day = None
-    chapter = None
+def parse_lesson_title(title: str) -> dict:
+    """
+    Extract segment, day, chapter, and date from lesson title.
+
+    Handles two date formats:
+    - "Day 1: Jan 17, Chapter 1" (month name, need year from context)
+    - "Day 1 2/7/25 Chapter 1" (M/D/YY format)
+
+    Returns dict with keys: segment, day, chapter, lesson_date, lesson_index
+    """
+    from datetime import datetime
+
+    result = {
+        'segment': None,
+        'day': None,
+        'chapter': None,
+        'lesson_date': None,
+        'lesson_index': None,
+    }
 
     seg_match = re.search(r'Segment\s*(\d+)', title, re.IGNORECASE)
     if seg_match:
-        segment = seg_match.group(1)
+        result['segment'] = seg_match.group(1)
 
     day_match = re.search(r'Day\s*(\d+)', title, re.IGNORECASE)
     if day_match:
-        day = day_match.group(1)
+        result['day'] = day_match.group(1)
 
     chapter_match = re.search(r'Chapter\s*(\d+)', title, re.IGNORECASE)
     if chapter_match:
-        chapter = chapter_match.group(1)
+        result['chapter'] = chapter_match.group(1)
+        result['lesson_index'] = f"Chapter {chapter_match.group(1)}"
 
-    return segment, day, chapter
+    # Try to extract date - format 1: M/D/YY (e.g., "2/7/25")
+    date_match = re.search(r'(\d{1,2})/(\d{1,2})/(\d{2})', title)
+    if date_match:
+        month, day, year = date_match.groups()
+        # Assume 20xx for two-digit years
+        full_year = 2000 + int(year)
+        try:
+            parsed_date = datetime(full_year, int(month), int(day))
+            result['lesson_date'] = parsed_date.strftime('%Y-%m-%d')
+        except ValueError:
+            pass
+    else:
+        # Try format 2: "Jan 17" (month name + day, assume 2025 for now)
+        month_match = re.search(r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*(\d{1,2})', title, re.IGNORECASE)
+        if month_match:
+            month_name, day_num = month_match.groups()
+            month_map = {
+                'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+                'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12
+            }
+            month_num = month_map.get(month_name.lower())
+            if month_num:
+                try:
+                    # Default to 2025 for segment 1 lessons
+                    parsed_date = datetime(2025, month_num, int(day_num))
+                    result['lesson_date'] = parsed_date.strftime('%Y-%m-%d')
+                except ValueError:
+                    pass
+
+    return result
 
 
 def scrape_and_update(
@@ -222,14 +268,16 @@ def scrape_and_update(
     for lesson_url, lesson_title in all_lessons:
         youtube_id = cached_mappings.get(lesson_url)
         if youtube_id:
-            segment, day, chapter = parse_lesson_title(lesson_title)
+            parsed = parse_lesson_title(lesson_title)
             videos.append(LessonVideo(
                 youtube_id=youtube_id,
                 lesson_url=lesson_url,
                 lesson_title=lesson_title,
-                segment=segment,
-                day=day,
-                chapter=chapter,
+                segment=parsed['segment'],
+                day=parsed['day'],
+                chapter=parsed['chapter'],
+                lesson_date=parsed.get('lesson_date'),
+                lesson_index=parsed.get('lesson_index'),
             ))
 
     logger.info(f"Total videos: {len(videos)}")
@@ -353,6 +401,8 @@ def stage_video(storage, video: LessonVideo) -> str:
         "source_id": FM_SOURCE_ID,
         "type_id": AUDIO_TYPE_ID,
         "tags": ["feldenkrais-manhattan", "training"],
+        "lesson_date": video.lesson_date,
+        "lesson_index": video.lesson_index,
         "youtube_metadata": {
             "video_id": video.youtube_id,
             "channel_name": video.youtube_channel,

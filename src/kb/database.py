@@ -34,7 +34,9 @@ CREATE TABLE IF NOT EXISTS document (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     tags JSONB,
-    metadata JSONB
+    metadata JSONB,
+    lesson_date DATE,
+    lesson_index TEXT
 );
 
 CREATE TABLE IF NOT EXISTS analysis_type (
@@ -105,6 +107,7 @@ CREATE INDEX IF NOT EXISTS idx_transcription_job_batch ON transcription_job(batc
 CREATE INDEX IF NOT EXISTS idx_youtube_queue_status ON youtube_queue(status);
 CREATE INDEX IF NOT EXISTS idx_fm_lesson_status ON fm_lesson_status(status);
 CREATE INDEX IF NOT EXISTS idx_fm_lesson_youtube ON fm_lesson_status(youtube_id);
+CREATE INDEX IF NOT EXISTS idx_document_lesson_date ON document(lesson_date);
 """
 
 SEED_DATA = """
@@ -209,16 +212,18 @@ class Database:
         source_url: Optional[str] = None,
         tags: Optional[str] = None,
         metadata: Optional[str] = None,
+        lesson_date: Optional[str] = None,
+        lesson_index: Optional[str] = None,
     ) -> str:
         """Create a new document record. Returns the document ID."""
         doc_id = str(uuid4())
         with self.get_cursor() as cursor:
             cursor.execute(
                 """
-                INSERT INTO document (id, title, source_url, s3_key, source_id, type_id, tags, metadata)
-                VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb)
+                INSERT INTO document (id, title, source_url, s3_key, source_id, type_id, tags, metadata, lesson_date, lesson_index)
+                VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s)
                 """,
-                (doc_id, title, source_url, s3_key, source_id, type_id, tags, metadata),
+                (doc_id, title, source_url, s3_key, source_id, type_id, tags, metadata, lesson_date, lesson_index),
             )
         return doc_id
 
@@ -687,4 +692,21 @@ class Database:
                 WHERE lesson_url = %s
                 """,
                 (lesson_url,),
+            )
+
+    def update_document_lesson_fields(
+        self,
+        doc_id: str,
+        lesson_date: Optional[str] = None,
+        lesson_index: Optional[str] = None,
+    ):
+        """Update lesson_date and lesson_index for a document."""
+        with self.get_cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE document
+                SET lesson_date = %s, lesson_index = %s, updated_at = NOW()
+                WHERE id = %s
+                """,
+                (lesson_date, lesson_index, doc_id),
             )

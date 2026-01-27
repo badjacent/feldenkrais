@@ -88,6 +88,8 @@ def process_file(
     source_id = sidecar.get("source_id", 1)
     type_id = sidecar.get("type_id", 1)
     tags = json.dumps(sidecar.get("tags", []))
+    lesson_date = sidecar.get("lesson_date")
+    lesson_index = sidecar.get("lesson_index")
 
     # Preserve metadata from sidecar
     metadata = {}
@@ -127,6 +129,8 @@ def process_file(
             source_url=source_url,
             tags=tags,
             metadata=metadata_json,
+            lesson_date=lesson_date,
+            lesson_index=lesson_index,
         )
 
         # Delete from staging
