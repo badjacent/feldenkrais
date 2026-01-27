@@ -24,8 +24,13 @@ Usage:
 """
 
 import os
+import json
 from dataclasses import dataclass, field
-from typing import Optional, Literal
+from typing import Optional, Literal, Type, TypeVar
+
+from pydantic import BaseModel
+
+T = TypeVar("T", bound=BaseModel)
 
 # Lazy imports
 anthropic = None
@@ -250,3 +255,251 @@ class LLM:
         )
 
         return response.text
+
+    def complete_structured(
+        self,
+        prompt: str,
+        response_model: Type[T],
+        *,
+        system: Optional[str] = None,
+        max_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+    ) -> T:
+        """
+        Get a structured response matching a Pydantic model.
+
+        Args:
+            prompt: The user prompt
+            response_model: Pydantic model class to parse response into
+            system: Optional system prompt
+            max_tokens: Max tokens to generate
+            temperature: Sampling temperature
+
+        Returns:
+            An instance of response_model
+        """
+        max_tokens = max_tokens or self.default_max_tokens
+        temperature = temperature if temperature is not None else self.default_temperature
+
+        if self.provider == "anthropic":
+            return self._structured_anthropic(prompt, response_model, system, max_tokens, temperature)
+        elif self.provider == "openai":
+            return self._structured_openai(prompt, response_model, system, max_tokens, temperature)
+        elif self.provider == "gemini":
+            return self._structured_gemini(prompt, response_model, system, max_tokens, temperature)
+
+    def _structured_anthropic(
+        self,
+        prompt: str,
+        response_model: Type[T],
+        system: Optional[str],
+        max_tokens: int,
+        temperature: float,
+    ) -> T:
+        """Get structured output from Anthropic using tool_use."""
+        schema = response_model.model_json_schema()
+
+        tool = {
+            "name": "output",
+            "description": f"Output structured data as {response_model.__name__}",
+            "input_schema": schema,
+        }
+
+        kwargs = {
+            "model": self.model,
+            "max_tokens": max_tokens,
+            "messages": [{"role": "user", "content": prompt}],
+            "tools": [tool],
+            "tool_choice": {"type": "tool", "name": "output"},
+        }
+        if system:
+            kwargs["system"] = system
+        if temperature > 0:
+            kwargs["temperature"] = temperature
+
+        response = self.client.messages.create(**kwargs)
+
+        # Extract tool use input
+        for block in response.content:
+            if block.type == "tool_use":
+                return response_model.model_validate(block.input)
+
+        raise ValueError("No tool use in response")
+
+    def _structured_openai(
+        self,
+        prompt: str,
+        response_model: Type[T],
+        system: Optional[str],
+        max_tokens: int,
+        temperature: float,
+    ) -> T:
+        """Get structured output from OpenAI using response_format."""
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+
+        response = self.client.beta.chat.completions.parse(
+            model=self.model,
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            response_format=response_model,
+        )
+
+        return response.choices[0].message.parsed
+
+    def _structured_gemini(
+        self,
+        prompt: str,
+        response_model: Type[T],
+        system: Optional[str],
+        max_tokens: int,
+        temperature: float,
+    ) -> T:
+        """Get structured output from Gemini using response_schema."""
+        config = {
+            "max_output_tokens": max_tokens,
+            "temperature": temperature,
+            "response_mime_type": "application/json",
+            "response_schema": response_model,
+        }
+        if system:
+            config["system_instruction"] = system
+
+        response = self.client.models.generate_content(
+            model=self.model,
+            contents=prompt,
+            config=config,
+        )
+
+        data = json.loads(response.text)
+        return response_model.model_validate(data)
+
+    def complete_structured_json(
+        self,
+        prompt: str,
+        schema: dict,
+        *,
+        system: Optional[str] = None,
+        max_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+    ) -> dict:
+        """
+        Get a structured response matching a JSON Schema.
+
+        Args:
+            prompt: The user prompt
+            schema: JSON Schema dict defining the expected structure
+            system: Optional system prompt
+            max_tokens: Max tokens to generate
+            temperature: Sampling temperature
+
+        Returns:
+            A dict matching the schema
+        """
+        max_tokens = max_tokens or self.default_max_tokens
+        temperature = temperature if temperature is not None else self.default_temperature
+
+        if self.provider == "anthropic":
+            return self._structured_json_anthropic(prompt, schema, system, max_tokens, temperature)
+        elif self.provider == "openai":
+            return self._structured_json_openai(prompt, schema, system, max_tokens, temperature)
+        elif self.provider == "gemini":
+            return self._structured_json_gemini(prompt, schema, system, max_tokens, temperature)
+
+    def _structured_json_anthropic(
+        self,
+        prompt: str,
+        schema: dict,
+        system: Optional[str],
+        max_tokens: int,
+        temperature: float,
+    ) -> dict:
+        """Get structured output from Anthropic using tool_use with JSON Schema."""
+        tool = {
+            "name": "output",
+            "description": schema.get("description", "Output structured data"),
+            "input_schema": schema,
+        }
+
+        kwargs = {
+            "model": self.model,
+            "max_tokens": max_tokens,
+            "messages": [{"role": "user", "content": prompt}],
+            "tools": [tool],
+            "tool_choice": {"type": "tool", "name": "output"},
+        }
+        if system:
+            kwargs["system"] = system
+        if temperature > 0:
+            kwargs["temperature"] = temperature
+
+        response = self.client.messages.create(**kwargs)
+
+        for block in response.content:
+            if block.type == "tool_use":
+                return block.input
+
+        raise ValueError("No tool use in response")
+
+    def _structured_json_openai(
+        self,
+        prompt: str,
+        schema: dict,
+        system: Optional[str],
+        max_tokens: int,
+        temperature: float,
+    ) -> dict:
+        """Get structured output from OpenAI using response_format with JSON Schema."""
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": schema.get("title", "output"),
+                    "schema": schema,
+                    "strict": True,
+                }
+            },
+        )
+
+        return json.loads(response.choices[0].message.content)
+
+    def _structured_json_gemini(
+        self,
+        prompt: str,
+        schema: dict,
+        system: Optional[str],
+        max_tokens: int,
+        temperature: float,
+    ) -> dict:
+        """Get structured output from Gemini using response_schema with JSON Schema."""
+        # Strip fields Gemini doesn't accept
+        clean_schema = {k: v for k, v in schema.items() if k not in ("$schema", "$id")}
+
+        config = {
+            "max_output_tokens": max_tokens,
+            "temperature": temperature,
+            "response_mime_type": "application/json",
+            "response_schema": clean_schema,
+        }
+        if system:
+            config["system_instruction"] = system
+
+        response = self.client.models.generate_content(
+            model=self.model,
+            contents=prompt,
+            config=config,
+        )
+
+        return json.loads(response.text)

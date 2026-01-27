@@ -124,3 +124,61 @@ uv run python src/kb/fm_loader.py --download-missing --limit 5
    - Downloads via yt-dlp if `--download-missing`
 5. Stages files to S3 `staging/` folder with metadata sidecar
 6. Loader Lambda picks up staged files and creates documents
+
+## Web Lambda (Lesson Analyzer)
+
+Public web interface for analyzing Feldenkrais lessons.
+
+### First-Time Setup
+
+1. Build the dependencies layer:
+```bash
+cd terraform
+./build_web_layer.sh
+```
+
+2. Deploy with API keys:
+```bash
+terraform apply \
+  -var="environment=prod" \
+  -var="google_api_key=$GOOGLE_API_KEY" \
+  -var="anthropic_api_key=$ANTHROPIC_API_KEY" \
+  -var="openai_api_key=$OPENAI_API_KEY" \
+  -var="database_url=$DATABASE_URL" \
+  -var="groq_api_key=$GROQ_API_KEY"
+```
+
+3. Get the public URL:
+```bash
+terraform output web_function_url
+```
+
+### Updating the Web App
+
+After modifying `web.py`, `llm.py`, `schemas.py`, or data files:
+```bash
+terraform apply -var="environment=prod" ...
+```
+
+### Updating Protocol/Schema
+
+1. Edit `data/washing.md` and `data/washing.schema.json`
+2. Redeploy:
+```bash
+terraform apply -var="environment=prod" ...
+```
+
+### Adding New Lesson Files
+
+1. Add `.txt` files to `data/lessons/`
+2. Add them to the `archive_file "web_lambda"` block in `main.tf`
+3. Redeploy
+
+### Custom Domain (Optional)
+
+To use a custom domain instead of the Lambda Function URL:
+1. Create a CloudFront distribution pointing to the Function URL
+2. Add an ACM certificate for your domain
+3. Configure Route 53 to point to CloudFront
+
+This is not currently implemented in Terraform.

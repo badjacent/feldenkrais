@@ -521,3 +521,113 @@ resource "aws_lambda_permission" "allow_eventbridge_youtube" {
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.youtube_schedule[0].arn
 }
+
+# -----------------------------------------------------------------------------
+# Web Lambda (Lesson Analyzer)
+# -----------------------------------------------------------------------------
+
+# Separate dependencies layer for web Lambda (FastAPI, LLM clients, etc.)
+resource "aws_lambda_layer_version" "web_deps" {
+  count               = fileexists("${path.module}/lambda_web_deps.zip") ? 1 : 0
+  filename            = "${path.module}/lambda_web_deps.zip"
+  layer_name          = "feldenkrais-web-deps-${var.environment}"
+  compatible_runtimes = ["python3.12"]
+  source_code_hash    = filebase64sha256("${path.module}/lambda_web_deps.zip")
+  description         = "Python dependencies for web Lambda (FastAPI, Mangum, LLM clients)"
+}
+
+resource "aws_iam_role" "web_lambda" {
+  name = "feldenkrais-web-${var.environment}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "web_lambda_logs" {
+  role       = aws_iam_role.web_lambda.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+# Package web Lambda code (web.py, llm.py, schemas.py, and data files)
+data "archive_file" "web_lambda" {
+  type        = "zip"
+  output_path = "${path.module}/lambda_web.zip"
+
+  source {
+    content  = file("${path.module}/../src/kb/web.py")
+    filename = "web.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/llm.py")
+    filename = "llm.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/schemas.py")
+    filename = "schemas.py"
+  }
+  source {
+    content  = file("${path.module}/../data/washing.md")
+    filename = "data/washing.md"
+  }
+  source {
+    content  = file("${path.module}/../data/washing.schema.json")
+    filename = "data/washing.schema.json"
+  }
+  # Lesson files
+  source {
+    content  = file("${path.module}/../data/lessons/vertical.txt")
+    filename = "data/lessons/vertical.txt"
+  }
+  source {
+    content  = file("${path.module}/../data/lessons/scalp.txt")
+    filename = "data/lessons/scalp.txt"
+  }
+}
+
+resource "aws_lambda_function" "web" {
+  filename         = data.archive_file.web_lambda.output_path
+  function_name    = "feldenkrais-web-${var.environment}"
+  role             = aws_iam_role.web_lambda.arn
+  handler          = "web.handler"
+  source_code_hash = data.archive_file.web_lambda.output_base64sha256
+  runtime          = "python3.12"
+  timeout          = 120  # 2 minutes for LLM calls
+  memory_size      = 512
+
+  layers = compact([
+    length(aws_lambda_layer_version.web_deps) > 0 ? aws_lambda_layer_version.web_deps[0].arn : null,
+  ])
+
+  environment {
+    variables = {
+      GOOGLE_API_KEY    = var.google_api_key
+      ANTHROPIC_API_KEY = var.anthropic_api_key
+      OPENAI_API_KEY    = var.openai_api_key
+    }
+  }
+}
+
+# HTTP API Gateway (public HTTPS endpoint)
+resource "aws_apigatewayv2_api" "web" {
+  name          = "feldenkrais-web-${var.environment}"
+  protocol_type = "HTTP"
+  target        = aws_lambda_function.web.arn
+}
+
+resource "aws_lambda_permission" "web_api_gateway" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.web.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.web.execution_arn}/*"
+}

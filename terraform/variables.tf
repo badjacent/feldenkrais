@@ -41,3 +41,24 @@ variable "enable_scheduled_triggers" {
   type        = bool
   default     = true
 }
+
+variable "google_api_key" {
+  description = "Google API key for Gemini"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "anthropic_api_key" {
+  description = "Anthropic API key for Claude"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "openai_api_key" {
+  description = "OpenAI API key for GPT"
+  type        = string
+  sensitive   = true
+  default     = ""
+}

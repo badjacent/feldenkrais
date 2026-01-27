@@ -42,3 +42,13 @@ output "youtube_lambda_arn" {
   description = "YouTube importer Lambda function ARN"
   value       = length(aws_lambda_function.youtube) > 0 ? aws_lambda_function.youtube[0].arn : null
 }
+
+output "web_lambda_name" {
+  description = "Web Lambda function name"
+  value       = aws_lambda_function.web.function_name
+}
+
+output "web_api_url" {
+  description = "Web API Gateway URL (public endpoint)"
+  value       = aws_apigatewayv2_api.web.api_endpoint
+}

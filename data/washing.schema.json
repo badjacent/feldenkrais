@@ -1,0 +1,233 @@
+{
+  "$defs": {
+    "Phase1SPIFFERQ": {
+      "description": "Phase 1: SPIFFER-Q Tagging - deconstruct text into discrete tagged steps.",
+      "properties": {
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/SPIFFERQStep"
+          },
+          "title": "Steps",
+          "type": "array"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Summary"
+        }
+      },
+      "required": [
+        "steps"
+      ],
+      "title": "Phase1SPIFFERQ",
+      "type": "object"
+    },
+    "Phase2Negotiation": {
+      "description": "Phase 2: The Negotiation Framework between Striver and Foundation.",
+      "properties": {
+        "striver_observations": {
+          "description": "How the Postural Effort System (The Striver) manifests - cortical, voluntary, goal-oriented",
+          "items": {
+            "type": "string"
+          },
+          "title": "Striver Observations",
+          "type": "array"
+        },
+        "foundation_observations": {
+          "description": "How the Postural Support System (The Foundation) responds - subcortical, reflexive, seeks equilibrium",
+          "items": {
+            "type": "string"
+          },
+          "title": "Foundation Observations",
+          "type": "array"
+        },
+        "washing_gradient": {
+          "description": "How the Striver is gradually eroded through repetition, oscillation, or complexity",
+          "title": "Washing Gradient",
+          "type": "string"
+        }
+      },
+      "required": [
+        "striver_observations",
+        "foundation_observations",
+        "washing_gradient"
+      ],
+      "title": "Phase2Negotiation",
+      "type": "object"
+    },
+    "SPIFFERQStep": {
+      "description": "A single step tagged with SPIFFER-Q attributes.",
+      "properties": {
+        "step_number": {
+          "title": "Step Number",
+          "type": "integer"
+        },
+        "instruction": {
+          "title": "Instruction",
+          "type": "string"
+        },
+        "tags": {
+          "description": "SPIFFER-Q tags: S, P, I, F (Function), F (Focus), E, R, Q",
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        }
+      },
+      "required": [
+        "step_number",
+        "instruction",
+        "tags"
+      ],
+      "title": "SPIFFERQStep",
+      "type": "object"
+    },
+    "SomaticNarrative": {
+      "description": "The Somatic Narrative - linear chunks describing the lesson's arc.",
+      "properties": {
+        "primary_inquiry": {
+          "description": "The fundamental neurological riddle of the lesson",
+          "title": "Primary Inquiry",
+          "type": "string"
+        },
+        "washing_gradient": {
+          "description": "How the Striver is gradually eroded (through speed, complexity, or unusual configurations)",
+          "title": "Washing Gradient",
+          "type": "string"
+        },
+        "threshold_of_quiet": {
+          "description": "The moment where the Foundation takes over and the Vertical Self emerges",
+          "title": "Threshold Of Quiet",
+          "type": "string"
+        }
+      },
+      "required": [
+        "primary_inquiry",
+        "washing_gradient",
+        "threshold_of_quiet"
+      ],
+      "title": "SomaticNarrative",
+      "type": "object"
+    },
+    "VL1Table": {
+      "description": "The VL-1 Analytical Table tracking the negotiation through the lesson.\n\nLessons generally fall into logical sections based on the movements involved.\nEach distinct movement or instruction should have its own row. There is no\nexact limit, but aim to capture each meaningful transition in the lesson,\nincluding the final return to initial position.",
+      "properties": {
+        "rows": {
+          "items": {
+            "$ref": "#/$defs/VL1TableRow"
+          },
+          "title": "Rows",
+          "type": "array"
+        }
+      },
+      "required": [
+        "rows"
+      ],
+      "title": "VL1Table",
+      "type": "object"
+    },
+    "VL1TableRow": {
+      "description": "A single row in the VL-1 Analytical Table.",
+      "properties": {
+        "step": {
+          "description": "The physical action",
+          "title": "Step",
+          "type": "string"
+        },
+        "spiffer_q_tags": {
+          "description": "Relevant SPIFFER-Q tags for this step",
+          "items": {
+            "type": "string"
+          },
+          "title": "Spiffer Q Tags",
+          "type": "array"
+        },
+        "the_question": {
+          "description": "The specific neurological riddle of this step",
+          "title": "The Question",
+          "type": "string"
+        },
+        "negotiation_state": {
+          "description": "Domination (Striver in control), Negotiation (Washing in progress), or Integration (Foundation has taken over)",
+          "enum": [
+            "Domination",
+            "Negotiation",
+            "Integration"
+          ],
+          "title": "Negotiation State",
+          "type": "string"
+        },
+        "functional_goal": {
+          "description": "Intended structural outcome",
+          "title": "Functional Goal",
+          "type": "string"
+        }
+      },
+      "required": [
+        "step",
+        "spiffer_q_tags",
+        "the_question",
+        "negotiation_state",
+        "functional_goal"
+      ],
+      "title": "VL1TableRow",
+      "type": "object"
+    }
+  },
+  "description": "Feldenkrais Lesson Analysis Protocol (VL-1 v2.0)",
+  "properties": {
+    "lesson_title": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Lesson Title"
+    },
+    "phase1_spifferq": {
+      "$ref": "#/$defs/Phase1SPIFFERQ"
+    },
+    "phase2_negotiation": {
+      "$ref": "#/$defs/Phase2Negotiation"
+    },
+    "phase3_somatic_narrative": {
+      "$ref": "#/$defs/SomaticNarrative"
+    },
+    "phase3_table": {
+      "$ref": "#/$defs/VL1Table"
+    }
+  },
+  "required": [
+    "phase1_spifferq",
+    "phase2_negotiation",
+    "phase3_somatic_narrative",
+    "phase3_table"
+  ],
+  "title": "LessonAnalysis",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}
