@@ -30,13 +30,28 @@ Evaluate the interaction between the two internal intelligences:
 * **The Threshold of Quiet:** Pinpoint the moment where the Foundation takes over and the Vertical Self emerges.
 
 ### 2. The VL-1 Analytical Table
-| Step | SPIFFER-Q | The Question | Negotiation State | Functional Goal |
+
+**Important:** Use the flexible column format. First provide `column_headers` to define what each column means, then populate rows using `column1`, `column2`, etc.
+
+**Column definitions for this protocol:**
+```
+column_headers: {
+  "column1": "Step",
+  "column2": "SPIFFER-Q",
+  "column3": "The Question",
+  "column4": "Negotiation State",
+  "column5": "Functional Goal"
+}
+```
+
+**Row format:**
+| column1 | column2 | column3 | column4 | column5 |
 | :--- | :--- | :--- | :--- | :--- |
 | Physical Action | Relevant Tags | The specific riddle of this step | Domination / Negotiation / Integration | Intended structural outcome |
 
 ---
 
-### How to use the "Negotiation State" column:
+### How to use the "Negotiation State" column (column4):
 * **Domination:** The Striver is in control (high noise, muscular effort).
 * **Negotiation:** The Washing is in progress (confusion, exploration, varying effort).
 * **Integration:** The Foundation has taken over (skeletal clarity, "involuntary" ease).

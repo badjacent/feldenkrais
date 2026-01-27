@@ -130,8 +130,22 @@
       "type": "object"
     },
     "VL1Table": {
-      "description": "The VL-1 Analytical Table tracking the negotiation through the lesson.\n\nLessons generally fall into logical sections based on the movements involved.\nEach distinct movement or instruction should have its own row. There is no\nexact limit, but aim to capture each meaningful transition in the lesson,\nincluding the final return to initial position.",
+      "description": "The VL-1 Analytical Table. Column meanings are defined by the protocol.",
       "properties": {
+        "column_headers": {
+          "description": "Maps column1, column2, etc. to their display names",
+          "type": "object",
+          "properties": {
+            "column1": {"type": "string"},
+            "column2": {"type": "string"},
+            "column3": {"type": "string"},
+            "column4": {"type": "string"},
+            "column5": {"type": "string"},
+            "column6": {"type": "string"},
+            "column7": {"type": "string"},
+            "column8": {"type": "string"}
+          }
+        },
         "rows": {
           "items": {
             "$ref": "#/$defs/VL1TableRow"
@@ -141,57 +155,25 @@
         }
       },
       "required": [
+        "column_headers",
         "rows"
       ],
       "title": "VL1Table",
       "type": "object"
     },
     "VL1TableRow": {
-      "description": "A single row in the VL-1 Analytical Table.",
+      "description": "A single row. Use column1-column8 as defined in column_headers.",
+      "type": "object",
       "properties": {
-        "step": {
-          "description": "The physical action",
-          "title": "Step",
-          "type": "string"
-        },
-        "spiffer_q_tags": {
-          "description": "Relevant SPIFFER-Q tags for this step",
-          "items": {
-            "type": "string"
-          },
-          "title": "Spiffer Q Tags",
-          "type": "array"
-        },
-        "the_question": {
-          "description": "The specific neurological riddle of this step",
-          "title": "The Question",
-          "type": "string"
-        },
-        "negotiation_state": {
-          "description": "Domination (Striver in control), Negotiation (Washing in progress), or Integration (Foundation has taken over)",
-          "enum": [
-            "Domination",
-            "Negotiation",
-            "Integration"
-          ],
-          "title": "Negotiation State",
-          "type": "string"
-        },
-        "functional_goal": {
-          "description": "Intended structural outcome",
-          "title": "Functional Goal",
-          "type": "string"
-        }
-      },
-      "required": [
-        "step",
-        "spiffer_q_tags",
-        "the_question",
-        "negotiation_state",
-        "functional_goal"
-      ],
-      "title": "VL1TableRow",
-      "type": "object"
+        "column1": {"type": "string"},
+        "column2": {"type": "string"},
+        "column3": {"type": "string"},
+        "column4": {"type": "string"},
+        "column5": {"type": "string"},
+        "column6": {"type": "string"},
+        "column7": {"type": "string"},
+        "column8": {"type": "string"}
+      }
     }
   },
   "description": "Feldenkrais Lesson Analysis Protocol (VL-1 v2.0)",
