@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PassAResult",
+  "description": "Pass A output: VL Classification + SPIFFER-Q Decomposition",
+  "type": "object",
+  "properties": {
+    "lesson_title": {
+      "type": "string",
+      "description": "Inferred title of the lesson"
+    },
+    "classifications": {
+      "type": "object",
+      "description": "Weighted scores (0.0-1.0) for each VL framework",
+      "properties": {
+        "vl1_vertical_self": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "vl2_homunculus": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "vl3_steering": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "vl4_proximal_distal": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "vl5_folding": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": ["vl1_vertical_self", "vl2_homunculus", "vl3_steering", "vl4_proximal_distal", "vl5_folding"]
+    },
+    "primary_framework": {
+      "type": "string",
+      "enum": ["VL-1", "VL-2", "VL-3", "VL-4", "VL-5"]
+    },
+    "secondary_frameworks": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["VL-1", "VL-2", "VL-3", "VL-4", "VL-5"]
+      }
+    },
+    "rationale": {
+      "type": "string",
+      "description": "Brief explanation of the classification"
+    },
+    "steps": {
+      "type": "array",
+      "description": "SPIFFER-Q decomposed lesson steps",
+      "items": {
+        "type": "object",
+        "properties": {
+          "step_number": {
+            "type": "integer"
+          },
+          "instruction": {
+            "type": "string",
+            "description": "The movement or instruction"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "SPIFFER-Q tags: S, P, I, F, E, R, Q"
+          },
+          "note": {
+            "type": "string",
+            "description": "Brief pedagogical note (optional)"
+          }
+        },
+        "required": ["step_number", "instruction", "tags"]
+      }
+    }
+  },
+  "required": ["classifications", "primary_framework", "rationale", "steps"]
+}

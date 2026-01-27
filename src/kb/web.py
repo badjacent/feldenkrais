@@ -55,27 +55,25 @@ This includes the final movements where the student returns to the initial posit
 Do not truncate the table early."""
 
 
-def load_router() -> tuple[str, dict]:
-    """Load the router prompt and schema."""
-    router_prompt_path = DATA_DIR / "router.md"
-    router_schema_path = DATA_DIR / "router.schema.json"
+def load_pass_a() -> tuple[str, dict]:
+    """Load Pass A prompt and schema (Decomposition + Routing)."""
+    prompt_path = DATA_DIR / "pass_a.md"
+    schema_path = DATA_DIR / "pass_a.schema.json"
 
-    prompt = router_prompt_path.read_text() if router_prompt_path.exists() else ""
-    schema = json.loads(router_schema_path.read_text()) if router_schema_path.exists() else {}
+    prompt = prompt_path.read_text() if prompt_path.exists() else ""
+    schema = json.loads(schema_path.read_text()) if schema_path.exists() else {}
 
     return prompt, schema
 
 
-def load_protocol(framework: str = "vl1") -> tuple[str, dict]:
-    """Load the protocol markdown and its JSON schema for a given framework.
+def load_pass_b(framework: str) -> tuple[str, dict]:
+    """Load Pass B prompt and schema for a specific VL framework.
 
-    The protocol is assembled from:
-    1. core_protocol.md - shared SPIFFER-Q and Negotiation State logic
-    2. vl{N}.md - framework-specific lens (Primary Inquiry, Striver/Foundation modes, Goal)
+    Pass B receives Pass A output and applies the VL-specific lens.
     """
-    # Load core protocol
-    core_path = DATA_DIR / "core_protocol.md"
-    core_protocol = core_path.read_text() if core_path.exists() else ""
+    # Load base Pass B protocol
+    base_path = DATA_DIR / "pass_b.md"
+    base_protocol = base_path.read_text() if base_path.exists() else ""
 
     # Load VL-specific module
     vl_map = {
@@ -89,14 +87,20 @@ def load_protocol(framework: str = "vl1") -> tuple[str, dict]:
     vl_path = DATA_DIR / vl_file
     vl_module = vl_path.read_text() if vl_path.exists() else ""
 
-    # Combine: core protocol + VL-specific framework section
-    protocol = core_protocol + "\n\n---\n\n## Framework: " + framework + "\n\n" + vl_module
+    # Combine: Pass B base + VL-specific framework
+    protocol = base_protocol + "\n\n---\n\n## Framework: " + framework + "\n\n" + vl_module
 
-    # Schema is shared across all VL frameworks
-    schema_path = DATA_DIR / "washing.schema.json"
+    # Pass B schema
+    schema_path = DATA_DIR / "pass_b.schema.json"
     schema = json.loads(schema_path.read_text()) if schema_path.exists() else {}
 
     return protocol, schema
+
+
+# Legacy function for backwards compatibility
+def load_protocol(framework: str = "VL-1") -> tuple[str, dict]:
+    """Load protocol - delegates to load_pass_b for backwards compatibility."""
+    return load_pass_b(framework)
 
 
 # Threshold for running a VL analysis (score must be >= this)
@@ -175,12 +179,15 @@ def invoke_lambda_async(job_id: str) -> None:
     )
 
 
-def run_router(lesson_text: str) -> dict:
-    """Run the router to classify the lesson."""
-    router_prompt, router_schema = load_router()
+def run_pass_a(lesson_text: str) -> dict:
+    """Run Pass A: Decomposition + Routing.
 
-    if not router_prompt or not router_schema:
-        # Return default classification if router not available
+    Returns VL classification AND SPIFFER-Q decomposed steps.
+    """
+    pass_a_prompt, pass_a_schema = load_pass_a()
+
+    if not pass_a_prompt or not pass_a_schema:
+        # Return default if Pass A not configured
         return {
             "classifications": {
                 "vl1_vertical_self": 1.0,
@@ -190,24 +197,31 @@ def run_router(lesson_text: str) -> dict:
                 "vl5_folding": 0.0,
             },
             "primary_framework": "VL-1",
-            "rationale": "Router not configured, defaulting to VL-1"
+            "rationale": "Pass A not configured, defaulting to VL-1",
+            "steps": []
         }
 
-    prompt = router_prompt + "\n\n---\n\n## Lesson to Classify:\n\n" + lesson_text
+    prompt = pass_a_prompt + "\n\n---\n\n## Lesson to Analyze:\n\n" + lesson_text
 
     llm = get_llm()
-    classification = llm.complete_structured_json(
+    result = llm.complete_structured_json(
         prompt,
-        router_schema,
+        pass_a_schema,
         system=ROUTER_SYSTEM_PROMPT,
     )
 
-    return classification
+    return result
 
 
-def get_active_frameworks(router_result: dict, threshold: float = VL_ANALYSIS_THRESHOLD) -> list[str]:
+# Alias for backwards compatibility
+def run_router(lesson_text: str) -> dict:
+    """Alias for run_pass_a for backwards compatibility."""
+    return run_pass_a(lesson_text)
+
+
+def get_active_frameworks(pass_a_result: dict, threshold: float = VL_ANALYSIS_THRESHOLD) -> list[str]:
     """Get list of VL frameworks that scored above the threshold."""
-    classifications = router_result.get("classifications", {})
+    classifications = pass_a_result.get("classifications", {})
 
     # Map classification keys to framework names
     key_to_framework = {
@@ -229,10 +243,16 @@ def get_active_frameworks(router_result: dict, threshold: float = VL_ANALYSIS_TH
     return [f for f, s in active]
 
 
-def run_vl_analysis(lesson_text: str, framework: str) -> dict:
-    """Run analysis for a specific VL framework."""
-    protocol, schema = load_protocol(framework)
-    prompt = protocol + "\n\n---\n\n## Lesson Text:\n\n" + lesson_text
+def run_pass_b(lesson_text: str, pass_a_result: dict, framework: str) -> dict:
+    """Run Pass B: VL Framework Synthesis.
+
+    Takes the original lesson text AND Pass A output, applies VL-specific lens.
+    """
+    protocol, schema = load_pass_b(framework)
+
+    # Build prompt with both lesson text and Pass A output
+    prompt = protocol + "\n\n---\n\n## Original Lesson Text:\n\n" + lesson_text
+    prompt += "\n\n---\n\n## Pass A Analysis:\n\n```json\n" + json.dumps(pass_a_result, indent=2) + "\n```"
 
     llm = get_llm()
     analysis = llm.complete_structured_json(
@@ -241,6 +261,23 @@ def run_vl_analysis(lesson_text: str, framework: str) -> dict:
         system=ANALYSIS_SYSTEM_PROMPT,
     )
     return analysis
+
+
+# Global to store Pass A result for the current request (used by run_vl_analysis alias)
+_current_pass_a_result = None
+
+
+def run_vl_analysis(lesson_text: str, framework: str) -> dict:
+    """Alias that runs Pass B using stored Pass A result.
+
+    This is for backwards compatibility with code that calls run_vl_analysis
+    after run_pass_a has already been called.
+    """
+    global _current_pass_a_result
+    if _current_pass_a_result is None:
+        # If no Pass A result stored, run it first
+        _current_pass_a_result = run_pass_a(lesson_text)
+    return run_pass_b(lesson_text, _current_pass_a_result, framework)
 
 
 def process_job(job_id: str) -> None:
@@ -252,25 +289,28 @@ def process_job(job_id: str) -> None:
     try:
         lesson_text = job["lesson_text"]
 
-        # Step 1: Run router to classify the lesson
-        router_result = run_router(lesson_text)
-        job["router_result"] = router_result
+        # Step 1: Run Pass A (Decomposition + Routing) - ONCE
+        pass_a_result = run_pass_a(lesson_text)
+        job["pass_a_result"] = pass_a_result
+
+        # For backwards compatibility, also store as router_result
+        job["router_result"] = pass_a_result
 
         # Step 2: Determine which frameworks to analyze
-        active_frameworks = get_active_frameworks(router_result)
+        active_frameworks = get_active_frameworks(pass_a_result)
 
         if not active_frameworks:
             # Fallback to primary if nothing above threshold
-            primary = router_result.get("primary_framework", "VL-1")
+            primary = pass_a_result.get("primary_framework", "VL-1")
             active_frameworks = [primary]
 
-        # Step 3: Run analysis for each active framework
-        # Store results keyed by framework name
+        # Step 3: Run Pass B for each active framework
+        # Pass B receives lesson text + Pass A output
         job["vl_analyses"] = {}
 
         for framework in active_frameworks:
             try:
-                analysis = run_vl_analysis(lesson_text, framework)
+                analysis = run_pass_b(lesson_text, pass_a_result, framework)
                 job["vl_analyses"][framework] = {
                     "status": "complete",
                     "result": analysis
@@ -343,7 +383,7 @@ def render_router_result(router_result: dict) -> str:
     if router_result.get("rationale"):
         html.append(f'<p><strong>Rationale:</strong> {router_result["rationale"]}</p>')
 
-    # Key indicators
+    # Key indicators (from router)
     indicators = router_result.get("key_indicators", [])
     if indicators:
         html.append("<details><summary><strong>Key Indicators</strong></summary><ul>")
@@ -354,6 +394,26 @@ def render_router_result(router_result: dict) -> str:
         html.append("</ul></details>")
 
     html.append("</div>")
+
+    # SPIFFER-Q Decomposition (Pass A output)
+    steps = router_result.get("steps", [])
+    if steps:
+        html.append('<div class="spiffer-q-steps" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">')
+
+        # Lesson title if present
+        if router_result.get("lesson_title"):
+            html.append(f"<h2>{router_result['lesson_title']}</h2>")
+
+        html.append("<h3>SPIFFER-Q Decomposition (Pass A)</h3>")
+        html.append("<ol>")
+        for step in steps:
+            tags = ", ".join(step.get("tags", []))
+            instruction = step.get("instruction", "")
+            note = f' <small style="color: #666;">({step["note"]})</small>' if step.get("note") else ""
+            html.append(f"<li><strong>[{tags}]</strong> {instruction}{note}</li>")
+        html.append("</ol>")
+        html.append("</div>")
+
     return "\n".join(html)
 
 
@@ -429,8 +489,99 @@ def render_multi_vl_analyses(vl_analyses: dict, schema: dict) -> str:
     return "\n".join(html)
 
 
+def render_pass_b_analysis(data: dict) -> str:
+    """Render Pass B analysis result as HTML."""
+    html = []
+
+    framework = data.get("framework", "")
+    if framework:
+        html.append(f'<p><em>Analysis through {framework} lens</em></p>')
+
+    # Negotiation Framework
+    neg = data.get("negotiation_framework", {})
+    if neg:
+        html.append("<h3>Negotiation Framework</h3>")
+
+        if neg.get("striver_observations"):
+            html.append("<h4>The Striver (Effort System)</h4><ul>")
+            for obs in neg["striver_observations"]:
+                html.append(f"<li>{obs}</li>")
+            html.append("</ul>")
+
+        if neg.get("foundation_observations"):
+            html.append("<h4>The Foundation (Support System)</h4><ul>")
+            for obs in neg["foundation_observations"]:
+                html.append(f"<li>{obs}</li>")
+            html.append("</ul>")
+
+        if neg.get("washing_gradient"):
+            html.append(f"<h4>Washing Gradient</h4><p>{neg['washing_gradient']}</p>")
+
+    # Somatic Narrative
+    narrative = data.get("somatic_narrative", {})
+    if narrative:
+        html.append("<h3>Somatic Narrative</h3>")
+
+        if narrative.get("primary_inquiry"):
+            html.append(f"<h4>Primary Inquiry</h4><p>{narrative['primary_inquiry']}</p>")
+
+        if narrative.get("washing_gradient"):
+            html.append(f"<h4>Washing Gradient</h4><p>{narrative['washing_gradient']}</p>")
+
+        if narrative.get("threshold_of_quiet"):
+            html.append(f"<h4>Threshold of Quiet</h4><p>{narrative['threshold_of_quiet']}</p>")
+
+    # Analytical Table
+    table = data.get("analytical_table", {})
+    if table:
+        rows = table.get("rows", [])
+        column_headers = table.get("column_headers", {})
+
+        html.append(f"<h3>Analytical Table ({len(rows)} rows)</h3>")
+
+        if rows:
+            # Determine columns to display
+            if column_headers:
+                columns = sorted([k for k in column_headers.keys() if column_headers.get(k)],
+                                key=lambda x: int(x.replace("column", "")) if x.startswith("column") else 999)
+                display_names = {col: column_headers[col] for col in columns}
+            else:
+                columns = ["column1", "column2", "column3", "column4", "column5"]
+                display_names = {c: c for c in columns}
+
+            html.append("""
+            <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width: 100%;">
+                <thead style="background-color: #f0f0f0;">
+                    <tr>
+            """)
+            for col in columns:
+                html.append(f"<th>{display_names.get(col, col)}</th>")
+            html.append("</tr></thead><tbody>")
+
+            for row in rows:
+                html.append("<tr>")
+                for col in columns:
+                    val = row.get(col, "")
+                    if isinstance(val, list):
+                        val = ", ".join(str(v) for v in val)
+                    html.append(f"<td>{val}</td>")
+                html.append("</tr>")
+
+            html.append("</tbody></table>")
+
+    return "\n".join(html)
+
+
 def render_analysis(data: dict, schema: dict) -> str:
-    """Render analysis dict as HTML based on schema structure."""
+    """Render analysis dict as HTML based on schema structure.
+
+    Handles both old (washing.schema.json) and new (pass_b.schema.json) formats.
+    """
+    # Check if this is Pass B format (has negotiation_framework, somatic_narrative, analytical_table)
+    if "negotiation_framework" in data or "somatic_narrative" in data or "analytical_table" in data:
+        return render_pass_b_analysis(data)
+
+    # Otherwise, use legacy rendering
     html = []
 
     # Title
@@ -987,23 +1138,23 @@ async def api_analyze(
 
     # Local development: process synchronously
     try:
-        # Step 1: Run router
-        router_result = run_router(text)
-        router_html = render_router_result(router_result)
+        # Step 1: Run Pass A (Decomposition + Routing) - ONCE
+        pass_a_result = run_pass_a(text)
+        router_html = render_router_result(pass_a_result)
 
-        # Step 2: Get active frameworks and run analyses
-        active_frameworks = get_active_frameworks(router_result)
+        # Step 2: Get active frameworks
+        active_frameworks = get_active_frameworks(pass_a_result)
         if not active_frameworks:
-            primary = router_result.get("primary_framework", "VL-1")
+            primary = pass_a_result.get("primary_framework", "VL-1")
             active_frameworks = [primary]
 
-        # Step 3: Run analysis for each active framework
-        _, schema = load_protocol()  # Schema is shared
+        # Step 3: Run Pass B for each active framework
+        _, schema = load_pass_b("VL-1")  # Schema is shared
         vl_analyses = {}
 
         for framework in active_frameworks:
             try:
-                analysis = run_vl_analysis(text, framework)
+                analysis = run_pass_b(text, pass_a_result, framework)
                 vl_analyses[framework] = {"status": "complete", "result": analysis}
             except Exception as e:
                 vl_analyses[framework] = {"status": "error", "error": str(e)}
@@ -1068,23 +1219,23 @@ async def analyze(
         )
 
     try:
-        # Step 1: Run router
-        router_result = run_router(text)
-        router_html = render_router_result(router_result)
+        # Step 1: Run Pass A (Decomposition + Routing) - ONCE
+        pass_a_result = run_pass_a(text)
+        router_html = render_router_result(pass_a_result)
 
-        # Step 2: Get active frameworks and run analyses
-        active_frameworks = get_active_frameworks(router_result)
+        # Step 2: Get active frameworks
+        active_frameworks = get_active_frameworks(pass_a_result)
         if not active_frameworks:
-            primary = router_result.get("primary_framework", "VL-1")
+            primary = pass_a_result.get("primary_framework", "VL-1")
             active_frameworks = [primary]
 
-        # Step 3: Run analysis for each active framework
-        _, schema = load_protocol()
+        # Step 3: Run Pass B for each active framework
+        _, schema = load_pass_b("VL-1")
         vl_analyses = {}
 
         for framework in active_frameworks:
             try:
-                analysis = run_vl_analysis(text, framework)
+                analysis = run_pass_b(text, pass_a_result, framework)
                 vl_analyses[framework] = {"status": "complete", "result": analysis}
             except Exception as e:
                 vl_analyses[framework] = {"status": "error", "error": str(e)}
