@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SomaticRouterResult",
+  "description": "Classification of a Feldenkrais lesson across the five VL Frameworks",
+  "type": "object",
+  "properties": {
+    "classifications": {
+      "type": "object",
+      "description": "Weighted scores (0.0-1.0) for each VL framework",
+      "properties": {
+        "vl1_vertical_self": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "VL-1: Focus on gravity, skeletal columns, longitudinal force transmission"
+        },
+        "vl2_homunculus": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "VL-2: Focus on micro-differentiation, joint resolution, sensory mapping"
+        },
+        "vl3_steering": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "VL-3: Focus on eyes, jaw, neck, autonomic regulation"
+        },
+        "vl4_proximal_distal": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "VL-4: Focus on limb-to-core power transmission, reach, grasp"
+        },
+        "vl5_folding": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "VL-5: Focus on flexion/extension, abdominal release, protective reflexes"
+        }
+      },
+      "required": ["vl1_vertical_self", "vl2_homunculus", "vl3_steering", "vl4_proximal_distal", "vl5_folding"]
+    },
+    "primary_framework": {
+      "type": "string",
+      "enum": ["VL-1", "VL-2", "VL-3", "VL-4", "VL-5"],
+      "description": "The dominant framework for this lesson"
+    },
+    "secondary_frameworks": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["VL-1", "VL-2", "VL-3", "VL-4", "VL-5"]
+      },
+      "description": "Additional significant frameworks (score >= 0.3)"
+    },
+    "rationale": {
+      "type": "string",
+      "description": "Brief explanation of the classification"
+    },
+    "key_indicators": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "framework": {
+            "type": "string",
+            "enum": ["VL-1", "VL-2", "VL-3", "VL-4", "VL-5"]
+          },
+          "indicator": {
+            "type": "string",
+            "description": "Specific element from the lesson that indicates this framework"
+          }
+        },
+        "required": ["framework", "indicator"]
+      },
+      "description": "Specific lesson elements that informed the classification"
+    }
+  },
+  "required": ["classifications", "primary_framework", "rationale"]
+}

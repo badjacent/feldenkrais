@@ -42,8 +42,12 @@ LESSONS_DIR = DATA_DIR / "lessons"
 KB_BUCKET = os.environ.get("KB_BUCKET")
 LAMBDA_FUNCTION_NAME = os.environ.get("AWS_LAMBDA_FUNCTION_NAME_SELF") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME")
 
-# System prompt for analysis
-SYSTEM_PROMPT = """You are an expert Feldenkrais practitioner analyzing lessons using the VL-1 protocol.
+# System prompts
+ROUTER_SYSTEM_PROMPT = """You are an expert Feldenkrais practitioner classifying lessons.
+Analyze the lesson text and classify it according to which VL framework(s) best describe its pedagogical focus.
+Be precise with your scores and provide specific indicators from the lesson text."""
+
+ANALYSIS_SYSTEM_PROMPT = """You are an expert Feldenkrais practitioner analyzing lessons using the VL-1 protocol.
 Follow the protocol exactly to analyze the lesson provided. Be thorough and specific in your analysis.
 
 Important: The analysis table must cover ALL major movements identified in the lesson, from beginning to end.
@@ -51,8 +55,20 @@ This includes the final movements where the student returns to the initial posit
 Do not truncate the table early."""
 
 
-def load_protocol() -> tuple[str, dict]:
-    """Load the current protocol markdown and its JSON schema."""
+def load_router() -> tuple[str, dict]:
+    """Load the router prompt and schema."""
+    router_prompt_path = DATA_DIR / "router.md"
+    router_schema_path = DATA_DIR / "router.schema.json"
+
+    prompt = router_prompt_path.read_text() if router_prompt_path.exists() else ""
+    schema = json.loads(router_schema_path.read_text()) if router_schema_path.exists() else {}
+
+    return prompt, schema
+
+
+def load_protocol(framework: str = "vl1") -> tuple[str, dict]:
+    """Load the protocol markdown and its JSON schema for a given framework."""
+    # For now, only VL-1 is implemented (washing.md)
     protocol_path = DATA_DIR / "washing.md"
     schema_path = DATA_DIR / "washing.schema.json"
 
@@ -134,6 +150,36 @@ def invoke_lambda_async(job_id: str) -> None:
     )
 
 
+def run_router(lesson_text: str) -> dict:
+    """Run the router to classify the lesson."""
+    router_prompt, router_schema = load_router()
+
+    if not router_prompt or not router_schema:
+        # Return default classification if router not available
+        return {
+            "classifications": {
+                "vl1_vertical_self": 1.0,
+                "vl2_homunculus": 0.0,
+                "vl3_steering": 0.0,
+                "vl4_proximal_distal": 0.0,
+                "vl5_folding": 0.0,
+            },
+            "primary_framework": "VL-1",
+            "rationale": "Router not configured, defaulting to VL-1"
+        }
+
+    prompt = router_prompt + "\n\n---\n\n## Lesson to Classify:\n\n" + lesson_text
+
+    llm = get_llm()
+    classification = llm.complete_structured_json(
+        prompt,
+        router_schema,
+        system=ROUTER_SYSTEM_PROMPT,
+    )
+
+    return classification
+
+
 def process_job(job_id: str) -> None:
     """Process a pending job (called by async Lambda invocation)."""
     job = load_job(job_id)
@@ -141,18 +187,36 @@ def process_job(job_id: str) -> None:
         return
 
     try:
-        # Load protocol and schema
-        protocol, schema = load_protocol()
+        lesson_text = job["lesson_text"]
+
+        # Step 1: Run router to classify the lesson
+        router_result = run_router(lesson_text)
+        job["router_result"] = router_result
+
+        # Step 2: Run analysis based on primary framework
+        primary = router_result.get("primary_framework", "VL-1")
+
+        # For now, only VL-1 is implemented
+        if primary != "VL-1":
+            # Store partial result and note that analysis is not yet available
+            job["status"] = "complete"
+            job["result"] = None
+            job["analysis_note"] = f"Analysis for {primary} is not yet implemented. Only VL-1 analysis is currently available."
+            save_job(job_id, job)
+            return
+
+        # Load protocol and schema for VL-1
+        protocol, schema = load_protocol("vl1")
 
         # Build prompt
-        prompt = protocol + "\n\n" + job["lesson_text"]
+        prompt = protocol + "\n\n---\n\n## Lesson Text:\n\n" + lesson_text
 
         # Get structured analysis
         llm = get_llm()
         analysis = llm.complete_structured_json(
             prompt,
             schema,
-            system=SYSTEM_PROMPT,
+            system=ANALYSIS_SYSTEM_PROMPT,
         )
 
         # Update job with result
@@ -165,6 +229,67 @@ def process_job(job_id: str) -> None:
         job["status"] = "error"
         job["error"] = str(e)
         save_job(job_id, job)
+
+
+def render_router_result(router_result: dict) -> str:
+    """Render router classification as HTML."""
+    if not router_result:
+        return ""
+
+    html = ['<div class="router-result" style="background: #f0f8ff; padding: 15px; border-radius: 8px; margin-bottom: 20px;">']
+    html.append("<h2>Framework Classification</h2>")
+
+    # Primary framework
+    primary = router_result.get("primary_framework", "Unknown")
+    html.append(f'<p><strong>Primary Framework:</strong> <span style="font-size: 1.2em; color: #007bff;">{primary}</span></p>')
+
+    # Secondary frameworks
+    secondary = router_result.get("secondary_frameworks", [])
+    if secondary:
+        html.append(f'<p><strong>Secondary:</strong> {", ".join(secondary)}</p>')
+
+    # Classification scores as a simple bar chart
+    classifications = router_result.get("classifications", {})
+    if classifications:
+        html.append('<div style="margin: 15px 0;">')
+        framework_names = {
+            "vl1_vertical_self": "VL-1 Vertical Self",
+            "vl2_homunculus": "VL-2 Homunculus",
+            "vl3_steering": "VL-3 Steering",
+            "vl4_proximal_distal": "VL-4 Proximal-Distal",
+            "vl5_folding": "VL-5 Folding",
+        }
+        for key, name in framework_names.items():
+            score = classifications.get(key, 0)
+            pct = int(score * 100)
+            color = "#007bff" if score >= 0.6 else "#6c757d" if score >= 0.3 else "#dee2e6"
+            html.append(f'''
+                <div style="margin: 5px 0;">
+                    <span style="display: inline-block; width: 150px;">{name}</span>
+                    <span style="display: inline-block; width: 200px; background: #eee; border-radius: 4px;">
+                        <span style="display: inline-block; width: {pct}%; background: {color}; height: 20px; border-radius: 4px;"></span>
+                    </span>
+                    <span style="margin-left: 10px;">{score:.2f}</span>
+                </div>
+            ''')
+        html.append('</div>')
+
+    # Rationale
+    if router_result.get("rationale"):
+        html.append(f'<p><strong>Rationale:</strong> {router_result["rationale"]}</p>')
+
+    # Key indicators
+    indicators = router_result.get("key_indicators", [])
+    if indicators:
+        html.append("<details><summary><strong>Key Indicators</strong></summary><ul>")
+        for ind in indicators:
+            framework = ind.get("framework", "")
+            indicator = ind.get("indicator", "")
+            html.append(f"<li><strong>{framework}:</strong> {indicator}</li>")
+        html.append("</ul></details>")
+
+    html.append("</div>")
+    return "\n".join(html)
 
 
 def render_analysis(data: dict, schema: dict) -> str:
@@ -505,7 +630,7 @@ def build_html(lesson_text: str = "", selected_lesson: str = "", result: str = "
 </head>
 <body>
     <h1>Feldenkrais Lesson Analyzer</h1>
-    <p>Select a lesson from the knowledge base or paste custom text to analyze using the VL-1 protocol.</p>
+    <p>Select a lesson or paste text. The system will classify which VL framework(s) apply and run the appropriate analysis.</p>
 
     <form id="analyze-form" method="post" action="/analyze" onsubmit="submitForm(event)">
         <div class="form-group">
@@ -620,8 +745,20 @@ def build_result_html(job: dict | None, job_id: str, schema: dict) -> str:
 """
 
     # status == "complete"
+    router_result = job.get("router_result", {})
     result = job.get("result", {})
-    result_html = render_analysis(result, schema)
+    analysis_note = job.get("analysis_note", "")
+
+    router_html = render_router_result(router_result)
+
+    if result:
+        analysis_html = render_analysis(result, schema)
+    elif analysis_note:
+        analysis_html = f'<div class="info" style="background: #fff3cd; padding: 15px; border-radius: 8px;"><strong>Note:</strong> {analysis_note}</div>'
+    else:
+        analysis_html = ""
+
+    result_html = router_html + analysis_html
 
     return f"""
 <!DOCTYPE html>
@@ -712,17 +849,29 @@ async def api_analyze(
 
     # Local development: process synchronously
     try:
-        protocol, schema = load_protocol()
-        prompt = protocol + "\n\n" + text
-        llm = get_llm()
-        analysis = llm.complete_structured_json(
-            prompt,
-            schema,
-            system=SYSTEM_PROMPT,
-        )
+        # Step 1: Run router
+        router_result = run_router(text)
+        router_html = render_router_result(router_result)
+
+        # Step 2: Run analysis if VL-1 (only implemented framework)
+        primary = router_result.get("primary_framework", "VL-1")
+
+        if primary != "VL-1":
+            analysis_html = f'<div class="info" style="background: #fff3cd; padding: 15px; border-radius: 8px;"><strong>Note:</strong> Analysis for {primary} is not yet implemented. Only VL-1 analysis is currently available.</div>'
+        else:
+            protocol, schema = load_protocol()
+            prompt = protocol + "\n\n---\n\n## Lesson Text:\n\n" + text
+            llm = get_llm()
+            analysis = llm.complete_structured_json(
+                prompt,
+                schema,
+                system=ANALYSIS_SYSTEM_PROMPT,
+            )
+            analysis_html = render_analysis(analysis, schema)
+
         return JSONResponse({
             "status": "complete",
-            "result_html": render_analysis(analysis, schema)
+            "result_html": router_html + analysis_html
         })
 
     except Exception as e:
@@ -747,8 +896,20 @@ async def api_status(job_id: str):
         return JSONResponse({"status": "error", "error": job.get("error", "Unknown error")})
     else:  # complete
         _, schema = load_protocol()
-        result_html = render_analysis(job.get("result", {}), schema)
-        return JSONResponse({"status": "complete", "result_html": result_html})
+        router_result = job.get("router_result", {})
+        result = job.get("result", {})
+        analysis_note = job.get("analysis_note", "")
+
+        router_html = render_router_result(router_result)
+
+        if result:
+            analysis_html = render_analysis(result, schema)
+        elif analysis_note:
+            analysis_html = f'<div class="info" style="background: #fff3cd; padding: 15px; border-radius: 8px;"><strong>Note:</strong> {analysis_note}</div>'
+        else:
+            analysis_html = ""
+
+        return JSONResponse({"status": "complete", "result_html": router_html + analysis_html})
 
 
 # Legacy form POST (redirects for non-JS browsers)
@@ -767,15 +928,27 @@ async def analyze(
         )
 
     try:
-        protocol, schema = load_protocol()
-        prompt = protocol + "\n\n" + text
-        llm = get_llm()
-        analysis = llm.complete_structured_json(
-            prompt,
-            schema,
-            system=SYSTEM_PROMPT,
-        )
-        result_html = f'<div class="result">{render_analysis(analysis, schema)}</div>'
+        # Step 1: Run router
+        router_result = run_router(text)
+        router_html = render_router_result(router_result)
+
+        # Step 2: Run analysis if VL-1 (only implemented framework)
+        primary = router_result.get("primary_framework", "VL-1")
+
+        if primary != "VL-1":
+            analysis_html = f'<div class="info" style="background: #fff3cd; padding: 15px; border-radius: 8px;"><strong>Note:</strong> Analysis for {primary} is not yet implemented. Only VL-1 analysis is currently available.</div>'
+        else:
+            protocol, schema = load_protocol()
+            prompt = protocol + "\n\n---\n\n## Lesson Text:\n\n" + text
+            llm = get_llm()
+            analysis = llm.complete_structured_json(
+                prompt,
+                schema,
+                system=ANALYSIS_SYSTEM_PROMPT,
+            )
+            analysis_html = render_analysis(analysis, schema)
+
+        result_html = f'<div class="result">{router_html}{analysis_html}</div>'
 
     except Exception as e:
         result_html = f'<div class="error">Error: {str(e)}</div>'
