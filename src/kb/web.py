@@ -11,6 +11,7 @@ Usage (local):
     uvicorn web:app --reload
 """
 
+import hashlib
 import json
 import os
 import uuid
@@ -37,6 +38,28 @@ else:
     # Local development
     DATA_DIR = Path(__file__).parent.parent.parent / "data"
 LESSONS_DIR = DATA_DIR / "lessons"
+CACHE_DIR = DATA_DIR / "cache"
+
+
+def get_cache_key(text: str) -> str:
+    """Generate a cache key from lesson text."""
+    return hashlib.sha256(text.encode()).hexdigest()[:16]
+
+
+def load_cached_analysis(cache_key: str) -> dict | None:
+    """Load cached analysis result if it exists."""
+    path = CACHE_DIR / f"{cache_key}.json"
+    if path.exists():
+        return json.loads(path.read_text())
+    return None
+
+
+def save_cached_analysis(cache_key: str, data: dict) -> None:
+    """Save analysis result to cache."""
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    path = CACHE_DIR / f"{cache_key}.json"
+    path.write_text(json.dumps(data))
+
 
 # S3 configuration for async jobs
 KB_BUCKET = os.environ.get("KB_BUCKET")
@@ -223,6 +246,94 @@ def format_text_with_segments(pass_0_result: dict) -> str:
     return "\n".join(lines)
 
 
+def format_timestamp(seconds: float) -> str:
+    """Format seconds as M:SS or H:MM:SS."""
+    if seconds is None:
+        return ""
+    total_seconds = int(seconds)
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    secs = total_seconds % 60
+    if hours > 0:
+        return f"{hours}:{minutes:02d}:{secs:02d}"
+    return f"{minutes}:{secs:02d}"
+
+
+def align_pass0_with_whisper(pass_0_result: dict, whisper_segments: list) -> None:
+    """Align Pass 0 segments with Whisper timestamps.
+
+    Mutates pass_0_result in place, adding time_start and time_end
+    (in seconds) to each segment that can be matched.
+
+    Algorithm:
+    1. Concatenate all whisper segment texts, tracking which character
+       positions belong to which whisper segment.
+    2. For each Pass 0 segment, search for its text in the whisper
+       concatenation using a prefix-based approach.
+    3. Map matched positions to whisper segment indices and read timestamps.
+    """
+    import re
+
+    if not whisper_segments or not pass_0_result.get("segments"):
+        return
+
+    # Build whisper concatenation and character-to-segment-index map
+    whisper_text = ""
+    char_to_seg_idx = []
+
+    for i, ws in enumerate(whisper_segments):
+        text = ws.get("text", "")
+        char_to_seg_idx.extend([i] * len(text))
+        whisper_text += text
+
+    if not whisper_text or not char_to_seg_idx:
+        return
+
+    whisper_lower = whisper_text.lower()
+    search_from = 0
+
+    for seg in pass_0_result["segments"]:
+        seg_text = seg.get("text", "").strip()
+        if not seg_text or len(seg_text) < 5:
+            continue
+
+        # Search for start of segment text in whisper (case-insensitive)
+        key_len = min(60, len(seg_text))
+        key = seg_text[:key_len].lower()
+        # Allow some backtrack to handle slight ordering differences
+        pos = whisper_lower.find(key, max(0, search_from - 200))
+
+        if pos < 0:
+            # Try shorter key
+            key = seg_text[:30].lower()
+            pos = whisper_lower.find(key, max(0, search_from - 500))
+
+        if pos >= 0:
+            # Found start - now find end position
+            if len(seg_text) > key_len:
+                end_key = seg_text[-key_len:].lower()
+                end_pos = whisper_lower.find(end_key, pos)
+                if end_pos >= 0:
+                    end_pos += len(end_key)
+                else:
+                    end_pos = min(pos + len(seg_text), len(whisper_text))
+            else:
+                end_pos = pos + len(key)
+
+            # Clamp to valid range
+            pos = min(pos, len(char_to_seg_idx) - 1)
+            end_pos = min(max(end_pos - 1, pos), len(char_to_seg_idx) - 1)
+
+            # Get whisper segment timestamps
+            start_ws_idx = char_to_seg_idx[pos]
+            end_ws_idx = char_to_seg_idx[end_pos]
+
+            seg["time_start"] = whisper_segments[start_ws_idx]["start"]
+            seg["time_end"] = whisper_segments[end_ws_idx]["end"]
+
+            search_from = end_pos
+
+
 # Threshold for running a VL analysis (score must be >= this)
 VL_ANALYSIS_THRESHOLD = 0.5
 
@@ -274,6 +385,25 @@ def load_lesson(category: str, filename: str) -> str:
     if path.exists() and path.is_file():
         return path.read_text()
     return ""
+
+
+def load_whisper_segments(category: str, filename: str) -> list | None:
+    """Load Whisper timestamp segments from sidecar JSON file.
+
+    Looks for a .whisper.json file alongside the lesson .txt file.
+    Returns the list of whisper segments or None if not available.
+    """
+    if not filename:
+        return None
+    # Convert lesson filename to whisper filename: foo.txt -> foo.whisper.json
+    whisper_name = filename.replace(".txt", ".whisper.json")
+    if category and category != "uncategorized":
+        path = LESSONS_DIR / category / whisper_name
+    else:
+        path = LESSONS_DIR / whisper_name
+    if path.exists():
+        return json.loads(path.read_text())
+    return None
 
 
 # S3 helper functions for async job management
@@ -700,12 +830,14 @@ def render_pass_b_analysis(data: dict, pass_a_result: dict = None) -> str:
             # Build Pass A step lookup and segment lookup
             pass_a_steps = {}
             segment_lookup = {}
+            segment_data = {}
             if pass_a_result:
                 for step in pass_a_result.get("steps", []):
                     pass_a_steps[step["step_number"]] = step
                 pass_0 = pass_a_result.get("pass_0", {})
                 for seg in pass_0.get("segments", []):
                     segment_lookup[seg["id"]] = seg["text"]
+                    segment_data[seg["id"]] = seg
 
             # Tab control: Card View (default) / Table View
             html.append(f'<h3>Analytical Table ({len(rows)} rows)</h3>')
@@ -739,6 +871,16 @@ def render_pass_b_analysis(data: dict, pass_a_result: dict = None) -> str:
                     val = row.get(col, "")
                     if isinstance(val, list):
                         val = ", ".join(str(v) for v in val)
+                    # Add timestamp annotation to Seq column
+                    if col == "column1" and pass_a_steps and segment_data and val:
+                        row_steps = _parse_seq_to_steps(str(val), pass_a_steps)
+                        if row_steps:
+                            sids = [sid for step in row_steps for sid in step.get("segments", [])]
+                            ts = [segment_data[s].get("time_start") for s in sids if s in segment_data and "time_start" in segment_data[s]]
+                            te = [segment_data[s].get("time_end") for s in sids if s in segment_data and "time_end" in segment_data[s]]
+                            if ts and te:
+                                time_str = f"{format_timestamp(min(ts))} \u2013 {format_timestamp(max(te))}"
+                                val = f'{val}<br><small style="color: #007bff;">{time_str}</small>'
                     html.append(f"<td>{val}</td>")
                 html.append("</tr>")
 
@@ -781,8 +923,19 @@ def render_pass_b_analysis(data: dict, pass_a_result: dict = None) -> str:
                 display = "block" if i == 0 else "none"
                 html.append(f'<div class="analytical-card" data-card-index="{i}" style="display: {display}; border: 1px solid #ddd; border-radius: 8px; padding: 20px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">')
 
-                # Card header - Seq and Negotiation State
+                # Card header - Seq, Negotiation State, and Timestamp
                 seq_val = row.get("column1", "")
+
+                # Compute matched steps and card timestamp early
+                matched_steps = _parse_seq_to_steps(seq_val, pass_a_steps) if pass_a_steps and seq_val else []
+                card_time_str = ""
+                if matched_steps and segment_data:
+                    _sids = [sid for step in matched_steps for sid in step.get("segments", [])]
+                    _ts = [segment_data[s].get("time_start") for s in _sids if s in segment_data and "time_start" in segment_data[s]]
+                    _te = [segment_data[s].get("time_end") for s in _sids if s in segment_data and "time_end" in segment_data[s]]
+                    if _ts and _te:
+                        card_time_str = f"{format_timestamp(min(_ts))} \u2013 {format_timestamp(max(_te))}"
+
                 neg_state = ""
                 # Find the negotiation state column (typically column4)
                 for col in columns:
@@ -798,9 +951,13 @@ def render_pass_b_analysis(data: dict, pass_a_result: dict = None) -> str:
                 }
                 state_color = state_colors.get(neg_state.lower(), "#6c757d") if neg_state else "#6c757d"
 
+                time_html = f'<span style="font-size: 0.85em; color: #007bff; margin-left: 10px;">{card_time_str}</span>' if card_time_str else ''
                 html.append(f'''
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                        <span style="font-size: 0.9em; color: #999;">Steps {seq_val}</span>
+                        <div>
+                            <span style="font-size: 0.9em; color: #999;">Steps {seq_val}</span>
+                            {time_html}
+                        </div>
                         <span style="padding: 4px 12px; border-radius: 12px; font-size: 0.85em; font-weight: bold; color: white; background: {state_color};">{neg_state}</span>
                     </div>
                 ''')
@@ -845,30 +1002,28 @@ def render_pass_b_analysis(data: dict, pass_a_result: dict = None) -> str:
                     html.append('</div>')
 
                 # SPIFFER-Q steps from Pass A that match this row's Seq
-                if pass_a_steps and seq_val:
-                    matched_steps = _parse_seq_to_steps(seq_val, pass_a_steps)
-                    if matched_steps:
-                        html.append('<div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">')
-                        html.append('<div style="font-size: 0.8em; font-weight: bold; color: #888; text-transform: uppercase; margin-bottom: 8px;">SPIFFER-Q Steps</div>')
-                        for step in matched_steps:
-                            tags = ", ".join(step.get("tags", []))
-                            instruction = step.get("instruction", "")
-                            note = f' <span style="color: #999;">({step["note"]})</span>' if step.get("note") else ""
-                            html.append(f'<div style="margin-bottom: 6px; padding: 6px 10px; background: #f8f9fa; border-radius: 4px;"><strong>[{tags}]</strong> {instruction}{note}</div>')
-                        html.append('</div>')
+                if matched_steps:
+                    html.append('<div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">')
+                    html.append('<div style="font-size: 0.8em; font-weight: bold; color: #888; text-transform: uppercase; margin-bottom: 8px;">SPIFFER-Q Steps</div>')
+                    for step in matched_steps:
+                        tags = ", ".join(step.get("tags", []))
+                        instruction = step.get("instruction", "")
+                        note = f' <span style="color: #999;">({step["note"]})</span>' if step.get("note") else ""
+                        html.append(f'<div style="margin-bottom: 6px; padding: 6px 10px; background: #f8f9fa; border-radius: 4px;"><strong>[{tags}]</strong> {instruction}{note}</div>')
+                    html.append('</div>')
 
-                        # Source text from segments
-                        all_segment_ids = []
-                        for step in matched_steps:
-                            all_segment_ids.extend(step.get("segments", []))
-                        if all_segment_ids and segment_lookup:
-                            source_texts = [segment_lookup.get(sid, "") for sid in all_segment_ids if segment_lookup.get(sid)]
-                            if source_texts:
-                                html.append('<details style="margin-top: 10px;">')
-                                html.append(f'<summary style="cursor: pointer; color: #666; font-size: 0.85em;">Source text (segments {", ".join(str(s) for s in all_segment_ids)})</summary>')
-                                html.append('<blockquote style="margin: 8px 0; padding: 10px 14px; background: #fafafa; border-left: 3px solid #007bff; font-style: italic; color: #555; line-height: 1.6;">')
-                                html.append(" ".join(source_texts))
-                                html.append('</blockquote></details>')
+                    # Source text from segments
+                    all_segment_ids = []
+                    for step in matched_steps:
+                        all_segment_ids.extend(step.get("segments", []))
+                    if all_segment_ids and segment_lookup:
+                        source_texts = [segment_lookup.get(sid, "") for sid in all_segment_ids if segment_lookup.get(sid)]
+                        if source_texts:
+                            html.append('<details style="margin-top: 10px;">')
+                            html.append(f'<summary style="cursor: pointer; color: #666; font-size: 0.85em;">Source text (segments {", ".join(str(s) for s in all_segment_ids)})</summary>')
+                            html.append('<blockquote style="margin: 8px 0; padding: 10px 14px; background: #fafafa; border-left: 3px solid #007bff; font-style: italic; color: #555; line-height: 1.6;">')
+                            html.append(" ".join(source_texts))
+                            html.append('</blockquote></details>')
 
                 html.append('</div>')  # end card
 
@@ -1591,35 +1746,47 @@ async def api_analyze(
 
     # Local development: process synchronously
     try:
-        # Step 1: Run Pass A (Decomposition + Routing) - ONCE
-        import logging
-        logger = logging.getLogger("feldenkrais")
-        logger.info("Starting Pass A...")
-        pass_a_result = run_pass_a(text)
-        logger.info("Pass A complete. Primary: %s", pass_a_result.get("primary_framework"))
+        cache_key = get_cache_key(text)
+        cached = load_cached_analysis(cache_key)
+
+        if cached:
+
+            pass_a_result = cached["pass_a_result"]
+            vl_analyses = cached["vl_analyses"]
+        else:
+
+            # Step 1: Run Pass A (Decomposition + Routing) - ONCE
+            pass_a_result = run_pass_a(text)
+
+            # Step 2: Get active frameworks
+            active_frameworks = get_active_frameworks(pass_a_result)
+            if not active_frameworks:
+                primary = pass_a_result.get("primary_framework", "VL-1")
+                active_frameworks = [primary]
+
+            # Step 3: Run Pass B for each active framework
+            vl_analyses = {}
+            for framework in active_frameworks:
+                try:
+                    analysis = run_pass_b(text, pass_a_result, framework)
+                    vl_analyses[framework] = {"status": "complete", "result": analysis}
+                except Exception as e:
+                    vl_analyses[framework] = {"status": "error", "error": str(e)}
+
+            # Save to cache (before whisper alignment, which is applied at render time)
+            save_cached_analysis(cache_key, {
+                "pass_a_result": pass_a_result,
+                "vl_analyses": vl_analyses,
+            })
+
+        # Align with whisper timestamps (always, even on cache hit)
+        whisper_segments = load_whisper_segments(selected_category, selected_lesson)
+        if whisper_segments:
+            align_pass0_with_whisper(pass_a_result.get("pass_0", {}), whisper_segments)
+
+        # Render
         router_html = render_router_result(pass_a_result)
-
-        # Step 2: Get active frameworks
-        active_frameworks = get_active_frameworks(pass_a_result)
-        if not active_frameworks:
-            primary = pass_a_result.get("primary_framework", "VL-1")
-            active_frameworks = [primary]
-        logger.info("Active frameworks: %s", active_frameworks)
-
-        # Step 3: Run Pass B for each active framework
-        _, schema = load_pass_b("VL-1")  # Schema is shared
-        vl_analyses = {}
-
-        for framework in active_frameworks:
-            try:
-                logger.info("Starting Pass B for %s...", framework)
-                analysis = run_pass_b(text, pass_a_result, framework)
-                logger.info("Pass B for %s complete.", framework)
-                vl_analyses[framework] = {"status": "complete", "result": analysis}
-            except Exception as e:
-                logger.error("Pass B for %s failed: %s", framework, e)
-                vl_analyses[framework] = {"status": "error", "error": str(e)}
-
+        _, schema = load_pass_b("VL-1")
         analysis_html = render_multi_vl_analyses(vl_analyses, schema, pass_a_result)
 
         return JSONResponse({
@@ -1682,27 +1849,45 @@ async def analyze(
         )
 
     try:
-        # Step 1: Run Pass A (Decomposition + Routing) - ONCE
-        pass_a_result = run_pass_a(text)
+        cache_key = get_cache_key(text)
+        cached = load_cached_analysis(cache_key)
+
+        if cached:
+            pass_a_result = cached["pass_a_result"]
+            vl_analyses = cached["vl_analyses"]
+        else:
+            # Step 1: Run Pass A (Decomposition + Routing) - ONCE
+            pass_a_result = run_pass_a(text)
+
+            # Step 2: Get active frameworks
+            active_frameworks = get_active_frameworks(pass_a_result)
+            if not active_frameworks:
+                primary = pass_a_result.get("primary_framework", "VL-1")
+                active_frameworks = [primary]
+
+            # Step 3: Run Pass B for each active framework
+            vl_analyses = {}
+            for framework in active_frameworks:
+                try:
+                    analysis = run_pass_b(text, pass_a_result, framework)
+                    vl_analyses[framework] = {"status": "complete", "result": analysis}
+                except Exception as e:
+                    vl_analyses[framework] = {"status": "error", "error": str(e)}
+
+            # Save to cache
+            save_cached_analysis(cache_key, {
+                "pass_a_result": pass_a_result,
+                "vl_analyses": vl_analyses,
+            })
+
+        # Align with whisper timestamps (always, even on cache hit)
+        whisper_segments = load_whisper_segments(selected_category, selected_lesson)
+        if whisper_segments:
+            align_pass0_with_whisper(pass_a_result.get("pass_0", {}), whisper_segments)
+
+        # Render
         router_html = render_router_result(pass_a_result)
-
-        # Step 2: Get active frameworks
-        active_frameworks = get_active_frameworks(pass_a_result)
-        if not active_frameworks:
-            primary = pass_a_result.get("primary_framework", "VL-1")
-            active_frameworks = [primary]
-
-        # Step 3: Run Pass B for each active framework
         _, schema = load_pass_b("VL-1")
-        vl_analyses = {}
-
-        for framework in active_frameworks:
-            try:
-                analysis = run_pass_b(text, pass_a_result, framework)
-                vl_analyses[framework] = {"status": "complete", "result": analysis}
-            except Exception as e:
-                vl_analyses[framework] = {"status": "error", "error": str(e)}
-
         analysis_html = render_multi_vl_analyses(vl_analyses, schema, pass_a_result)
         result_html = f'<div class="result">{router_html}{analysis_html}</div>'
 
