@@ -742,6 +742,19 @@ def render_pass_b_analysis(data: dict, pass_a_result: dict = None) -> str:
                     html.append(f"<td>{val}</td>")
                 html.append("</tr>")
 
+                # Add voice/shadow row if present
+                vl_voice = row.get("vl_voice", "")
+                striver_shadow = row.get("striver_shadow", "")
+                if vl_voice or striver_shadow:
+                    html.append(f'<tr><td colspan="{len(columns)}" style="background: #fafafa; padding: 8px 12px; font-size: 0.9em;">')
+                    if vl_voice:
+                        html.append(f'<span style="color: #007bff; font-weight: bold;">Person Inside:</span> <em>{vl_voice}</em>')
+                    if vl_voice and striver_shadow:
+                        html.append(' &mdash; ')
+                    if striver_shadow:
+                        html.append(f'<span style="color: #dc3545; font-weight: bold;">Shadow:</span> <em>{striver_shadow}</em>')
+                    html.append('</td></tr>')
+
             html.append("</tbody></table></div>")
 
             # === CARD VIEW (shown by default) ===
@@ -809,6 +822,27 @@ def render_pass_b_analysis(data: dict, pass_a_result: dict = None) -> str:
                             <div>{val}</div>
                         </div>
                     ''')
+
+                # VL Voice and Striver Shadow
+                vl_voice = row.get("vl_voice", "")
+                striver_shadow = row.get("striver_shadow", "")
+                if vl_voice or striver_shadow:
+                    html.append('<div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">')
+                    if vl_voice:
+                        html.append(f'''
+                            <div style="margin-bottom: 12px; padding: 12px 16px; background: #f0f7ff; border-radius: 6px; border-left: 3px solid #007bff;">
+                                <div style="font-size: 0.75em; font-weight: bold; color: #007bff; text-transform: uppercase; margin-bottom: 4px;">The Person Inside</div>
+                                <div style="font-style: italic; color: #333; line-height: 1.5;">{vl_voice}</div>
+                            </div>
+                        ''')
+                    if striver_shadow:
+                        html.append(f'''
+                            <div style="margin-bottom: 12px; padding: 12px 16px; background: #fff5f5; border-radius: 6px; border-left: 3px solid #dc3545;">
+                                <div style="font-size: 0.75em; font-weight: bold; color: #dc3545; text-transform: uppercase; margin-bottom: 4px;">The Shadow</div>
+                                <div style="font-style: italic; color: #555; line-height: 1.5;">{striver_shadow}</div>
+                            </div>
+                        ''')
+                    html.append('</div>')
 
                 # SPIFFER-Q steps from Pass A that match this row's Seq
                 if pass_a_steps and seq_val:

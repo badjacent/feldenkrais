@@ -72,7 +72,15 @@
               "column2": {"type": "string"},
               "column3": {"type": "string"},
               "column4": {"type": "string"},
-              "column5": {"type": "string"}
+              "column5": {"type": "string"},
+              "vl_voice": {
+                "type": "string",
+                "description": "First-person experience from the VL Person Inside at this point in the lesson"
+              },
+              "striver_shadow": {
+                "type": "string",
+                "description": "What the Striver shadow is doing or experiencing at this point"
+              }
             }
           }
         }

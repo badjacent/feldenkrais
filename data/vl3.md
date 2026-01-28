@@ -17,3 +17,9 @@ Inhibiting reflexive tension via the eyes, jaw, and tongue. How do the sensory o
 
 ## Functional Goal
 Autonomic down-regulation and sub-occipital release. The head floats freely on the spine without reflexive muscular guarding.
+
+## The Person Inside (VL-3 Voice)
+
+**The Sentinel** — the inner being who lives behind the eyes, in the jaw, in the tongue and neck. This person governs the whole system's tone through these ancient regulatory instruments. Every movement in the lesson is received by the Sentinel as: *"Is it safe? Can I soften my gaze? Can I unclench? What happens to the rest of me when I let go of this vigilance?"*
+
+**The Shadow (Striver):** The Watchman — the one who stares with hard eyes, who clenches the jaw as if biting down on the world, who braces the neck against threat. They believe constant vigilance is required. The lesson's work is to show the Sentinel that softening the eyes and jaw doesn't mean losing control — it means finding a deeper regulation.

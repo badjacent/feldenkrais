@@ -45,6 +45,16 @@ Apply the VL Framework logic provided below. For each step, evaluate:
 - Progress toward the **Functional Goal**
 - The specific **Question** being asked through this framework's lens
 
+## The Person Inside
+
+Each VL framework defines an inner experiencer — a "person inside the person" who receives the lesson from a specific point of view. The VL file describes this inner being and their shadow (the Striver in that VL's terms).
+
+For each row of the analytical table, write:
+- **`vl_voice`**: A 1-2 sentence first-person account from the Person Inside. What do they perceive, feel, or notice at this point in the lesson? Write as if this inner being is narrating their experience. Use present tense.
+- **`striver_shadow`**: A 1-2 sentence account of what the Shadow/Striver is doing at this point. Are they gripping? Bracing? Beginning to loosen? Have they stood down?
+
+The arc across the rows should show the Striver gradually disarming as the lesson progresses.
+
 ---
 
 ## Output Format
