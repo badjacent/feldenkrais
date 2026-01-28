@@ -103,6 +103,126 @@ def load_protocol(framework: str = "VL-1") -> tuple[str, dict]:
     return load_pass_b(framework)
 
 
+def run_pass_0(text: str) -> dict:
+    """
+    Pass 0: Text Segmentation.
+
+    Segments lesson text into sentence-level chunks with character offsets.
+    Uses rule-based segmentation optimized for Feldenkrais lesson text patterns.
+
+    Returns:
+        {
+            "segments": [{"id": 1, "text": "...", "start": 0, "end": 50}, ...],
+            "original_length": 1234
+        }
+    """
+    import re
+
+    # Clean the text - normalize whitespace but preserve structure
+    cleaned = text.strip()
+
+    # Feldenkrais lessons often use "..." as instruction separators
+    # Split on: sentence endings (. ! ?) followed by space/newline, or "..." patterns
+
+    # Pattern explanation:
+    # - Split on period/exclamation/question followed by whitespace
+    # - Also split on "..." (ellipsis used as pause/transition marker)
+    # - Also split on numbered steps like "1." or "2."
+    # - Preserve the delimiter for proper offset calculation
+
+    segments = []
+    current_pos = 0
+    segment_id = 1
+
+    # Use regex to find sentence boundaries
+    # Match: end punctuation + space, or ellipsis + space, or newline after text
+    sentence_pattern = re.compile(
+        r'([.!?](?:\s|$))|'  # Standard sentence endings
+        r'(\.{2,}\s*)|'       # Ellipsis (2+ dots)
+        r'(\n\s*\n)|'         # Paragraph breaks
+        r'(\n(?=\d+\.\s))'    # Newline before numbered step
+    )
+
+    last_end = 0
+
+    for match in sentence_pattern.finditer(cleaned):
+        # Get the text from last_end to end of this match
+        end_pos = match.end()
+        segment_text = cleaned[last_end:end_pos].strip()
+
+        if segment_text and len(segment_text) > 2:  # Skip tiny fragments
+            segments.append({
+                "id": segment_id,
+                "text": segment_text,
+                "start": last_end,
+                "end": end_pos
+            })
+            segment_id += 1
+
+        last_end = end_pos
+
+    # Don't forget the last segment if text doesn't end with punctuation
+    if last_end < len(cleaned):
+        remaining = cleaned[last_end:].strip()
+        if remaining and len(remaining) > 2:
+            segments.append({
+                "id": segment_id,
+                "text": remaining,
+                "start": last_end,
+                "end": len(cleaned)
+            })
+
+    # If segmentation produced too few segments, fall back to simpler approach
+    if len(segments) < 3 and len(cleaned) > 200:
+        # Fall back: split on any sentence-ending punctuation
+        segments = []
+        segment_id = 1
+        last_end = 0
+
+        for match in re.finditer(r'[.!?]+\s*', cleaned):
+            end_pos = match.end()
+            segment_text = cleaned[last_end:end_pos].strip()
+            if segment_text:
+                segments.append({
+                    "id": segment_id,
+                    "text": segment_text,
+                    "start": last_end,
+                    "end": end_pos
+                })
+                segment_id += 1
+            last_end = end_pos
+
+        if last_end < len(cleaned):
+            remaining = cleaned[last_end:].strip()
+            if remaining:
+                segments.append({
+                    "id": segment_id,
+                    "text": remaining,
+                    "start": last_end,
+                    "end": len(cleaned)
+                })
+
+    return {
+        "segments": segments,
+        "original_length": len(cleaned)
+    }
+
+
+def format_text_with_segments(pass_0_result: dict) -> str:
+    """
+    Format text with segment markers for LLM consumption.
+
+    Returns text like:
+    [1] Lie on your back on the floor.
+    [2] Bend your knees so your feet are standing.
+    ...
+    """
+    lines = []
+    for seg in pass_0_result.get("segments", []):
+        lines.append(f"[{seg['id']}] {seg['text']}")
+    return "\n".join(lines)
+
+
 # Threshold for running a VL analysis (score must be >= this)
 VL_ANALYSIS_THRESHOLD = 0.5
 
@@ -120,19 +240,37 @@ def get_llm() -> LLM:
     )
 
 
-def get_available_lessons() -> list[tuple[str, str]]:
-    """Get list of (filename, display_name) for available lessons."""
-    lessons = []
+def get_available_lessons() -> dict[str, list[tuple[str, str]]]:
+    """Get dict of category -> [(filename, display_name)] for available lessons."""
+    categories = {}
     if LESSONS_DIR.exists():
+        # Scan subdirectories
+        for subdir in sorted(LESSONS_DIR.iterdir()):
+            if subdir.is_dir() and not subdir.name.startswith('.'):
+                lessons = []
+                for f in sorted(subdir.glob("*.txt")):
+                    display = f.stem.replace("_", " ").replace("-", " ").title()
+                    lessons.append((f.name, display))
+                if lessons:
+                    # Format category name nicely
+                    cat_display = subdir.name.replace("_", " ").title()
+                    categories[subdir.name] = lessons
+        # Also check for lessons directly in LESSONS_DIR (uncategorized)
+        uncategorized = []
         for f in sorted(LESSONS_DIR.glob("*.txt")):
             display = f.stem.replace("_", " ").replace("-", " ").title()
-            lessons.append((f.name, display))
-    return lessons
+            uncategorized.append((f.name, display))
+        if uncategorized:
+            categories["uncategorized"] = uncategorized
+    return categories
 
 
-def load_lesson(filename: str) -> str:
+def load_lesson(category: str, filename: str) -> str:
     """Load lesson text from file."""
-    path = LESSONS_DIR / filename
+    if category and category != "uncategorized":
+        path = LESSONS_DIR / category / filename
+    else:
+        path = LESSONS_DIR / filename
     if path.exists() and path.is_file():
         return path.read_text()
     return ""
@@ -182,8 +320,13 @@ def invoke_lambda_async(job_id: str) -> None:
 def run_pass_a(lesson_text: str) -> dict:
     """Run Pass A: Decomposition + Routing.
 
-    Returns VL classification AND SPIFFER-Q decomposed steps.
+    Internally runs Pass 0 to segment text, then passes segmented text to LLM.
+    Returns VL classification, SPIFFER-Q decomposed steps, AND Pass 0 segments.
     """
+    # Run Pass 0 to segment the text
+    pass_0_result = run_pass_0(lesson_text)
+    segmented_text = format_text_with_segments(pass_0_result)
+
     pass_a_prompt, pass_a_schema = load_pass_a()
 
     if not pass_a_prompt or not pass_a_schema:
@@ -198,10 +341,11 @@ def run_pass_a(lesson_text: str) -> dict:
             },
             "primary_framework": "VL-1",
             "rationale": "Pass A not configured, defaulting to VL-1",
-            "steps": []
+            "steps": [],
+            "pass_0": pass_0_result,
         }
 
-    prompt = pass_a_prompt + "\n\n---\n\n## Lesson to Analyze:\n\n" + lesson_text
+    prompt = pass_a_prompt + "\n\n---\n\n## Lesson to Analyze:\n\n" + segmented_text
 
     llm = get_llm()
     result = llm.complete_structured_json(
@@ -209,6 +353,9 @@ def run_pass_a(lesson_text: str) -> dict:
         pass_a_schema,
         system=ROUTER_SYSTEM_PROMPT,
     )
+
+    # Attach Pass 0 segments to result for UI rendering
+    result["pass_0"] = pass_0_result
 
     return result
 
@@ -405,19 +552,40 @@ def render_router_result(router_result: dict) -> str:
             html.append(f"<h2>{router_result['lesson_title']}</h2>")
 
         html.append("<h3>SPIFFER-Q Decomposition (Pass A)</h3>")
+
+        # Build segment lookup from Pass 0
+        pass_0 = router_result.get("pass_0", {})
+        segments_list = pass_0.get("segments", [])
+        segment_lookup = {seg["id"]: seg["text"] for seg in segments_list}
+
         html.append("<ol>")
         for step in steps:
             tags = ", ".join(step.get("tags", []))
             instruction = step.get("instruction", "")
             note = f' <small style="color: #666;">({step["note"]})</small>' if step.get("note") else ""
-            html.append(f"<li><strong>[{tags}]</strong> {instruction}{note}</li>")
+
+            # Get referenced source text
+            segment_ids = step.get("segments", [])
+            source_texts = [segment_lookup.get(sid, f"[segment {sid} not found]") for sid in segment_ids]
+
+            html.append(f"<li><strong>[{tags}]</strong> {instruction}{note}")
+
+            # Show source text if we have segment references
+            if source_texts:
+                html.append('<details style="margin-top: 8px; margin-left: 20px;">')
+                html.append(f'<summary style="cursor: pointer; color: #666; font-size: 0.9em;">Source text (segments {", ".join(str(s) for s in segment_ids)})</summary>')
+                html.append('<blockquote style="margin: 8px 0; padding: 8px 12px; background: #fff; border-left: 3px solid #007bff; font-style: italic; color: #555;">')
+                html.append(" ".join(source_texts))
+                html.append('</blockquote></details>')
+
+            html.append("</li>")
         html.append("</ol>")
         html.append("</div>")
 
     return "\n".join(html)
 
 
-def render_multi_vl_analyses(vl_analyses: dict, schema: dict) -> str:
+def render_multi_vl_analyses(vl_analyses: dict, schema: dict, pass_a_result: dict = None) -> str:
     """Render multiple VL analyses with tabs for switching between them."""
     if not vl_analyses:
         return ""
@@ -429,7 +597,7 @@ def render_multi_vl_analyses(vl_analyses: dict, schema: dict) -> str:
         framework = frameworks[0]
         entry = vl_analyses[framework]
         if entry.get("status") == "complete" and entry.get("result"):
-            return f'<h2>{framework} Analysis</h2>' + render_analysis(entry["result"], schema)
+            return f'<h2>{framework} Analysis</h2>' + render_analysis(entry["result"], schema, pass_a_result)
         elif entry.get("status") == "error":
             return f'<div class="error"><strong>{framework}:</strong> {entry.get("error", "Unknown error")}</div>'
         return ""
@@ -458,7 +626,7 @@ def render_multi_vl_analyses(vl_analyses: dict, schema: dict) -> str:
         html.append(f'<h2>{framework} Analysis</h2>')
 
         if entry.get("status") == "complete" and entry.get("result"):
-            html.append(render_analysis(entry["result"], schema))
+            html.append(render_analysis(entry["result"], schema, pass_a_result))
         elif entry.get("status") == "error":
             html.append(f'<div class="error">Error: {entry.get("error", "Unknown error")}</div>')
         else:
@@ -466,30 +634,12 @@ def render_multi_vl_analyses(vl_analyses: dict, schema: dict) -> str:
 
         html.append('</div>')
 
-    # Tab switching JavaScript
-    html.append('''
-        <script>
-        function showVLTab(framework) {
-            // Hide all content
-            document.querySelectorAll('.vl-content').forEach(el => el.style.display = 'none');
-            // Deactivate all tabs
-            document.querySelectorAll('.vl-tabs button').forEach(el => {
-                el.style.background = '#e9ecef';
-                el.style.color = '#333';
-            });
-            // Show selected content
-            document.getElementById('content-' + framework).style.display = 'block';
-            // Activate selected tab
-            document.getElementById('tab-' + framework).style.background = '#007bff';
-            document.getElementById('tab-' + framework).style.color = 'white';
-        }
-        </script>
-    ''')
+    # Note: Tab switching JavaScript is in the main page template (build_html)
 
     return "\n".join(html)
 
 
-def render_pass_b_analysis(data: dict) -> str:
+def render_pass_b_analysis(data: dict, pass_a_result: dict = None) -> str:
     """Render Pass B analysis result as HTML."""
     html = []
 
@@ -531,16 +681,14 @@ def render_pass_b_analysis(data: dict) -> str:
         if narrative.get("threshold_of_quiet"):
             html.append(f"<h4>Threshold of Quiet</h4><p>{narrative['threshold_of_quiet']}</p>")
 
-    # Analytical Table
+    # Analytical Table / Card View
     table = data.get("analytical_table", {})
     if table:
         rows = table.get("rows", [])
         column_headers = table.get("column_headers", {})
 
-        html.append(f"<h3>Analytical Table ({len(rows)} rows)</h3>")
-
         if rows:
-            # Determine columns to display
+            # Determine columns
             if column_headers:
                 columns = sorted([k for k in column_headers.keys() if column_headers.get(k)],
                                 key=lambda x: int(x.replace("column", "")) if x.startswith("column") else 999)
@@ -549,6 +697,33 @@ def render_pass_b_analysis(data: dict) -> str:
                 columns = ["column1", "column2", "column3", "column4", "column5"]
                 display_names = {c: c for c in columns}
 
+            # Build Pass A step lookup and segment lookup
+            pass_a_steps = {}
+            segment_lookup = {}
+            if pass_a_result:
+                for step in pass_a_result.get("steps", []):
+                    pass_a_steps[step["step_number"]] = step
+                pass_0 = pass_a_result.get("pass_0", {})
+                for seg in pass_0.get("segments", []):
+                    segment_lookup[seg["id"]] = seg["text"]
+
+            # Tab control: Card View (default) / Table View
+            html.append(f'<h3>Analytical Table ({len(rows)} rows)</h3>')
+            html.append('''
+                <div style="margin-bottom: 10px;">
+                    <button onclick="showAnalyticalView('cards')" id="btn-cards"
+                            style="padding: 6px 16px; border: none; cursor: pointer; background: #007bff; color: white; border-radius: 4px 4px 0 0; margin-right: 2px;">
+                        Card View
+                    </button>
+                    <button onclick="showAnalyticalView('table')" id="btn-table"
+                            style="padding: 6px 16px; border: none; cursor: pointer; background: #e9ecef; color: #333; border-radius: 4px 4px 0 0;">
+                        Table View
+                    </button>
+                </div>
+            ''')
+
+            # === TABLE VIEW (hidden by default) ===
+            html.append('<div id="analytical-table-view" style="display: none;">')
             html.append("""
             <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width: 100%;">
                 <thead style="background-color: #f0f0f0;">
@@ -567,19 +742,137 @@ def render_pass_b_analysis(data: dict) -> str:
                     html.append(f"<td>{val}</td>")
                 html.append("</tr>")
 
-            html.append("</tbody></table>")
+            html.append("</tbody></table></div>")
+
+            # === CARD VIEW (shown by default) ===
+            html.append('<div id="analytical-card-view">')
+
+            # Navigation
+            nav_html = f'''
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
+                    <button onclick="prevCard()" id="card-prev-btn"
+                            style="padding: 10px 20px; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; background: white; font-size: 1em;">
+                        \u2190 Previous
+                    </button>
+                    <span id="card-counter" style="font-weight: bold; color: #555; font-size: 1.1em;">1 / {len(rows)}</span>
+                    <button onclick="nextCard()" id="card-next-btn"
+                            style="padding: 10px 20px; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; background: white; font-size: 1em;">
+                        Next \u2192
+                    </button>
+                </div>
+            '''
+            html.append(nav_html)
+
+            # Render each card
+            for i, row in enumerate(rows):
+                display = "block" if i == 0 else "none"
+                html.append(f'<div class="analytical-card" data-card-index="{i}" style="display: {display}; border: 1px solid #ddd; border-radius: 8px; padding: 20px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">')
+
+                # Card header - Seq and Negotiation State
+                seq_val = row.get("column1", "")
+                neg_state = ""
+                # Find the negotiation state column (typically column4)
+                for col in columns:
+                    header = display_names.get(col, "").lower()
+                    if "negotiation" in header or "state" in header:
+                        neg_state = row.get(col, "")
+                        break
+
+                state_colors = {
+                    "domination": "#dc3545",
+                    "negotiation": "#fd7e14",
+                    "integration": "#28a745",
+                }
+                state_color = state_colors.get(neg_state.lower(), "#6c757d") if neg_state else "#6c757d"
+
+                html.append(f'''
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <span style="font-size: 0.9em; color: #999;">Steps {seq_val}</span>
+                        <span style="padding: 4px 12px; border-radius: 12px; font-size: 0.85em; font-weight: bold; color: white; background: {state_color};">{neg_state}</span>
+                    </div>
+                ''')
+
+                # Main content - the row columns (skip seq/column1 and negotiation state)
+                for col in columns:
+                    header = display_names.get(col, col)
+                    val = row.get(col, "")
+                    if isinstance(val, list):
+                        val = ", ".join(str(v) for v in val)
+                    if not val or col == "column1":
+                        continue
+                    header_lower = header.lower()
+                    if "negotiation" in header_lower or "state" in header_lower:
+                        continue  # already shown as badge
+                    html.append(f'''
+                        <div style="margin-bottom: 12px;">
+                            <div style="font-size: 0.8em; font-weight: bold; color: #888; text-transform: uppercase; margin-bottom: 4px;">{header}</div>
+                            <div>{val}</div>
+                        </div>
+                    ''')
+
+                # SPIFFER-Q steps from Pass A that match this row's Seq
+                if pass_a_steps and seq_val:
+                    matched_steps = _parse_seq_to_steps(seq_val, pass_a_steps)
+                    if matched_steps:
+                        html.append('<div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">')
+                        html.append('<div style="font-size: 0.8em; font-weight: bold; color: #888; text-transform: uppercase; margin-bottom: 8px;">SPIFFER-Q Steps</div>')
+                        for step in matched_steps:
+                            tags = ", ".join(step.get("tags", []))
+                            instruction = step.get("instruction", "")
+                            note = f' <span style="color: #999;">({step["note"]})</span>' if step.get("note") else ""
+                            html.append(f'<div style="margin-bottom: 6px; padding: 6px 10px; background: #f8f9fa; border-radius: 4px;"><strong>[{tags}]</strong> {instruction}{note}</div>')
+                        html.append('</div>')
+
+                        # Source text from segments
+                        all_segment_ids = []
+                        for step in matched_steps:
+                            all_segment_ids.extend(step.get("segments", []))
+                        if all_segment_ids and segment_lookup:
+                            source_texts = [segment_lookup.get(sid, "") for sid in all_segment_ids if segment_lookup.get(sid)]
+                            if source_texts:
+                                html.append('<details style="margin-top: 10px;">')
+                                html.append(f'<summary style="cursor: pointer; color: #666; font-size: 0.85em;">Source text (segments {", ".join(str(s) for s in all_segment_ids)})</summary>')
+                                html.append('<blockquote style="margin: 8px 0; padding: 10px 14px; background: #fafafa; border-left: 3px solid #007bff; font-style: italic; color: #555; line-height: 1.6;">')
+                                html.append(" ".join(source_texts))
+                                html.append('</blockquote></details>')
+
+                html.append('</div>')  # end card
+
+            html.append('</div>')  # end card view
 
     return "\n".join(html)
 
 
-def render_analysis(data: dict, schema: dict) -> str:
+def _parse_seq_to_steps(seq_val: str, pass_a_steps: dict) -> list:
+    """Parse a Seq column value (e.g., '1-2', '3', '4-6') and return matching Pass A steps."""
+    import re
+    matched = []
+    # Handle ranges like "1-3" and single numbers like "4", and combos like "1-2, 4"
+    for part in re.split(r'[,;]\s*', str(seq_val)):
+        part = part.strip()
+        range_match = re.match(r'(\d+)\s*[-–]\s*(\d+)', part)
+        if range_match:
+            start, end = int(range_match.group(1)), int(range_match.group(2))
+            for n in range(start, end + 1):
+                if n in pass_a_steps:
+                    matched.append(pass_a_steps[n])
+        else:
+            num_match = re.match(r'(\d+)', part)
+            if num_match:
+                n = int(num_match.group(1))
+                if n in pass_a_steps:
+                    matched.append(pass_a_steps[n])
+    return matched
+
+
+def render_analysis(data: dict, schema: dict, pass_a_result: dict = None) -> str:
     """Render analysis dict as HTML based on schema structure.
 
     Handles both old (washing.schema.json) and new (pass_b.schema.json) formats.
     """
     # Check if this is Pass B format (has negotiation_framework, somatic_narrative, analytical_table)
     if "negotiation_framework" in data or "somatic_narrative" in data or "analytical_table" in data:
-        return render_pass_b_analysis(data)
+        return render_pass_b_analysis(data, pass_a_result)
 
     # Otherwise, use legacy rendering
     html = []
@@ -717,15 +1010,31 @@ def render_analysis(data: dict, schema: dict) -> str:
     return "\n".join(html)
 
 
-def build_html(lesson_text: str = "", selected_lesson: str = "", result: str = "") -> str:
+def build_html(lesson_text: str = "", selected_category: str = "", selected_lesson: str = "", result: str = "") -> str:
     """Build the HTML page."""
-    lessons = get_available_lessons()
+    categories = get_available_lessons()
 
-    # Build lesson options
-    lesson_options = ['<option value="">-- Paste custom text below --</option>']
-    for filename, display in lessons:
-        selected = "selected" if filename == selected_lesson else ""
-        lesson_options.append(f'<option value="{filename}" {selected}>{display}</option>')
+    # Build category options
+    category_options = ['<option value="">-- Select category --</option>']
+    for cat_name in categories.keys():
+        cat_display = cat_name.replace("_", " ").title()
+        selected = "selected" if cat_name == selected_category else ""
+        category_options.append(f'<option value="{cat_name}" {selected}>{cat_display}</option>')
+    category_select = "\n".join(category_options)
+
+    # Build lessons data as JSON for JavaScript
+    import json
+    lessons_json = json.dumps({
+        cat: [(f, d) for f, d in lessons]
+        for cat, lessons in categories.items()
+    })
+
+    # Build initial lesson options (for selected category or empty)
+    lesson_options = ['<option value="">-- Select lesson --</option>']
+    if selected_category and selected_category in categories:
+        for filename, display in categories[selected_category]:
+            selected = "selected" if filename == selected_lesson else ""
+            lesson_options.append(f'<option value="{filename}" {selected}>{display}</option>')
     lesson_select = "\n".join(lesson_options)
 
     return f"""
@@ -808,10 +1117,11 @@ def build_html(lesson_text: str = "", selected_lesson: str = "", result: str = "
     <script>
         async function onLessonSelect(select) {{
             const textarea = document.getElementById('lesson_text');
-            if (select.value) {{
+            const category = document.getElementById('selected_category').value;
+            if (select.value && category) {{
                 // Fetch lesson text and populate textarea
                 try {{
-                    const response = await fetch('/api/lesson/' + encodeURIComponent(select.value));
+                    const response = await fetch('/api/lesson/' + encodeURIComponent(category) + '/' + encodeURIComponent(select.value));
                     const data = await response.json();
                     if (data.text) {{
                         textarea.value = data.text;
@@ -862,6 +1172,7 @@ def build_html(lesson_text: str = "", selected_lesson: str = "", result: str = "
                 // If we got result directly (local mode), display it
                 if (data.status === 'complete' && data.result_html) {{
                     resultDiv.innerHTML = '<div class="result">' + data.result_html + '</div>';
+                    initCards();
                     resetForm();
                     return;
                 }}
@@ -890,6 +1201,7 @@ def build_html(lesson_text: str = "", selected_lesson: str = "", result: str = "
 
                     if (data.status === 'complete') {{
                         resultDiv.innerHTML = '<div class="result">' + data.result_html + '</div>';
+                        initCards();
                         resetForm();
                         return;
                     }} else if (data.status === 'error') {{
@@ -914,15 +1226,120 @@ def build_html(lesson_text: str = "", selected_lesson: str = "", result: str = "
             btn.textContent = 'Analyze Lesson';
             spinner.style.display = 'none';
         }}
+
+        // Tab switching for multi-VL analysis results
+        function showVLTab(framework) {{
+            // Hide all content
+            document.querySelectorAll('.vl-content').forEach(el => el.style.display = 'none');
+            // Deactivate all tabs
+            document.querySelectorAll('.vl-tabs button').forEach(el => {{
+                el.style.background = '#e9ecef';
+                el.style.color = '#333';
+            }});
+            // Show selected content
+            document.getElementById('content-' + framework).style.display = 'block';
+            // Activate selected tab
+            document.getElementById('tab-' + framework).style.background = '#007bff';
+            document.getElementById('tab-' + framework).style.color = 'white';
+            // Re-init cards for the new tab
+            setTimeout(initCards, 0);
+        }}
+
+        // Analytical table: Card View / Table View switching
+        var currentCard = 0;
+        var totalCards = 0;
+
+        function getActiveVLContent() {{
+            // Find the currently visible VL content div (or fall back to document)
+            var visible = document.querySelector('.vl-content[style*="display: block"]');
+            if (!visible) {{
+                // Single framework (no tabs) - just use the result div
+                visible = document.getElementById('result') || document;
+            }}
+            return visible;
+        }}
+
+        function showAnalyticalView(view) {{
+            var scope = getActiveVLContent();
+            var tableEl = scope.querySelector('#analytical-table-view') || document.getElementById('analytical-table-view');
+            var cardEl = scope.querySelector('#analytical-card-view') || document.getElementById('analytical-card-view');
+            if (tableEl) tableEl.style.display = view === 'table' ? 'block' : 'none';
+            if (cardEl) cardEl.style.display = view === 'cards' ? 'block' : 'none';
+            var btnCards = scope.querySelector('#btn-cards') || document.getElementById('btn-cards');
+            var btnTable = scope.querySelector('#btn-table') || document.getElementById('btn-table');
+            if (btnCards) {{ btnCards.style.background = view === 'cards' ? '#007bff' : '#e9ecef'; btnCards.style.color = view === 'cards' ? 'white' : '#333'; }}
+            if (btnTable) {{ btnTable.style.background = view === 'table' ? '#007bff' : '#e9ecef'; btnTable.style.color = view === 'table' ? 'white' : '#333'; }}
+        }}
+
+        function showCard(index) {{
+            var scope = getActiveVLContent();
+            var cards = scope.querySelectorAll('.analytical-card');
+            if (cards.length === 0) return;
+            cards.forEach(function(c) {{ c.style.display = 'none'; }});
+            if (index >= cards.length) index = 0;
+            cards[index].style.display = 'block';
+            currentCard = index;
+            var counter = scope.querySelector('#card-counter') || document.getElementById('card-counter');
+            if (counter) counter.textContent = (index + 1) + ' / ' + cards.length;
+            var prevBtn = scope.querySelector('#card-prev-btn') || document.getElementById('card-prev-btn');
+            var nextBtn = scope.querySelector('#card-next-btn') || document.getElementById('card-next-btn');
+            if (prevBtn) prevBtn.disabled = index === 0;
+            if (nextBtn) nextBtn.disabled = index === cards.length - 1;
+        }}
+
+        function prevCard() {{ if (currentCard > 0) showCard(currentCard - 1); }}
+        function nextCard() {{
+            var scope = getActiveVLContent();
+            var cards = scope.querySelectorAll('.analytical-card');
+            if (currentCard < cards.length - 1) showCard(currentCard + 1);
+        }}
+
+        function initCards() {{
+            var scope = getActiveVLContent();
+            var cards = scope.querySelectorAll('.analytical-card');
+            totalCards = cards.length;
+            if (totalCards > 0) {{
+                currentCard = 0;
+                showCard(0);
+            }}
+        }}
     </script>
 </head>
 <body>
     <h1>Feldenkrais Lesson Analyzer</h1>
     <p>Select a lesson or paste text. The system will classify which VL framework(s) apply and run the appropriate analysis.</p>
 
+    <script>
+        const lessonsData = {lessons_json};
+
+        function onCategoryChange(select) {{
+            const category = select.value;
+            const lessonSelect = document.getElementById('selected_lesson');
+            lessonSelect.innerHTML = '<option value="">-- Select lesson --</option>';
+
+            if (category && lessonsData[category]) {{
+                lessonsData[category].forEach(([filename, display]) => {{
+                    const option = document.createElement('option');
+                    option.value = filename;
+                    option.textContent = display;
+                    lessonSelect.appendChild(option);
+                }});
+            }}
+            // Clear textarea when changing category
+            document.getElementById('lesson_text').value = '';
+        }}
+    </script>
+
     <form id="analyze-form" method="post" action="/analyze" onsubmit="submitForm(event)">
         <div class="form-group">
-            <label for="selected_lesson">Select a Lesson:</label>
+            <label for="selected_category">Category:</label>
+            <select name="selected_category" id="selected_category" onchange="onCategoryChange(this)">
+                {category_select}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="selected_lesson">Lesson:</label>
             <select name="selected_lesson" id="selected_lesson" onchange="onLessonSelect(this)">
                 {lesson_select}
             </select>
@@ -1089,10 +1506,10 @@ async def home():
     return build_html()
 
 
-@app.get("/api/lesson/{filename}")
-async def get_lesson_text(filename: str):
+@app.get("/api/lesson/{category}/{filename}")
+async def get_lesson_text(category: str, filename: str):
     """Return lesson text for populating the textarea."""
-    text = load_lesson(filename)
+    text = load_lesson(category, filename)
     if text:
         return JSONResponse({"text": text})
     return JSONResponse({"error": "Lesson not found"}, status_code=404)
@@ -1111,6 +1528,7 @@ from fastapi.responses import JSONResponse
 @app.post("/api/analyze")
 async def api_analyze(
     lesson_text: str = Form(""),
+    selected_category: str = Form(""),
     selected_lesson: str = Form("")
 ):
     """Start analysis and return job_id for polling."""
@@ -1127,6 +1545,7 @@ async def api_analyze(
         job_data = {
             "status": "pending",
             "lesson_text": text,
+            "selected_category": selected_category,
             "selected_lesson": selected_lesson,
         }
         save_job(job_id, job_data)
@@ -1139,7 +1558,11 @@ async def api_analyze(
     # Local development: process synchronously
     try:
         # Step 1: Run Pass A (Decomposition + Routing) - ONCE
+        import logging
+        logger = logging.getLogger("feldenkrais")
+        logger.info("Starting Pass A...")
         pass_a_result = run_pass_a(text)
+        logger.info("Pass A complete. Primary: %s", pass_a_result.get("primary_framework"))
         router_html = render_router_result(pass_a_result)
 
         # Step 2: Get active frameworks
@@ -1147,6 +1570,7 @@ async def api_analyze(
         if not active_frameworks:
             primary = pass_a_result.get("primary_framework", "VL-1")
             active_frameworks = [primary]
+        logger.info("Active frameworks: %s", active_frameworks)
 
         # Step 3: Run Pass B for each active framework
         _, schema = load_pass_b("VL-1")  # Schema is shared
@@ -1154,12 +1578,15 @@ async def api_analyze(
 
         for framework in active_frameworks:
             try:
+                logger.info("Starting Pass B for %s...", framework)
                 analysis = run_pass_b(text, pass_a_result, framework)
+                logger.info("Pass B for %s complete.", framework)
                 vl_analyses[framework] = {"status": "complete", "result": analysis}
             except Exception as e:
+                logger.error("Pass B for %s failed: %s", framework, e)
                 vl_analyses[framework] = {"status": "error", "error": str(e)}
 
-        analysis_html = render_multi_vl_analyses(vl_analyses, schema)
+        analysis_html = render_multi_vl_analyses(vl_analyses, schema, pass_a_result)
 
         return JSONResponse({
             "status": "complete",
@@ -1207,6 +1634,7 @@ async def api_status(job_id: str):
 @app.post("/analyze", response_class=HTMLResponse)
 async def analyze(
     lesson_text: str = Form(""),
+    selected_category: str = Form(""),
     selected_lesson: str = Form("")
 ):
     """Fallback for non-JavaScript form submission."""
@@ -1215,6 +1643,7 @@ async def analyze(
     if not text:
         return build_html(
             lesson_text=lesson_text,
+            selected_category=selected_category,
             result='<div class="error">Please enter or select lesson text.</div>'
         )
 
@@ -1240,7 +1669,7 @@ async def analyze(
             except Exception as e:
                 vl_analyses[framework] = {"status": "error", "error": str(e)}
 
-        analysis_html = render_multi_vl_analyses(vl_analyses, schema)
+        analysis_html = render_multi_vl_analyses(vl_analyses, schema, pass_a_result)
         result_html = f'<div class="result">{router_html}{analysis_html}</div>'
 
     except Exception as e:
@@ -1248,6 +1677,7 @@ async def analyze(
 
     return build_html(
         lesson_text=lesson_text if not selected_lesson else "",
+        selected_category=selected_category,
         selected_lesson=selected_lesson,
         result=result_html
     )

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Pass0Result",
+  "description": "Pass 0 output: Text Segmentation",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Inferred or provided lesson title"
+    },
+    "segments": {
+      "type": "array",
+      "description": "Sentence-level segments of the lesson text",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Sequential segment ID (1-indexed)"
+          },
+          "text": {
+            "type": "string",
+            "description": "The segment text (typically one sentence or instruction)"
+          },
+          "start": {
+            "type": "integer",
+            "description": "Character offset from start of original text"
+          },
+          "end": {
+            "type": "integer",
+            "description": "Character offset for end of segment"
+          }
+        },
+        "required": ["id", "text", "start", "end"]
+      }
+    },
+    "original_length": {
+      "type": "integer",
+      "description": "Character count of original text"
+    }
+  },
+  "required": ["segments", "original_length"]
+}

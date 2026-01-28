@@ -78,9 +78,16 @@
           "note": {
             "type": "string",
             "description": "Brief pedagogical note (optional)"
+          },
+          "segments": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "Segment IDs from the source text that this step covers"
           }
         },
-        "required": ["step_number", "instruction", "tags"]
+        "required": ["step_number", "instruction", "tags", "segments"]
       }
     }
   },

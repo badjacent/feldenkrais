@@ -5,6 +5,9 @@ Analyze the Feldenkrais lesson transcript to:
 1. Classify which VL Framework(s) apply
 2. Decompose the lesson into SPIFFER-Q tagged steps
 
+## Input Format
+The lesson text is pre-segmented with markers like `[1]`, `[2]`, etc. Each marker indicates a sentence or instruction unit. When you identify steps, reference the segment IDs that correspond to that step.
+
 ---
 
 ## Part 1: VL Framework Classification
@@ -44,8 +47,9 @@ Segment the transcript into discrete "Somatic Events" (movements/instructions). 
 
 For each step, provide:
 - Step number
-- The instruction/movement
+- The instruction/movement (summarized in your own words)
 - Relevant SPIFFER-Q tags
+- Segment IDs from the source text (e.g., `[45, 46, 47]` if the step covers segments 45-47)
 - Brief note on the pedagogical purpose (optional)
 
 ---
@@ -57,4 +61,4 @@ Provide your analysis in the structured format with:
 2. `primary_framework` - the dominant VL
 3. `secondary_frameworks` - VLs scoring >= 0.3
 4. `rationale` - brief explanation of classification
-5. `steps` - the SPIFFER-Q decomposed lesson
+5. `steps` - the SPIFFER-Q decomposed lesson, each with `segments` array referencing source text
