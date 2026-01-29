@@ -613,23 +613,51 @@ data "archive_file" "web_lambda" {
     content  = file("${path.module}/../src/kb/schemas.py")
     filename = "schemas.py"
   }
+  # Framework registry
   source {
-    content  = file("${path.module}/../data/washing.md")
-    filename = "data/washing.md"
+    content  = file("${path.module}/../data/frameworks.json")
+    filename = "data/frameworks.json"
+  }
+  # Pass A (decomposition + routing)
+  source {
+    content  = file("${path.module}/../data/pass_a.md")
+    filename = "data/pass_a.md"
   }
   source {
-    content  = file("${path.module}/../data/washing.schema.json")
-    filename = "data/washing.schema.json"
+    content  = file("${path.module}/../data/pass_a.schema.json")
+    filename = "data/pass_a.schema.json"
   }
-  # Lesson files
+  # Pass B (VL synthesis)
   source {
-    content  = file("${path.module}/../data/lessons/vertical.txt")
-    filename = "data/lessons/vertical.txt"
+    content  = file("${path.module}/../data/pass_b.md")
+    filename = "data/pass_b.md"
   }
   source {
-    content  = file("${path.module}/../data/lessons/scalp.txt")
-    filename = "data/lessons/scalp.txt"
+    content  = file("${path.module}/../data/pass_b.schema.json")
+    filename = "data/pass_b.schema.json"
   }
+  # VL-specific modules
+  source {
+    content  = file("${path.module}/../data/vl1.md")
+    filename = "data/vl1.md"
+  }
+  source {
+    content  = file("${path.module}/../data/vl2.md")
+    filename = "data/vl2.md"
+  }
+  source {
+    content  = file("${path.module}/../data/vl3.md")
+    filename = "data/vl3.md"
+  }
+  source {
+    content  = file("${path.module}/../data/vl4.md")
+    filename = "data/vl4.md"
+  }
+  source {
+    content  = file("${path.module}/../data/vl5.md")
+    filename = "data/vl5.md"
+  }
+  # Note: Lesson files are loaded dynamically from S3 or user input
 }
 
 resource "aws_lambda_function" "web" {

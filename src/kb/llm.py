@@ -483,15 +483,15 @@ class LLM:
         max_tokens: int,
         temperature: float,
     ) -> dict:
-        """Get structured output from Gemini using response_schema with JSON Schema."""
-        # Strip fields Gemini doesn't accept
+        """Get structured output from Gemini using response_json_schema."""
+        # Strip fields Gemini doesn't accept in JSON Schema mode
         clean_schema = {k: v for k, v in schema.items() if k not in ("$schema", "$id")}
 
         config = {
             "max_output_tokens": max_tokens,
             "temperature": temperature,
             "response_mime_type": "application/json",
-            "response_schema": clean_schema,
+            "response_json_schema": clean_schema,
         }
         if system:
             config["system_instruction"] = system
