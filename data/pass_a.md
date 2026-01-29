@@ -12,15 +12,9 @@ The lesson text is pre-segmented with markers like `[1]`, `[2]`, etc. Each marke
 
 ## Part 1: VL Framework Classification
 
-Classify the lesson across the five VL Frameworks with a score from 0.0 to 1.0:
+Classify the lesson across the VL Frameworks with a score from 0.0 to 1.0:
 
-| Framework | Focus | Key Indicators |
-|-----------|-------|----------------|
-| **VL-1** Vertical Self | Gravity, skeletal columns, longitudinal force | Standing, weight transfer, spine as column, lengthening |
-| **VL-2** Homunculus | Micro-differentiation, joint resolution | Small precise movements, sensing specific joints, body mapping |
-| **VL-3** Steering & Tone | Eyes, jaw, neck, autonomic regulation | Eye movements, jaw relaxation, neck turning, breathing |
-| **VL-4** Proximal-Distal | Limb-to-core power, reach | Arm/leg reaching, connection to trunk, crawling patterns |
-| **VL-5** Folding-Unfolding | Flexion/extension, protective reflexes | Curling/uncurling, abdominal engagement, fetal references |
+{CLASSIFICATION_TABLE}
 
 **Scoring:**
 - 0.0-0.2: Not present or incidental
@@ -51,6 +45,14 @@ For each step, provide:
 - Relevant SPIFFER-Q tags
 - Segment IDs from the source text (e.g., `[45, 46, 47]` if the step covers segments 45-47)
 - Brief note on the pedagogical purpose (optional)
+- Whether this step is a **return to home position** (`is_home: true`)
+
+### Home Position
+
+Most Feldenkrais lessons have a **home position** — the base configuration the student returns to between movement explorations. Typically the teacher says something like "come back to lying on your back" or "return to the starting position." Identify:
+
+1. `home_position`: A brief description of the home configuration (e.g., "Lying on back, knees bent, feet standing" or "Sitting on the floor, legs crossed"). This is usually established in the first few instructions.
+2. For each step that represents a return to this home position, set `is_home: true`. These are rest/reset moments, not the initial setup itself.
 
 ---
 
@@ -61,4 +63,5 @@ Provide your analysis in the structured format with:
 2. `primary_framework` - the dominant VL
 3. `secondary_frameworks` - VLs scoring >= 0.3
 4. `rationale` - brief explanation of classification
-5. `steps` - the SPIFFER-Q decomposed lesson, each with `segments` array referencing source text
+5. `home_position` - description of the base configuration the student returns to
+6. `steps` - the SPIFFER-Q decomposed lesson, each with `segments` array referencing source text and `is_home` flag for return-to-home steps

@@ -10,50 +10,25 @@
     },
     "classifications": {
       "type": "object",
-      "description": "Weighted scores (0.0-1.0) for each VL framework",
-      "properties": {
-        "vl1_vertical_self": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "vl2_homunculus": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "vl3_steering": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "vl4_proximal_distal": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "vl5_folding": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        }
-      },
-      "required": ["vl1_vertical_self", "vl2_homunculus", "vl3_steering", "vl4_proximal_distal", "vl5_folding"]
+      "description": "Weighted scores (0.0-1.0) for each active VL framework (populated dynamically from frameworks.json)"
     },
     "primary_framework": {
       "type": "string",
-      "enum": ["VL-1", "VL-2", "VL-3", "VL-4", "VL-5"]
+      "description": "Primary VL framework (populated dynamically from frameworks.json)"
     },
     "secondary_frameworks": {
       "type": "array",
       "items": {
-        "type": "string",
-        "enum": ["VL-1", "VL-2", "VL-3", "VL-4", "VL-5"]
+        "type": "string"
       }
     },
     "rationale": {
       "type": "string",
       "description": "Brief explanation of the classification"
+    },
+    "home_position": {
+      "type": "string",
+      "description": "The base configuration the student returns to between movements (e.g., 'Lying on back, knees bent, feet standing')"
     },
     "steps": {
       "type": "array",
@@ -85,11 +60,15 @@
               "type": "integer"
             },
             "description": "Segment IDs from the source text that this step covers"
+          },
+          "is_home": {
+            "type": "boolean",
+            "description": "True if this step is a return to the home position"
           }
         },
         "required": ["step_number", "instruction", "tags", "segments"]
       }
     }
   },
-  "required": ["classifications", "primary_framework", "rationale", "steps"]
+  "required": ["classifications", "primary_framework", "rationale", "home_position", "steps"]
 }

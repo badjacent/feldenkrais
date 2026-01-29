@@ -11,6 +11,7 @@ Usage (local):
     uvicorn web:app --reload
 """
 
+import asyncio
 import hashlib
 import json
 import os
@@ -39,6 +40,64 @@ else:
     DATA_DIR = Path(__file__).parent.parent.parent / "data"
 LESSONS_DIR = DATA_DIR / "lessons"
 CACHE_DIR = DATA_DIR / "cache"
+
+# --- Framework Registry ---
+_frameworks_cache = None
+
+
+def load_frameworks() -> list[dict]:
+    """Load current version of framework registry (cached)."""
+    global _frameworks_cache
+    if _frameworks_cache is None:
+        path = DATA_DIR / "frameworks.json"
+        registry = json.loads(path.read_text())
+        version = registry["current_version"]
+        _frameworks_cache = registry["versions"][version]["frameworks"]
+    return _frameworks_cache
+
+
+def get_active_frameworks_config() -> list[dict]:
+    """Return only active frameworks from current version."""
+    return [f for f in load_frameworks() if f.get("active", True)]
+
+
+def build_classification_table() -> str:
+    """Build the VL classification markdown table from the framework registry."""
+    rows = []
+    for f in get_active_frameworks_config():
+        rows.append(f"| **{f['id']}** {f['name']} | {f['focus']} | {f['indicators']} |")
+    header = "| Framework | Focus | Key Indicators |\n|-----------|-------|----------------|\n"
+    return header + "\n".join(rows)
+
+
+def build_pass_a_schema() -> dict:
+    """Build Pass A schema with dynamic classification properties from registry."""
+    schema = json.loads((DATA_DIR / "pass_a.schema.json").read_text())
+    active = get_active_frameworks_config()
+    cls_props = {}
+    cls_required = []
+    for f in active:
+        cls_props[f["key"]] = {"type": "number", "minimum": 0, "maximum": 1}
+        cls_required.append(f["key"])
+    schema["properties"]["classifications"]["properties"] = cls_props
+    schema["properties"]["classifications"]["required"] = cls_required
+    schema["properties"]["primary_framework"]["enum"] = [f["id"] for f in active]
+    schema["properties"]["secondary_frameworks"]["items"] = {
+        "type": "string",
+        "enum": [f["id"] for f in active],
+    }
+    return schema
+
+# Database connection (optional - for loading lessons from DB)
+_db = None
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if DATABASE_URL:
+    try:
+        from database import Database
+    except ImportError:
+        from .database import Database
+    _db = Database(DATABASE_URL)
+    _db.initialize()
 
 
 def get_cache_key(text: str) -> str:
@@ -79,12 +138,18 @@ Do not truncate the table early."""
 
 
 def load_pass_a() -> tuple[str, dict]:
-    """Load Pass A prompt and schema (Decomposition + Routing)."""
+    """Load Pass A prompt and schema (Decomposition + Routing).
+
+    The prompt's {CLASSIFICATION_TABLE} placeholder is populated from
+    the framework registry, and the schema's classification properties
+    are built dynamically.
+    """
     prompt_path = DATA_DIR / "pass_a.md"
-    schema_path = DATA_DIR / "pass_a.schema.json"
 
     prompt = prompt_path.read_text() if prompt_path.exists() else ""
-    schema = json.loads(schema_path.read_text()) if schema_path.exists() else {}
+    prompt = prompt.replace("{CLASSIFICATION_TABLE}", build_classification_table())
+
+    schema = build_pass_a_schema()
 
     return prompt, schema
 
@@ -99,13 +164,7 @@ def load_pass_b(framework: str) -> tuple[str, dict]:
     base_protocol = base_path.read_text() if base_path.exists() else ""
 
     # Load VL-specific module
-    vl_map = {
-        "VL-1": "vl1.md",
-        "VL-2": "vl2.md",
-        "VL-3": "vl3.md",
-        "VL-4": "vl4.md",
-        "VL-5": "vl5.md",
-    }
+    vl_map = {f["id"]: f["prompt_file"] for f in load_frameworks()}
     vl_file = vl_map.get(framework, "vl1.md")
     vl_path = DATA_DIR / vl_file
     vl_module = vl_path.read_text() if vl_path.exists() else ""
@@ -351,11 +410,58 @@ def get_llm() -> LLM:
     )
 
 
-def get_available_lessons() -> dict[str, list[tuple[str, str]]]:
-    """Get dict of category -> [(filename, display_name)] for available lessons."""
+def get_available_lessons() -> tuple[dict[str, list[tuple[str, str]]], dict[str, str]]:
+    """Get categories and their display names.
+
+    DB documents with category_name set are grouped under that name (override).
+    DB documents without category_name are grouped under their source's category.
+
+    Returns (categories_dict, display_names_dict).
+    - categories: category_key -> [(lesson_key, display_name)]
+    - display_names: category_key -> display_name
+    All DB keys start with 'db:'.
+    """
     categories = {}
+    display_names = {}
+
+    # 1. Database sources (if available)
+    if _db:
+        try:
+            for src in _db.get_lesson_categories():
+                source_display = (
+                    src.get("source_category_name")
+                    or src["source_name"].replace("_", " ").title()
+                )
+                # Group documents: those with category_name override go to their own bucket
+                override_buckets = {}  # category_name -> list of (id, title)
+                source_bucket = []     # docs without override
+
+                for doc in _db.get_source_lessons(src["source_id"]):
+                    doc_cat = doc.get("category_name")
+                    if doc_cat:
+                        override_buckets.setdefault(doc_cat, []).append(
+                            (str(doc["id"]), doc["title"])
+                        )
+                    else:
+                        source_bucket.append((str(doc["id"]), doc["title"]))
+
+                # Add override buckets as separate categories
+                for cat_name, lessons in override_buckets.items():
+                    # Key encodes source + override name for uniqueness
+                    cat_key = f"db:{src['source_id']}:{cat_name}"
+                    categories[cat_key] = lessons
+                    display_names[cat_key] = cat_name
+
+                # Add remaining docs under the source category
+                if source_bucket:
+                    cat_key = f"db:{src['source_id']}"
+                    categories[cat_key] = source_bucket
+                    display_names[cat_key] = source_display
+        except Exception:
+            pass
+
+    # 2. Filesystem sources
     if LESSONS_DIR.exists():
-        # Scan subdirectories
         for subdir in sorted(LESSONS_DIR.iterdir()):
             if subdir.is_dir() and not subdir.name.startswith('.'):
                 lessons = []
@@ -363,40 +469,48 @@ def get_available_lessons() -> dict[str, list[tuple[str, str]]]:
                     display = f.stem.replace("_", " ").replace("-", " ").title()
                     lessons.append((f.name, display))
                 if lessons:
-                    # Format category name nicely
-                    cat_display = subdir.name.replace("_", " ").title()
                     categories[subdir.name] = lessons
-        # Also check for lessons directly in LESSONS_DIR (uncategorized)
         uncategorized = []
         for f in sorted(LESSONS_DIR.glob("*.txt")):
             display = f.stem.replace("_", " ").replace("-", " ").title()
             uncategorized.append((f.name, display))
         if uncategorized:
             categories["uncategorized"] = uncategorized
-    return categories
+
+    return categories, display_names
 
 
-def load_lesson(category: str, filename: str) -> str:
-    """Load lesson text from file."""
+def load_lesson(category: str, lesson_key: str) -> str:
+    """Load lesson text from DB or filesystem."""
+    # DB source (handles both 'db:4' and 'db:4:Category Name')
+    if category.startswith("db:") and _db:
+        text = _db.get_document_transcription(lesson_key)
+        return text or ""
+
+    # Filesystem source
     if category and category != "uncategorized":
-        path = LESSONS_DIR / category / filename
+        path = LESSONS_DIR / category / lesson_key
     else:
-        path = LESSONS_DIR / filename
+        path = LESSONS_DIR / lesson_key
     if path.exists() and path.is_file():
         return path.read_text()
     return ""
 
 
-def load_whisper_segments(category: str, filename: str) -> list | None:
-    """Load Whisper timestamp segments from sidecar JSON file.
+def load_whisper_segments(category: str, lesson_key: str) -> list | None:
+    """Load Whisper timestamp segments from DB or sidecar JSON file.
 
-    Looks for a .whisper.json file alongside the lesson .txt file.
     Returns the list of whisper segments or None if not available.
     """
-    if not filename:
+    if not lesson_key:
         return None
-    # Convert lesson filename to whisper filename: foo.txt -> foo.whisper.json
-    whisper_name = filename.replace(".txt", ".whisper.json")
+
+    # DB source: segments are in the transcription analysis
+    if category.startswith("db:") and _db:
+        return _db.get_document_whisper_segments(lesson_key)
+
+    # Filesystem source: look for .whisper.json sidecar
+    whisper_name = lesson_key.replace(".txt", ".whisper.json")
     if category and category != "uncategorized":
         path = LESSONS_DIR / category / whisper_name
     else:
@@ -461,16 +575,12 @@ def run_pass_a(lesson_text: str) -> dict:
 
     if not pass_a_prompt or not pass_a_schema:
         # Return default if Pass A not configured
+        active = get_active_frameworks_config()
+        default_cls = {f["key"]: (1.0 if i == 0 else 0.0) for i, f in enumerate(active)}
         return {
-            "classifications": {
-                "vl1_vertical_self": 1.0,
-                "vl2_homunculus": 0.0,
-                "vl3_steering": 0.0,
-                "vl4_proximal_distal": 0.0,
-                "vl5_folding": 0.0,
-            },
-            "primary_framework": "VL-1",
-            "rationale": "Pass A not configured, defaulting to VL-1",
+            "classifications": default_cls,
+            "primary_framework": active[0]["id"] if active else "VL-1",
+            "rationale": "Pass A not configured, defaulting to first framework",
             "steps": [],
             "pass_0": pass_0_result,
         }
@@ -500,14 +610,8 @@ def get_active_frameworks(pass_a_result: dict, threshold: float = VL_ANALYSIS_TH
     """Get list of VL frameworks that scored above the threshold."""
     classifications = pass_a_result.get("classifications", {})
 
-    # Map classification keys to framework names
-    key_to_framework = {
-        "vl1_vertical_self": "VL-1",
-        "vl2_homunculus": "VL-2",
-        "vl3_steering": "VL-3",
-        "vl4_proximal_distal": "VL-4",
-        "vl5_folding": "VL-5",
-    }
+    # Map classification keys to framework names from registry
+    key_to_framework = {f["key"]: f["id"] for f in get_active_frameworks_config()}
 
     active = []
     for key, framework in key_to_framework.items():
@@ -634,13 +738,7 @@ def render_router_result(router_result: dict) -> str:
     classifications = router_result.get("classifications", {})
     if classifications:
         html.append('<div style="margin: 15px 0;">')
-        framework_names = {
-            "vl1_vertical_self": "VL-1 Vertical Self",
-            "vl2_homunculus": "VL-2 Homunculus",
-            "vl3_steering": "VL-3 Steering",
-            "vl4_proximal_distal": "VL-4 Proximal-Distal",
-            "vl5_folding": "VL-5 Folding",
-        }
+        framework_names = {f["key"]: f["display_name"] for f in load_frameworks()}
         for key, name in framework_names.items():
             score = classifications.get(key, 0)
             pct = int(score * 100)
@@ -683,6 +781,11 @@ def render_router_result(router_result: dict) -> str:
 
         html.append("<h3>SPIFFER-Q Decomposition (Pass A)</h3>")
 
+        # Home position
+        home_pos = router_result.get("home_position")
+        if home_pos:
+            html.append(f'<p style="margin-bottom: 12px; padding: 8px 12px; background: #e8f4fd; border-left: 3px solid #17a2b8; border-radius: 4px;"><strong>Home position:</strong> {home_pos}</p>')
+
         # Build segment lookup from Pass 0
         pass_0 = router_result.get("pass_0", {})
         segments_list = pass_0.get("segments", [])
@@ -693,12 +796,13 @@ def render_router_result(router_result: dict) -> str:
             tags = ", ".join(step.get("tags", []))
             instruction = step.get("instruction", "")
             note = f' <small style="color: #666;">({step["note"]})</small>' if step.get("note") else ""
+            home_badge = ' <span style="font-size: 0.8em; padding: 1px 6px; background: #e8f4fd; color: #17a2b8; border-radius: 3px;">home</span>' if step.get("is_home") else ""
 
             # Get referenced source text
             segment_ids = step.get("segments", [])
             source_texts = [segment_lookup.get(sid, f"[segment {sid} not found]") for sid in segment_ids]
 
-            html.append(f"<li><strong>[{tags}]</strong> {instruction}{note}")
+            html.append(f"<li><strong>[{tags}]</strong> {instruction}{home_badge}{note}")
 
             # Show source text if we have segment references
             if source_texts:
@@ -884,17 +988,15 @@ def render_pass_b_analysis(data: dict, pass_a_result: dict = None) -> str:
                     html.append(f"<td>{val}</td>")
                 html.append("</tr>")
 
-                # Add voice/shadow row if present
+                # Add voice/striver row if present
                 vl_voice = row.get("vl_voice", "")
                 striver_shadow = row.get("striver_shadow", "")
                 if vl_voice or striver_shadow:
                     html.append(f'<tr><td colspan="{len(columns)}" style="background: #fafafa; padding: 8px 12px; font-size: 0.9em;">')
                     if vl_voice:
-                        html.append(f'<span style="color: #007bff; font-weight: bold;">Person Inside:</span> <em>{vl_voice}</em>')
-                    if vl_voice and striver_shadow:
-                        html.append(' &mdash; ')
+                        html.append(f'<div style="margin-bottom: 6px;"><span style="color: #007bff; font-weight: bold;">Person Inside:</span> <em>{vl_voice}</em></div>')
                     if striver_shadow:
-                        html.append(f'<span style="color: #dc3545; font-weight: bold;">Shadow:</span> <em>{striver_shadow}</em>')
+                        html.append(f'<div><span style="color: #dc3545; font-weight: bold;">Striver:</span> <em>{striver_shadow}</em></div>')
                     html.append('</td></tr>')
 
             html.append("</tbody></table></div>")
@@ -995,7 +1097,7 @@ def render_pass_b_analysis(data: dict, pass_a_result: dict = None) -> str:
                     if striver_shadow:
                         html.append(f'''
                             <div style="margin-bottom: 12px; padding: 12px 16px; background: #fff5f5; border-radius: 6px; border-left: 3px solid #dc3545;">
-                                <div style="font-size: 0.75em; font-weight: bold; color: #dc3545; text-transform: uppercase; margin-bottom: 4px;">The Shadow</div>
+                                <div style="font-size: 0.75em; font-weight: bold; color: #dc3545; text-transform: uppercase; margin-bottom: 4px;">The Striver</div>
                                 <div style="font-style: italic; color: #555; line-height: 1.5;">{striver_shadow}</div>
                             </div>
                         ''')
@@ -1201,12 +1303,12 @@ def render_analysis(data: dict, schema: dict, pass_a_result: dict = None) -> str
 
 def build_html(lesson_text: str = "", selected_category: str = "", selected_lesson: str = "", result: str = "") -> str:
     """Build the HTML page."""
-    categories = get_available_lessons()
+    categories, display_names = get_available_lessons()
 
     # Build category options
     category_options = ['<option value="">-- Select category --</option>']
     for cat_name in categories.keys():
-        cat_display = cat_name.replace("_", " ").title()
+        cat_display = display_names.get(cat_name, cat_name.replace("_", " ").title())
         selected = "selected" if cat_name == selected_category else ""
         category_options.append(f'<option value="{cat_name}" {selected}>{cat_display}</option>')
     category_select = "\n".join(category_options)
@@ -1308,24 +1410,27 @@ def build_html(lesson_text: str = "", selected_category: str = "", selected_less
             const textarea = document.getElementById('lesson_text');
             const category = document.getElementById('selected_category').value;
             if (select.value && category) {{
-                // Fetch lesson text and populate textarea
+                textarea.value = '';
+                textarea.disabled = true;
+                textarea.placeholder = 'Loading lesson...';
+                textarea.style.opacity = '0.5';
                 try {{
                     const response = await fetch('/api/lesson/' + encodeURIComponent(category) + '/' + encodeURIComponent(select.value));
                     const data = await response.json();
                     if (data.text) {{
                         textarea.value = data.text;
-                        textarea.disabled = false;
                     }} else {{
-                        textarea.value = '';
                         textarea.placeholder = 'Error loading lesson';
                     }}
                 }} catch (error) {{
-                    textarea.value = '';
                     textarea.placeholder = 'Error loading lesson';
                 }}
+                textarea.disabled = false;
+                textarea.style.opacity = '1';
             }} else {{
                 textarea.value = '';
                 textarea.disabled = false;
+                textarea.style.opacity = '1';
                 textarea.placeholder = 'Paste lesson text here...';
             }}
         }}
@@ -1343,6 +1448,7 @@ def build_html(lesson_text: str = "", selected_category: str = "", selected_less
             btn.textContent = 'Starting analysis...';
             spinner.style.display = 'block';
             resultDiv.innerHTML = '';
+            startProgressTimer();
 
             try {{
                 // Submit to API
@@ -1362,14 +1468,13 @@ def build_html(lesson_text: str = "", selected_category: str = "", selected_less
                 if (data.status === 'complete' && data.result_html) {{
                     resultDiv.innerHTML = '<div class="result">' + data.result_html + '</div>';
                     initCards();
+                    showTimings(data.timings);
                     resetForm();
                     return;
                 }}
 
                 // Otherwise, poll for result
                 if (data.job_id) {{
-                    spinner.querySelector('span:last-child').textContent =
-                        'Analyzing lesson... This typically takes 30-60 seconds.';
                     await pollForResult(data.job_id);
                 }}
 
@@ -1408,12 +1513,63 @@ def build_html(lesson_text: str = "", selected_category: str = "", selected_less
             }}
         }}
 
+        function showTimings(timings) {{
+            if (!timings) return;
+            var loadingText = document.getElementById('loading-text');
+            var elapsedEl = document.getElementById('loading-elapsed');
+            var spinner = document.getElementById('loading-spinner');
+            if (_progressTimer) {{ clearInterval(_progressTimer); _progressTimer = null; }}
+            spinner.style.display = 'block';
+            spinner.querySelector('.spinner').style.display = 'none';
+            if (timings.cached) {{
+                loadingText.textContent = 'Loaded from cache';
+                elapsedEl.textContent = '';
+            }} else {{
+                var parts = [];
+                if (timings.pass_a != null) parts.push('Pass A: ' + formatSecs(timings.pass_a));
+                for (var key in timings) {{
+                    if (key.startsWith('pass_b_')) {{
+                        var fw = key.replace('pass_b_', '');
+                        parts.push('Pass B (' + fw + '): ' + formatSecs(timings[key]));
+                    }}
+                }}
+                loadingText.textContent = 'Analysis complete';
+                elapsedEl.textContent = parts.join(' · ') + (timings.total != null ? ' · Total: ' + formatSecs(timings.total) : '');
+            }}
+        }}
+
+        function formatSecs(s) {{
+            if (s >= 60) return Math.floor(s / 60) + 'm ' + Math.round(s % 60) + 's';
+            return Math.round(s) + 's';
+        }}
+
+        var _progressTimer = null;
+        function startProgressTimer() {{
+            var startTime = Date.now();
+            var loadingText = document.getElementById('loading-text');
+            var elapsedEl = document.getElementById('loading-elapsed');
+            _progressTimer = setInterval(function() {{
+                var elapsed = Math.floor((Date.now() - startTime) / 1000);
+                var min = Math.floor(elapsed / 60);
+                var sec = elapsed % 60;
+                elapsedEl.textContent = (min > 0 ? min + 'm ' : '') + sec + 's';
+                if (elapsed < 5) {{
+                    loadingText.textContent = 'Starting analysis...';
+                }} else if (elapsed < 120) {{
+                    loadingText.textContent = 'Running Pass A: decomposing lesson structure...';
+                }} else {{
+                    loadingText.textContent = 'Running Pass B: applying framework analysis...';
+                }}
+            }}, 1000);
+        }}
+
         function resetForm() {{
             const btn = document.getElementById('submit-btn');
             const spinner = document.getElementById('loading-spinner');
             btn.disabled = false;
             btn.textContent = 'Analyze Lesson';
             spinner.style.display = 'none';
+            if (_progressTimer) {{ clearInterval(_progressTimer); _progressTimer = null; }}
         }}
 
         // Tab switching for multi-VL analysis results
@@ -1496,7 +1652,9 @@ def build_html(lesson_text: str = "", selected_category: str = "", selected_less
 </head>
 <body>
     <h1>Feldenkrais Lesson Analyzer</h1>
-    <p>Select a lesson or paste text. The system will classify which VL framework(s) apply and run the appropriate analysis.</p>
+    <p>Select a lesson or paste text. The system will classify which VL framework(s) apply and run the appropriate analysis.
+       <a href="/pipeline" style="float: right; color: #007bff; text-decoration: none; font-size: 0.9em;">Pipeline Dashboard &rarr;</a>
+    </p>
 
     <script>
         const lessonsData = {lessons_json};
@@ -1546,7 +1704,8 @@ def build_html(lesson_text: str = "", selected_category: str = "", selected_less
 
     <div id="loading-spinner" class="loading-spinner">
         <span class="spinner"></span>
-        <span>Analyzing lesson with AI... This may take 30-60 seconds.</span>
+        <span id="loading-text">Analyzing lesson with AI...</span>
+        <div id="loading-elapsed" style="font-size: 0.85em; color: #999; margin-top: 8px;"></div>
     </div>
 
     <div id="result">{result}</div>
@@ -1710,6 +1869,49 @@ async def analyze_redirect():
     return RedirectResponse(url="/", status_code=303)
 
 
+ANALYSIS_TIMEOUT = 480  # 8 minutes
+
+
+def _run_analysis(text: str) -> dict:
+    """Run LLM analysis (blocking). Returns dict with pass_a_result, vl_analyses, and timings."""
+    import time
+
+    cache_key = get_cache_key(text)
+    cached = load_cached_analysis(cache_key)
+
+    if cached:
+        cached["timings"] = {"cached": True}
+        return cached
+
+    timings = {}
+
+    t0 = time.time()
+    pass_a_result = run_pass_a(text)
+    timings["pass_a"] = round(time.time() - t0, 1)
+
+    active_frameworks = get_active_frameworks(pass_a_result)
+    if not active_frameworks:
+        primary = pass_a_result.get("primary_framework", "VL-1")
+        active_frameworks = [primary]
+
+    vl_analyses = {}
+    for framework in active_frameworks:
+        t1 = time.time()
+        try:
+            analysis = run_pass_b(text, pass_a_result, framework)
+            vl_analyses[framework] = {"status": "complete", "result": analysis}
+        except Exception as e:
+            vl_analyses[framework] = {"status": "error", "error": str(e)}
+        timings[f"pass_b_{framework}"] = round(time.time() - t1, 1)
+
+    timings["total"] = round(time.time() - t0, 1)
+
+    result = {"pass_a_result": pass_a_result, "vl_analyses": vl_analyses}
+    save_cached_analysis(cache_key, result)
+    result["timings"] = timings
+    return result
+
+
 # JSON API endpoints for AJAX polling
 from fastapi.responses import JSONResponse
 
@@ -1744,40 +1946,14 @@ async def api_analyze(
 
         return JSONResponse({"job_id": job_id, "status": "pending"})
 
-    # Local development: process synchronously
+    # Local development: run in thread with timeout
     try:
-        cache_key = get_cache_key(text)
-        cached = load_cached_analysis(cache_key)
-
-        if cached:
-
-            pass_a_result = cached["pass_a_result"]
-            vl_analyses = cached["vl_analyses"]
-        else:
-
-            # Step 1: Run Pass A (Decomposition + Routing) - ONCE
-            pass_a_result = run_pass_a(text)
-
-            # Step 2: Get active frameworks
-            active_frameworks = get_active_frameworks(pass_a_result)
-            if not active_frameworks:
-                primary = pass_a_result.get("primary_framework", "VL-1")
-                active_frameworks = [primary]
-
-            # Step 3: Run Pass B for each active framework
-            vl_analyses = {}
-            for framework in active_frameworks:
-                try:
-                    analysis = run_pass_b(text, pass_a_result, framework)
-                    vl_analyses[framework] = {"status": "complete", "result": analysis}
-                except Exception as e:
-                    vl_analyses[framework] = {"status": "error", "error": str(e)}
-
-            # Save to cache (before whisper alignment, which is applied at render time)
-            save_cached_analysis(cache_key, {
-                "pass_a_result": pass_a_result,
-                "vl_analyses": vl_analyses,
-            })
+        result = await asyncio.wait_for(
+            asyncio.to_thread(_run_analysis, text),
+            timeout=ANALYSIS_TIMEOUT,
+        )
+        pass_a_result = result["pass_a_result"]
+        vl_analyses = result["vl_analyses"]
 
         # Align with whisper timestamps (always, even on cache hit)
         whisper_segments = load_whisper_segments(selected_category, selected_lesson)
@@ -1791,9 +1967,15 @@ async def api_analyze(
 
         return JSONResponse({
             "status": "complete",
-            "result_html": router_html + analysis_html
+            "result_html": router_html + analysis_html,
+            "timings": result.get("timings"),
         })
 
+    except asyncio.TimeoutError:
+        return JSONResponse(
+            {"error": "Analysis timed out. Please try again."},
+            status_code=504,
+        )
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
@@ -1849,36 +2031,12 @@ async def analyze(
         )
 
     try:
-        cache_key = get_cache_key(text)
-        cached = load_cached_analysis(cache_key)
-
-        if cached:
-            pass_a_result = cached["pass_a_result"]
-            vl_analyses = cached["vl_analyses"]
-        else:
-            # Step 1: Run Pass A (Decomposition + Routing) - ONCE
-            pass_a_result = run_pass_a(text)
-
-            # Step 2: Get active frameworks
-            active_frameworks = get_active_frameworks(pass_a_result)
-            if not active_frameworks:
-                primary = pass_a_result.get("primary_framework", "VL-1")
-                active_frameworks = [primary]
-
-            # Step 3: Run Pass B for each active framework
-            vl_analyses = {}
-            for framework in active_frameworks:
-                try:
-                    analysis = run_pass_b(text, pass_a_result, framework)
-                    vl_analyses[framework] = {"status": "complete", "result": analysis}
-                except Exception as e:
-                    vl_analyses[framework] = {"status": "error", "error": str(e)}
-
-            # Save to cache
-            save_cached_analysis(cache_key, {
-                "pass_a_result": pass_a_result,
-                "vl_analyses": vl_analyses,
-            })
+        result = await asyncio.wait_for(
+            asyncio.to_thread(_run_analysis, text),
+            timeout=ANALYSIS_TIMEOUT,
+        )
+        pass_a_result = result["pass_a_result"]
+        vl_analyses = result["vl_analyses"]
 
         # Align with whisper timestamps (always, even on cache hit)
         whisper_segments = load_whisper_segments(selected_category, selected_lesson)
@@ -1891,6 +2049,8 @@ async def analyze(
         analysis_html = render_multi_vl_analyses(vl_analyses, schema, pass_a_result)
         result_html = f'<div class="result">{router_html}{analysis_html}</div>'
 
+    except asyncio.TimeoutError:
+        result_html = '<div class="error">Analysis timed out. Please try again.</div>'
     except Exception as e:
         result_html = f'<div class="error">Error: {str(e)}</div>'
 
@@ -1900,6 +2060,230 @@ async def analyze(
         selected_lesson=selected_lesson,
         result=result_html
     )
+
+
+def build_pipeline_html() -> str:
+    """Build the pipeline dashboard HTML page."""
+    if not _db:
+        return """
+<!DOCTYPE html><html><head><title>Pipeline Dashboard</title>
+<style>body { font-family: -apple-system, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }</style>
+</head><body><h1>Pipeline Dashboard</h1><p>Database not configured. Set DATABASE_URL to enable.</p>
+<p><a href="/">&larr; Back to Analyzer</a></p></body></html>"""
+
+    try:
+        summary = _db.get_pipeline_summary()
+        events = _db.get_pipeline_log(limit=50)
+        documents = _db.get_document_pipeline_view(limit=50)
+    except Exception as e:
+        return f"""
+<!DOCTYPE html><html><head><title>Pipeline Dashboard</title>
+<style>body {{ font-family: -apple-system, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }}</style>
+</head><body><h1>Pipeline Dashboard</h1><div style="color: red;">Error: {e}</div>
+<p><a href="/">&larr; Back to Analyzer</a></p></body></html>"""
+
+    # Summary cards
+    doc_total = summary.get("documents", {}).get("total", 0)
+    transcribed = summary.get("transcribed", 0)
+    pending_docs = summary.get("documents", {}).get("pending", 0)
+    jobs = summary.get("transcription_jobs", {})
+    pending_jobs = jobs.get("pending", 0)
+    failed_jobs = jobs.get("failed", 0)
+
+    # Events table rows
+    event_rows = []
+    for ev in events:
+        created = str(ev.get("created_at", ""))[:19]
+        event_type = ev.get("event", "")
+        title = ev.get("title", "") or ""
+        doc_id = str(ev.get("document_id", "") or "")[:8]
+        detail = ev.get("detail", {}) or {}
+        detail_str = json.dumps(detail) if detail else ""
+        if len(detail_str) > 120:
+            detail_str = detail_str[:120] + "..."
+
+        # Color code event types
+        color_map = {
+            "loaded": "#28a745",
+            "staged": "#17a2b8",
+            "batch_created": "#007bff",
+            "transcription_complete": "#28a745",
+            "transcription_failed": "#dc3545",
+            "duplicate_skipped": "#6c757d",
+            "load_error": "#dc3545",
+        }
+        color = color_map.get(event_type, "#333")
+
+        event_rows.append(f"""
+            <tr>
+                <td style="white-space: nowrap;">{created}</td>
+                <td><span style="color: {color}; font-weight: bold;">{event_type}</span></td>
+                <td>{title}</td>
+                <td style="font-family: monospace; font-size: 0.85em;">{doc_id}</td>
+                <td style="font-size: 0.85em; color: #666;">{detail_str}</td>
+            </tr>
+        """)
+
+    # Documents table rows
+    doc_rows = []
+    for doc in documents:
+        created = str(doc.get("created_at", ""))[:10]
+        title = doc.get("title", "")
+        if len(title) > 60:
+            title = title[:57] + "..."
+        category = doc.get("display_category", "")
+        has_tx = doc.get("has_transcription", False)
+        latest_job = doc.get("latest_job_status", "")
+        latest_error = doc.get("latest_error", "")
+
+        if has_tx:
+            status_badge = '<span style="padding: 2px 8px; border-radius: 10px; font-size: 0.8em; background: #d4edda; color: #155724;">Transcribed</span>'
+        elif latest_job == "pending":
+            status_badge = '<span style="padding: 2px 8px; border-radius: 10px; font-size: 0.8em; background: #fff3cd; color: #856404;">Pending</span>'
+        elif latest_job == "failed":
+            status_badge = f'<span style="padding: 2px 8px; border-radius: 10px; font-size: 0.8em; background: #f8d7da; color: #721c24;" title="{latest_error or ""}">Failed</span>'
+        else:
+            status_badge = '<span style="padding: 2px 8px; border-radius: 10px; font-size: 0.8em; background: #e2e3e5; color: #383d41;">New</span>'
+
+        doc_rows.append(f"""
+            <tr>
+                <td>{created}</td>
+                <td>{title}</td>
+                <td style="font-size: 0.85em;">{category}</td>
+                <td>{status_badge}</td>
+                <td style="text-align: center;">{doc.get("job_count", 0)}</td>
+            </tr>
+        """)
+
+    events_html = "\n".join(event_rows) if event_rows else '<tr><td colspan="5" style="text-align: center; color: #999;">No events yet</td></tr>'
+    docs_html = "\n".join(doc_rows) if doc_rows else '<tr><td colspan="5" style="text-align: center; color: #999;">No documents yet</td></tr>'
+
+    return f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Pipeline Dashboard - Feldenkrais</title>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }}
+        h1 {{ color: #333; }}
+        h2 {{ color: #555; border-bottom: 1px solid #ddd; padding-bottom: 5px; margin-top: 30px; }}
+        .nav {{ margin-bottom: 20px; }}
+        .nav a {{ color: #007bff; text-decoration: none; }}
+        .nav a:hover {{ text-decoration: underline; }}
+        .cards {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }}
+        .card {{
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+        }}
+        .card .value {{
+            font-size: 2em;
+            font-weight: bold;
+            color: #333;
+        }}
+        .card .label {{
+            font-size: 0.85em;
+            color: #666;
+            margin-top: 5px;
+        }}
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }}
+        th, td {{
+            padding: 8px 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }}
+        th {{
+            background: #f0f0f0;
+            font-weight: bold;
+            font-size: 0.9em;
+        }}
+        tr:hover {{ background: #f8f9fa; }}
+    </style>
+</head>
+<body>
+    <div class="nav"><a href="/">&larr; Back to Analyzer</a></div>
+    <h1>Pipeline Dashboard</h1>
+
+    <div class="cards">
+        <div class="card">
+            <div class="value">{doc_total}</div>
+            <div class="label">Total Documents</div>
+        </div>
+        <div class="card">
+            <div class="value">{transcribed}</div>
+            <div class="label">Transcribed</div>
+        </div>
+        <div class="card">
+            <div class="value">{pending_docs}</div>
+            <div class="label">Pending Docs</div>
+        </div>
+        <div class="card">
+            <div class="value">{pending_jobs}</div>
+            <div class="label">Pending Jobs</div>
+        </div>
+        <div class="card">
+            <div class="value" style="color: {('#dc3545' if failed_jobs else '#333')};">{failed_jobs}</div>
+            <div class="label">Failed Jobs</div>
+        </div>
+    </div>
+
+    <h2>Recent Events</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Event</th>
+                <th>Title</th>
+                <th>Doc ID</th>
+                <th>Detail</th>
+            </tr>
+        </thead>
+        <tbody>
+            {events_html}
+        </tbody>
+    </table>
+
+    <h2>Documents</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Created</th>
+                <th>Title</th>
+                <th>Category</th>
+                <th>Status</th>
+                <th>Jobs</th>
+            </tr>
+        </thead>
+        <tbody>
+            {docs_html}
+        </tbody>
+    </table>
+</body>
+</html>
+"""
+
+
+@app.get("/pipeline", response_class=HTMLResponse)
+async def pipeline_dashboard():
+    """Pipeline monitoring dashboard."""
+    return build_pipeline_html()
 
 
 # Lambda handler
