@@ -190,6 +190,8 @@ resource "aws_iam_role_policy" "github_deploy_infra" {
           "s3:GetObject",
           "s3:PutObject",
           "s3:DeleteObject",
+          "s3:GetObjectTagging",
+          "s3:PutObjectTagging",
           "s3:GetBucketNotification",
           "s3:PutBucketNotification"
         ]
@@ -215,6 +217,7 @@ resource "aws_iam_role_policy" "github_deploy_infra" {
           "lambda:AddPermission",
           "lambda:RemovePermission",
           "lambda:GetPolicy",
+          "lambda:GetFunctionCodeSigningConfig",
           "lambda:TagResource",
           "lambda:ListTags"
         ]
