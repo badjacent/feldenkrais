@@ -5078,6 +5078,12 @@ async def admin_cache_list():
     return JSONResponse({"count": len(entries), "entries": entries})
 
 
+@app.get("/version")
+async def version():
+    sha = os.environ.get("DEPLOY_SHA", "local")
+    return {"sha": sha, "short": sha[:7] if len(sha) > 7 else sha}
+
+
 # Lambda handler
 from mangum import Mangum
 

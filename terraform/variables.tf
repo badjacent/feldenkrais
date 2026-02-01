@@ -68,3 +68,9 @@ variable "domain_name" {
   type        = string
   default     = "aionyourside.net"
 }
+
+variable "deploy_sha" {
+  description = "Git commit SHA of the current deploy"
+  type        = string
+  default     = "local"
+}

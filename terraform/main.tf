@@ -711,6 +711,7 @@ resource "aws_lambda_function" "web" {
       DATABASE_URL      = var.database_url
       KB_BUCKET         = aws_s3_bucket.main.id
       AWS_LAMBDA_FUNCTION_NAME_SELF = "feldenkrais-web-${var.environment}"
+      DEPLOY_SHA        = var.deploy_sha
     }
   }
 }
