@@ -68,7 +68,36 @@
         },
         "required": ["step_number", "instruction", "tags", "segments"]
       }
+    },
+    "groups": {
+      "type": "array",
+      "description": "Clustered step groups for the analytical table (5-8 groups)",
+      "items": {
+        "type": "object",
+        "properties": {
+          "group_number": {
+            "type": "integer",
+            "description": "Sequential group number"
+          },
+          "label": {
+            "type": "string",
+            "description": "Short label for this group (e.g., 'Bilateral push-pull with heels')"
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "Step numbers belonging to this group"
+          },
+          "description": {
+            "type": "string",
+            "description": "Brief description of the movement exploration in this group"
+          }
+        },
+        "required": ["group_number", "label", "steps"]
+      }
     }
   },
-  "required": ["classifications", "primary_framework", "rationale", "home_position", "steps"]
+  "required": ["classifications", "primary_framework", "rationale", "home_position", "steps", "groups"]
 }

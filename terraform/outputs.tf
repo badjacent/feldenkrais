@@ -52,3 +52,8 @@ output "web_api_url" {
   description = "Web API Gateway URL (public endpoint)"
   value       = aws_apigatewayv2_api.web.api_endpoint
 }
+
+output "web_custom_domain" {
+  description = "Custom domain URL"
+  value       = var.domain_name != "" ? "https://${var.domain_name}" : null
+}

@@ -24,9 +24,9 @@ variable "groq_api_key" {
 }
 
 variable "ffmpeg_layer_arn" {
-  description = "ARN of FFmpeg Lambda layer (deploy from serverlessrepo or use public layer)"
+  description = "ARN of FFmpeg Lambda layer"
   type        = string
-  default     = ""
+  default     = "arn:aws:lambda:us-east-1:355854622119:layer:ffmpeg:1"
 }
 
 variable "database_url" {
@@ -61,4 +61,10 @@ variable "openai_api_key" {
   type        = string
   sensitive   = true
   default     = ""
+}
+
+variable "domain_name" {
+  description = "Custom domain name for the web app"
+  type        = string
+  default     = "aionyourside.net"
 }

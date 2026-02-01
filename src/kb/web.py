@@ -23,7 +23,7 @@ from dotenv import load_dotenv
 # Load .env from project root
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
-from fastapi import FastAPI, Form
+from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from llm import LLM
@@ -39,41 +39,72 @@ else:
     # Local development
     DATA_DIR = Path(__file__).parent.parent.parent / "data"
 LESSONS_DIR = DATA_DIR / "lessons"
-CACHE_DIR = DATA_DIR / "cache"
+
+
+def _resolve_prompts_dir(version: str | None = None) -> tuple[Path, str]:
+    """Resolve the versioned prompts directory. If version is None, read from pointer."""
+    if version is None:
+        pointer = DATA_DIR / "frameworks.json"
+        if pointer.exists():
+            version = json.loads(pointer.read_text())["current_version"]
+        else:
+            version = "v1"
+    return DATA_DIR / "frameworks" / version, version
+
+
+PROMPTS_DIR, FRAMEWORK_VERSION = _resolve_prompts_dir()
+
+
+def get_available_framework_versions() -> list[str]:
+    """List available framework versions by scanning the frameworks directory."""
+    fw_dir = DATA_DIR / "frameworks"
+    if not fw_dir.exists():
+        return [FRAMEWORK_VERSION]
+    return sorted(d.name for d in fw_dir.iterdir() if d.is_dir() and (d / "frameworks.json").exists())
+
+
+def _framework_version_suffix(framework_version: str | None = None) -> str:
+    """Return cache key suffix for framework version. Empty for v1 (backwards compat)."""
+    v = framework_version or FRAMEWORK_VERSION
+    if v == "v1":
+        return ""
+    return f":f{v}"
+
 
 # --- Framework Registry ---
-_frameworks_cache = None
+_frameworks_cache: dict[str, list[dict]] = {}
 
 
-def load_frameworks() -> list[dict]:
-    """Load current version of framework registry (cached)."""
-    global _frameworks_cache
-    if _frameworks_cache is None:
-        path = DATA_DIR / "frameworks.json"
+def load_frameworks(framework_version: str | None = None) -> list[dict]:
+    """Load framework registry for a given version (cached per version)."""
+    v = framework_version or FRAMEWORK_VERSION
+    if v not in _frameworks_cache:
+        prompts_dir, _ = _resolve_prompts_dir(v)
+        path = prompts_dir / "frameworks.json"
         registry = json.loads(path.read_text())
-        version = registry["current_version"]
-        _frameworks_cache = registry["versions"][version]["frameworks"]
-    return _frameworks_cache
+        ver_key = registry.get("current_version", list(registry.get("versions", {}).keys())[0])
+        _frameworks_cache[v] = registry["versions"][ver_key]["frameworks"]
+    return _frameworks_cache[v]
 
 
-def get_active_frameworks_config() -> list[dict]:
-    """Return only active frameworks from current version."""
-    return [f for f in load_frameworks() if f.get("active", True)]
+def get_active_frameworks_config(framework_version: str | None = None) -> list[dict]:
+    """Return only active frameworks from a given version."""
+    return [f for f in load_frameworks(framework_version) if f.get("active", True)]
 
 
-def build_classification_table() -> str:
+def build_classification_table(framework_version: str | None = None) -> str:
     """Build the VL classification markdown table from the framework registry."""
     rows = []
-    for f in get_active_frameworks_config():
+    for f in get_active_frameworks_config(framework_version):
         rows.append(f"| **{f['id']}** {f['name']} | {f['focus']} | {f['indicators']} |")
     header = "| Framework | Focus | Key Indicators |\n|-----------|-------|----------------|\n"
     return header + "\n".join(rows)
 
 
-def build_pass_a_schema() -> dict:
+def build_pass_a_schema(framework_version: str | None = None) -> dict:
     """Build Pass A schema with dynamic classification properties from registry."""
     schema = json.loads((DATA_DIR / "pass_a.schema.json").read_text())
-    active = get_active_frameworks_config()
+    active = get_active_frameworks_config(framework_version)
     cls_props = {}
     cls_required = []
     for f in active:
@@ -106,18 +137,16 @@ def get_cache_key(text: str) -> str:
 
 
 def load_cached_analysis(cache_key: str) -> dict | None:
-    """Load cached analysis result if it exists."""
-    path = CACHE_DIR / f"{cache_key}.json"
-    if path.exists():
-        return json.loads(path.read_text())
+    """Load cached analysis result from database."""
+    if _db:
+        return _db.get_cache(cache_key)
     return None
 
 
 def save_cached_analysis(cache_key: str, data: dict) -> None:
-    """Save analysis result to cache."""
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    path = CACHE_DIR / f"{cache_key}.json"
-    path.write_text(json.dumps(data))
+    """Save analysis result to database cache."""
+    if _db:
+        _db.set_cache(cache_key, data)
 
 
 # S3 configuration for async jobs
@@ -137,42 +166,48 @@ This includes the final movements where the student returns to the initial posit
 Do not truncate the table early."""
 
 
-def load_pass_a() -> tuple[str, dict]:
+def load_pass_a(framework_version: str | None = None) -> tuple[str, dict]:
     """Load Pass A prompt and schema (Decomposition + Routing).
 
     The prompt's {CLASSIFICATION_TABLE} placeholder is populated from
     the framework registry, and the schema's classification properties
-    are built dynamically.
+    are built dynamically. Prompt comes from versioned PROMPTS_DIR,
+    schema from shared DATA_DIR.
     """
-    prompt_path = DATA_DIR / "pass_a.md"
+    prompts_dir, _ = _resolve_prompts_dir(framework_version or FRAMEWORK_VERSION)
+    prompt_path = prompts_dir / "pass_a.md"
 
     prompt = prompt_path.read_text() if prompt_path.exists() else ""
-    prompt = prompt.replace("{CLASSIFICATION_TABLE}", build_classification_table())
+    fv = framework_version or FRAMEWORK_VERSION
+    prompt = prompt.replace("{CLASSIFICATION_TABLE}", build_classification_table(fv))
 
-    schema = build_pass_a_schema()
+    schema = build_pass_a_schema(fv)
 
     return prompt, schema
 
 
-def load_pass_b(framework: str) -> tuple[str, dict]:
+def load_pass_b(framework: str, framework_version: str | None = None) -> tuple[str, dict]:
     """Load Pass B prompt and schema for a specific VL framework.
 
     Pass B receives Pass A output and applies the VL-specific lens.
+    Prompts come from versioned PROMPTS_DIR, schema from shared DATA_DIR.
     """
+    fv = framework_version or FRAMEWORK_VERSION
+    prompts_dir, _ = _resolve_prompts_dir(fv)
     # Load base Pass B protocol
-    base_path = DATA_DIR / "pass_b.md"
+    base_path = prompts_dir / "pass_b.md"
     base_protocol = base_path.read_text() if base_path.exists() else ""
 
     # Load VL-specific module
-    vl_map = {f["id"]: f["prompt_file"] for f in load_frameworks()}
+    vl_map = {f["id"]: f["prompt_file"] for f in load_frameworks(fv)}
     vl_file = vl_map.get(framework, "vl1.md")
-    vl_path = DATA_DIR / vl_file
+    vl_path = prompts_dir / vl_file
     vl_module = vl_path.read_text() if vl_path.exists() else ""
 
     # Combine: Pass B base + VL-specific framework
     protocol = base_protocol + "\n\n---\n\n## Framework: " + framework + "\n\n" + vl_module
 
-    # Pass B schema
+    # Pass B schema (shared, unversioned)
     schema_path = DATA_DIR / "pass_b.schema.json"
     schema = json.loads(schema_path.read_text()) if schema_path.exists() else {}
 
@@ -305,6 +340,101 @@ def format_text_with_segments(pass_0_result: dict) -> str:
     return "\n".join(lines)
 
 
+def load_pass_0b() -> tuple[str, dict]:
+    """Load Pass 0b prompt and schema (Segment Enrichment)."""
+    prompt_path = DATA_DIR / "pass_0b.md"
+    schema_path = DATA_DIR / "pass_0b.schema.json"
+    prompt = prompt_path.read_text() if prompt_path.exists() else ""
+    schema = json.loads(schema_path.read_text()) if schema_path.exists() else {}
+    return prompt, schema
+
+
+def run_pass_0b(lesson_text: str, provider_key: str | None = None, debug_log: list | None = None) -> dict:
+    """
+    Pass 0b: LLM-based segment enrichment.
+
+    Takes raw lesson text, runs Pass 0 to segment it, then sends segments
+    to an LLM for enrichment (clarified text, movement, intent, implicit context).
+
+    Returns:
+        {
+            "pass_0": { ... pass 0 result ... },
+            "enriched_segments": [ { id, clarified, movement, intent, implicit }, ... ]
+        }
+    """
+    import time
+
+    # Run Pass 0 first
+    pass_0_result = run_pass_0(lesson_text)
+    segmented_text = format_text_with_segments(pass_0_result)
+
+    # Load prompt and schema
+    prompt_template, schema = load_pass_0b()
+
+    # Build the full prompt
+    prompt = prompt_template + segmented_text
+
+    system_prompt = (
+        "You are an expert Feldenkrais practitioner enriching lesson segments. "
+        "Process every segment. Do not skip, merge, or split segments."
+    )
+
+    # Check cache
+    cache_suffix = ":pass_0b"
+    if provider_key and provider_key != DEFAULT_LLM:
+        cache_suffix += f":{provider_key}"
+    cache_key = get_cache_key(lesson_text.strip() + cache_suffix)
+    cached = load_cached_analysis(cache_key)
+    if cached:
+        return {
+            "pass_0": pass_0_result,
+            "enriched_segments": cached.get("enriched_segments", []),
+            "cached": True,
+        }
+
+    # Run LLM
+    llm = get_llm(provider_key)
+    t0 = time.time()
+
+    if debug_log is not None:
+        debug_log.append({
+            "label": f"Pass 0b ({provider_key or DEFAULT_LLM})",
+            "provider": provider_key or DEFAULT_LLM,
+            "prompt": prompt,
+            "system_prompt": system_prompt,
+            "schema": schema,
+        })
+
+    try:
+        result = llm.complete_structured_json(
+            prompt=prompt,
+            schema=schema,
+            system=system_prompt,
+        )
+        elapsed = round(time.time() - t0, 1)
+
+        if debug_log is not None:
+            debug_log[-1]["output"] = json.dumps(result, indent=2)
+            debug_log[-1]["elapsed"] = elapsed
+
+        enriched = result.get("segments", [])
+
+        # Cache the result
+        save_cached_analysis(cache_key, {"enriched_segments": enriched})
+
+        return {
+            "pass_0": pass_0_result,
+            "enriched_segments": enriched,
+            "elapsed": elapsed,
+            "cached": False,
+        }
+
+    except Exception as e:
+        if debug_log is not None:
+            debug_log[-1]["error"] = str(e)
+        raise
+
+
 def format_timestamp(seconds: float) -> str:
     """Format seconds as M:SS or H:MM:SS."""
     if seconds is None:
@@ -397,16 +527,50 @@ def align_pass0_with_whisper(pass_0_result: dict, whisper_segments: list) -> Non
 VL_ANALYSIS_THRESHOLD = 0.5
 
 
-def get_llm() -> LLM:
-    """Get configured LLM instance."""
-    api_key = os.environ.get("GOOGLE_API_KEY")
+LLM_CONFIGS = {
+    "gemini": {
+        "provider": "gemini",
+        "model": "gemini-3-flash-preview",
+        "api_key_env": "GOOGLE_API_KEY",
+        "default_max_tokens": 65536,
+    },
+    "openai": {
+        "provider": "openai",
+        "model": "gpt-5",
+        "api_key_env": "OPENAI_API_KEY",
+        "default_max_tokens": 128000,
+    },
+    "anthropic": {
+        "provider": "anthropic",
+        "model": "claude-sonnet-4-20250514",
+        "api_key_env": "ANTHROPIC_API_KEY",
+        "default_max_tokens": 16384,
+    },
+}
+
+DEFAULT_LLM = "gemini"
+
+
+def get_llm(provider_key: str | None = None) -> LLM:
+    """Get configured LLM instance.
+
+    Args:
+        provider_key: One of 'gemini', 'openai', 'anthropic'. Defaults to DEFAULT_LLM.
+    """
+    key = provider_key or DEFAULT_LLM
+    config = LLM_CONFIGS.get(key)
+    if not config:
+        raise ValueError(f"Unknown LLM provider: {key}. Choose from: {list(LLM_CONFIGS.keys())}")
+
+    api_key = os.environ.get(config["api_key_env"])
     if not api_key:
-        raise ValueError("GOOGLE_API_KEY environment variable not set")
+        raise ValueError(f"{config['api_key_env']} environment variable not set")
+
     return LLM(
-        provider="gemini",
-        model="gemini-3-flash-preview",
+        provider=config["provider"],
+        model=config["model"],
         api_key=api_key,
-        default_max_tokens=65536,
+        default_max_tokens=config["default_max_tokens"],
     )
 
 
@@ -460,22 +624,8 @@ def get_available_lessons() -> tuple[dict[str, list[tuple[str, str]]], dict[str,
         except Exception:
             pass
 
-    # 2. Filesystem sources
-    if LESSONS_DIR.exists():
-        for subdir in sorted(LESSONS_DIR.iterdir()):
-            if subdir.is_dir() and not subdir.name.startswith('.'):
-                lessons = []
-                for f in sorted(subdir.glob("*.txt")):
-                    display = f.stem.replace("_", " ").replace("-", " ").title()
-                    lessons.append((f.name, display))
-                if lessons:
-                    categories[subdir.name] = lessons
-        uncategorized = []
-        for f in sorted(LESSONS_DIR.glob("*.txt")):
-            display = f.stem.replace("_", " ").replace("-", " ").title()
-            uncategorized.append((f.name, display))
-        if uncategorized:
-            categories["uncategorized"] = uncategorized
+    # Skip empty sources (e.g. OTHER with no documents)
+    categories = {k: v for k, v in categories.items() if v}
 
     return categories, display_names
 
@@ -561,21 +711,43 @@ def invoke_lambda_async(job_id: str) -> None:
     )
 
 
-def run_pass_a(lesson_text: str) -> dict:
+def _pass_a_cache_key(lesson_text: str, provider_key: str | None = None, framework_version: str | None = None) -> str:
+    """Cache key for Pass A results, independent of Pass B provider."""
+    suffix = ":pass_a" + _framework_version_suffix(framework_version)
+    if provider_key and provider_key != DEFAULT_LLM:
+        suffix += f":{provider_key}"
+    return get_cache_key(lesson_text + suffix)
+
+
+def run_pass_a(lesson_text: str, provider_key: str | None = None, debug_log: list | None = None, framework_version: str | None = None) -> dict:
     """Run Pass A: Decomposition + Routing.
 
     Internally runs Pass 0 to segment text, then passes segmented text to LLM.
     Returns VL classification, SPIFFER-Q decomposed steps, AND Pass 0 segments.
+    Results are cached independently of Pass B provider.
     """
+    fv = framework_version
+    # Check Pass A cache first
+    pa_cache_key = _pass_a_cache_key(lesson_text, provider_key, fv)
+    cached = load_cached_analysis(pa_cache_key)
+    if cached:
+        if debug_log is not None:
+            debug_log.append({
+                "name": "Pass A",
+                "provider": provider_key or DEFAULT_LLM,
+                "cached": True,
+            })
+        return cached
+
     # Run Pass 0 to segment the text
     pass_0_result = run_pass_0(lesson_text)
     segmented_text = format_text_with_segments(pass_0_result)
 
-    pass_a_prompt, pass_a_schema = load_pass_a()
+    pass_a_prompt, pass_a_schema = load_pass_a(fv)
 
     if not pass_a_prompt or not pass_a_schema:
         # Return default if Pass A not configured
-        active = get_active_frameworks_config()
+        active = get_active_frameworks_config(fv)
         default_cls = {f["key"]: (1.0 if i == 0 else 0.0) for i, f in enumerate(active)}
         return {
             "classifications": default_cls,
@@ -587,15 +759,28 @@ def run_pass_a(lesson_text: str) -> dict:
 
     prompt = pass_a_prompt + "\n\n---\n\n## Lesson to Analyze:\n\n" + segmented_text
 
-    llm = get_llm()
+    llm = get_llm(provider_key)
     result = llm.complete_structured_json(
         prompt,
         pass_a_schema,
         system=ROUTER_SYSTEM_PROMPT,
     )
 
+    if debug_log is not None:
+        debug_log.append({
+            "name": "Pass A",
+            "provider": provider_key or DEFAULT_LLM,
+            "prompt": prompt,
+            "system": ROUTER_SYSTEM_PROMPT,
+            "schema": pass_a_schema,
+            "output": result,
+        })
+
     # Attach Pass 0 segments to result for UI rendering
     result["pass_0"] = pass_0_result
+
+    # Cache Pass A result independently
+    save_cached_analysis(pa_cache_key, result)
 
     return result
 
@@ -624,41 +809,158 @@ def get_active_frameworks(pass_a_result: dict, threshold: float = VL_ANALYSIS_TH
     return [f for f, s in active]
 
 
-def run_pass_b(lesson_text: str, pass_a_result: dict, framework: str) -> dict:
+def run_pass_b(lesson_text: str, pass_a_result: dict, framework: str, split: bool = False, provider_key: str | None = None, debug_log: list | None = None, framework_version: str | None = None) -> dict:
     """Run Pass B: VL Framework Synthesis.
 
     Takes the original lesson text AND Pass A output, applies VL-specific lens.
+    If split=True, runs as two sequential queries (narrative then table) to
+    avoid truncation on long lessons.
     """
-    protocol, schema = load_pass_b(framework)
+    fv = framework_version
+    if split:
+        return run_pass_b_split(lesson_text, pass_a_result, framework, provider_key=provider_key, debug_log=debug_log, framework_version=fv)
+
+    protocol, schema = load_pass_b(framework, fv)
 
     # Build prompt with both lesson text and Pass A output
     prompt = protocol + "\n\n---\n\n## Original Lesson Text:\n\n" + lesson_text
     prompt += "\n\n---\n\n## Pass A Analysis:\n\n```json\n" + json.dumps(pass_a_result, indent=2) + "\n```"
 
-    llm = get_llm()
-    analysis = llm.complete_structured_json(
-        prompt,
-        schema,
-        system=ANALYSIS_SYSTEM_PROMPT,
-    )
+    llm = get_llm(provider_key)
+    try:
+        analysis = llm.complete_structured_json(
+            prompt,
+            schema,
+            system=ANALYSIS_SYSTEM_PROMPT,
+        )
+    except Exception as e:
+        if debug_log is not None:
+            # Extract raw output from error message if available
+            error_str = str(e)
+            raw_output = error_str
+            debug_log.append({
+                "name": f"Pass B ({framework})",
+                "provider": provider_key or DEFAULT_LLM,
+                "prompt": prompt,
+                "system": ANALYSIS_SYSTEM_PROMPT,
+                "schema": schema,
+                "error": raw_output,
+            })
+        raise
+
+    if debug_log is not None:
+        debug_log.append({
+            "name": f"Pass B ({framework})",
+            "provider": provider_key or DEFAULT_LLM,
+            "prompt": prompt,
+            "system": ANALYSIS_SYSTEM_PROMPT,
+            "schema": schema,
+            "output": analysis,
+        })
     return analysis
+
+
+def run_pass_b_split(lesson_text: str, pass_a_result: dict, framework: str, provider_key: str | None = None, debug_log: list | None = None, framework_version: str | None = None) -> dict:
+    """Run Pass B as two sequential queries: narrative first, then table.
+
+    The narrative (negotiation framework + somatic narrative) is generated first,
+    then fed as context to the table query. This prevents truncation on long
+    lessons and gives the table an interpretive anchor.
+    """
+    protocol, _ = load_pass_b(framework, framework_version)
+
+    base_prompt = protocol + "\n\n---\n\n## Original Lesson Text:\n\n" + lesson_text
+    base_prompt += "\n\n---\n\n## Pass A Analysis:\n\n```json\n" + json.dumps(pass_a_result, indent=2) + "\n```"
+
+    llm = get_llm(provider_key)
+    prov = provider_key or DEFAULT_LLM
+
+    # Query 1: Narrative (negotiation framework + somatic narrative)
+    narrative_schema = json.loads((DATA_DIR / "pass_b_narrative.schema.json").read_text())
+    narrative_prompt = base_prompt + "\n\n---\n\nFor this query, provide ONLY the negotiation framework observations and somatic narrative. Do NOT include the analytical table."
+    try:
+        narrative_result = llm.complete_structured_json(
+            narrative_prompt,
+            narrative_schema,
+            system=ANALYSIS_SYSTEM_PROMPT,
+        )
+    except Exception as e:
+        if debug_log is not None:
+            debug_log.append({
+                "name": f"Pass B Narrative ({framework})",
+                "provider": prov,
+                "prompt": narrative_prompt,
+                "system": ANALYSIS_SYSTEM_PROMPT,
+                "schema": narrative_schema,
+                "error": str(e),
+            })
+        raise
+
+    if debug_log is not None:
+        debug_log.append({
+            "name": f"Pass B Narrative ({framework})",
+            "provider": prov,
+            "prompt": narrative_prompt,
+            "system": ANALYSIS_SYSTEM_PROMPT,
+            "schema": narrative_schema,
+            "output": narrative_result,
+        })
+
+    # Query 2: Table (receives narrative as context)
+    num_groups = len(pass_a_result.get("groups", []))
+    num_rows = num_groups if num_groups > 0 else min(len(pass_a_result.get("steps", [])), 12)
+    table_schema = json.loads((DATA_DIR / "pass_b_table.schema.json").read_text())
+    table_prompt = base_prompt
+    table_prompt += "\n\n---\n\n## Narrative Analysis (from prior query):\n\n```json\n" + json.dumps(narrative_result, indent=2) + "\n```"
+    table_prompt += f"\n\n---\n\nUsing the narrative analysis above as your interpretive frame, provide ONLY the analytical table. Produce exactly {num_rows} rows — one per group from Pass A. Cover all groups from beginning to end — do not truncate."
+    try:
+        table_result = llm.complete_structured_json(
+            table_prompt,
+            table_schema,
+            system=ANALYSIS_SYSTEM_PROMPT,
+        )
+    except Exception as e:
+        if debug_log is not None:
+            debug_log.append({
+                "name": f"Pass B Table ({framework})",
+                "provider": prov,
+                "prompt": table_prompt,
+                "system": ANALYSIS_SYSTEM_PROMPT,
+                "schema": table_schema,
+                "error": str(e),
+            })
+        raise
+
+    if debug_log is not None:
+        debug_log.append({
+            "name": f"Pass B Table ({framework})",
+            "provider": prov,
+            "prompt": table_prompt,
+            "system": ANALYSIS_SYSTEM_PROMPT,
+            "schema": table_schema,
+            "output": table_result,
+        })
+
+    # Merge into single result matching the combined Pass B schema
+    return {**narrative_result, **table_result}
 
 
 # Global to store Pass A result for the current request (used by run_vl_analysis alias)
 _current_pass_a_result = None
 
 
-def run_vl_analysis(lesson_text: str, framework: str) -> dict:
+def run_vl_analysis(lesson_text: str, framework: str, framework_version: str | None = None) -> dict:
     """Alias that runs Pass B using stored Pass A result.
 
     This is for backwards compatibility with code that calls run_vl_analysis
     after run_pass_a has already been called.
     """
     global _current_pass_a_result
+    fv = framework_version
     if _current_pass_a_result is None:
         # If no Pass A result stored, run it first
-        _current_pass_a_result = run_pass_a(lesson_text)
-    return run_pass_b(lesson_text, _current_pass_a_result, framework)
+        _current_pass_a_result = run_pass_a(lesson_text, framework_version=fv)
+    return run_pass_b(lesson_text, _current_pass_a_result, framework, framework_version=fv)
 
 
 def process_job(job_id: str) -> None:
@@ -669,9 +971,12 @@ def process_job(job_id: str) -> None:
 
     try:
         lesson_text = job["lesson_text"]
+        pa_provider = job.get("pass_a_provider")
+        pb_provider = job.get("pass_b_provider")
+        fv = job.get("framework_version")
 
         # Step 1: Run Pass A (Decomposition + Routing) - ONCE
-        pass_a_result = run_pass_a(lesson_text)
+        pass_a_result = run_pass_a(lesson_text, provider_key=pa_provider, framework_version=fv)
         job["pass_a_result"] = pass_a_result
 
         # For backwards compatibility, also store as router_result
@@ -687,11 +992,12 @@ def process_job(job_id: str) -> None:
 
         # Step 3: Run Pass B for each active framework
         # Pass B receives lesson text + Pass A output
+        split = job.get("split_pass_b", False)
         job["vl_analyses"] = {}
 
         for framework in active_frameworks:
             try:
-                analysis = run_pass_b(lesson_text, pass_a_result, framework)
+                analysis = run_pass_b(lesson_text, pass_a_result, framework, split=split, provider_key=pb_provider, framework_version=fv)
                 job["vl_analyses"][framework] = {
                     "status": "complete",
                     "result": analysis
@@ -772,6 +1078,7 @@ def render_router_result(router_result: dict) -> str:
 
     # SPIFFER-Q Decomposition (Pass A output)
     steps = router_result.get("steps", [])
+    groups = router_result.get("groups", [])
     if steps:
         html.append('<div class="spiffer-q-steps" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">')
 
@@ -791,29 +1098,77 @@ def render_router_result(router_result: dict) -> str:
         segments_list = pass_0.get("segments", [])
         segment_lookup = {seg["id"]: seg["text"] for seg in segments_list}
 
-        html.append("<ol>")
-        for step in steps:
+        # Build step lookup by step_number
+        step_lookup = {s["step_number"]: s for s in steps if "step_number" in s}
+
+        def _render_step(step):
+            """Render a single step as an <li> with tags, instruction, and individual source segments."""
             tags = ", ".join(step.get("tags", []))
             instruction = step.get("instruction", "")
             note = f' <small style="color: #666;">({step["note"]})</small>' if step.get("note") else ""
             home_badge = ' <span style="font-size: 0.8em; padding: 1px 6px; background: #e8f4fd; color: #17a2b8; border-radius: 3px;">home</span>' if step.get("is_home") else ""
 
-            # Get referenced source text
             segment_ids = step.get("segments", [])
-            source_texts = [segment_lookup.get(sid, f"[segment {sid} not found]") for sid in segment_ids]
+            parts = []
+            parts.append(f"<li><strong>[{tags}]</strong> {instruction}{home_badge}{note}")
 
-            html.append(f"<li><strong>[{tags}]</strong> {instruction}{home_badge}{note}")
+            # Show individual source segments
+            if segment_ids:
+                parts.append('<details style="margin-top: 6px; margin-left: 20px;">')
+                parts.append(f'<summary style="cursor: pointer; color: #666; font-size: 0.9em;">Source text ({len(segment_ids)} segment{"s" if len(segment_ids) != 1 else ""})</summary>')
+                parts.append('<div style="margin: 6px 0;">')
+                for sid in segment_ids:
+                    seg_text = segment_lookup.get(sid, f"[segment {sid} not found]")
+                    parts.append(f'<div style="margin: 4px 0; padding: 6px 10px; background: #fff; border-left: 3px solid #007bff; font-style: italic; color: #555; font-size: 0.9em;">'
+                                 f'<span style="color: #999; font-size: 0.8em; font-style: normal;">#{sid}</span> {seg_text}</div>')
+                parts.append('</div></details>')
 
-            # Show source text if we have segment references
-            if source_texts:
-                html.append('<details style="margin-top: 8px; margin-left: 20px;">')
-                html.append(f'<summary style="cursor: pointer; color: #666; font-size: 0.9em;">Source text (segments {", ".join(str(s) for s in segment_ids)})</summary>')
-                html.append('<blockquote style="margin: 8px 0; padding: 8px 12px; background: #fff; border-left: 3px solid #007bff; font-style: italic; color: #555;">')
-                html.append(" ".join(source_texts))
-                html.append('</blockquote></details>')
+            parts.append("</li>")
+            return "\n".join(parts)
 
-            html.append("</li>")
-        html.append("</ol>")
+        if groups:
+            # Three-level tree: Group → Steps → Segments
+            # Track which steps are assigned to groups
+            grouped_step_nums = set()
+            for g in groups:
+                grouped_step_nums.update(g.get("steps", []))
+
+            for g in groups:
+                group_label = g.get("label", f"Group {g.get('group_number', '?')}")
+                group_desc = g.get("description", "")
+                group_step_nums = g.get("steps", [])
+
+                html.append('<details open style="margin-bottom: 12px;">')
+                html.append(f'<summary style="cursor: pointer; font-weight: bold; font-size: 1.05em; padding: 6px 0;">'
+                            f'{g.get("group_number", "?")}. {group_label}</summary>')
+                if group_desc:
+                    html.append(f'<p style="margin: 4px 0 8px 20px; color: #555; font-size: 0.9em;">{group_desc}</p>')
+
+                html.append('<ol style="margin-left: 20px;">')
+                for sn in group_step_nums:
+                    step = step_lookup.get(sn)
+                    if step:
+                        html.append(_render_step(step))
+                html.append('</ol>')
+                html.append('</details>')
+
+            # Render any ungrouped steps
+            ungrouped = [s for s in steps if s.get("step_number") not in grouped_step_nums]
+            if ungrouped:
+                html.append('<details style="margin-bottom: 12px;">')
+                html.append('<summary style="cursor: pointer; font-weight: bold; font-size: 1.05em; padding: 6px 0;">Ungrouped Steps</summary>')
+                html.append('<ol style="margin-left: 20px;">')
+                for step in ungrouped:
+                    html.append(_render_step(step))
+                html.append('</ol>')
+                html.append('</details>')
+        else:
+            # Fallback: flat list (no groups available)
+            html.append("<ol>")
+            for step in steps:
+                html.append(_render_step(step))
+            html.append("</ol>")
+
         html.append("</div>")
 
     return "\n".join(html)
@@ -871,6 +1226,77 @@ def render_multi_vl_analyses(vl_analyses: dict, schema: dict, pass_a_result: dic
     # Note: Tab switching JavaScript is in the main page template (build_html)
 
     return "\n".join(html)
+
+
+def render_debug_log(debug_log: list) -> str:
+    """Render raw LLM input/output debug log as collapsible HTML sections."""
+    if not debug_log:
+        return ""
+
+    import html as html_module
+
+    parts = ['<div class="debug-log" style="margin-top: 30px; border-top: 2px solid #ddd; padding-top: 15px;">']
+    parts.append('<h2 style="cursor: pointer;" onclick="document.getElementById(\'debug-contents\').style.display = document.getElementById(\'debug-contents\').style.display === \'none\' ? \'block\' : \'none\';">Raw I/O <span style="font-size: 0.7em; color: #999;">(click to toggle)</span></h2>')
+    parts.append('<div id="debug-contents" style="display: none;">')
+
+    # Sub-tabs for each exchange
+    parts.append('<div class="debug-tabs" style="margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 4px;">')
+    for i, entry in enumerate(debug_log):
+        name = entry.get("name", f"Query {i+1}")
+        provider = entry.get("provider", "")
+        has_error = "error" in entry
+        color = "#dc3545" if has_error else "#6c757d"
+        active = "background: #007bff; color: white;" if i == 0 else f"background: #e9ecef; color: {color};"
+        label = f'{name} [{provider}]'
+        if has_error:
+            label += " (error)"
+        parts.append(f'<button onclick="showDebugTab({i})" id="debug-tab-{i}" style="padding: 6px 12px; border: 1px solid #ccc; cursor: pointer; {active} border-radius: 4px; font-size: 0.85em;">{label}</button>')
+    parts.append('</div>')
+
+    for i, entry in enumerate(debug_log):
+        display = "block" if i == 0 else "none"
+        name = entry.get("name", f"Query {i+1}")
+        provider = entry.get("provider", "")
+        parts.append(f'<div id="debug-content-{i}" class="debug-entry" style="display: {display};">')
+
+        # Prompt
+        prompt = entry.get("prompt", "")
+        prompt_chars = len(prompt)
+        parts.append(f'<details style="margin-bottom: 10px;"><summary style="cursor: pointer; font-weight: bold; color: #555;">Prompt ({prompt_chars:,} chars)</summary>')
+        parts.append(f'<pre style="background: #f8f9fa; padding: 12px; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word; max-height: 500px; overflow-y: auto; font-size: 0.8em;">{html_module.escape(prompt)}</pre>')
+        parts.append('</details>')
+
+        # System prompt
+        system = entry.get("system", "")
+        if system:
+            parts.append(f'<details style="margin-bottom: 10px;"><summary style="cursor: pointer; font-weight: bold; color: #555;">System Prompt ({len(system):,} chars)</summary>')
+            parts.append(f'<pre style="background: #f0f8ff; padding: 12px; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word; max-height: 300px; overflow-y: auto; font-size: 0.8em;">{html_module.escape(system)}</pre>')
+            parts.append('</details>')
+
+        # Schema
+        schema = entry.get("schema")
+        if schema:
+            schema_str = json.dumps(schema, indent=2)
+            parts.append(f'<details style="margin-bottom: 10px;"><summary style="cursor: pointer; font-weight: bold; color: #555;">Schema ({len(schema_str):,} chars)</summary>')
+            parts.append(f'<pre style="background: #fff8f0; padding: 12px; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word; max-height: 400px; overflow-y: auto; font-size: 0.8em;">{html_module.escape(schema_str)}</pre>')
+            parts.append('</details>')
+
+        # Output or Error
+        if "error" in entry:
+            error_str = entry["error"]
+            parts.append(f'<details open style="margin-bottom: 10px;"><summary style="cursor: pointer; font-weight: bold; color: #dc3545;">Output (ERROR)</summary>')
+            parts.append(f'<pre style="background: #fff5f5; padding: 12px; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word; max-height: 600px; overflow-y: auto; font-size: 0.8em; border: 1px solid #f5c6cb;">{html_module.escape(error_str)}</pre>')
+            parts.append('</details>')
+        elif "output" in entry:
+            output_str = json.dumps(entry["output"], indent=2)
+            parts.append(f'<details style="margin-bottom: 10px;"><summary style="cursor: pointer; font-weight: bold; color: #555;">Output ({len(output_str):,} chars)</summary>')
+            parts.append(f'<pre style="background: #f0fff0; padding: 12px; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word; max-height: 600px; overflow-y: auto; font-size: 0.8em;">{html_module.escape(output_str)}</pre>')
+            parts.append('</details>')
+
+        parts.append('</div>')
+
+    parts.append('</div></div>')
+    return "\n".join(parts)
 
 
 def render_pass_b_analysis(data: dict, pass_a_result: dict = None) -> str:
@@ -1328,6 +1754,14 @@ def build_html(lesson_text: str = "", selected_category: str = "", selected_less
             lesson_options.append(f'<option value="{filename}" {selected}>{display}</option>')
     lesson_select = "\n".join(lesson_options)
 
+    # Build framework version options
+    versions = get_available_framework_versions()
+    fv_options = []
+    for v in versions:
+        default_marker = " (default)" if v == FRAMEWORK_VERSION else ""
+        fv_options.append(f'<option value="{v}">{v}{default_marker}</option>')
+    framework_version_options = "\n".join(fv_options)
+
     return f"""
 <!DOCTYPE html>
 <html>
@@ -1479,7 +1913,12 @@ def build_html(lesson_text: str = "", selected_category: str = "", selected_less
                 }}
 
             }} catch (error) {{
-                resultDiv.innerHTML = '<div class="error">Error: ' + error.message + '</div>';
+                var msg = error.message || String(error);
+                if (msg.includes('\\n')) {{
+                    resultDiv.innerHTML = '<div class="error"><strong>Error:</strong><pre style="white-space: pre-wrap; word-wrap: break-word; margin-top: 8px; background: #fff5f5; padding: 10px; border-radius: 4px; font-size: 0.85em;">' + msg.replace(/</g, '&lt;') + '</pre></div>';
+                }} else {{
+                    resultDiv.innerHTML = '<div class="error">Error: ' + msg + '</div>';
+                }}
                 resetForm();
             }}
         }}
@@ -1590,6 +2029,19 @@ def build_html(lesson_text: str = "", selected_category: str = "", selected_less
             setTimeout(initCards, 0);
         }}
 
+        // Debug I/O tab switching
+        function showDebugTab(index) {{
+            document.querySelectorAll('.debug-entry').forEach(el => el.style.display = 'none');
+            document.querySelectorAll('.debug-tabs button').forEach(el => {{
+                el.style.background = '#e9ecef';
+                el.style.color = '#6c757d';
+            }});
+            var content = document.getElementById('debug-content-' + index);
+            var tab = document.getElementById('debug-tab-' + index);
+            if (content) content.style.display = 'block';
+            if (tab) {{ tab.style.background = '#007bff'; tab.style.color = 'white'; }}
+        }}
+
         // Analytical table: Card View / Table View switching
         var currentCard = 0;
         var totalCards = 0;
@@ -1653,7 +2105,10 @@ def build_html(lesson_text: str = "", selected_category: str = "", selected_less
 <body>
     <h1>Feldenkrais Lesson Analyzer</h1>
     <p>Select a lesson or paste text. The system will classify which VL framework(s) apply and run the appropriate analysis.
-       <a href="/pipeline" style="float: right; color: #007bff; text-decoration: none; font-size: 0.9em;">Pipeline Dashboard &rarr;</a>
+       <a href="/pipeline" style="float: right; color: #007bff; text-decoration: none; font-size: 0.9em; margin-left: 15px;">Pipeline Dashboard &rarr;</a>
+       <a href="/booklet" style="float: right; color: #007bff; text-decoration: none; font-size: 0.9em; margin-left: 15px;">Booklet &rarr;</a>
+       <a href="/explore" style="float: right; color: #007bff; text-decoration: none; font-size: 0.9em; margin-left: 15px;">Explore &rarr;</a>
+       <a href="/pass0b" style="float: right; color: #007bff; text-decoration: none; font-size: 0.9em;">Pass 0b Experiment &rarr;</a>
     </p>
 
     <script>
@@ -1697,6 +2152,33 @@ def build_html(lesson_text: str = "", selected_category: str = "", selected_less
         <div class="form-group">
             <label for="lesson_text">Paste Lesson Text:</label>
             <textarea name="lesson_text" id="lesson_text" placeholder="Paste lesson text here...">{lesson_text}</textarea>
+        </div>
+
+        <div style="margin: 10px 0; display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
+            <label style="font-size: 0.9em;">
+                Framework:
+                <select name="framework_version" style="margin-left: 4px; padding: 2px 6px;">
+                    {framework_version_options}
+                </select>
+            </label>
+            <label style="font-size: 0.9em;">
+                Pass A provider:
+                <select name="pass_a_provider" style="margin-left: 4px; padding: 2px 6px;">
+                    <option value="">Default (Gemini)</option>
+                    <option value="gemini">Gemini</option>
+                    <option value="openai">OpenAI (GPT-5)</option>
+                    <option value="anthropic">Anthropic (Claude)</option>
+                </select>
+            </label>
+            <label style="font-size: 0.9em;">
+                Pass B provider:
+                <select name="pass_b_provider" style="margin-left: 4px; padding: 2px 6px;">
+                    <option value="">Default (Gemini)</option>
+                    <option value="gemini">Gemini</option>
+                    <option value="openai">OpenAI (GPT-5)</option>
+                    <option value="anthropic">Anthropic (Claude)</option>
+                </select>
+            </label>
         </div>
 
         <button type="submit" id="submit-btn">Analyze Lesson</button>
@@ -1869,14 +2351,23 @@ async def analyze_redirect():
     return RedirectResponse(url="/", status_code=303)
 
 
-ANALYSIS_TIMEOUT = 480  # 8 minutes
+ANALYSIS_TIMEOUT = 900  # 15 minutes
 
 
-def _run_analysis(text: str) -> dict:
-    """Run LLM analysis (blocking). Returns dict with pass_a_result, vl_analyses, and timings."""
+def _run_analysis(text: str, split: bool = False, pass_a_provider: str | None = None, pass_b_provider: str | None = None, framework_version: str | None = None) -> dict:
+    """Run LLM analysis (blocking). Returns dict with pass_a_result, vl_analyses, timings, and debug_log."""
     import time
 
-    cache_key = get_cache_key(text)
+    fv = framework_version
+    # Include split mode, providers, and framework version in cache key
+    cache_suffix = _framework_version_suffix(fv)
+    if split:
+        cache_suffix += ":split"
+    if pass_a_provider and pass_a_provider != DEFAULT_LLM:
+        cache_suffix += f":a={pass_a_provider}"
+    if pass_b_provider and pass_b_provider != DEFAULT_LLM:
+        cache_suffix += f":b={pass_b_provider}"
+    cache_key = get_cache_key(text + cache_suffix)
     cached = load_cached_analysis(cache_key)
 
     if cached:
@@ -1884,9 +2375,10 @@ def _run_analysis(text: str) -> dict:
         return cached
 
     timings = {}
+    debug_log = []
 
     t0 = time.time()
-    pass_a_result = run_pass_a(text)
+    pass_a_result = run_pass_a(text, provider_key=pass_a_provider, debug_log=debug_log, framework_version=fv)
     timings["pass_a"] = round(time.time() - t0, 1)
 
     active_frameworks = get_active_frameworks(pass_a_result)
@@ -1898,7 +2390,7 @@ def _run_analysis(text: str) -> dict:
     for framework in active_frameworks:
         t1 = time.time()
         try:
-            analysis = run_pass_b(text, pass_a_result, framework)
+            analysis = run_pass_b(text, pass_a_result, framework, split=split, provider_key=pass_b_provider, debug_log=debug_log, framework_version=fv)
             vl_analyses[framework] = {"status": "complete", "result": analysis}
         except Exception as e:
             vl_analyses[framework] = {"status": "error", "error": str(e)}
@@ -1909,6 +2401,7 @@ def _run_analysis(text: str) -> dict:
     result = {"pass_a_result": pass_a_result, "vl_analyses": vl_analyses}
     save_cached_analysis(cache_key, result)
     result["timings"] = timings
+    result["debug_log"] = debug_log
     return result
 
 
@@ -1920,13 +2413,22 @@ from fastapi.responses import JSONResponse
 async def api_analyze(
     lesson_text: str = Form(""),
     selected_category: str = Form(""),
-    selected_lesson: str = Form("")
+    selected_lesson: str = Form(""),
+    split_pass_b: str = Form(""),
+    pass_a_provider: str = Form(""),
+    pass_b_provider: str = Form(""),
+    framework_version: str = Form(""),
 ):
     """Start analysis and return job_id for polling."""
     # Use textarea content (which may have been populated from a selected lesson)
     text = lesson_text.strip()
     if not text:
         return JSONResponse({"error": "Please enter or select lesson text."}, status_code=400)
+
+    split = bool(split_pass_b)
+    pa_provider = pass_a_provider if pass_a_provider else None
+    pb_provider = pass_b_provider if pass_b_provider else None
+    fv = framework_version if framework_version else None
 
     # In Lambda with S3 configured, use async pattern
     if IS_LAMBDA and KB_BUCKET:
@@ -1938,6 +2440,10 @@ async def api_analyze(
             "lesson_text": text,
             "selected_category": selected_category,
             "selected_lesson": selected_lesson,
+            "split_pass_b": split,
+            "pass_a_provider": pa_provider,
+            "pass_b_provider": pb_provider,
+            "framework_version": fv,
         }
         save_job(job_id, job_data)
 
@@ -1949,7 +2455,7 @@ async def api_analyze(
     # Local development: run in thread with timeout
     try:
         result = await asyncio.wait_for(
-            asyncio.to_thread(_run_analysis, text),
+            asyncio.to_thread(_run_analysis, text, split, pa_provider, pb_provider, fv),
             timeout=ANALYSIS_TIMEOUT,
         )
         pass_a_result = result["pass_a_result"]
@@ -1964,10 +2470,11 @@ async def api_analyze(
         router_html = render_router_result(pass_a_result)
         _, schema = load_pass_b("VL-1")
         analysis_html = render_multi_vl_analyses(vl_analyses, schema, pass_a_result)
+        debug_html = render_debug_log(result.get("debug_log", []))
 
         return JSONResponse({
             "status": "complete",
-            "result_html": router_html + analysis_html,
+            "result_html": router_html + analysis_html + debug_html,
             "timings": result.get("timings"),
         })
 
@@ -2018,11 +2525,13 @@ async def api_status(job_id: str):
 async def analyze(
     lesson_text: str = Form(""),
     selected_category: str = Form(""),
-    selected_lesson: str = Form("")
+    selected_lesson: str = Form(""),
+    framework_version: str = Form(""),
 ):
     """Fallback for non-JavaScript form submission."""
     # Use textarea content
     text = lesson_text.strip()
+    fv = framework_version if framework_version else None
     if not text:
         return build_html(
             lesson_text=lesson_text,
@@ -2032,7 +2541,7 @@ async def analyze(
 
     try:
         result = await asyncio.wait_for(
-            asyncio.to_thread(_run_analysis, text),
+            asyncio.to_thread(_run_analysis, text, False, None, None, fv),
             timeout=ANALYSIS_TIMEOUT,
         )
         pass_a_result = result["pass_a_result"]
@@ -2284,6 +2793,2289 @@ def build_pipeline_html() -> str:
 async def pipeline_dashboard():
     """Pipeline monitoring dashboard."""
     return build_pipeline_html()
+
+
+# --- Pass 0b Experiment ---
+
+@app.get("/pass0b", response_class=HTMLResponse)
+async def pass0b_page():
+    """Pass 0b experiment page."""
+    return build_pass0b_html()
+
+
+@app.post("/api/pass0b")
+async def api_pass0b(
+    lesson_text: str = Form(""),
+    selected_category: str = Form(""),
+    selected_lesson: str = Form(""),
+    provider: str = Form(""),
+):
+    """Run Pass 0 + Pass 0b and return results."""
+    text = lesson_text.strip()
+    if not text:
+        return JSONResponse({"error": "Please enter or select lesson text."}, status_code=400)
+
+    prov = provider if provider else None
+    debug_log = []
+
+    try:
+        result = await asyncio.wait_for(
+            asyncio.to_thread(run_pass_0b, text, prov, debug_log),
+            timeout=ANALYSIS_TIMEOUT,
+        )
+        result_html = render_pass0b_result(result)
+        debug_html = render_debug_log(debug_log) if debug_log else ""
+        return JSONResponse({
+            "status": "complete",
+            "result_html": result_html,
+            "debug_html": debug_html,
+            "elapsed": result.get("elapsed"),
+            "cached": result.get("cached", False),
+            "segment_count": len(result.get("pass_0", {}).get("segments", [])),
+            "enriched_count": len(result.get("enriched_segments", [])),
+        })
+    except asyncio.TimeoutError:
+        return JSONResponse({"error": "Analysis timed out."}, status_code=504)
+    except Exception as e:
+        debug_html = render_debug_log(debug_log) if debug_log else ""
+        return JSONResponse({
+            "error": str(e),
+            "debug_html": debug_html,
+        }, status_code=500)
+
+
+def render_pass0b_result(result: dict) -> str:
+    """Render Pass 0 + Pass 0b results as HTML."""
+    pass_0 = result.get("pass_0", {})
+    segments = pass_0.get("segments", [])
+    enriched = result.get("enriched_segments", [])
+
+    # Build lookup for enriched segments by ID
+    enriched_lookup = {e["id"]: e for e in enriched}
+
+    html = []
+    html.append(f'<p style="color: #666; font-size: 0.9em;">Pass 0: {len(segments)} segments | '
+                f'Pass 0b: {len(enriched)} enriched</p>')
+
+    for seg in segments:
+        sid = seg["id"]
+        e = enriched_lookup.get(sid, {})
+
+        html.append(f'<div style="margin-bottom: 16px; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">')
+
+        # Header with segment ID
+        html.append(f'<div style="background: #f0f0f0; padding: 8px 12px; font-weight: bold; font-size: 0.9em; color: #555;">'
+                    f'Segment #{sid}</div>')
+
+        html.append('<div style="padding: 12px;">')
+
+        # Original text
+        html.append(f'<div style="margin-bottom: 10px;">'
+                    f'<div style="font-size: 0.8em; color: #999; text-transform: uppercase; margin-bottom: 2px;">Original</div>'
+                    f'<div style="padding: 8px; background: #fafafa; border-left: 3px solid #ccc; color: #333;">{seg["text"]}</div>'
+                    f'</div>')
+
+        if e:
+            # Three-tier extraction
+            if e.get("mechanical_directive"):
+                html.append(f'<div style="margin-bottom: 10px;">'
+                            f'<div style="font-size: 0.8em; color: #999; text-transform: uppercase; margin-bottom: 2px;">Mechanical Directive</div>'
+                            f'<div style="padding: 8px; background: #f0f0f0; border-left: 3px solid #6c757d; color: #333;">{e["mechanical_directive"]}</div>'
+                            f'</div>')
+
+            if e.get("quality_constraint"):
+                html.append(f'<div style="margin-bottom: 10px;">'
+                            f'<div style="font-size: 0.8em; color: #999; text-transform: uppercase; margin-bottom: 2px;">Quality Constraint</div>'
+                            f'<div style="padding: 8px; background: #f0fff0; border-left: 3px solid #28a745; color: #333;">{e["quality_constraint"]}</div>'
+                            f'</div>')
+
+            if e.get("sensory_inquiry"):
+                html.append(f'<div style="margin-bottom: 10px;">'
+                            f'<div style="font-size: 0.8em; color: #999; text-transform: uppercase; margin-bottom: 2px;">Sensory Inquiry</div>'
+                            f'<div style="padding: 8px; background: #fff8f0; border-left: 3px solid #fd7e14; color: #333;">{e["sensory_inquiry"]}</div>'
+                            f'</div>')
+
+            # Clarified rewrite
+            if e.get("clarified"):
+                html.append(f'<div style="margin-bottom: 10px;">'
+                            f'<div style="font-size: 0.8em; color: #999; text-transform: uppercase; margin-bottom: 2px;">Clarified</div>'
+                            f'<div style="padding: 8px; background: #f0f8ff; border-left: 3px solid #007bff; color: #333;">{e["clarified"]}</div>'
+                            f'</div>')
+
+            # Global anchor (optional)
+            if e.get("global_anchor"):
+                html.append(f'<div style="margin-bottom: 10px;">'
+                            f'<div style="font-size: 0.8em; color: #999; text-transform: uppercase; margin-bottom: 2px;">Global Anchor</div>'
+                            f'<div style="padding: 8px; background: #f8f0ff; border-left: 3px solid #6f42c1; color: #333;">{e["global_anchor"]}</div>'
+                            f'</div>')
+
+            # Intent
+            if e.get("intent"):
+                html.append(f'<div style="margin-bottom: 10px;">'
+                            f'<div style="font-size: 0.8em; color: #999; text-transform: uppercase; margin-bottom: 2px;">Intent</div>'
+                            f'<div style="padding: 8px; background: #e8f4fd; border-left: 3px solid #17a2b8; color: #333;">{e["intent"]}</div>'
+                            f'</div>')
+        else:
+            html.append('<div style="color: #999; font-style: italic;">No enrichment for this segment</div>')
+
+        html.append('</div></div>')
+
+    return "\n".join(html)
+
+
+def build_pass0b_html() -> str:
+    """Build the Pass 0b experiment page HTML."""
+    categories, display_names = get_available_lessons()
+
+    category_options = ['<option value="">-- Select category --</option>']
+    for cat_name in categories.keys():
+        cat_display = display_names.get(cat_name, cat_name.replace("_", " ").title())
+        category_options.append(f'<option value="{cat_name}">{cat_display}</option>')
+    category_select = "\n".join(category_options)
+
+    lessons_json = json.dumps({
+        cat: [(f, d) for f, d in lessons]
+        for cat, lessons in categories.items()
+    })
+
+    return f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Pass 0b Experiment - Segment Enrichment</title>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }}
+        h1 {{ color: #333; }}
+        select {{
+            width: 100%;
+            padding: 10px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }}
+        textarea {{
+            width: 100%;
+            height: 200px;
+            font-family: monospace;
+            font-size: 14px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }}
+        button {{
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }}
+        button:hover {{ background-color: #0056b3; }}
+        button:disabled {{ background-color: #ccc; cursor: not-allowed; }}
+        .error {{ color: red; padding: 10px; background: #fee; border-radius: 4px; }}
+        label {{ font-weight: bold; display: block; margin-bottom: 5px; }}
+        .form-group {{ margin-bottom: 15px; }}
+        .or-divider {{ text-align: center; color: #666; margin: 10px 0; }}
+        .loading-spinner {{
+            display: none;
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            text-align: center;
+        }}
+        .loading-spinner .spinner {{
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            border: 3px solid #ddd;
+            border-top-color: #007bff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            vertical-align: middle;
+            margin-right: 10px;
+        }}
+        @keyframes spin {{
+            to {{ transform: rotate(360deg); }}
+        }}
+    </style>
+    <script>
+        const lessonsData = {lessons_json};
+
+        function onCategoryChange(select) {{
+            const category = select.value;
+            const lessonSelect = document.getElementById('selected_lesson');
+            lessonSelect.innerHTML = '<option value="">-- Select lesson --</option>';
+            if (category && lessonsData[category]) {{
+                lessonsData[category].forEach(([filename, display]) => {{
+                    const option = document.createElement('option');
+                    option.value = filename;
+                    option.textContent = display;
+                    lessonSelect.appendChild(option);
+                }});
+            }}
+            document.getElementById('lesson_text').value = '';
+        }}
+
+        async function onLessonSelect(select) {{
+            const textarea = document.getElementById('lesson_text');
+            const category = document.getElementById('selected_category').value;
+            if (select.value && category) {{
+                textarea.value = '';
+                textarea.disabled = true;
+                textarea.placeholder = 'Loading lesson...';
+                textarea.style.opacity = '0.5';
+                try {{
+                    const response = await fetch('/api/lesson/' + encodeURIComponent(category) + '/' + encodeURIComponent(select.value));
+                    const data = await response.json();
+                    if (data.text) textarea.value = data.text;
+                    else textarea.placeholder = 'Error loading lesson';
+                }} catch (error) {{
+                    textarea.placeholder = 'Error loading lesson';
+                }}
+                textarea.disabled = false;
+                textarea.style.opacity = '1';
+            }} else {{
+                textarea.value = '';
+                textarea.disabled = false;
+                textarea.style.opacity = '1';
+                textarea.placeholder = 'Paste lesson text here...';
+            }}
+        }}
+
+        async function submitForm(event) {{
+            event.preventDefault();
+            const btn = document.getElementById('submit-btn');
+            const spinner = document.getElementById('loading-spinner');
+            const resultDiv = document.getElementById('result');
+            const debugDiv = document.getElementById('debug');
+            const form = document.getElementById('pass0b-form');
+
+            btn.disabled = true;
+            btn.textContent = 'Running Pass 0 + 0b...';
+            spinner.style.display = 'block';
+            resultDiv.innerHTML = '';
+            debugDiv.innerHTML = '';
+            var startTime = Date.now();
+            var timer = setInterval(function() {{
+                var elapsed = Math.floor((Date.now() - startTime) / 1000);
+                document.getElementById('loading-elapsed').textContent = elapsed + 's';
+            }}, 1000);
+
+            try {{
+                const formData = new FormData(form);
+                const response = await fetch('/api/pass0b', {{
+                    method: 'POST',
+                    body: formData
+                }});
+                const data = await response.json();
+                clearInterval(timer);
+
+                if (data.error) {{
+                    var msg = data.error;
+                    if (msg.includes('\\n')) {{
+                        resultDiv.innerHTML = '<div class="error"><strong>Error:</strong><pre style="white-space: pre-wrap; word-wrap: break-word; margin-top: 8px;">' + msg.replace(/</g, '&lt;') + '</pre></div>';
+                    }} else {{
+                        resultDiv.innerHTML = '<div class="error">Error: ' + msg + '</div>';
+                    }}
+                    if (data.debug_html) debugDiv.innerHTML = data.debug_html;
+                    resetForm();
+                    return;
+                }}
+
+                if (data.result_html) {{
+                    var stats = '';
+                    if (data.cached) {{
+                        stats = 'Loaded from cache';
+                    }} else {{
+                        stats = 'Completed in ' + (data.elapsed || '?') + 's';
+                    }}
+                    stats += ' | ' + (data.segment_count || '?') + ' segments, ' + (data.enriched_count || '?') + ' enriched';
+                    resultDiv.innerHTML = '<p style="color: #28a745; font-weight: bold;">' + stats + '</p>' + data.result_html;
+                }}
+                if (data.debug_html) debugDiv.innerHTML = data.debug_html;
+                resetForm();
+            }} catch (error) {{
+                clearInterval(timer);
+                resultDiv.innerHTML = '<div class="error">Error: ' + error.message + '</div>';
+                resetForm();
+            }}
+        }}
+
+        function resetForm() {{
+            document.getElementById('submit-btn').disabled = false;
+            document.getElementById('submit-btn').textContent = 'Run Pass 0b';
+            document.getElementById('loading-spinner').style.display = 'none';
+        }}
+    </script>
+</head>
+<body>
+    <h1>Pass 0b: Segment Enrichment</h1>
+    <p>Experiment page. Runs Pass 0 (rule-based segmentation) then Pass 0b (LLM enrichment of each segment).
+       <a href="/" style="float: right; color: #007bff; text-decoration: none; font-size: 0.9em;">&larr; Main Analyzer</a>
+    </p>
+
+    <form id="pass0b-form" onsubmit="submitForm(event)">
+        <div class="form-group">
+            <label for="selected_category">Category:</label>
+            <select name="selected_category" id="selected_category" onchange="onCategoryChange(this)">
+                {category_select}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="selected_lesson">Lesson:</label>
+            <select name="selected_lesson" id="selected_lesson" onchange="onLessonSelect(this)">
+                <option value="">-- Select lesson --</option>
+            </select>
+        </div>
+
+        <div class="or-divider">— OR —</div>
+
+        <div class="form-group">
+            <label for="lesson_text">Paste Lesson Text:</label>
+            <textarea name="lesson_text" id="lesson_text" placeholder="Paste lesson text here..."></textarea>
+        </div>
+
+        <div style="margin: 10px 0;">
+            <label style="font-size: 0.9em;">
+                Provider:
+                <select name="provider" style="margin-left: 4px; padding: 2px 6px; width: auto;">
+                    <option value="">Default (Gemini)</option>
+                    <option value="gemini">Gemini</option>
+                    <option value="openai">OpenAI (GPT-5)</option>
+                    <option value="anthropic">Anthropic (Claude)</option>
+                </select>
+            </label>
+        </div>
+
+        <button type="submit" id="submit-btn">Run Pass 0b</button>
+    </form>
+
+    <div id="loading-spinner" class="loading-spinner">
+        <span class="spinner"></span>
+        <span>Running segment enrichment...</span>
+        <div id="loading-elapsed" style="font-size: 0.85em; color: #999; margin-top: 8px;"></div>
+    </div>
+
+    <div id="result" style="margin-top: 20px;"></div>
+    <div id="debug" style="margin-top: 20px;"></div>
+</body>
+</html>
+"""
+
+
+# --- Exploration Agent ---
+
+def load_explore_prompt(round_type: str) -> str:
+    """Load exploration prompt (init or round)."""
+    filename = "explore_init.md" if round_type == "init" else "explore_round.md"
+    path = DATA_DIR / filename
+    return path.read_text() if path.exists() else ""
+
+
+def load_explore_schema() -> dict:
+    """Load the exploration output schema."""
+    path = DATA_DIR / "explore.schema.json"
+    return json.loads(path.read_text()) if path.exists() else {}
+
+
+def explore_session_key(lesson_cache_key: str) -> str:
+    """Get the cache key for an exploration session."""
+    return f"{lesson_cache_key}:explore"
+
+
+def load_explore_session(session_key: str) -> dict:
+    """Load exploration session from database cache."""
+    if _db:
+        cached = _db.get_cache(session_key)
+        if cached:
+            return cached
+    return {"rounds": []}
+
+
+def save_explore_session(session_key: str, session: dict) -> None:
+    """Save exploration session to database cache."""
+    if _db:
+        _db.set_cache(session_key, session)
+
+
+def build_explore_context(analysis_result: dict) -> str:
+    """Format analysis result as text context for the exploration LLM prompt."""
+    parts = []
+    pass_a = analysis_result.get("pass_a_result", {})
+
+    # Lesson title
+    title = pass_a.get("lesson_title", "Untitled")
+    parts.append(f"# Lesson: {title}\n")
+
+    # Classifications
+    classifications = pass_a.get("classifications", {})
+    primary = pass_a.get("primary_framework", "Unknown")
+    secondary = pass_a.get("secondary_frameworks", [])
+    parts.append(f"Primary framework: {primary}")
+    if secondary:
+        parts.append(f"Secondary: {', '.join(secondary)}")
+    if classifications:
+        scores = ", ".join(f"{k}={v:.2f}" for k, v in classifications.items() if v > 0)
+        parts.append(f"Scores: {scores}")
+    parts.append("")
+
+    # Home position
+    home_pos = pass_a.get("home_position")
+    if home_pos:
+        parts.append(f"Home position: {home_pos}\n")
+
+    # Groups and steps
+    groups = pass_a.get("groups", [])
+    steps = pass_a.get("steps", [])
+    step_lookup = {s["step_number"]: s for s in steps if "step_number" in s}
+
+    if groups:
+        for g in groups:
+            gnum = g.get("group_number", "?")
+            label = g.get("label", "")
+            desc = g.get("description", "")
+            parts.append(f"## Group {gnum}: {label}")
+            if desc:
+                parts.append(f"  {desc}")
+            for sn in g.get("steps", []):
+                step = step_lookup.get(sn, {})
+                tags = ", ".join(step.get("tags", []))
+                instruction = step.get("instruction", "")
+                note = f" ({step['note']})" if step.get("note") else ""
+                home = " [HOME]" if step.get("is_home") else ""
+                parts.append(f"  Step {sn}: [{tags}] {instruction}{home}{note}")
+            parts.append("")
+    elif steps:
+        for step in steps:
+            sn = step.get("step_number", "?")
+            tags = ", ".join(step.get("tags", []))
+            instruction = step.get("instruction", "")
+            parts.append(f"  Step {sn}: [{tags}] {instruction}")
+        parts.append("")
+
+    # Rationale
+    if pass_a.get("rationale"):
+        parts.append(f"Rationale: {pass_a['rationale']}\n")
+
+    # Pass B analyses
+    vl_analyses = analysis_result.get("vl_analyses", {})
+    for framework, vl_data in vl_analyses.items():
+        if vl_data.get("status") != "complete":
+            continue
+        result = vl_data.get("result", {})
+        parts.append(f"## Pass B: {framework}")
+
+        # Somatic narrative
+        narrative = result.get("somatic_narrative")
+        if narrative:
+            parts.append(f"Somatic narrative: {narrative}")
+
+        # Negotiation framework
+        neg = result.get("negotiation_framework")
+        if neg:
+            parts.append(f"Negotiation framework: {json.dumps(neg)}")
+
+        # Table rows (if present)
+        table = result.get("table")
+        if table:
+            parts.append(f"Analysis table: {len(table)} rows")
+            for row in table[:5]:  # Just first few to keep context manageable
+                parts.append(f"  - {json.dumps(row)}")
+            if len(table) > 5:
+                parts.append(f"  ... and {len(table) - 5} more rows")
+        parts.append("")
+
+    return "\n".join(parts)
+
+
+def run_explore_round(
+    analysis_result: dict,
+    session: dict,
+    focus: dict | None = None,
+    hint: str | None = None,
+    provider_key: str | None = None,
+) -> dict:
+    """Run one exploration round.
+
+    Args:
+        analysis_result: The cached analysis (pass_a_result + vl_analyses)
+        session: Current exploration session (with previous rounds)
+        focus: For round N, the selected focus area {group, step, label}
+        hint: Optional user hint/question
+        provider_key: LLM provider override
+
+    Returns:
+        Round result dict with annotations, suggestions, meta_observation
+    """
+    import time
+
+    rounds = session.get("rounds", [])
+    round_num = len(rounds)
+
+    # Build context from analysis
+    context = build_explore_context(analysis_result)
+
+    if round_num == 0:
+        # Round 0: survey and suggest
+        prompt_template = load_explore_prompt("init")
+        prompt = prompt_template + "\n\n---\n\n## Analysis to explore:\n\n" + context
+    else:
+        # Round N: focused exploration
+        prompt_template = load_explore_prompt("round")
+
+        # Build focus description
+        focus_desc = ""
+        if focus:
+            focus_desc = f"Focus on Group {focus.get('group', '?')}"
+            if focus.get("step"):
+                focus_desc += f", Step {focus['step']}"
+            if focus.get("label"):
+                focus_desc += f" — {focus['label']}"
+        if hint:
+            focus_desc += f"\nUser hint: {hint}"
+
+        # Build previous annotations summary
+        prev_annotations = []
+        for r in rounds:
+            for ann in r.get("annotations", []):
+                prev_annotations.append(
+                    f"[Round {r['round']}] Group {ann.get('anchor_group', '?')}"
+                    f"{' Step ' + str(ann['anchor_step']) if ann.get('anchor_step') else ''}"
+                    f" ({ann.get('category', '?')}): {ann.get('text', '')}"
+                )
+
+        prev_section = ""
+        if prev_annotations:
+            prev_section = "\n\n## Previous annotations (do not repeat these):\n\n" + "\n".join(prev_annotations)
+
+        prompt = (
+            prompt_template
+            + "\n\n---\n\n## Analysis:\n\n" + context
+            + "\n\n---\n\n## Focus area:\n\n" + focus_desc
+            + prev_section
+        )
+
+    system = "You are an expert Feldenkrais practitioner exploring a lesson analysis. Be specific, insightful, and non-obvious."
+    schema = load_explore_schema()
+    llm = get_llm(provider_key)
+
+    t0 = time.time()
+    result = llm.complete_structured_json(
+        prompt=prompt,
+        schema=schema,
+        system=system,
+    )
+    elapsed = round(time.time() - t0, 1)
+
+    # Build round entry
+    round_entry = {
+        "round": round_num,
+        "focus": focus,
+        "hint": hint,
+        "annotations": result.get("annotations", []),
+        "suggestions": result.get("suggestions", []),
+        "meta_observation": result.get("meta_observation", ""),
+        "elapsed": elapsed,
+    }
+
+    return round_entry
+
+
+ANNOTATION_COLORS = {
+    "pedagogical_gap": ("#f0ad4e", "#fff3cd"),
+    "hidden_connection": ("#6f42c1", "#f3e8ff"),
+    "question": ("#007bff", "#e8f0fe"),
+    "reinterpretation": ("#28a745", "#e8f5e9"),
+    "missing_voice": ("#fd7e14", "#fff3e0"),
+    "contradiction": ("#dc3545", "#fde8e8"),
+}
+
+
+def render_explore_analysis_with_annotations(analysis_result: dict, session: dict) -> str:
+    """Render Pass A groups/steps with annotation badges overlaid."""
+    pass_a = analysis_result.get("pass_a_result", {})
+    groups = pass_a.get("groups", [])
+    steps = pass_a.get("steps", [])
+    step_lookup = {s["step_number"]: s for s in steps if "step_number" in s}
+
+    # Collect all annotations by group and step
+    annotations_by_group = {}
+    annotations_by_step = {}
+    for r in session.get("rounds", []):
+        for ann in r.get("annotations", []):
+            g = ann.get("anchor_group")
+            s = ann.get("anchor_step")
+            if g is not None:
+                annotations_by_group.setdefault(g, []).append(ann)
+            if s is not None:
+                annotations_by_step.setdefault(s, []).append(ann)
+
+    def _render_annotation_badges(annotations):
+        badges = []
+        for ann in annotations:
+            cat = ann.get("category", "unknown")
+            color, bg = ANNOTATION_COLORS.get(cat, ("#999", "#f0f0f0"))
+            conf = ann.get("confidence", 0)
+            text = ann.get("text", "")
+            # Escape HTML in tooltip
+            tooltip = text.replace('"', '&quot;').replace('<', '&lt;').replace('>', '&gt;')
+            badges.append(
+                f'<span style="display: inline-block; font-size: 0.75em; padding: 2px 8px; '
+                f'margin: 2px 3px; border-radius: 12px; background: {bg}; color: {color}; '
+                f'border: 1px solid {color}; cursor: help;" '
+                f'title="{tooltip}">{cat} ({conf:.1f})</span>'
+            )
+        return "".join(badges)
+
+    def _render_annotation_detail(annotations):
+        if not annotations:
+            return ""
+        parts = ['<div style="margin: 6px 0 6px 20px;">']
+        for ann in annotations:
+            cat = ann.get("category", "unknown")
+            color, bg = ANNOTATION_COLORS.get(cat, ("#999", "#f0f0f0"))
+            conf = ann.get("confidence", 0)
+            text = ann.get("text", "")
+            parts.append(
+                f'<div style="margin: 4px 0; padding: 8px 12px; background: {bg}; '
+                f'border-left: 3px solid {color}; border-radius: 4px; font-size: 0.9em;">'
+                f'<strong style="color: {color};">{cat}</strong> '
+                f'<span style="color: #999; font-size: 0.85em;">({conf:.1f})</span><br>'
+                f'{text}</div>'
+            )
+        parts.append('</div>')
+        return "\n".join(parts)
+
+    html = []
+
+    # Lesson title
+    title = pass_a.get("lesson_title")
+    if title:
+        html.append(f"<h3>{title}</h3>")
+
+    # Home position
+    home_pos = pass_a.get("home_position")
+    if home_pos:
+        html.append(f'<p style="padding: 6px 10px; background: #e8f4fd; border-left: 3px solid #17a2b8; border-radius: 4px; font-size: 0.9em;"><strong>Home:</strong> {home_pos}</p>')
+
+    if groups:
+        grouped_step_nums = set()
+        for g in groups:
+            grouped_step_nums.update(g.get("steps", []))
+
+        for g in groups:
+            gnum = g.get("group_number", 0)
+            label = g.get("label", f"Group {gnum}")
+            desc = g.get("description", "")
+            group_anns = annotations_by_group.get(gnum, [])
+            # Only group-level annotations (no specific step)
+            group_only_anns = [a for a in group_anns if not a.get("anchor_step")]
+
+            html.append(f'<details open style="margin-bottom: 10px;" id="group-{gnum}">')
+            html.append(
+                f'<summary style="cursor: pointer; font-weight: bold; padding: 6px 0;">'
+                f'{gnum}. {label}'
+                f'{_render_annotation_badges(group_only_anns)}'
+                f'</summary>'
+            )
+            if desc:
+                html.append(f'<p style="margin: 2px 0 6px 20px; color: #666; font-size: 0.9em;">{desc}</p>')
+
+            # Group-level annotation details
+            if group_only_anns:
+                html.append(_render_annotation_detail(group_only_anns))
+
+            html.append('<ol style="margin-left: 20px;">')
+            for sn in g.get("steps", []):
+                step = step_lookup.get(sn)
+                if not step:
+                    continue
+                tags = ", ".join(step.get("tags", []))
+                instruction = step.get("instruction", "")
+                home = ' <span style="font-size: 0.8em; padding: 1px 6px; background: #e8f4fd; color: #17a2b8; border-radius: 3px;">home</span>' if step.get("is_home") else ""
+                step_anns = annotations_by_step.get(sn, [])
+
+                html.append(f'<li id="step-{sn}"><strong>[{tags}]</strong> {instruction}{home}')
+                if step_anns:
+                    html.append(_render_annotation_badges(step_anns))
+                    html.append(_render_annotation_detail(step_anns))
+                html.append('</li>')
+            html.append('</ol>')
+            html.append('</details>')
+    elif steps:
+        html.append('<ol>')
+        for step in steps:
+            sn = step.get("step_number", 0)
+            tags = ", ".join(step.get("tags", []))
+            instruction = step.get("instruction", "")
+            step_anns = annotations_by_step.get(sn, [])
+            html.append(f'<li><strong>[{tags}]</strong> {instruction}')
+            if step_anns:
+                html.append(_render_annotation_badges(step_anns))
+                html.append(_render_annotation_detail(step_anns))
+            html.append('</li>')
+        html.append('</ol>')
+
+    return "\n".join(html)
+
+
+def render_explore_panel(session: dict) -> str:
+    """Render the exploration panel (suggestions, round history)."""
+    rounds = session.get("rounds", [])
+    html = []
+
+    if not rounds:
+        html.append('<p style="color: #666;">Load a lesson to begin exploration.</p>')
+        return "\n".join(html)
+
+    latest = rounds[-1]
+
+    # Meta observation from latest round
+    meta = latest.get("meta_observation", "")
+    if meta:
+        html.append(f'<div style="padding: 10px; background: #f8f9fa; border-radius: 6px; margin-bottom: 12px; font-style: italic; color: #555;">{meta}</div>')
+
+    # Current suggestions
+    suggestions = latest.get("suggestions", [])
+    if suggestions:
+        html.append('<h4 style="margin-bottom: 8px;">Suggested explorations:</h4>')
+        for i, s in enumerate(suggestions):
+            group = s.get("group", "?")
+            step = s.get("step")
+            label = s.get("label", "")
+            why = s.get("why", "")
+            step_str = f", Step {step}" if step else ""
+            html.append(
+                f'<div class="suggestion-card" data-group="{group}" data-step="{step or ""}" '
+                f'data-label="{label}" '
+                f'onclick="selectSuggestion(this)" '
+                f'style="padding: 10px; margin-bottom: 8px; border: 1px solid #ddd; border-radius: 6px; '
+                f'cursor: pointer; transition: border-color 0.2s;"'
+                f'onmouseover="this.style.borderColor=\'#007bff\'" '
+                f'onmouseout="if(!this.classList.contains(\'selected\'))this.style.borderColor=\'#ddd\'">'
+                f'<strong>Group {group}{step_str}:</strong> {label}'
+                f'<div style="font-size: 0.85em; color: #666; margin-top: 4px;">{why}</div>'
+                f'</div>'
+            )
+
+    # Round history
+    if len(rounds) > 1 or (len(rounds) == 1 and rounds[0].get("annotations")):
+        html.append('<h4 style="margin-top: 16px; margin-bottom: 8px;">Round history:</h4>')
+        for r in reversed(rounds):
+            rnum = r.get("round", 0)
+            focus = r.get("focus")
+            annotations = r.get("annotations", [])
+            elapsed = r.get("elapsed", "?")
+
+            focus_str = "Survey" if focus is None else f"Group {focus.get('group', '?')}"
+            if focus and focus.get("label"):
+                focus_str += f" — {focus['label']}"
+
+            html.append(f'<details style="margin-bottom: 6px;">')
+            html.append(
+                f'<summary style="cursor: pointer; font-size: 0.9em; color: #555;">'
+                f'Round {rnum}: {focus_str} '
+                f'<span style="color: #999;">({len(annotations)} annotations, {elapsed}s)</span>'
+                f'</summary>'
+            )
+            if r.get("meta_observation"):
+                html.append(f'<p style="font-style: italic; color: #666; font-size: 0.85em; margin: 4px 0 4px 16px;">{r["meta_observation"]}</p>')
+            for ann in annotations:
+                cat = ann.get("category", "?")
+                color, bg = ANNOTATION_COLORS.get(cat, ("#999", "#f0f0f0"))
+                g = ann.get("anchor_group", "?")
+                s = ann.get("anchor_step")
+                anchor = f"G{g}" + (f"/S{s}" if s else "")
+                html.append(
+                    f'<div style="margin: 3px 0 3px 16px; padding: 6px 10px; background: {bg}; '
+                    f'border-left: 3px solid {color}; border-radius: 4px; font-size: 0.85em;">'
+                    f'<strong style="color: {color};">[{anchor}] {cat}</strong> '
+                    f'({ann.get("confidence", 0):.1f})<br>{ann.get("text", "")}</div>'
+                )
+            html.append('</details>')
+
+    return "\n".join(html)
+
+
+def build_explore_html() -> str:
+    """Build the /explore page HTML."""
+    categories, display_names = get_available_lessons()
+
+    category_options = ['<option value="">-- Select category --</option>']
+    for cat_name in categories.keys():
+        cat_display = display_names.get(cat_name, cat_name.replace("_", " ").title())
+        category_options.append(f'<option value="{cat_name}">{cat_display}</option>')
+    category_select = "\n".join(category_options)
+
+    lessons_json = json.dumps({
+        cat: [(f, d) for f, d in lessons]
+        for cat, lessons in categories.items()
+    })
+
+    return f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Explore - Feldenkrais Lesson Analysis</title>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            line-height: 1.6;
+        }}
+        h1 {{ color: #333; margin-bottom: 5px; }}
+        .top-bar {{
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }}
+        .top-bar select, .top-bar button {{
+            padding: 8px 12px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }}
+        .top-bar button {{
+            background: #007bff;
+            color: white;
+            cursor: pointer;
+            border: none;
+        }}
+        .top-bar button:hover {{ background: #0056b3; }}
+        .top-bar button:disabled {{ background: #ccc; cursor: not-allowed; }}
+        .columns {{
+            display: flex;
+            gap: 20px;
+        }}
+        .col-left {{
+            flex: 6;
+            min-width: 0;
+        }}
+        .col-right {{
+            flex: 4;
+            min-width: 300px;
+        }}
+        .panel {{
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            position: sticky;
+            top: 20px;
+            max-height: calc(100vh - 60px);
+            overflow-y: auto;
+        }}
+        .hint-area {{
+            margin-top: 12px;
+        }}
+        .hint-area textarea {{
+            width: 100%;
+            height: 60px;
+            font-size: 13px;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            resize: vertical;
+        }}
+        .explore-btn {{
+            display: block;
+            width: 100%;
+            padding: 10px;
+            margin-top: 8px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 15px;
+            cursor: pointer;
+        }}
+        .explore-btn:hover {{ background: #218838; }}
+        .explore-btn:disabled {{ background: #ccc; cursor: not-allowed; }}
+        .suggestion-card.selected {{
+            border-color: #007bff !important;
+            background: #e8f0fe;
+        }}
+        .loading {{
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }}
+        .loading .spinner {{
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #ddd;
+            border-top-color: #007bff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            vertical-align: middle;
+            margin-right: 8px;
+        }}
+        @keyframes spin {{
+            to {{ transform: rotate(360deg); }}
+        }}
+        .error {{ color: red; padding: 10px; background: #fee; border-radius: 4px; }}
+    </style>
+    <script>
+        const lessonsData = {lessons_json};
+        let sessionKey = null;
+        let selectedFocus = null;
+
+        function onCategoryChange(select) {{
+            const category = select.value;
+            const lessonSelect = document.getElementById('selected_lesson');
+            lessonSelect.innerHTML = '<option value="">-- Select lesson --</option>';
+            if (category && lessonsData[category]) {{
+                lessonsData[category].forEach(([filename, display]) => {{
+                    const option = document.createElement('option');
+                    option.value = filename;
+                    option.textContent = display;
+                    lessonSelect.appendChild(option);
+                }});
+            }}
+        }}
+
+        function selectSuggestion(card) {{
+            document.querySelectorAll('.suggestion-card').forEach(c => {{
+                c.classList.remove('selected');
+                c.style.borderColor = '#ddd';
+            }});
+            card.classList.add('selected');
+            card.style.borderColor = '#007bff';
+            selectedFocus = {{
+                group: parseInt(card.dataset.group),
+                step: card.dataset.step ? parseInt(card.dataset.step) : null,
+                label: card.dataset.label
+            }};
+        }}
+
+        async function loadLesson() {{
+            const category = document.getElementById('selected_category').value;
+            const lesson = document.getElementById('selected_lesson').value;
+            if (!category || !lesson) return;
+
+            const loadBtn = document.getElementById('load-btn');
+            const analysisDiv = document.getElementById('analysis');
+            const panelDiv = document.getElementById('panel');
+
+            loadBtn.disabled = true;
+            loadBtn.textContent = 'Loading...';
+            analysisDiv.innerHTML = '<div class="loading"><span class="spinner"></span> Loading analysis and running initial survey...</div>';
+            panelDiv.innerHTML = '';
+
+            try {{
+                const formData = new FormData();
+                formData.append('selected_category', category);
+                formData.append('selected_lesson', lesson);
+
+                const response = await fetch('/api/explore/load', {{
+                    method: 'POST',
+                    body: formData
+                }});
+                const data = await response.json();
+
+                if (data.error) {{
+                    analysisDiv.innerHTML = '<div class="error">' + data.error + '</div>';
+                    loadBtn.disabled = false;
+                    loadBtn.textContent = 'Load & Explore';
+                    return;
+                }}
+
+                sessionKey = data.session_key;
+                analysisDiv.innerHTML = data.analysis_html || '';
+                panelDiv.innerHTML = data.panel_html || '';
+            }} catch (error) {{
+                analysisDiv.innerHTML = '<div class="error">Error: ' + error.message + '</div>';
+            }}
+            loadBtn.disabled = false;
+            loadBtn.textContent = 'Load & Explore';
+        }}
+
+        async function runRound() {{
+            if (!sessionKey) return;
+
+            const hint = document.getElementById('hint-text').value.trim();
+            const exploreBtn = document.getElementById('explore-btn');
+            const panelDiv = document.getElementById('panel');
+            const analysisDiv = document.getElementById('analysis');
+
+            if (!selectedFocus && !hint) {{
+                alert('Select a suggestion or enter a hint to explore.');
+                return;
+            }}
+
+            exploreBtn.disabled = true;
+            exploreBtn.textContent = 'Exploring...';
+
+            // Add loading indicator
+            const loadingDiv = document.createElement('div');
+            loadingDiv.className = 'loading';
+            loadingDiv.id = 'round-loading';
+            loadingDiv.innerHTML = '<span class="spinner"></span> Running exploration round...';
+            panelDiv.prepend(loadingDiv);
+
+            try {{
+                const formData = new FormData();
+                formData.append('session_key', sessionKey);
+                if (selectedFocus) {{
+                    formData.append('focus_group', selectedFocus.group);
+                    if (selectedFocus.step) formData.append('focus_step', selectedFocus.step);
+                    if (selectedFocus.label) formData.append('focus_label', selectedFocus.label);
+                }}
+                if (hint) formData.append('hint', hint);
+
+                const response = await fetch('/api/explore/round', {{
+                    method: 'POST',
+                    body: formData
+                }});
+                const data = await response.json();
+
+                const loading = document.getElementById('round-loading');
+                if (loading) loading.remove();
+
+                if (data.error) {{
+                    panelDiv.innerHTML = '<div class="error">' + data.error + '</div>' + panelDiv.innerHTML;
+                    exploreBtn.disabled = false;
+                    exploreBtn.textContent = 'Explore Selected Area';
+                    return;
+                }}
+
+                // Update both panels
+                analysisDiv.innerHTML = data.analysis_html || analysisDiv.innerHTML;
+                panelDiv.innerHTML = data.panel_html || panelDiv.innerHTML;
+                selectedFocus = null;
+                document.getElementById('hint-text').value = '';
+            }} catch (error) {{
+                const loading = document.getElementById('round-loading');
+                if (loading) loading.remove();
+                panelDiv.innerHTML = '<div class="error">Error: ' + error.message + '</div>' + panelDiv.innerHTML;
+            }}
+            exploreBtn.disabled = false;
+            exploreBtn.textContent = 'Explore Selected Area';
+        }}
+    </script>
+</head>
+<body>
+    <h1>Exploration Agent</h1>
+    <p style="color: #666; margin-top: 0;">
+        Iteratively explore a lesson analysis. The agent suggests areas of interest; you choose where to dig deeper.
+        <a href="/" style="float: right; color: #007bff; text-decoration: none; font-size: 0.9em;">&larr; Main Analyzer</a>
+    </p>
+
+    <div class="top-bar">
+        <select id="selected_category" onchange="onCategoryChange(this)">
+            {category_select}
+        </select>
+        <select id="selected_lesson">
+            <option value="">-- Select lesson --</option>
+        </select>
+        <button id="load-btn" onclick="loadLesson()">Load &amp; Explore</button>
+    </div>
+
+    <div class="columns">
+        <div class="col-left" id="analysis">
+            <p style="color: #999;">Select a lesson and click "Load & Explore" to begin.</p>
+        </div>
+        <div class="col-right">
+            <div class="panel" id="panel">
+                <p style="color: #999;">Exploration panel will appear here.</p>
+            </div>
+            <div class="hint-area">
+                <textarea id="hint-text" placeholder="Optional: add your own question or direction..."></textarea>
+                <button class="explore-btn" id="explore-btn" onclick="runRound()">Explore Selected Area</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
+
+@app.get("/explore", response_class=HTMLResponse)
+async def explore_page():
+    """Exploration agent page."""
+    return build_explore_html()
+
+
+@app.post("/api/explore/load")
+async def api_explore_load(
+    selected_category: str = Form(""),
+    selected_lesson: str = Form(""),
+):
+    """Load lesson analysis and run Round 0 (survey + suggest)."""
+    text = load_lesson(selected_category, selected_lesson).strip()
+    if not text:
+        return JSONResponse({"error": "No lesson text found."}, status_code=400)
+
+    try:
+        # Load or run the analysis
+        analysis_result = await asyncio.wait_for(
+            asyncio.to_thread(_run_analysis, text),
+            timeout=ANALYSIS_TIMEOUT,
+        )
+
+        # Get cache key for the analysis (same as _run_analysis uses)
+        lesson_cache_key = get_cache_key(text)
+        session_key = explore_session_key(lesson_cache_key)
+
+        # Load existing session or start fresh
+        session = load_explore_session(session_key)
+
+        if not session.get("rounds"):
+            # Run Round 0
+            round_result = await asyncio.wait_for(
+                asyncio.to_thread(run_explore_round, analysis_result, session),
+                timeout=ANALYSIS_TIMEOUT,
+            )
+            session["rounds"].append(round_result)
+            session["lesson_cache_key"] = lesson_cache_key
+            save_explore_session(session_key, session)
+
+        analysis_html = render_explore_analysis_with_annotations(analysis_result, session)
+        panel_html = render_explore_panel(session)
+
+        return JSONResponse({
+            "session_key": session_key,
+            "analysis_html": analysis_html,
+            "panel_html": panel_html,
+            "round_count": len(session["rounds"]),
+        })
+
+    except asyncio.TimeoutError:
+        return JSONResponse({"error": "Analysis timed out."}, status_code=504)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/explore/round")
+async def api_explore_round(
+    session_key: str = Form(""),
+    focus_group: str = Form(""),
+    focus_step: str = Form(""),
+    focus_label: str = Form(""),
+    hint: str = Form(""),
+):
+    """Run one exploration round with selected focus."""
+    if not session_key:
+        return JSONResponse({"error": "No session key."}, status_code=400)
+
+    session = load_explore_session(session_key)
+    if not session.get("rounds"):
+        return JSONResponse({"error": "Session not initialized. Load a lesson first."}, status_code=400)
+
+    # Reconstruct analysis from cache
+    lesson_cache_key = session.get("lesson_cache_key", session_key.replace(":explore", ""))
+    cached_analysis = load_cached_analysis(lesson_cache_key)
+    if not cached_analysis:
+        return JSONResponse({"error": "Cached analysis not found. Re-load the lesson."}, status_code=400)
+
+    # Build focus dict
+    focus = None
+    if focus_group:
+        focus = {"group": int(focus_group)}
+        if focus_step:
+            focus["step"] = int(focus_step)
+        if focus_label:
+            focus["label"] = focus_label
+
+    hint_text = hint.strip() if hint else None
+
+    try:
+        round_result = await asyncio.wait_for(
+            asyncio.to_thread(run_explore_round, cached_analysis, session, focus, hint_text),
+            timeout=ANALYSIS_TIMEOUT,
+        )
+        session["rounds"].append(round_result)
+        save_explore_session(session_key, session)
+
+        analysis_html = render_explore_analysis_with_annotations(cached_analysis, session)
+        panel_html = render_explore_panel(session)
+
+        return JSONResponse({
+            "analysis_html": analysis_html,
+            "panel_html": panel_html,
+            "round_count": len(session["rounds"]),
+            "new_annotations": len(round_result.get("annotations", [])),
+            "elapsed": round_result.get("elapsed"),
+        })
+
+    except asyncio.TimeoutError:
+        return JSONResponse({"error": "Exploration round timed out."}, status_code=504)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+# --- Lesson Booklet ---
+
+VL_BOOKLET_INTROS = {
+    "VL-1": {
+        "name": "The Vertical Self",
+        "subtitle": "The Physics Lens",
+        "lens": "How force travels through your skeleton from the floor to your crown. When you're truly vertical, the floor pushes up through your bones all the way to your head — you don't have to hold yourself up.",
+        "person_inside": "The Vertical One",
+        "person_description": "The inner being who senses your relationship with gravity. They feel weight dropping through bone, they know when the column is stacked and when it's collapsing. Every movement is received as: <em>What just happened to my column? Is force transmitting cleanly through my bones, or is something buckling?</em>",
+        "shadow": "The Muscular Hoister",
+        "shadow_description": "The one who can't trust the skeleton. They grip the lower back, clench the waist, pull the head up with the neck. They believe that without their effort, everything would collapse. The lesson shows that bones can do what muscles have been forcing.",
+    },
+    "VL-2": {
+        "name": "Homunculus Mapping",
+        "subtitle": "The Micro-Differentiation Lens",
+        "lens": "Your brain has a 'map' of your body — some parts are highly detailed, others are blurry. This lens sees how the lesson lights up the dark spots on that map, turning vague regions into articulated joints.",
+        "person_inside": "The Cartographer",
+        "person_description": "The inner being who holds the cortical self-image. They see the body as a territory with bright regions and dark regions. Every movement is received as: <em>What just became visible? What pixel lit up that was dark before? Where did I discover a joint I didn't know I had?</em>",
+        "shadow": "The Blunt Mover",
+        "shadow_description": "The one who moves in clumps and blocks. They don't distinguish hip from waist, shoulder from arm, one vertebra from another. They move 'the leg' when only the ankle was asked. The lesson illuminates the map until the Blunt Mover dissolves into articulation.",
+    },
+    "VL-3": {
+        "name": "Steering & Tone",
+        "subtitle": "The Autonomic Lens",
+        "lens": "Your eyes, jaw, and neck act like a volume knob for your entire nervous system's tension. If you stare hard or clench your jaw, everything tenses. This lens sees how the lesson teaches you to regulate yourself from these control points.",
+        "person_inside": "The Sentinel",
+        "person_description": "The inner being who lives behind the eyes, in the jaw and tongue. They govern the whole system's tone through these ancient regulatory instruments. Every movement is received as: <em>Is it safe? Can I soften my gaze? Can I unclench? What happens to the rest of me when I let go of this vigilance?</em>",
+        "shadow": "The Watchman",
+        "shadow_description": "The one who stares with hard eyes, who clenches the jaw as if biting down on the world, who braces the neck against threat. They believe constant vigilance is required. The lesson shows that softening the eyes and jaw doesn't mean losing control — it means finding a deeper regulation.",
+    },
+    "VL-4": {
+        "name": "Proximal-Distal",
+        "subtitle": "The Reach & Power Lens",
+        "lens": "Most people move their arms and legs like separate machines. But your trunk is an engine — a real reach or kick starts in your spine and pelvis and flows outward. This lens sees how the lesson reconnects your limbs to their source of power.",
+        "person_inside": "The Connector",
+        "person_description": "The inner being who feels the chain from core to fingertip, from pelvis to toe. They sense whether power flows outward from center or whether the limbs are working alone. Every movement is received as: <em>Is this coming from my center? Can I feel the path from my spine through my shoulder to my hand? Or is this limb orphaned?</em>",
+        "shadow": "The Isolated Lifter",
+        "shadow_description": "The one who hoists the arm from the shoulder alone, who kicks the leg without engaging the pelvis. They work each limb as a separate machine, disconnected from the engine of the trunk. The lesson restores the pathways until every reach is a whole-body event.",
+    },
+    "VL-5": {
+        "name": "Folding-Unfolding",
+        "subtitle": "The Flexion-Extension Lens",
+        "lens": "Many people can curl forward but feel stuck extending backward, or vice versa. This lens sees how the lesson teaches your spine to bend equally in both directions — to fold and unfold without bracing or protecting.",
+        "person_inside": "The Geometrist",
+        "person_description": "The inner being who senses the body's capacity to round and arch. They live in the geometry of flexion and extension, feeling the spine as a curve that can go either way. Every movement is received as: <em>Which way is the curve going? Can I fold without bracing? Can I unfold without strain?</em>",
+        "shadow": "The Bracer",
+        "shadow_description": "The one who holds the belly tight as armor, who treats the front body as something that must be protected. They reflexively crunch at any hint of vulnerability. The lesson shows that neither direction is dangerous — the spine can curve freely both ways.",
+    },
+}
+
+SPIFFER_TRANSLATIONS = {
+    "S": "A moment of sensing — turning attention inward to feel what's actually happening.",
+    "P": "A pause to let things settle. Integration happens in the quiet moments.",
+    "I": "A mental image or metaphor to guide the movement from the inside.",
+    "F": "A functional goal — connecting this movement to something you actually do in life.",
+    "E": "An invitation to reduce effort, to find the movement with less force.",
+    "R": "Noticing how parts of your body are connected — how one movement ripples through.",
+    "Q": "The teacher poses a question. Not something to answer, but something to feel into.",
+}
+
+
+def map_groups_to_table_rows(groups: list, table: dict, pass_a_steps: dict) -> dict:
+    """Map each group to its matching analytical table row(s).
+
+    Returns dict of group_number -> list of matching table rows.
+    """
+    rows = table.get("rows", [])
+    mapping = {}
+
+    for g in groups:
+        group_steps = set(g.get("steps", []))
+        group_num = g.get("group_number")
+        matched = []
+        for row in rows:
+            seq_val = row.get("column1", "")
+            row_steps = _parse_seq_to_steps(str(seq_val), pass_a_steps)
+            row_step_nums = {s.get("step_number") for s in row_steps}
+            if row_step_nums & group_steps:
+                matched.append(row)
+        mapping[group_num] = matched
+
+    return mapping
+
+
+def _get_negotiation_state(row: dict, column_headers: dict) -> str:
+    """Extract the negotiation state from a table row."""
+    for col, header in column_headers.items():
+        if header and ("negotiation" in header.lower() or "state" in header.lower()):
+            return row.get(col, "")
+    return ""
+
+
+def _get_column_by_keyword(row: dict, column_headers: dict, keyword: str) -> str:
+    """Get a column value by keyword match in the header."""
+    for col, header in column_headers.items():
+        if header and keyword.lower() in header.lower():
+            return row.get(col, "")
+    return ""
+
+
+def render_booklet_cover(title: str, framework_id: str) -> str:
+    """Render the booklet cover page."""
+    intro = VL_BOOKLET_INTROS.get(framework_id, {})
+    framework_name = intro.get("name", framework_id)
+    subtitle = intro.get("subtitle", "")
+
+    return f"""
+    <div class="booklet-cover">
+        <div class="cover-content">
+            <h1 class="cover-title">{title}</h1>
+            <p class="cover-subtitle">A Companion to This Lesson</p>
+            <div class="cover-lens">
+                Explored through the lens of<br>
+                <strong><em>{framework_name}</em></strong>
+                <span class="cover-lens-subtitle">{subtitle}</span>
+            </div>
+        </div>
+    </div>
+    """
+
+
+def render_booklet_intro() -> str:
+    """Render the 'What This Booklet Is' section."""
+    return """
+    <section class="booklet-section">
+        <h2>What This Booklet Is</h2>
+        <p>
+            You've just done this lesson — on the floor, in a class, or from a recording.
+            This booklet is your companion afterward. It won't teach you the movements
+            (you've already done them). Instead, it helps you understand what was happening
+            underneath: why the teacher chose those movements in that order, what your
+            nervous system was sorting out, and what to notice next time.
+        </p>
+        <p>
+            Each Feldenkrais lesson is a carefully designed puzzle for your nervous system.
+            The movements aren't exercises — they're questions. This booklet helps you
+            see what questions were being asked, and what your body was discovering.
+        </p>
+    </section>
+    """
+
+
+def render_booklet_home(home_position: str) -> str:
+    """Render the 'Where You Started' section."""
+    return f"""
+    <section class="booklet-section">
+        <h2>Where You Started</h2>
+        <div class="home-position">
+            <p>{home_position}</p>
+        </div>
+        <p>
+            This starting position isn't arbitrary. It's chosen to give your nervous system
+            a baseline — a clear sense of how things are <em>before</em> the lesson begins.
+            You'll return to it at the end, and the contrast is often striking.
+        </p>
+    </section>
+    """
+
+
+def render_booklet_inquiry(somatic_narrative: dict) -> str:
+    """Render 'The Question This Lesson Asks' section."""
+    primary = somatic_narrative.get("primary_inquiry", "")
+    washing = somatic_narrative.get("washing_gradient", "")
+
+    html = ['<section class="booklet-section">']
+    html.append("<h2>The Question This Lesson Asks</h2>")
+    html.append("<p>Every Feldenkrais lesson poses a question to your nervous system. Not a question you answer with words — a question you answer with movement, sensation, and gradually shifting organization.</p>")
+
+    if primary:
+        html.append(f'<blockquote class="primary-inquiry">{primary}</blockquote>')
+
+    if washing:
+        html.append(f"<p>{washing}</p>")
+
+    html.append("</section>")
+    return "\n".join(html)
+
+
+def render_booklet_concepts() -> str:
+    """Render the 'How Feldenkrais Lessons Work' section."""
+    return """
+    <section class="booklet-section">
+        <h2>How Feldenkrais Lessons Work</h2>
+        <p>
+            To make sense of the journey through this lesson, it helps to understand
+            three ideas. They'll come up throughout the booklet.
+        </p>
+
+        <h3>The Striver</h3>
+        <p>
+            When you first try a movement, there's a part of you that grips, pushes, and
+            forces. This is your voluntary muscular effort — we'll call it the <strong>Striver</strong>.
+            It means well, but it's noisy. It uses ten muscles when two would do. It holds
+            your breath. It treats every movement as a task to be conquered.
+        </p>
+
+        <h3>The Foundation</h3>
+        <p>
+            Underneath the Striver, your skeleton and reflexes already know how to support you.
+            This deeper system — the <strong>Foundation</strong> — is quiet, efficient, and reflexive.
+            It responds to gravity, finds balance, and transmits force through bone rather
+            than muscle. The lesson's job is to let the Foundation emerge.
+        </p>
+
+        <h3>The Washing</h3>
+        <p>
+            The lesson doesn't fight the Striver. It <em>washes</em> it away — through
+            repetition, variation, and gentle complexity. Like water over stone, the
+            unnecessary effort gradually dissolves. You don't try to relax. You simply
+            repeat and vary until the Striver runs out of strategies and the Foundation
+            is all that remains.
+        </p>
+
+        <h3>Three States</h3>
+        <p>
+            As you move through a lesson, you typically pass through three states:
+        </p>
+        <div class="three-states">
+            <div class="state state-domination">
+                <strong>Domination</strong>
+                <span>The Striver is in charge. You're "doing" the movement with voluntary effort.</span>
+            </div>
+            <div class="state state-negotiation">
+                <strong>Negotiation</strong>
+                <span>An active exchange. The Striver is losing its grip. You're exploring, confused in a good way.</span>
+            </div>
+            <div class="state state-integration">
+                <strong>Integration</strong>
+                <span>The Foundation takes over. Movement becomes easy, quiet, almost involuntary.</span>
+            </div>
+        </div>
+    </section>
+    """
+
+
+def render_booklet_journey(groups: list, steps: list, vl_analysis: dict, pass_a_steps: dict) -> str:
+    """Render the main 'Journey' section — group by group walkthrough."""
+    html = ['<section class="booklet-section booklet-journey">']
+    html.append("<h2>The Journey</h2>")
+    html.append("<p>Here's what happened in this lesson, section by section. For each part, you'll see what you did and what was happening underneath.</p>")
+
+    # Get analytical table data from the primary VL analysis
+    result = vl_analysis.get("result", {})
+    table = result.get("analytical_table", {})
+    column_headers = table.get("column_headers", {})
+
+    group_to_rows = map_groups_to_table_rows(groups, table, pass_a_steps)
+
+    step_lookup = {s["step_number"]: s for s in steps if "step_number" in s}
+
+    state_colors = {
+        "domination": "#c0392b",
+        "negotiation": "#e67e22",
+        "integration": "#27ae60",
+    }
+
+    for g in groups:
+        group_num = g.get("group_number", "?")
+        group_label = g.get("label", f"Group {group_num}")
+        group_desc = g.get("description", "")
+        group_step_nums = g.get("steps", [])
+
+        html.append(f'<div class="journey-group">')
+        html.append(f'<h3>Part {group_num}: {group_label}</h3>')
+        if group_desc:
+            html.append(f'<p class="group-description">{group_desc}</p>')
+
+        # What You Did — steps list
+        html.append('<div class="what-you-did">')
+        html.append('<h4>What You Did</h4>')
+        html.append('<ol class="step-list">')
+        for sn in group_step_nums:
+            step = step_lookup.get(sn)
+            if step:
+                instruction = step.get("instruction", "")
+                home_badge = ' <span class="home-badge">return to start</span>' if step.get("is_home") else ""
+                html.append(f"<li>{instruction}{home_badge}</li>")
+        html.append("</ol>")
+
+        # SPIFFER-Q translation — show prominent tags for this group
+        all_tags = []
+        for sn in group_step_nums:
+            step = step_lookup.get(sn)
+            if step:
+                all_tags.extend(step.get("tags", []))
+        # Count tag frequency, show the most common
+        if all_tags:
+            from collections import Counter
+            tag_counts = Counter(all_tags)
+            prominent = [tag for tag, count in tag_counts.most_common(3) if count > 1 or len(group_step_nums) <= 3]
+            if prominent:
+                html.append('<div class="spiffer-hints">')
+                for tag in prominent:
+                    if tag in SPIFFER_TRANSLATIONS:
+                        html.append(f'<p class="spiffer-hint">{SPIFFER_TRANSLATIONS[tag]}</p>')
+                html.append("</div>")
+
+        html.append("</div>")  # end what-you-did
+
+        # What Was Happening — from analytical table
+        matched_rows = group_to_rows.get(group_num, [])
+        if matched_rows:
+            html.append('<div class="what-was-happening">')
+            html.append('<h4>What Was Happening</h4>')
+
+            for row in matched_rows:
+                neg_state = _get_negotiation_state(row, column_headers)
+                question = _get_column_by_keyword(row, column_headers, "question")
+                goal = _get_column_by_keyword(row, column_headers, "goal") or _get_column_by_keyword(row, column_headers, "functional")
+                vl_voice = row.get("vl_voice", "")
+                striver_shadow = row.get("striver_shadow", "")
+
+                if neg_state:
+                    color = state_colors.get(neg_state.lower(), "#7f8c8d")
+                    html.append(f'<span class="neg-badge" style="background: {color};">{neg_state}</span>')
+
+                if question:
+                    html.append(f'<p class="table-question"><strong>The question being posed:</strong> {question}</p>')
+
+                if goal:
+                    html.append(f'<p class="table-goal"><strong>The functional goal:</strong> {goal}</p>')
+
+                if vl_voice:
+                    html.append(f"""
+                    <div class="voice-box person-inside">
+                        <div class="voice-label">The Person Inside</div>
+                        <p>{vl_voice}</p>
+                    </div>
+                    """)
+
+                if striver_shadow:
+                    html.append(f"""
+                    <div class="voice-box striver">
+                        <div class="voice-label">The Striver</div>
+                        <p>{striver_shadow}</p>
+                    </div>
+                    """)
+
+            html.append("</div>")  # end what-was-happening
+
+        html.append("</div>")  # end journey-group
+
+    html.append("</section>")
+    return "\n".join(html)
+
+
+def render_booklet_arc(somatic_narrative: dict, negotiation: dict, groups: list, table: dict, column_headers: dict, pass_a_steps: dict) -> str:
+    """Render 'The Arc' section — overall trajectory."""
+    html = ['<section class="booklet-section">']
+    html.append("<h2>The Arc</h2>")
+    html.append("<p>Every Feldenkrais lesson has a trajectory — from effort to ease, from noise to quiet. Here's how this lesson made that journey.</p>")
+
+    # Washing gradient
+    washing = somatic_narrative.get("washing_gradient", "")
+    if washing:
+        html.append('<h3>How the Lesson Washed Away Effort</h3>')
+        html.append(f"<p>{washing}</p>")
+
+    # Threshold of quiet
+    threshold = somatic_narrative.get("threshold_of_quiet", "")
+    if threshold:
+        html.append('<h3>The Threshold of Quiet</h3>')
+        html.append(f"<p>{threshold}</p>")
+
+    # Visual timeline of negotiation states
+    rows = table.get("rows", [])
+    if rows and groups:
+        html.append('<h3>The Negotiation Arc</h3>')
+        html.append('<div class="arc-timeline">')
+
+        state_colors = {
+            "domination": "#c0392b",
+            "negotiation": "#e67e22",
+            "integration": "#27ae60",
+        }
+
+        group_to_rows = map_groups_to_table_rows(groups, table, pass_a_steps)
+
+        for g in groups:
+            gn = g.get("group_number", "?")
+            label = g.get("label", "")
+            matched = group_to_rows.get(gn, [])
+            # Get the negotiation state from the first matched row
+            state = ""
+            if matched:
+                state = _get_negotiation_state(matched[0], column_headers)
+            color = state_colors.get(state.lower(), "#bdc3c7") if state else "#bdc3c7"
+
+            html.append(f"""
+            <div class="arc-item">
+                <div class="arc-dot" style="background: {color};"></div>
+                <div class="arc-label">{gn}. {label}</div>
+                <div class="arc-state" style="color: {color};">{state}</div>
+            </div>
+            """)
+
+        html.append("</div>")  # end arc-timeline
+
+    # Striver and Foundation observations
+    if negotiation:
+        striver_obs = negotiation.get("striver_observations", [])
+        foundation_obs = negotiation.get("foundation_observations", [])
+
+        if striver_obs:
+            html.append('<h3>What the Striver Was Doing</h3>')
+            html.append("<ul>")
+            for obs in striver_obs:
+                html.append(f"<li>{obs}</li>")
+            html.append("</ul>")
+
+        if foundation_obs:
+            html.append('<h3>What the Foundation Discovered</h3>')
+            html.append("<ul>")
+            for obs in foundation_obs:
+                html.append(f"<li>{obs}</li>")
+            html.append("</ul>")
+
+    html.append("</section>")
+    return "\n".join(html)
+
+
+def render_booklet_lens(framework_id: str, vl_analysis: dict) -> str:
+    """Render 'The Lens' section — framework introduction."""
+    intro = VL_BOOKLET_INTROS.get(framework_id, {})
+    if not intro:
+        return ""
+
+    html = ['<section class="booklet-section">']
+    html.append(f'<h2>The Lens: {intro["name"]}</h2>')
+    html.append(f'<p class="lens-description">{intro["lens"]}</p>')
+
+    # The Person Inside
+    html.append(f'<h3>{intro["person_inside"]}</h3>')
+    html.append(f'<p>{intro["person_description"]}</p>')
+
+    # The Shadow
+    html.append(f'<h3>The Shadow: {intro["shadow"]}</h3>')
+    html.append(f'<p>{intro["shadow_description"]}</p>')
+
+    html.append("</section>")
+    return "\n".join(html)
+
+
+def render_booklet_reflection(steps: list) -> str:
+    """Render 'Next Time' section."""
+    # Gather unique tags across all steps
+    all_tags = set()
+    for step in steps:
+        all_tags.update(step.get("tags", []))
+
+    html = ['<section class="booklet-section">']
+    html.append("<h2>Next Time</h2>")
+    html.append("""
+    <p>
+        The question this lesson asks doesn't have a final answer. Each time you do it,
+        your nervous system finds a slightly different solution. Here are some things to
+        pay attention to next time:
+    </p>
+    <ul class="reflection-list">
+    """)
+
+    # Generate reflection prompts based on prominent tags
+    if "S" in all_tags:
+        html.append("<li>Notice the very first moment of sensing — before you move. What do you feel on the floor? What's the shape of your contact?</li>")
+    if "R" in all_tags:
+        html.append("<li>Pay attention to the connections. When you move one part, what ripples through to distant parts? Where do you feel unexpected responses?</li>")
+    if "E" in all_tags:
+        html.append("<li>Each time you're asked to reduce effort, see how little you can do and still have the movement happen. The answer might surprise you.</li>")
+    if "Q" in all_tags:
+        html.append("<li>When the teacher poses a question, resist the urge to find an answer. Let the question sit. Your body will answer in its own time.</li>")
+    if "P" in all_tags:
+        html.append("<li>Don't rush through the pauses. That's where the real work happens — your nervous system integrating what it just learned.</li>")
+    if "I" in all_tags:
+        html.append("<li>Let the imagery work on you. When you imagine a movement, your nervous system rehearses it almost as fully as if you did it. Imagination is movement.</li>")
+
+    html.append("""
+    </ul>
+    <p class="closing">
+        The lesson is a conversation between you and your nervous system.
+        Each time you listen a little more carefully, you hear something new.
+    </p>
+    </section>
+    """)
+    return "\n".join(html)
+
+
+def build_booklet_html(analysis_result: dict, lesson_title: str = "") -> str:
+    """Assemble the complete booklet HTML from cached analysis data."""
+    pass_a = analysis_result.get("pass_a_result", {})
+    vl_analyses = analysis_result.get("vl_analyses", {})
+
+    # Use the lesson title from analysis or provided title
+    title = pass_a.get("lesson_title", "") or lesson_title or "Untitled Lesson"
+
+    # Get primary framework
+    framework_id = pass_a.get("primary_framework", "VL-1")
+
+    # Get the primary VL analysis
+    primary_vl = vl_analyses.get(framework_id, {})
+    if primary_vl.get("status") != "complete":
+        # Fall back to first complete analysis
+        for fid, vl in vl_analyses.items():
+            if vl.get("status") == "complete":
+                primary_vl = vl
+                framework_id = fid
+                break
+
+    result = primary_vl.get("result", {})
+    somatic_narrative = result.get("somatic_narrative", {})
+    negotiation = result.get("negotiation_framework", {})
+    table = result.get("analytical_table", {})
+    column_headers = table.get("column_headers", {})
+
+    groups = pass_a.get("groups", [])
+    steps = pass_a.get("steps", [])
+    home_position = pass_a.get("home_position", "")
+
+    # Build step lookup
+    pass_a_steps = {s["step_number"]: s for s in steps if "step_number" in s}
+
+    # Assemble sections
+    sections = []
+    sections.append(render_booklet_cover(title, framework_id))
+    sections.append(render_booklet_intro())
+    if home_position:
+        sections.append(render_booklet_home(home_position))
+    if somatic_narrative:
+        sections.append(render_booklet_inquiry(somatic_narrative))
+    sections.append(render_booklet_concepts())
+    if groups and steps:
+        sections.append(render_booklet_journey(groups, steps, primary_vl, pass_a_steps))
+    if somatic_narrative or negotiation:
+        sections.append(render_booklet_arc(somatic_narrative, negotiation, groups, table, column_headers, pass_a_steps))
+    sections.append(render_booklet_lens(framework_id, primary_vl))
+    if steps:
+        sections.append(render_booklet_reflection(steps))
+
+    body = "\n".join(sections)
+
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>{title} — Lesson Companion</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Inter:wght@400;500;600&display=swap');
+
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+
+        body {{
+            font-family: 'Lora', Georgia, 'Times New Roman', serif;
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 40px 24px;
+            line-height: 1.75;
+            color: #2c2c2c;
+            background: #faf9f7;
+        }}
+
+        /* Cover */
+        .booklet-cover {{
+            text-align: center;
+            padding: 80px 20px 60px;
+            margin-bottom: 40px;
+            border-bottom: 2px solid #d4c5a9;
+        }}
+        .cover-title {{
+            font-size: 2.2em;
+            font-weight: 700;
+            color: #1a1a1a;
+            line-height: 1.2;
+            margin-bottom: 16px;
+        }}
+        .cover-subtitle {{
+            font-size: 1.1em;
+            color: #777;
+            font-style: italic;
+            margin-bottom: 40px;
+        }}
+        .cover-lens {{
+            font-size: 0.95em;
+            color: #666;
+            line-height: 1.6;
+        }}
+        .cover-lens strong {{
+            font-size: 1.3em;
+            color: #4a6741;
+            display: block;
+            margin-top: 6px;
+        }}
+        .cover-lens-subtitle {{
+            display: block;
+            font-size: 0.85em;
+            color: #999;
+            margin-top: 2px;
+        }}
+
+        /* Sections */
+        .booklet-section {{
+            margin-bottom: 48px;
+            padding-bottom: 32px;
+            border-bottom: 1px solid #e8e2d9;
+        }}
+        .booklet-section:last-child {{
+            border-bottom: none;
+        }}
+
+        h2 {{
+            font-family: 'Inter', -apple-system, sans-serif;
+            font-size: 1.4em;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 16px;
+            letter-spacing: -0.01em;
+        }}
+        h3 {{
+            font-family: 'Inter', -apple-system, sans-serif;
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #444;
+            margin-top: 28px;
+            margin-bottom: 10px;
+        }}
+        h4 {{
+            font-family: 'Inter', -apple-system, sans-serif;
+            font-size: 0.95em;
+            font-weight: 600;
+            color: #555;
+            margin-top: 20px;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }}
+
+        p {{
+            margin-bottom: 14px;
+        }}
+
+        /* Home position */
+        .home-position {{
+            padding: 20px 24px;
+            background: #f0ede6;
+            border-radius: 6px;
+            margin-bottom: 16px;
+            font-style: italic;
+            border-left: 4px solid #b8a88a;
+        }}
+
+        /* Primary inquiry */
+        .primary-inquiry {{
+            font-size: 1.15em;
+            font-style: italic;
+            padding: 24px 28px;
+            margin: 20px 0;
+            background: #f5f2ec;
+            border-left: 4px solid #4a6741;
+            border-radius: 4px;
+            color: #333;
+        }}
+
+        /* Three states */
+        .three-states {{
+            margin: 20px 0;
+        }}
+        .state {{
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 14px 18px;
+            margin: 8px 0;
+            border-radius: 6px;
+            font-size: 0.95em;
+        }}
+        .state strong {{
+            font-family: 'Inter', sans-serif;
+            white-space: nowrap;
+            min-width: 110px;
+        }}
+        .state span {{
+            color: #555;
+        }}
+        .state-domination {{
+            background: #fdf2f2;
+            border-left: 4px solid #c0392b;
+        }}
+        .state-negotiation {{
+            background: #fef9f0;
+            border-left: 4px solid #e67e22;
+        }}
+        .state-integration {{
+            background: #f0f9f0;
+            border-left: 4px solid #27ae60;
+        }}
+
+        /* Journey */
+        .journey-group {{
+            margin-bottom: 40px;
+            padding: 24px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }}
+        .journey-group h3 {{
+            margin-top: 0;
+            font-size: 1.15em;
+            color: #333;
+        }}
+        .group-description {{
+            color: #666;
+            font-style: italic;
+            margin-bottom: 16px;
+        }}
+        .step-list {{
+            margin: 12px 0 16px 20px;
+        }}
+        .step-list li {{
+            margin-bottom: 8px;
+            line-height: 1.6;
+        }}
+        .home-badge {{
+            display: inline-block;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.75em;
+            padding: 2px 8px;
+            background: #e8f4fd;
+            color: #2980b9;
+            border-radius: 3px;
+            font-style: normal;
+            vertical-align: middle;
+            margin-left: 6px;
+        }}
+        .spiffer-hints {{
+            margin: 12px 0;
+            padding: 12px 16px;
+            background: #f9f7f3;
+            border-radius: 6px;
+        }}
+        .spiffer-hint {{
+            font-size: 0.9em;
+            color: #777;
+            font-style: italic;
+            margin-bottom: 6px;
+        }}
+        .spiffer-hint:last-child {{
+            margin-bottom: 0;
+        }}
+
+        /* Negotiation badge */
+        .neg-badge {{
+            display: inline-block;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.8em;
+            font-weight: 600;
+            padding: 4px 14px;
+            border-radius: 14px;
+            color: white;
+            margin-bottom: 12px;
+        }}
+
+        /* Table insights */
+        .table-question, .table-goal {{
+            font-size: 0.95em;
+            margin-bottom: 10px;
+        }}
+
+        /* Voice boxes */
+        .voice-box {{
+            padding: 16px 20px;
+            border-radius: 6px;
+            margin: 12px 0;
+        }}
+        .voice-box p {{
+            font-style: italic;
+            margin-bottom: 0;
+            line-height: 1.6;
+        }}
+        .voice-label {{
+            font-family: 'Inter', sans-serif;
+            font-size: 0.75em;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 6px;
+        }}
+        .person-inside {{
+            background: #f0f7ff;
+            border-left: 3px solid #3498db;
+        }}
+        .person-inside .voice-label {{
+            color: #3498db;
+        }}
+        .striver {{
+            background: #fff5f5;
+            border-left: 3px solid #c0392b;
+        }}
+        .striver .voice-label {{
+            color: #c0392b;
+        }}
+
+        /* Arc timeline */
+        .arc-timeline {{
+            margin: 20px 0;
+            padding: 0 20px;
+        }}
+        .arc-item {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 0;
+            border-left: 2px solid #ddd;
+            margin-left: 8px;
+            padding-left: 20px;
+            position: relative;
+        }}
+        .arc-dot {{
+            position: absolute;
+            left: -7px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }}
+        .arc-label {{
+            flex: 1;
+            font-size: 0.9em;
+        }}
+        .arc-state {{
+            font-family: 'Inter', sans-serif;
+            font-size: 0.8em;
+            font-weight: 600;
+            text-transform: uppercase;
+        }}
+
+        /* Lens */
+        .lens-description {{
+            font-size: 1.05em;
+            color: #444;
+            margin-bottom: 20px;
+        }}
+
+        /* Reflection */
+        .reflection-list {{
+            margin: 16px 0 16px 20px;
+        }}
+        .reflection-list li {{
+            margin-bottom: 12px;
+        }}
+        .closing {{
+            margin-top: 24px;
+            font-style: italic;
+            color: #666;
+            text-align: center;
+            padding: 20px;
+        }}
+
+        ul {{
+            margin: 12px 0 12px 20px;
+        }}
+        li {{
+            margin-bottom: 6px;
+        }}
+
+        /* Print styles */
+        @media print {{
+            body {{
+                background: white;
+                padding: 0;
+                max-width: none;
+            }}
+            .booklet-cover {{
+                page-break-after: always;
+            }}
+            .booklet-section {{
+                page-break-inside: avoid;
+            }}
+            .journey-group {{
+                page-break-inside: avoid;
+                box-shadow: none;
+                border: 1px solid #ddd;
+            }}
+        }}
+
+        /* Back link */
+        .back-link {{
+            font-family: 'Inter', sans-serif;
+            font-size: 0.85em;
+            color: #999;
+            text-decoration: none;
+            display: inline-block;
+            margin-bottom: 20px;
+        }}
+        .back-link:hover {{
+            color: #333;
+        }}
+    </style>
+</head>
+<body>
+    <a href="/" class="back-link">&larr; Back to Analyzer</a>
+    {body}
+</body>
+</html>"""
+
+
+@app.get("/booklet", response_class=HTMLResponse)
+async def booklet_page(category: str = "", lesson: str = ""):
+    """Render a lesson booklet from cached analysis."""
+    if not category or not lesson:
+        # Show a simple lesson picker
+        return _booklet_picker_html()
+
+    text = load_lesson(category, lesson).strip()
+    if not text:
+        return HTMLResponse("<h1>Lesson not found</h1>", status_code=404)
+
+    cache_key = get_cache_key(text)
+    cached = load_cached_analysis(cache_key)
+    if not cached:
+        return HTMLResponse(
+            "<h1>No analysis available</h1><p>This lesson hasn't been analyzed yet. "
+            '<a href="/">Go to the analyzer</a> and run it first.</p>',
+            status_code=404,
+        )
+
+    # Get display name for the lesson
+    categories, display_names = get_available_lessons()
+    lesson_title = lesson
+    cat_lessons = categories.get(category, [])
+    for key, display in cat_lessons:
+        if key == lesson:
+            lesson_title = display
+            break
+
+    return build_booklet_html(cached, lesson_title)
+
+
+def _booklet_picker_html() -> str:
+    """Simple lesson picker for the booklet page."""
+    categories, display_names = get_available_lessons()
+
+    # Two queries total instead of N per lesson:
+    # 1. All cache keys (just key strings, no data)
+    # 2. All document transcription hashes (doc_id -> cache_key)
+    cached_keys = _db.get_cache_keys() if _db else set()
+    doc_hashes = _db.get_all_transcription_hashes() if _db else {}
+
+    options = []
+    for cat_key, lessons in categories.items():
+        cat_display = display_names.get(cat_key, cat_key)
+        for lesson_key, lesson_display in lessons:
+            # For DB lessons, look up hash directly without loading text
+            cache_key = doc_hashes.get(lesson_key)
+            if cache_key and cache_key in cached_keys:
+                options.append(
+                    f'<li><a href="/booklet?category={cat_key}&lesson={lesson_key}">'
+                    f'{lesson_display}</a> <span style="color: #999;">({cat_display})</span></li>'
+                )
+
+    if not options:
+        lesson_list = "<p>No analyzed lessons available. <a href='/'>Run an analysis first.</a></p>"
+    else:
+        lesson_list = "<ul>" + "\n".join(options) + "</ul>"
+
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Lesson Booklets</title>
+    <style>
+        body {{
+            font-family: 'Lora', Georgia, serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 40px 24px;
+            line-height: 1.6;
+            color: #2c2c2c;
+            background: #faf9f7;
+        }}
+        h1 {{ font-size: 1.8em; margin-bottom: 8px; }}
+        p {{ color: #666; margin-bottom: 24px; }}
+        ul {{ list-style: none; padding: 0; }}
+        li {{
+            padding: 12px 16px;
+            border-bottom: 1px solid #e8e2d9;
+        }}
+        li:first-child {{ border-top: 1px solid #e8e2d9; }}
+        a {{
+            color: #4a6741;
+            text-decoration: none;
+            font-weight: 600;
+        }}
+        a:hover {{ text-decoration: underline; }}
+        .back {{ font-size: 0.85em; color: #999; margin-bottom: 20px; display: block; }}
+    </style>
+</head>
+<body>
+    <a href="/" class="back">&larr; Back to Analyzer</a>
+    <h1>Lesson Booklets</h1>
+    <p>Select an analyzed lesson to view as a companion booklet.</p>
+    {lesson_list}
+</body>
+</html>"""
+
+
+# --- Admin endpoints ---
+
+@app.post("/admin/precache")
+async def admin_precache(request: Request):
+    """Pre-cache analysis for specific lessons (both single and split modes)."""
+    body = await request.json()
+    lessons = body.get("lessons", [])
+    results = []
+    for lesson in lessons:
+        category = lesson.get("category", "")
+        key = lesson.get("key", "")
+        text = load_lesson(category, key).strip()
+        if not text:
+            results.append({"category": category, "key": key, "single": "skipped", "split": "skipped"})
+            continue
+        entry = {"category": category, "key": key}
+        for mode, split in [("single", False), ("split", True)]:
+            cache_suffix = ":split" if split else ""
+            cache_key = get_cache_key(text + cache_suffix)
+            if load_cached_analysis(cache_key):
+                entry[mode] = "cached"
+            else:
+                try:
+                    _run_analysis(text, split=split)
+                    entry[mode] = "complete"
+                except Exception as e:
+                    entry[mode] = f"error: {e}"
+        results.append(entry)
+    return JSONResponse({"results": results})
+
+
+@app.post("/admin/clear-cache")
+async def admin_clear_cache():
+    """Clear all cached analysis results."""
+    if _db:
+        count = _db.clear_cache()
+    else:
+        count = 0
+    return JSONResponse({"cleared": count})
+
+
+@app.get("/admin/cache")
+async def admin_cache_list():
+    """List cached entries in database."""
+    if _db:
+        entries = _db.list_cache()
+        for e in entries:
+            e["size_kb"] = round(e.pop("size_bytes", 0) / 1024, 1)
+            # Convert datetimes to strings for JSON
+            for k in ("created_at", "updated_at"):
+                if e.get(k):
+                    e[k] = str(e[k])
+    else:
+        entries = []
+    return JSONResponse({"count": len(entries), "entries": entries})
 
 
 # Lambda handler

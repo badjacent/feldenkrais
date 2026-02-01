@@ -76,6 +76,8 @@ def process_file(
             return {"status": "skipped", "reason": "no_sidecar_grace_period"}
         else:
             logger.error(f"Error - no sidecar after grace period ({file_age:.0f}s): {main_key}")
+            db.log_event("load_error", title=filename,
+                         detail={"filename": filename, "reason": "no_sidecar"})
             # Move to errors/
             error_key = main_key.replace("staging/", "errors/", 1)
             storage.copy_object(main_key, error_key)
@@ -104,6 +106,7 @@ def process_file(
     # Check for duplicate document
     if db.document_exists(title, source_url):
         logger.info(f"Skipping duplicate: {title}")
+        db.log_event("duplicate_skipped", title=title, detail={"filename": filename})
         # Clean up staging files
         storage.delete_object(main_key)
         storage.delete_object(sidecar_key)
@@ -139,6 +142,8 @@ def process_file(
         storage.delete_object(sidecar_key)
 
         logger.info(f"Loaded: {main_key} → {doc_id}")
+        db.log_event("loaded", title=title, document_id=doc_id,
+                     detail={"filename": filename, "archive_key": archive_key})
         return {
             "status": "loaded",
             "document_id": doc_id,
@@ -156,6 +161,8 @@ def process_file(
 
     except Exception as e:
         logger.error(f"Failed to process {main_key}: {e}")
+        db.log_event("load_error", title=title,
+                     detail={"filename": filename, "error": str(e)})
         if within_grace_period:
             logger.info(f"Within grace period, will retry: {main_key}")
             return {"status": "error", "reason": "processing_failed_will_retry"}

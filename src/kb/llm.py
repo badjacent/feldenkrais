@@ -208,12 +208,20 @@ class LLM:
         if system and not has_system:
             messages = [{"role": "system", "content": system}] + messages
 
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            max_tokens=max_tokens,
-            temperature=temperature,
-        )
+        is_reasoning = any(self.model.startswith(p) for p in ("gpt-5", "o1", "o3"))
+
+        kwargs = {
+            "model": self.model,
+            "messages": messages,
+        }
+        # Reasoning models don't support temperature and use max_completion_tokens
+        if is_reasoning:
+            kwargs["max_completion_tokens"] = max_tokens
+        else:
+            kwargs["max_tokens"] = max_tokens
+            kwargs["temperature"] = temperature
+
+        response = self.client.chat.completions.create(**kwargs)
         return response.choices[0].message.content
 
     def _chat_gemini(
@@ -458,22 +466,33 @@ class LLM:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
 
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            response_format={
+        is_reasoning = any(self.model.startswith(p) for p in ("gpt-5", "o1", "o3"))
+
+        kwargs = {
+            "model": self.model,
+            "messages": messages,
+            "response_format": {
                 "type": "json_schema",
                 "json_schema": {
                     "name": schema.get("title", "output"),
                     "schema": schema,
-                    "strict": True,
+                    "strict": False,
                 }
             },
-        )
+        }
+        # Reasoning models don't support temperature and use max_completion_tokens
+        if is_reasoning:
+            kwargs["max_completion_tokens"] = max_tokens
+        else:
+            kwargs["max_tokens"] = max_tokens
+            kwargs["temperature"] = temperature
 
-        return json.loads(response.choices[0].message.content)
+        response = self.client.chat.completions.create(**kwargs)
+        raw_text = response.choices[0].message.content
+        try:
+            return json.loads(raw_text)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"{e}\n\n--- Raw LLM output ---\n{raw_text}") from e
 
     def _structured_json_gemini(
         self,
@@ -502,4 +521,24 @@ class LLM:
             config=config,
         )
 
-        return json.loads(response.text)
+        # Check finish reason for truncation
+        finish_reason = None
+        if response.candidates:
+            finish_reason = response.candidates[0].finish_reason
+
+        raw_text = response.text
+        try:
+            result = json.loads(raw_text)
+        except json.JSONDecodeError as e:
+            extra = ""
+            if finish_reason:
+                extra = f"\nFinish reason: {finish_reason}"
+            if response.candidates:
+                c = response.candidates[0]
+                extra += f"\nToken count: {getattr(c, 'token_count', 'unknown')}"
+            if hasattr(response, 'usage_metadata') and response.usage_metadata:
+                u = response.usage_metadata
+                extra += f"\nUsage: prompt={getattr(u, 'prompt_token_count', '?')}, output={getattr(u, 'candidates_token_count', '?')}, total={getattr(u, 'total_token_count', '?')}"
+            raise ValueError(f"{e}{extra}\n\n--- Raw LLM output ---\n{raw_text}") from e
+
+        return result

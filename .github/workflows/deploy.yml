@@ -1,0 +1,63 @@
+name: Deploy
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: hashicorp/setup-terraform@v3
+
+      # Cache dependency layers (rebuild only when requirements change)
+      - uses: actions/cache@v4
+        id: deps-cache
+        with:
+          path: terraform/lambda_deps.zip
+          key: deps-${{ hashFiles('terraform/lambda_requirements.txt') }}
+
+      - uses: actions/cache@v4
+        id: web-cache
+        with:
+          path: terraform/lambda_web_deps.zip
+          key: web-deps-${{ hashFiles('terraform/lambda_web_requirements.txt') }}
+
+      - name: Build deps layer
+        if: steps.deps-cache.outputs.cache-hit != 'true'
+        run: cd terraform && ./build_deps_layer.sh
+
+      - name: Build web layer
+        if: steps.web-cache.outputs.cache-hit != 'true'
+        run: cd terraform && ./build_web_layer.sh
+
+      - name: Terraform Init
+        run: cd terraform && terraform init
+
+      - name: Terraform Apply
+        run: |
+          cd terraform
+          terraform apply -auto-approve \
+            -var="environment=prod" \
+            -var="domain_name=aionyourside.net"
+        env:
+          TF_VAR_groq_api_key: ${{ secrets.GROQ_API_KEY }}
+          TF_VAR_database_url: ${{ secrets.DATABASE_URL }}
+          TF_VAR_google_api_key: ${{ secrets.GOOGLE_API_KEY }}
+          TF_VAR_anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          TF_VAR_openai_api_key: ${{ secrets.OPENAI_API_KEY }}

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Pass0bResult",
+  "description": "Pass 0b: Somatic feature extraction with three-tier architecture",
+  "type": "object",
+  "properties": {
+    "segments": {
+      "type": "array",
+      "description": "Enriched segments, one per input segment, in order",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Segment ID matching the input segment"
+          },
+          "mechanical_directive": {
+            "type": "string",
+            "description": "The explicit physical command or description of what the segment is (if not a movement)"
+          },
+          "quality_constraint": {
+            "type": "string",
+            "description": "Adjectives, metaphors, or modifiers that shape effort or movement quality"
+          },
+          "sensory_inquiry": {
+            "type": "string",
+            "description": "What the student is asked to feel or notice, especially in non-moving parts. Tag questions as primary learning objective."
+          },
+          "clarified": {
+            "type": "string",
+            "description": "Clear rewrite with all ambiguous references resolved"
+          },
+          "global_anchor": {
+            "type": "string",
+            "description": "Connection between local movement and distant skeletal foundation (optional)"
+          },
+          "intent": {
+            "type": "string",
+            "description": "Pedagogical purpose: the learning strategy behind this instruction"
+          }
+        },
+        "required": ["id", "mechanical_directive", "quality_constraint", "sensory_inquiry", "clarified", "intent"]
+      }
+    }
+  },
+  "required": ["segments"]
+}

@@ -1,5 +1,15 @@
 # Operations Guide
 
+## Prerequisites
+
+All `terraform apply` commands require environment variables from `.env`. Load them first:
+```bash
+cd terraform
+export $(grep -v '^#' ../.env | xargs)
+```
+
+**Important:** `source .env` does NOT export variables. You must use the `export` command above, or the Groq/DB/API keys will be empty and Lambdas will be silently skipped or misconfigured.
+
 ## Scheduled Lambda Triggers
 
 All Lambda functions can be triggered on a schedule via EventBridge. These schedules can be enabled/disabled via the `enable_scheduled_triggers` variable.
@@ -157,16 +167,60 @@ terraform output web_function_url
 
 After modifying `web.py`, `llm.py`, `schemas.py`, or data files:
 ```bash
-terraform apply -var="environment=prod" ...
+cd terraform
+terraform apply -var="environment=prod" \
+  -var="google_api_key=$GOOGLE_API_KEY" \
+  -var="anthropic_api_key=$ANTHROPIC_API_KEY" \
+  -var="openai_api_key=$OPENAI_API_KEY" \
+  -var="database_url=$DATABASE_URL" \
+  -var="groq_api_key=$GROQ_API_KEY"
 ```
 
-### Updating Protocol/Schema
-
-1. Edit `data/washing.md` and `data/washing.schema.json`
-2. Redeploy:
+If dependencies changed (new packages in `lambda_web_requirements.txt`), rebuild the layer first:
 ```bash
-terraform apply -var="environment=prod" ...
+./build_web_layer.sh
 ```
+
+### Framework Versions
+
+Analysis prompts live in versioned directories under `data/frameworks/`:
+```
+data/
+  frameworks.json              ← pointer: {"current_version": "v1"}
+  frameworks/
+    v1/                        ← prompt files for v1
+      pass_a.md, pass_b.md, vl1-5.md, frameworks.json
+    v2/                        ← prompt files for v2 (if exists)
+      ...
+  pass_a.schema.json           ← shared schemas (unversioned)
+  pass_b.schema.json
+  pass_b_narrative.schema.json
+  pass_b_table.schema.json
+```
+
+**To create a new version:**
+1. Copy the current version directory:
+   ```bash
+   cp -r data/frameworks/v1 data/frameworks/v2
+   ```
+2. Edit the prompt files in `data/frameworks/v2/`
+3. The web UI has a "Framework" dropdown to select which version to analyze with
+
+**To change the default version:**
+Edit `data/frameworks.json`:
+```json
+{"current_version": "v2"}
+```
+
+**Cache behavior:**
+- v1 uses existing cache keys (no version suffix) — backwards compatible
+- v2+ adds `:fv2` etc. to cache keys, so results cache separately
+- Switching versions never invalidates existing cached analyses
+
+**Deploying new versions to Lambda:**
+1. Copy files to `terraform/data/frameworks/` to match
+2. Add new source blocks in `main.tf` for the new version's files
+3. Redeploy
 
 ### Adding New Lesson Files
 
@@ -174,11 +228,85 @@ terraform apply -var="environment=prod" ...
 2. Add them to the `archive_file "web_lambda"` block in `main.tf`
 3. Redeploy
 
-### Custom Domain (Optional)
+### Custom Domain
 
-To use a custom domain instead of the Lambda Function URL:
-1. Create a CloudFront distribution pointing to the Function URL
-2. Add an ACM certificate for your domain
-3. Configure Route 53 to point to CloudFront
+The domain `aionyourside.net` is configured via Route 53 + ACM + API Gateway:
+- ACM certificate with DNS validation (auto-created Route 53 CNAME records)
+- API Gateway custom domain name (regional endpoint)
+- Route 53 A alias record pointing to the API Gateway
 
-This is not currently implemented in Terraform.
+Gated behind `var.domain_name`. To deploy:
+```bash
+terraform apply \
+  -var="domain_name=aionyourside.net" \
+  -var="environment=prod" \
+  -var="google_api_key=$GOOGLE_API_KEY" \
+  -var="anthropic_api_key=$ANTHROPIC_API_KEY" \
+  -var="openai_api_key=$OPENAI_API_KEY" \
+  -var="database_url=$DATABASE_URL" \
+  -var="groq_api_key=$GROQ_API_KEY"
+```
+
+To skip custom domain setup, omit the domain_name variable or set it to empty string.
+
+**Note:** The domain must have completed ICANN email verification (check the email sent during Route 53 registration).
+
+## Continuous Deployment (CD)
+
+All Lambda functions and infrastructure auto-deploy on push to `master` via GitHub Actions.
+
+### How It Works
+
+```
+push to master
+  → GitHub Actions (.github/workflows/deploy.yml)
+    → OIDC → assume AWS role (no stored AWS keys)
+    → Build dependency layers (cached by requirements hash)
+    → terraform apply (state in S3 + DynamoDB lock)
+```
+
+- **Auth**: GitHub OIDC federation — no long-lived AWS credentials stored in GitHub
+- **State**: S3 bucket `feldenkrais-terraform-state` with DynamoDB locking (`feldenkrais-terraform-lock`)
+- **Secrets**: API keys passed via `TF_VAR_` environment variables from GitHub Secrets
+
+### GitHub Secrets Required
+
+Set in repo settings (`badjacent/feldenkrais` → Settings → Secrets → Actions):
+
+| Secret | Description |
+|--------|-------------|
+| `AWS_ROLE_ARN` | ARN of the `feldenkrais-github-deploy` IAM role |
+| `GROQ_API_KEY` | Groq API key for transcription |
+| `DATABASE_URL` | Neon PostgreSQL connection string |
+| `GOOGLE_API_KEY` | Google/Gemini API key |
+| `ANTHROPIC_API_KEY` | Anthropic API key |
+| `OPENAI_API_KEY` | OpenAI API key |
+
+### Bootstrap (One-Time Setup)
+
+The CI/CD prerequisites (S3 bucket, DynamoDB table, OIDC provider, IAM role) are managed in `terraform/ci/`:
+
+```bash
+cd terraform/ci
+terraform init
+terraform apply
+```
+
+After bootstrap, migrate existing state to S3:
+```bash
+cd terraform
+terraform init -migrate-state
+```
+
+### Dependency Layer Caching
+
+The workflow caches `lambda_deps.zip` and `lambda_web_deps.zip` based on the hash of their respective requirements files. Layers only rebuild when requirements change.
+
+### Manual Deploy
+
+If you need to deploy manually (e.g., to test a branch), the same commands still work:
+```bash
+cd terraform
+export $(grep -v '^#' ../.env | xargs)
+terraform apply -var="environment=prod" -var="domain_name=aionyourside.net"
+```

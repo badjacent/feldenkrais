@@ -56,6 +56,19 @@ Most Feldenkrais lessons have a **home position** — the base configuration the
 
 ---
 
+## Part 3: Step Groups
+
+After decomposing the lesson into individual steps, cluster them into approximately 5-8 **groups** that represent the major movement explorations of the lesson. Each group bundles related steps into a single thematic unit.
+
+Guidelines:
+- A group typically represents one movement exploration and its variations, or a setup/rest phase
+- Include the step numbers that belong to each group (e.g., `[1, 2, 3]`)
+- Give each group a short label describing the exploration (e.g., "Pelvic clock 12-6", "Bilateral push-pull with heels")
+- Aim for roughly 5-8 groups. Fewer than 4 loses lesson structure; more than 10 is too granular.
+- Rest/pause steps can be folded into the preceding group or stand alone if they mark a significant transition
+
+---
+
 ## Output Format
 
 Provide your analysis in the structured format with:
@@ -65,3 +78,4 @@ Provide your analysis in the structured format with:
 4. `rationale` - brief explanation of classification
 5. `home_position` - description of the base configuration the student returns to
 6. `steps` - the SPIFFER-Q decomposed lesson, each with `segments` array referencing source text and `is_home` flag for return-to-home steps
+7. `groups` - clustered step groups for the analytical table, each with `label`, `steps` (step numbers), and `description`

@@ -1,6 +1,14 @@
 terraform {
   required_version = ">= 1.0"
 
+  backend "s3" {
+    bucket         = "feldenkrais-terraform-state"
+    key            = "prod/terraform.tfstate"
+    region         = "us-east-1"
+    dynamodb_table = "feldenkrais-terraform-lock"
+    encrypt        = true
+  }
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -613,49 +621,70 @@ data "archive_file" "web_lambda" {
     content  = file("${path.module}/../src/kb/schemas.py")
     filename = "schemas.py"
   }
-  # Framework registry
+  # Framework version pointer
   source {
     content  = file("${path.module}/../data/frameworks.json")
     filename = "data/frameworks.json"
   }
-  # Pass A (decomposition + routing)
-  source {
-    content  = file("${path.module}/../data/pass_a.md")
-    filename = "data/pass_a.md"
-  }
+  # Schemas (shared, unversioned)
   source {
     content  = file("${path.module}/../data/pass_a.schema.json")
     filename = "data/pass_a.schema.json"
-  }
-  # Pass B (VL synthesis)
-  source {
-    content  = file("${path.module}/../data/pass_b.md")
-    filename = "data/pass_b.md"
   }
   source {
     content  = file("${path.module}/../data/pass_b.schema.json")
     filename = "data/pass_b.schema.json"
   }
-  # VL-specific modules
+  # Versioned framework prompts (v1)
   source {
-    content  = file("${path.module}/../data/vl1.md")
-    filename = "data/vl1.md"
+    content  = file("${path.module}/../data/frameworks/v1/frameworks.json")
+    filename = "data/frameworks/v1/frameworks.json"
   }
   source {
-    content  = file("${path.module}/../data/vl2.md")
-    filename = "data/vl2.md"
+    content  = file("${path.module}/../data/frameworks/v1/pass_a.md")
+    filename = "data/frameworks/v1/pass_a.md"
   }
   source {
-    content  = file("${path.module}/../data/vl3.md")
-    filename = "data/vl3.md"
+    content  = file("${path.module}/../data/frameworks/v1/pass_b.md")
+    filename = "data/frameworks/v1/pass_b.md"
   }
   source {
-    content  = file("${path.module}/../data/vl4.md")
-    filename = "data/vl4.md"
+    content  = file("${path.module}/../data/frameworks/v1/vl1.md")
+    filename = "data/frameworks/v1/vl1.md"
   }
   source {
-    content  = file("${path.module}/../data/vl5.md")
-    filename = "data/vl5.md"
+    content  = file("${path.module}/../data/frameworks/v1/vl2.md")
+    filename = "data/frameworks/v1/vl2.md"
+  }
+  source {
+    content  = file("${path.module}/../data/frameworks/v1/vl3.md")
+    filename = "data/frameworks/v1/vl3.md"
+  }
+  source {
+    content  = file("${path.module}/../data/frameworks/v1/vl4.md")
+    filename = "data/frameworks/v1/vl4.md"
+  }
+  source {
+    content  = file("${path.module}/../data/frameworks/v1/vl5.md")
+    filename = "data/frameworks/v1/vl5.md"
+  }
+  # Database module
+  source {
+    content  = file("${path.module}/../src/kb/database.py")
+    filename = "database.py"
+  }
+  # Exploration agent
+  source {
+    content  = file("${path.module}/../data/explore_init.md")
+    filename = "data/explore_init.md"
+  }
+  source {
+    content  = file("${path.module}/../data/explore_round.md")
+    filename = "data/explore_round.md"
+  }
+  source {
+    content  = file("${path.module}/../data/explore.schema.json")
+    filename = "data/explore.schema.json"
   }
   # Note: Lesson files are loaded dynamically from S3 or user input
 }
@@ -667,7 +696,7 @@ resource "aws_lambda_function" "web" {
   handler          = "web.handler"
   source_code_hash = data.archive_file.web_lambda.output_base64sha256
   runtime          = "python3.12"
-  timeout          = 120  # 2 minutes for LLM calls
+  timeout          = 900  # 15 minutes for LLM calls
   memory_size      = 512
 
   layers = compact([
@@ -679,6 +708,7 @@ resource "aws_lambda_function" "web" {
       GOOGLE_API_KEY    = var.google_api_key
       ANTHROPIC_API_KEY = var.anthropic_api_key
       OPENAI_API_KEY    = var.openai_api_key
+      DATABASE_URL      = var.database_url
       KB_BUCKET         = aws_s3_bucket.main.id
       AWS_LAMBDA_FUNCTION_NAME_SELF = "feldenkrais-web-${var.environment}"
     }
@@ -698,4 +728,85 @@ resource "aws_lambda_permission" "web_api_gateway" {
   function_name = aws_lambda_function.web.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_apigatewayv2_api.web.execution_arn}/*"
+}
+
+# -----------------------------------------------------------------------------
+# Custom Domain (Route 53 + ACM + API Gateway)
+# -----------------------------------------------------------------------------
+
+# Look up the Route 53 hosted zone (auto-created when domain was registered)
+data "aws_route53_zone" "main" {
+  count = var.domain_name != "" ? 1 : 0
+  name  = var.domain_name
+}
+
+# ACM certificate
+resource "aws_acm_certificate" "web" {
+  count             = var.domain_name != "" ? 1 : 0
+  domain_name       = var.domain_name
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# DNS validation record
+resource "aws_route53_record" "cert_validation" {
+  for_each = var.domain_name != "" ? {
+    for dvo in aws_acm_certificate.web[0].domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      record = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
+  } : {}
+
+  zone_id = data.aws_route53_zone.main[0].zone_id
+  name    = each.value.name
+  type    = each.value.type
+  records = [each.value.record]
+  ttl     = 60
+
+  allow_overwrite = true
+}
+
+# Wait for certificate validation
+resource "aws_acm_certificate_validation" "web" {
+  count                   = var.domain_name != "" ? 1 : 0
+  certificate_arn         = aws_acm_certificate.web[0].arn
+  validation_record_fqdns = [for record in aws_route53_record.cert_validation : record.fqdn]
+}
+
+# API Gateway custom domain
+resource "aws_apigatewayv2_domain_name" "web" {
+  count       = var.domain_name != "" ? 1 : 0
+  domain_name = var.domain_name
+
+  domain_name_configuration {
+    certificate_arn = aws_acm_certificate_validation.web[0].certificate_arn
+    endpoint_type   = "REGIONAL"
+    security_policy = "TLS_1_2"
+  }
+}
+
+# Map the custom domain to the API
+resource "aws_apigatewayv2_api_mapping" "web" {
+  count       = var.domain_name != "" ? 1 : 0
+  api_id      = aws_apigatewayv2_api.web.id
+  domain_name = aws_apigatewayv2_domain_name.web[0].domain_name
+  stage       = "$default"
+}
+
+# Route 53 alias record pointing domain to API Gateway
+resource "aws_route53_record" "web" {
+  count   = var.domain_name != "" ? 1 : 0
+  zone_id = data.aws_route53_zone.main[0].zone_id
+  name    = var.domain_name
+  type    = "A"
+
+  alias {
+    name                   = aws_apigatewayv2_domain_name.web[0].domain_name_configuration[0].target_domain_name
+    zone_id                = aws_apigatewayv2_domain_name.web[0].domain_name_configuration[0].hosted_zone_id
+    evaluate_target_health = false
+  }
 }

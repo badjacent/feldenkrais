@@ -99,7 +99,8 @@ private_examples/
 terraform/.terraform/
 terraform/*.tfstate
 terraform/*.tfstate.*
-terraform/.terraform.lock.hcl
+# Commit lock file for CI reproducibility
+# terraform/.terraform.lock.hcl
 terraform/*.zip
 # Data directory (lessons may be copyrighted)
 data/lessons/

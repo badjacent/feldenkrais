@@ -52,6 +52,6 @@ column_headers: {
 ---
 
 ### How to use the "Negotiation State" column (column4):
-* **Domination:** The Striver is in control (high noise, muscular effort).
-* **Negotiation:** The Washing is in progress (confusion, exploration, varying effort).
-* **Integration:** The Foundation has taken over (skeletal clarity, "involuntary" ease).
+* **Braced:** The Striver is in control (high noise, muscular effort).
+* **Softening:** The Washing is in progress (confusion, exploration, varying effort).
+* **Clear:** The Foundation has taken over (skeletal clarity, "involuntary" ease).

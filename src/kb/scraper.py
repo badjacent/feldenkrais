@@ -160,6 +160,27 @@ def find_html5_media(soup: BeautifulSoup) -> list[MediaFile]:
     return media
 
 
+def find_podlove_player(soup: BeautifulSoup, page_html: str) -> list[MediaFile]:
+    """Find Podlove Web Player audio embeds (WordPress plugin)."""
+    media = []
+    for match in re.finditer(r'podlovePlayer\(\s*\w+\s*,\s*({.*?})\s*[,)]', page_html):
+        try:
+            data = json.loads(match.group(1))
+            title = data.get("title")
+            for audio in data.get("audio", []):
+                url = audio.get("url")
+                if url:
+                    media.append(MediaFile(
+                        url=url,
+                        filename=get_filename_from_url(url),
+                        title=title,
+                        media_type="audio",
+                    ))
+        except json.JSONDecodeError:
+            pass
+    return media
+
+
 def find_direct_links(soup: BeautifulSoup, base_url: str) -> list[MediaFile]:
     """Find direct links to media files."""
     media = []
@@ -188,7 +209,7 @@ def find_direct_links(soup: BeautifulSoup, base_url: str) -> list[MediaFile]:
     return media
 
 
-def scrape_page(url: str, user_agent: str = DEFAULT_USER_AGENT) -> tuple[list[MediaFile], str]:
+def scrape_page(url: str, user_agent: str = DEFAULT_USER_AGENT, cookies: Optional[str] = None) -> tuple[list[MediaFile], str]:
     """
     Scrape a page for media files.
 
@@ -196,15 +217,20 @@ def scrape_page(url: str, user_agent: str = DEFAULT_USER_AGENT) -> tuple[list[Me
     """
     logger.info(f"Fetching: {url}")
 
-    response = requests.get(url, headers={"User-Agent": user_agent}, timeout=30)
+    headers = {"User-Agent": user_agent}
+    if cookies:
+        headers["Cookie"] = cookies
+    response = requests.get(url, headers=headers, timeout=30)
     response.raise_for_status()
 
-    soup = BeautifulSoup(response.text, "html.parser")
+    page_html = response.text
+    soup = BeautifulSoup(page_html, "html.parser")
     page_title = extract_page_title(soup) or "Untitled"
 
     # Find media from various sources
     media = []
     media.extend(find_squarespace_audio(soup))
+    media.extend(find_podlove_player(soup, page_html))
     media.extend(find_html5_media(soup))
     media.extend(find_direct_links(soup, url))
 
@@ -223,14 +249,18 @@ def scrape_page(url: str, user_agent: str = DEFAULT_USER_AGENT) -> tuple[list[Me
 def download_media(
     media: MediaFile,
     user_agent: str = DEFAULT_USER_AGENT,
-    timeout: int = 300
+    timeout: int = 300,
+    cookies: Optional[str] = None,
 ) -> bytes:
     """Download a media file and return its content."""
     logger.info(f"Downloading: {media.filename}")
 
+    headers = {"User-Agent": user_agent}
+    if cookies:
+        headers["Cookie"] = cookies
     response = requests.get(
         media.url,
-        headers={"User-Agent": user_agent},
+        headers=headers,
         timeout=timeout,
         stream=True
     )
@@ -290,6 +320,8 @@ def scrape(
     storage: Optional[Storage] = None,
     tags: Optional[list[str]] = None,
     dry_run: bool = False,
+    cookies: Optional[str] = None,
+    db=None,
 ) -> dict:
     """
     Scrape a URL for media and stage files.
@@ -301,6 +333,7 @@ def scrape(
         storage: Storage instance (required unless dry_run)
         tags: Tags to apply to all media
         dry_run: If True, just list media without downloading/staging
+        cookies: Raw Cookie header string for authenticated pages
 
     Returns dict with staged files and any errors.
     """
@@ -311,7 +344,7 @@ def scrape(
     }
 
     try:
-        media_files, page_title = scrape_page(url)
+        media_files, page_title = scrape_page(url, cookies=cookies)
         results["page_title"] = page_title
         results["media_found"] = len(media_files)
 
@@ -327,7 +360,7 @@ def scrape(
 
         for media in media_files:
             try:
-                content = download_media(media)
+                content = download_media(media, cookies=cookies)
                 staging_key = stage_media(
                     storage=storage,
                     media=media,
@@ -344,6 +377,19 @@ def scrape(
                     "size": len(content),
                     "title": media.title or page_title,
                 })
+
+                # Log staging event
+                if db:
+                    try:
+                        db.log_event("staged", title=media.title or page_title,
+                                     detail={
+                                         "filename": media.filename,
+                                         "staging_key": staging_key,
+                                         "source_url": url,
+                                         "size": len(content),
+                                     })
+                    except Exception as log_err:
+                        logger.warning(f"Failed to log staged event: {log_err}")
             except Exception as e:
                 logger.error(f"Failed to process {media.filename}: {e}")
                 results["errors"].append({
@@ -368,6 +414,7 @@ def handler(event, context):
     type_id = event.get("type_id", 2)  # Default to AUDIO
     tags = event.get("tags", [])
     dry_run = event.get("dry_run", False)
+    cookies = event.get("cookies")
 
     if not url:
         return {
@@ -378,19 +425,35 @@ def handler(event, context):
     config = Config.from_env()
     storage = None if dry_run else Storage(config.bucket)
 
-    results = scrape(
-        url=url,
-        source_id=source_id,
-        type_id=type_id,
-        storage=storage,
-        tags=tags,
-        dry_run=dry_run,
-    )
+    # Initialize DB for pipeline logging
+    db = None
+    if not dry_run and hasattr(config, 'database_url') and config.database_url:
+        try:
+            from database import Database
+        except ImportError:
+            from .database import Database
+        db = Database(config.database_url)
+        db.initialize()
 
-    return {
-        "statusCode": 200,
-        "body": json.dumps(results),
-    }
+    try:
+        results = scrape(
+            url=url,
+            source_id=source_id,
+            type_id=type_id,
+            storage=storage,
+            tags=tags,
+            dry_run=dry_run,
+            cookies=cookies,
+            db=db,
+        )
+
+        return {
+            "statusCode": 200,
+            "body": json.dumps(results),
+        }
+    finally:
+        if db:
+            db.close()
 
 
 if __name__ == "__main__":
@@ -408,10 +471,15 @@ if __name__ == "__main__":
     parser.add_argument("--tags", help="Comma-separated tags")
     parser.add_argument("--dry-run", action="store_true", help="List media without staging")
     parser.add_argument("--bucket", help="S3 bucket (overrides KB_BUCKET)")
+    parser.add_argument("--cookies", help="Cookie header string for authenticated pages")
+    parser.add_argument("--cookies-file", help="File containing cookie header string")
 
     args = parser.parse_args()
 
     tags = args.tags.split(",") if args.tags else []
+    cookies = args.cookies
+    if args.cookies_file:
+        cookies = Path(args.cookies_file).read_text().strip()
 
     if args.dry_run:
         results = scrape(
@@ -420,6 +488,7 @@ if __name__ == "__main__":
             type_id=args.type_id,
             tags=tags,
             dry_run=True,
+            cookies=cookies,
         )
     else:
         config = Config.from_env()
@@ -436,6 +505,7 @@ if __name__ == "__main__":
             storage=storage,
             tags=tags,
             dry_run=False,
+            cookies=cookies,
         )
 
     print(json.dumps(results, indent=2))

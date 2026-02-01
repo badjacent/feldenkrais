@@ -306,6 +306,15 @@ class TranscriptionService:
                         batch_id=batch_id,
                     )
 
+                # Log batch creation
+                doc_titles = [doc.get("title", doc["id"]) for doc in documents]
+                self.db.log_event("batch_created", detail={
+                    "batch_id": batch_id,
+                    "document_count": len(documents),
+                    "job_count": len(jobs_created),
+                    "titles": doc_titles,
+                })
+
                 return batch_id
 
             finally:
@@ -397,6 +406,19 @@ class TranscriptionService:
                         status="failed",
                         error=error_msg,
                     )
+
+                    # Log transcription failure
+                    job = self.db.get_transcription_job(job_id)
+                    if job:
+                        doc = self.db.get_document(job["document_id"])
+                        doc_title = doc.get("title", job["document_id"]) if doc else job["document_id"]
+                        self.db.log_event("transcription_failed", title=doc_title,
+                                          document_id=job["document_id"], detail={
+                                              "batch_id": batch_id,
+                                              "job_id": job_id,
+                                              "error": error_msg,
+                                          })
+
                     results["jobs_failed"].append({
                         "job_id": job_id,
                         "error": error_msg,
@@ -540,6 +562,17 @@ class TranscriptionService:
             )
 
             logger.info(f"Created transcription for document {doc_id} ({total_chunks} chunks)")
+
+            # Log transcription completion
+            doc = self.db.get_document(doc_id)
+            doc_title = doc.get("title", doc_id) if doc else doc_id
+            self.db.log_event("transcription_complete", title=doc_title,
+                              document_id=doc_id, detail={
+                                  "batch_id": batch_id,
+                                  "text_length": len(text),
+                                  "chunk_count": total_chunks,
+                              })
+
             completed_docs.append({
                 "document_id": doc_id,
                 "text_length": len(text),

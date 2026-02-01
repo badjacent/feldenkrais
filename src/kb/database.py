@@ -15,7 +15,9 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 CREATE TABLE IF NOT EXISTS document_source (
     id SERIAL PRIMARY KEY,
-    name TEXT NOT NULL UNIQUE
+    name TEXT NOT NULL UNIQUE,
+    category_name TEXT,
+    visible BOOLEAN NOT NULL DEFAULT TRUE
 );
 
 CREATE TABLE IF NOT EXISTS document_type (
@@ -31,6 +33,7 @@ CREATE TABLE IF NOT EXISTS document (
     source_id INTEGER NOT NULL REFERENCES document_source(id),
     type_id INTEGER NOT NULL REFERENCES document_type(id),
     status TEXT NOT NULL DEFAULT 'pending',
+    category_name TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     tags JSONB,
@@ -92,6 +95,22 @@ CREATE TABLE IF NOT EXISTS fm_lesson_status (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS pipeline_log (
+    id SERIAL PRIMARY KEY,
+    event TEXT NOT NULL,
+    document_id UUID,
+    title TEXT,
+    detail JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS cache (
+    key TEXT PRIMARY KEY,
+    data JSONB NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
 """
 
 INDEXES = """
@@ -108,10 +127,13 @@ CREATE INDEX IF NOT EXISTS idx_youtube_queue_status ON youtube_queue(status);
 CREATE INDEX IF NOT EXISTS idx_fm_lesson_status ON fm_lesson_status(status);
 CREATE INDEX IF NOT EXISTS idx_fm_lesson_youtube ON fm_lesson_status(youtube_id);
 CREATE INDEX IF NOT EXISTS idx_document_lesson_date ON document(lesson_date);
+CREATE INDEX IF NOT EXISTS idx_pipeline_log_event ON pipeline_log(event);
+CREATE INDEX IF NOT EXISTS idx_pipeline_log_created ON pipeline_log(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_pipeline_log_document ON pipeline_log(document_id);
 """
 
 SEED_DATA = """
-INSERT INTO document_source (id, name) VALUES (1, 'OTHER'), (2, 'YOUTUBE'), (3, 'FELDENKRAIS_MANHATTAN') ON CONFLICT DO NOTHING;
+INSERT INTO document_source (id, name) VALUES (1, 'OTHER'), (2, 'YOUTUBE'), (3, 'FELDENKRAIS_MANHATTAN'), (4, 'FELDENKRAIS_PROJECT') ON CONFLICT DO NOTHING;
 INSERT INTO document_type (id, name) VALUES (1, 'TEXT'), (2, 'AUDIO'), (3, 'VIDEO') ON CONFLICT DO NOTHING;
 INSERT INTO analysis_type (id, name) VALUES (1, 'TRANSCRIPTION'), (2, 'ANNOTATION') ON CONFLICT DO NOTHING;
 """
@@ -197,6 +219,18 @@ class Database:
                 statement = statement.strip()
                 if statement:
                     cursor.execute(statement)
+            # Migrations: add columns if missing (safe for existing tables)
+            for table, column, col_type in [
+                ("document_source", "category_name", "TEXT"),
+                ("document_source", "visible", "BOOLEAN NOT NULL DEFAULT TRUE"),
+                ("document", "category_name", "TEXT"),
+            ]:
+                cursor.execute(f"""
+                    DO $$ BEGIN
+                        ALTER TABLE {table} ADD COLUMN {column} {col_type};
+                    EXCEPTION WHEN duplicate_column THEN NULL;
+                    END $$;
+                """)
             # Seed enum values
             for statement in SEED_DATA.strip().split(';'):
                 statement = statement.strip()
@@ -710,3 +744,237 @@ class Database:
                 """,
                 (lesson_date, lesson_index, doc_id),
             )
+
+    # Lesson browsing methods (for web UI)
+
+    def get_lesson_categories(self) -> list[dict]:
+        """Get document sources that have at least one transcribed document.
+
+        Returns list of dicts with: source_id, source_name, category_name, lesson_count.
+        """
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute("""
+                SELECT ds.id as source_id, ds.name as source_name,
+                       ds.category_name as source_category_name,
+                       COUNT(DISTINCT d.id) as lesson_count
+                FROM document_source ds
+                JOIN document d ON d.source_id = ds.id
+                JOIN analysis a ON a.document_id = d.id AND a.type_id = 1
+                WHERE ds.visible = TRUE
+                GROUP BY ds.id, ds.name, ds.category_name
+                ORDER BY ds.id
+            """)
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_source_lessons(self, source_id: int) -> list[dict]:
+        """Get transcribed documents for a source.
+
+        Returns list of dicts with: id, title, category_name, created_at.
+        Uses tiered override: document.category_name > source.category_name > source.name.
+        """
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute("""
+                SELECT d.id, d.title, d.category_name,
+                       d.lesson_date, d.lesson_index, d.created_at
+                FROM document d
+                JOIN analysis a ON a.document_id = d.id AND a.type_id = 1
+                WHERE d.source_id = %s
+                ORDER BY d.lesson_date NULLS LAST, d.lesson_index NULLS LAST, d.title
+            """, (source_id,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_document_transcription(self, document_id: str) -> Optional[str]:
+        """Get the transcription text for a document."""
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute("""
+                SELECT a.data->>'text' as text
+                FROM analysis a
+                WHERE a.document_id = %s AND a.type_id = 1
+            """, (document_id,))
+            row = cursor.fetchone()
+            return row["text"] if row else None
+
+    def get_document_whisper_segments(self, document_id: str) -> Optional[list]:
+        """Get whisper segments for a document from its transcription analysis."""
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute("""
+                SELECT a.data->'segments' as segments
+                FROM analysis a
+                WHERE a.document_id = %s AND a.type_id = 1
+            """, (document_id,))
+            row = cursor.fetchone()
+            if row and row["segments"]:
+                return row["segments"] if isinstance(row["segments"], list) else json.loads(row["segments"])
+            return None
+
+    def update_source_category_name(self, source_id: int, category_name: str):
+        """Set the display category name for a document source."""
+        with self.get_cursor() as cursor:
+            cursor.execute(
+                "UPDATE document_source SET category_name = %s WHERE id = %s",
+                (category_name, source_id),
+            )
+
+    # Pipeline logging
+
+    def log_event(self, event: str, title: str = None,
+                  document_id: str = None, detail: dict = None):
+        """Append an event to the pipeline log."""
+        detail_json = json.dumps(detail) if detail else None
+        with self.get_cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO pipeline_log (event, document_id, title, detail)
+                VALUES (%s, %s, %s, %s::jsonb)
+                """,
+                (event, document_id, title, detail_json),
+            )
+
+    def get_pipeline_log(self, limit: int = 50, event: str = None) -> list[dict]:
+        """Get recent pipeline events, optionally filtered by event type."""
+        with self.get_cursor(commit=False) as cursor:
+            if event:
+                cursor.execute(
+                    """
+                    SELECT * FROM pipeline_log
+                    WHERE event = %s
+                    ORDER BY created_at DESC LIMIT %s
+                    """,
+                    (event, limit),
+                )
+            else:
+                cursor.execute(
+                    "SELECT * FROM pipeline_log ORDER BY created_at DESC LIMIT %s",
+                    (limit,),
+                )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_pipeline_summary(self) -> dict:
+        """Get pipeline status counts."""
+        with self.get_cursor(commit=False) as cursor:
+            # Document counts by status
+            cursor.execute("""
+                SELECT status, COUNT(*) as count
+                FROM document GROUP BY status
+            """)
+            doc_counts = {row["status"]: row["count"] for row in cursor.fetchall()}
+
+            # Transcription job counts by status
+            cursor.execute("""
+                SELECT status, COUNT(*) as count
+                FROM transcription_job GROUP BY status
+            """)
+            job_counts = {row["status"]: row["count"] for row in cursor.fetchall()}
+
+            # Total documents
+            cursor.execute("SELECT COUNT(*) as count FROM document")
+            doc_total = cursor.fetchone()["count"]
+
+            # Total with transcriptions
+            cursor.execute("""
+                SELECT COUNT(DISTINCT document_id) as count
+                FROM analysis WHERE type_id = 1
+            """)
+            transcribed_count = cursor.fetchone()["count"]
+
+            return {
+                "documents": {"total": doc_total, **doc_counts},
+                "transcription_jobs": job_counts,
+                "transcribed": transcribed_count,
+            }
+
+    def get_document_pipeline_view(self, limit: int = 50) -> list[dict]:
+        """Get documents with their pipeline status for the dashboard."""
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute("""
+                SELECT d.id, d.title, d.status, d.created_at, d.updated_at,
+                       ds.name as source_name,
+                       ds.category_name as source_category,
+                       COALESCE(d.category_name, ds.category_name, ds.name) as display_category,
+                       (SELECT COUNT(*) FROM transcription_job j
+                        WHERE j.document_id = d.id) as job_count,
+                       (SELECT j.status FROM transcription_job j
+                        WHERE j.document_id = d.id
+                        ORDER BY j.updated_at DESC LIMIT 1) as latest_job_status,
+                       (SELECT j.error FROM transcription_job j
+                        WHERE j.document_id = d.id AND j.status = 'failed'
+                        ORDER BY j.updated_at DESC LIMIT 1) as latest_error,
+                       EXISTS(SELECT 1 FROM analysis a
+                              WHERE a.document_id = d.id AND a.type_id = 1) as has_transcription
+                FROM document d
+                JOIN document_source ds ON ds.id = d.source_id
+                ORDER BY d.updated_at DESC
+                LIMIT %s
+            """, (limit,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    # Cache operations
+
+    def get_cache(self, key: str) -> dict | None:
+        """Load a cached value by key."""
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute("SELECT data FROM cache WHERE key = %s", (key,))
+            row = cursor.fetchone()
+            return dict(row["data"]) if row else None
+
+    def set_cache(self, key: str, data: dict) -> None:
+        """Store a value in the cache (upsert)."""
+        with self.get_cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO cache (key, data, updated_at)
+                VALUES (%s, %s::jsonb, NOW())
+                ON CONFLICT (key) DO UPDATE
+                SET data = EXCLUDED.data, updated_at = NOW()
+                """,
+                (key, json.dumps(data)),
+            )
+
+    def clear_cache(self, prefix: str | None = None) -> int:
+        """Delete cache entries. If prefix given, only delete matching keys."""
+        with self.get_cursor() as cursor:
+            if prefix:
+                cursor.execute(
+                    "DELETE FROM cache WHERE key LIKE %s",
+                    (prefix + "%",),
+                )
+            else:
+                cursor.execute("DELETE FROM cache")
+            return cursor.rowcount
+
+    def list_cache(self) -> list[dict]:
+        """List all cache entries with key and data size."""
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute(
+                """
+                SELECT key, length(data::text) as size_bytes, created_at, updated_at
+                FROM cache ORDER BY key
+                """
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_cache_keys(self) -> set[str]:
+        """Return the set of all cache keys (fast, no data loaded)."""
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute("SELECT key FROM cache")
+            return {row["key"] for row in cursor.fetchall()}
+
+    def get_all_transcription_hashes(self) -> dict[str, str]:
+        """Return {document_id: cache_key} for all documents with transcriptions.
+
+        Computes SHA256 hashes in Python to match get_cache_key() in web.py.
+        Single DB round-trip instead of one per document.
+        """
+        import hashlib
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute("""
+                SELECT a.document_id::text as doc_id, a.data->>'text' as text
+                FROM analysis a
+                WHERE a.type_id = 1 AND a.data->>'text' IS NOT NULL
+            """)
+            result = {}
+            for row in cursor.fetchall():
+                text = row["text"].strip()
+                if text:
+                    result[row["doc_id"]] = hashlib.sha256(text.encode()).hexdigest()[:16]
+            return result
