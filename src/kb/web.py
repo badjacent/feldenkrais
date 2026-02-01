@@ -974,42 +974,20 @@ def process_job(job_id: str) -> None:
         pa_provider = job.get("pass_a_provider")
         pb_provider = job.get("pass_b_provider")
         fv = job.get("framework_version")
-
-        # Step 1: Run Pass A (Decomposition + Routing) - ONCE
-        pass_a_result = run_pass_a(lesson_text, provider_key=pa_provider, framework_version=fv)
-        job["pass_a_result"] = pass_a_result
-
-        # For backwards compatibility, also store as router_result
-        job["router_result"] = pass_a_result
-
-        # Step 2: Determine which frameworks to analyze
-        active_frameworks = get_active_frameworks(pass_a_result)
-
-        if not active_frameworks:
-            # Fallback to primary if nothing above threshold
-            primary = pass_a_result.get("primary_framework", "VL-1")
-            active_frameworks = [primary]
-
-        # Step 3: Run Pass B for each active framework
-        # Pass B receives lesson text + Pass A output
         split = job.get("split_pass_b", False)
-        job["vl_analyses"] = {}
 
-        for framework in active_frameworks:
-            try:
-                analysis = run_pass_b(lesson_text, pass_a_result, framework, split=split, provider_key=pb_provider, framework_version=fv)
-                job["vl_analyses"][framework] = {
-                    "status": "complete",
-                    "result": analysis
-                }
-            except Exception as e:
-                job["vl_analyses"][framework] = {
-                    "status": "error",
-                    "error": str(e)
-                }
+        # Use _run_analysis for consistent caching with local path
+        result = _run_analysis(lesson_text, split=split, pass_a_provider=pa_provider, pass_b_provider=pb_provider, framework_version=fv)
+
+        job["pass_a_result"] = result["pass_a_result"]
+        job["router_result"] = result["pass_a_result"]
+        job["vl_analyses"] = result["vl_analyses"]
 
         # For backwards compatibility, also store primary result in "result"
-        primary = active_frameworks[0] if active_frameworks else "VL-1"
+        active_frameworks = get_active_frameworks(result["pass_a_result"])
+        if not active_frameworks:
+            active_frameworks = [result["pass_a_result"].get("primary_framework", "VL-1")]
+        primary = active_frameworks[0]
         if primary in job["vl_analyses"] and job["vl_analyses"][primary].get("status") == "complete":
             job["result"] = job["vl_analyses"][primary]["result"]
 
