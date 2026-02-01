@@ -4049,14 +4049,188 @@ VL_BOOKLET_INTROS = {
 }
 
 SPIFFER_TRANSLATIONS = {
-    "S": "A moment of sensing — turning attention inward to feel what's actually happening.",
-    "P": "A pause to let things settle. Integration happens in the quiet moments.",
-    "I": "A mental image or metaphor to guide the movement from the inside.",
-    "F": "A functional goal — connecting this movement to something you actually do in life.",
-    "E": "An invitation to reduce effort, to find the movement with less force.",
-    "R": "Noticing how parts of your body are connected — how one movement ripples through.",
-    "Q": "The teacher poses a question. Not something to answer, but something to feel into.",
+    "S": "Sensing",
+    "P": "Pause",
+    "I": "Image",
+    "F": "Function",
+    "E": "Effort",
+    "R": "Relationship",
+    "Q": "Question",
 }
+
+# ---------------------------------------------------------------------------
+# Booklet Query Types
+#
+# Each type defines a slot in the booklet where an LLM generates text.
+# An agent walks the booklet, finds <div class="llm-query"> blocks,
+# and uses the query type to know what to generate and how.
+#
+# Fields:
+#   name        — human-readable label
+#   location    — where in the booklet structure this slot lives
+#   purpose     — what this text should accomplish for the reader
+#   voice       — tone/style guidance for the generated text
+#   length      — target output length
+#   prompt      — prompt template; {placeholders} are filled from context
+#   context_keys— what keys the data-context JSON will contain
+# ---------------------------------------------------------------------------
+
+BOOKLET_QUERY_TYPES = {
+    "volume-intro": {
+        "name": "Volume Introduction",
+        "location": "Top of booklet index page, before the lesson list",
+        "purpose": "Introduce a collected volume of lesson companion booklets to someone who does "
+                   "Feldenkrais ATM lessons from recordings. Orient them to the five lenses, the "
+                   "concepts (Striver, Foundation, Washing), and what the booklets will help them see.",
+        "voice": "Warm, direct, second-person. Writing for people who do ATM lessons and want to "
+                 "understand what happened. Not a textbook, not promotional — a companion.",
+        "length": "4-6 paragraphs, ~500-700 words",
+        "prompt": (
+            "You are writing the introduction to a volume of companion booklets for Feldenkrais "
+            "Awareness Through Movement lessons. The audience does ATM lessons from recordings and "
+            "wants to understand what happened on the floor.\n\n"
+            "The volume contains five booklets, one per analytical lens:\n{lens_summaries}\n\n"
+            "The lessons included are:\n{lesson_list}\n\n"
+            "Every booklet uses a shared conceptual framework:\n"
+            "- The Striver: the part of you that grips, pushes, forces — voluntary muscular effort. "
+            "Means well but uses ten muscles when two would do.\n"
+            "- The Foundation: the skeleton and reflexes underneath. Quiet, efficient, reflexive. "
+            "Responds to gravity, finds balance, transmits force through bone.\n"
+            "- The Washing: the lesson dissolves the Striver through repetition, variation, and "
+            "gentle complexity — like water over stone.\n"
+            "- Three States: Domination (Striver in charge) → Negotiation (active exchange, "
+            "confused in a good way) → Integration (Foundation takes over, movement becomes easy).\n\n"
+            "Each booklet walks through a lesson section by section: what you did, what was happening "
+            "underneath, the arc from beginning to end, and the specific lens illuminating a different "
+            "dimension of the experience. Two voices appear — the Person Inside (sensing the Foundation) "
+            "and the Shadow (the Striver's voice, gradually losing grip).\n\n"
+            "Write 4-6 paragraphs introducing this volume. Include:\n"
+            "1. What these booklets are and who they're for\n"
+            "2. The core idea: movements aren't exercises, they're questions\n"
+            "3. Brief orientation to the Striver/Foundation/Washing framework\n"
+            "4. The five lenses — what each one sees, in a sentence or two each\n"
+            "5. How to use the booklets (do the lesson first, then read; pick any order)\n"
+            "6. The closing note: these are companions to experiences, not explanations of a method"
+        ),
+        "context_keys": [
+            "lenses",       # list of {id, name, subtitle, lens_description}
+            "lessons",      # list of {title, framework_id, framework_name}
+        ],
+    },
+    "booklet-intro": {
+        "name": "Booklet Introduction",
+        "location": "Top of booklet, after cover, before any lesson content",
+        "purpose": "Orient the reader: what this booklet is, what it's for, and how it relates "
+                   "to the lesson they just did. Should convey the spirit of the Feldenkrais approach "
+                   "without being academic.",
+        "voice": "Warm, direct, second-person. Write for someone who does ATM lessons from recordings "
+                 "and wants to understand what happened. Not a textbook — a companion.",
+        "length": "2-3 short paragraphs",
+        "prompt": (
+            "You are writing the introduction to a companion booklet for a Feldenkrais ATM lesson called "
+            "\"{lesson_title}\". The reader has just done this lesson — on the floor, from a recording. "
+            "They are curious about what happened and want to go deeper.\n\n"
+            "The lesson's central question is: {primary_inquiry}\n\n"
+            "The lesson covers these parts: {group_summary}\n\n"
+            "The analytical framework used is: {framework_name}\n\n"
+            "Write 2-3 short paragraphs that:\n"
+            "1. Welcome the reader and acknowledge they've just done the lesson\n"
+            "2. Explain what this booklet will help them see (the pedagogy, the arc, "
+            "what their nervous system was sorting out)\n"
+            "3. Set the tone — this is a companion, not a manual. The movements aren't exercises, "
+            "they're questions. The booklet helps the reader see what questions were being asked."
+        ),
+        "context_keys": [
+            "lesson_title",
+            "primary_inquiry",
+            "framework_id",
+            "framework_name",
+            "groups_summary",      # list of {group_number, label}
+            "somatic_narrative",   # full somatic narrative dict
+        ],
+    },
+    "pedagogical-gloss": {
+        "name": "Pedagogical Gloss",
+        "location": "Journey > Group > between 'What You Did' and 'What Was Happening'",
+        "purpose": "Help the reader understand what the teacher was doing pedagogically "
+                   "in this part of the lesson — why these instructions, in this order, "
+                   "at this point in the arc.",
+        "voice": "Warm, concrete, second-person. Reference the actual movements. "
+                 "Not academic — write for someone who just did the lesson.",
+        "length": "1-2 sentences",
+        "prompt": (
+            "You are writing a booklet for someone who just completed a Feldenkrais ATM lesson. "
+            "This section covers Part {group_number}: {group_label}. "
+            "The steps in this part are: {steps_text}. "
+            "The prominent pedagogical qualities are: {tag_labels}. "
+            "Write 1-2 sentences describing what the teacher is doing pedagogically here. "
+            "Be concrete — reference the actual movements, not generic tag definitions. "
+            "Consider where this part falls in the overall lesson arc."
+        ),
+        "context_keys": [
+            "all_groups",           # list of {group_number, label, description} for arc awareness
+            "all_steps",            # list of {step_number, instruction, tags} for full lesson
+            "target_group",         # {group_number, label, description, steps, prominent_tags, analytical_rows}
+        ],
+    },
+}
+
+
+def booklet_query_block(query_type: str, context: dict) -> str:
+    """Generate an LLM query block for the booklet.
+
+    Args:
+        query_type: key into BOOKLET_QUERY_TYPES
+        context: dict matching the type's context_keys, embedded as data-context
+
+    Returns:
+        HTML string with the query div, or empty string if type unknown.
+    """
+    import html as html_mod
+
+    qtype = BOOKLET_QUERY_TYPES.get(query_type)
+    if not qtype:
+        return ""
+
+    # Build prompt variables from context — flatten nested dicts for template filling
+    # Build prompt variables from context — covers all query types
+    target = context.get("target_group", {})
+    groups_summary = context.get("groups_summary", [])
+    lenses = context.get("lenses", [])
+    lessons = context.get("lessons", [])
+    prompt_vars = {
+        # pedagogical-gloss
+        "group_number": target.get("group_number", "?"),
+        "group_label": target.get("label", ""),
+        "steps_text": "; ".join(target.get("steps", [])),
+        "tag_labels": ", ".join(target.get("prominent_tags", [])),
+        # booklet-intro
+        "lesson_title": context.get("lesson_title", ""),
+        "primary_inquiry": context.get("primary_inquiry", ""),
+        "framework_name": context.get("framework_name", ""),
+        "group_summary": ", ".join(
+            f"Part {g.get('group_number', '?')}: {g.get('label', '')}"
+            for g in groups_summary
+        ) if groups_summary else "",
+        # volume-intro
+        "lens_summaries": "\n".join(
+            f"- {l.get('name', '')} ({l.get('subtitle', '')}): {l.get('lens_description', '')}"
+            for l in lenses
+        ) if lenses else "",
+        "lesson_list": "\n".join(
+            f"- {l.get('title', '')}" for l in lessons
+        ) if lessons else "(lessons not yet selected)",
+    }
+    filled_prompt = qtype["prompt"].format(**prompt_vars)
+
+    context_json = json.dumps(context)
+    return (
+        f'<div class="llm-query" '
+        f'data-query-type="{html_mod.escape(query_type)}" '
+        f'data-context="{html_mod.escape(context_json)}">'
+        f'<p class="query-prompt">{html_mod.escape(filled_prompt)}</p>'
+        f'</div>'
+    )
 
 
 def map_groups_to_table_rows(groups: list, table: dict, pass_a_steps: dict) -> dict:
@@ -4119,23 +4293,32 @@ def render_booklet_cover(title: str, framework_id: str) -> str:
     """
 
 
-def render_booklet_intro() -> str:
-    """Render the 'What This Booklet Is' section."""
-    return """
+def render_booklet_intro(lesson_title: str = "", framework_id: str = "",
+                         somatic_narrative: dict = None, groups: list = None) -> str:
+    """Render the 'What This Booklet Is' section with an LLM query block."""
+    somatic_narrative = somatic_narrative or {}
+    groups = groups or []
+
+    intro = VL_BOOKLET_INTROS.get(framework_id, {})
+    framework_name = intro.get("name", framework_id)
+    primary_inquiry = somatic_narrative.get("primary_inquiry", "")
+    group_summary = ", ".join(
+        f"Part {g.get('group_number', '?')}: {g.get('label', '')}" for g in groups
+    )
+
+    context = {
+        "lesson_title": lesson_title,
+        "primary_inquiry": primary_inquiry,
+        "framework_id": framework_id,
+        "framework_name": framework_name,
+        "groups_summary": [{"group_number": g.get("group_number"), "label": g.get("label")} for g in groups],
+        "somatic_narrative": somatic_narrative,
+    }
+
+    return f"""
     <section class="booklet-section">
         <h2>What This Booklet Is</h2>
-        <p>
-            You've just done this lesson — on the floor, in a class, or from a recording.
-            This booklet is your companion afterward. It won't teach you the movements
-            (you've already done them). Instead, it helps you understand what was happening
-            underneath: why the teacher chose those movements in that order, what your
-            nervous system was sorting out, and what to notice next time.
-        </p>
-        <p>
-            Each Feldenkrais lesson is a carefully designed puzzle for your nervous system.
-            The movements aren't exercises — they're questions. This booklet helps you
-            see what questions were being asked, and what your body was discovering.
-        </p>
+        {booklet_query_block("booklet-intro", context)}
     </section>
     """
 
@@ -4273,27 +4456,49 @@ def render_booklet_journey(groups: list, steps: list, vl_analysis: dict, pass_a_
             step = step_lookup.get(sn)
             if step:
                 instruction = step.get("instruction", "")
-                home_badge = ' <span class="home-badge">return to start</span>' if step.get("is_home") else ""
-                html.append(f"<li>{instruction}{home_badge}</li>")
+                html.append(f"<li>{instruction}</li>")
         html.append("</ol>")
 
-        # SPIFFER-Q translation — show prominent tags for this group
+        # Pedagogical gloss — what the teacher is doing in this group
+        # Collect the SPIFFER tags and step instructions for context
+        group_instructions = []
         all_tags = []
         for sn in group_step_nums:
             step = step_lookup.get(sn)
             if step:
+                group_instructions.append(step.get("instruction", ""))
                 all_tags.extend(step.get("tags", []))
-        # Count tag frequency, show the most common
         if all_tags:
             from collections import Counter
             tag_counts = Counter(all_tags)
             prominent = [tag for tag, count in tag_counts.most_common(3) if count > 1 or len(group_step_nums) <= 3]
             if prominent:
-                html.append('<div class="spiffer-hints">')
-                for tag in prominent:
-                    if tag in SPIFFER_TRANSLATIONS:
-                        html.append(f'<p class="spiffer-hint">{SPIFFER_TRANSLATIONS[tag]}</p>')
-                html.append("</div>")
+                tag_labels = [SPIFFER_TRANSLATIONS.get(t, t) for t in prominent]
+
+                # Build the matched analytical rows for this group
+                matched_rows = group_to_rows.get(group_num, [])
+                matched_rows_summary = []
+                for row in matched_rows:
+                    row_summary = {}
+                    for k, v in row.items():
+                        if v and k not in ("row_number",):
+                            row_summary[k] = v
+                    if row_summary:
+                        matched_rows_summary.append(row_summary)
+
+                query_context = {
+                    "all_groups": [{"group_number": gg.get("group_number"), "label": gg.get("label"), "description": gg.get("description")} for gg in groups],
+                    "all_steps": [{"step_number": s.get("step_number"), "instruction": s.get("instruction"), "tags": s.get("tags", [])} for s in steps],
+                    "target_group": {
+                        "group_number": group_num,
+                        "label": group_label,
+                        "description": group_desc,
+                        "steps": group_instructions,
+                        "prominent_tags": tag_labels,
+                        "analytical_rows": matched_rows_summary,
+                    },
+                }
+                html.append(booklet_query_block("pedagogical-gloss", query_context))
 
         html.append("</div>")  # end what-you-did
 
@@ -4484,7 +4689,7 @@ def render_booklet_reflection(steps: list) -> str:
     return "\n".join(html)
 
 
-def build_booklet_html(analysis_result: dict, lesson_title: str = "") -> str:
+def build_booklet_html(analysis_result: dict, lesson_title: str = "", framework: str = "") -> str:
     """Assemble the complete booklet HTML from cached analysis data."""
     pass_a = analysis_result.get("pass_a_result", {})
     vl_analyses = analysis_result.get("vl_analyses", {})
@@ -4492,18 +4697,22 @@ def build_booklet_html(analysis_result: dict, lesson_title: str = "") -> str:
     # Use the lesson title from analysis or provided title
     title = pass_a.get("lesson_title", "") or lesson_title or "Untitled Lesson"
 
-    # Get primary framework
-    framework_id = pass_a.get("primary_framework", "VL-1")
+    # Get primary framework — explicit override wins, then Pass A classification, then fallback
+    framework_id = framework or pass_a.get("primary_framework", "VL-1")
 
-    # Get the primary VL analysis
+    # Get the VL analysis for the chosen framework
     primary_vl = vl_analyses.get(framework_id, {})
     if primary_vl.get("status") != "complete":
-        # Fall back to first complete analysis
-        for fid, vl in vl_analyses.items():
-            if vl.get("status") == "complete":
-                primary_vl = vl
-                framework_id = fid
-                break
+        if framework:
+            # Explicit framework requested but not available — don't silently fall back
+            pass
+        else:
+            # Fall back to first complete analysis
+            for fid, vl in vl_analyses.items():
+                if vl.get("status") == "complete":
+                    primary_vl = vl
+                    framework_id = fid
+                    break
 
     result = primary_vl.get("result", {})
     somatic_narrative = result.get("somatic_narrative", {})
@@ -4521,7 +4730,7 @@ def build_booklet_html(analysis_result: dict, lesson_title: str = "") -> str:
     # Assemble sections
     sections = []
     sections.append(render_booklet_cover(title, framework_id))
-    sections.append(render_booklet_intro())
+    sections.append(render_booklet_intro(title, framework_id, somatic_narrative, groups))
     if home_position:
         sections.append(render_booklet_home(home_position))
     if somatic_narrative:
@@ -4743,6 +4952,31 @@ def build_booklet_html(analysis_result: dict, lesson_title: str = "") -> str:
         .spiffer-hint:last-child {{
             margin-bottom: 0;
         }}
+        .llm-query {{
+            margin: 12px 0;
+            padding: 12px 16px;
+            background: #fef9e7;
+            border: 1px dashed #d4ac0d;
+            border-radius: 6px;
+            font-size: 0.85em;
+            color: #856404;
+            font-family: monospace;
+        }}
+        .llm-query .query-prompt {{
+            margin: 0;
+        }}
+        .llm-filled {{
+            margin: 12px 0;
+            padding: 12px 16px;
+            background: #eafaf1;
+            border-left: 3px solid #27ae60;
+            border-radius: 4px;
+            font-size: 0.95em;
+            color: #2c3e50;
+        }}
+        .llm-filled p {{
+            margin: 0;
+        }}
 
         /* Negotiation badge */
         .neg-badge {{
@@ -4894,14 +5128,14 @@ def build_booklet_html(analysis_result: dict, lesson_title: str = "") -> str:
     </style>
 </head>
 <body>
-    <a href="/" class="back-link">&larr; Back to Analyzer</a>
+    <a href="/book" class="back-link">&larr; All Booklets</a>
     {body}
 </body>
 </html>"""
 
 
 @app.get("/booklet", response_class=HTMLResponse)
-async def booklet_page(category: str = "", lesson: str = ""):
+async def booklet_page(category: str = "", lesson: str = "", fill: str = "", framework: str = ""):
     """Render a lesson booklet from cached analysis."""
     if not category or not lesson:
         # Show a simple lesson picker
@@ -4929,11 +5163,233 @@ async def booklet_page(category: str = "", lesson: str = ""):
             lesson_title = display
             break
 
-    return build_booklet_html(cached, lesson_title)
+    html = build_booklet_html(cached, lesson_title, framework=framework)
+
+    # Optionally fill query blocks via QueryAgent
+    if fill.lower() in ("true", "1", "yes"):
+        import asyncio
+        try:
+            from query_agent import QueryAgent
+        except ImportError:
+            from .query_agent import QueryAgent
+        agent = QueryAgent(
+            llm=get_llm(DEFAULT_LLM),
+            cache_dir=str(DATA_DIR / "cache" / "query_agent"),
+            max_review_cycles=0,  # skip review for web; use CLI for iteration
+        )
+        html = await asyncio.to_thread(agent.fill, html)
+
+    return html
+
+
+# --- Book (curated volume) ---
+# Five lessons, one per VL lens.
+BOOK_LESSONS = {
+    "VL-1": {
+        "lesson_id": "abfddaf1-e837-4ed5-9d59-6e53056eb759",
+        "category": "db:4",
+        "title": "The Anti-Gravity Lesson",
+    },
+    "VL-2": {
+        "lesson_id": "cf787d50-2757-4e7e-bc16-25582e9dc810",
+        "category": "db:4",
+        "title": "Chanukia, the Candle Holder Lesson",
+    },
+    "VL-3": {
+        "lesson_id": "90e72ae1-98bc-4b35-816c-4542e23bd928",
+        "category": "db:4:Feldenkrais Project ATM Book",
+        "title": "The Movement of the Eyes Organizes the Movement of the Body",
+    },
+    "VL-4": {
+        "lesson_id": "bbbf731f-bc74-462f-b7eb-fdfac69dc61b",
+        "category": "db:4",
+        "title": "The Hip Joints: Moving Proximal Around Distal",
+    },
+    "VL-5": {
+        "lesson_id": "7bef0dd0-5e16-47a7-bd98-fcc880a65c9a",
+        "category": "db:4:Feldenkrais Project ATM Book",
+        "title": "Coordination of the Flexor Muscles and of the Extensors",
+    },
+}
+
+BOOK_ALTERNATES = {
+    "VL-1": None,  # decided — no alternate
+    "VL-2": {
+        "lesson_id": "4decf333-7008-4070-84f8-84da64382098",
+        "category": "db:4:Feldenkrais Project ATM Book",
+        "title": "Spatial Relationships as a Means to Coordinated Action",
+    },
+    "VL-3": {
+        "lesson_id": "c2029d32-8c74-4bec-90cb-472d677051ae",
+        "category": "db:4",
+        "title": "Arms Like a Skeleton, Integrating the Neck, Jaw, and Eyes",
+    },
+    "VL-4": {
+        "lesson_id": "c0d50725-fc4a-4e7e-ab31-42a30ac70e07",
+        "category": "db:4",
+        "title": "Legs as Free as a Baby's",
+    },
+    "VL-5": {
+        "lesson_id": "4e4d98d7-7af4-47a9-9a75-76997968100e",
+        "category": "db:4",
+        "title": "More Precise Hips and Spine",
+    },
+}
+
+
+@app.get("/book", response_class=HTMLResponse)
+async def book_page(fill: str = ""):
+    """Render the curated volume: intro + five booklet links."""
+    # Build lens info for the volume-intro query block
+    lenses = []
+    for vl_id in sorted(VL_BOOKLET_INTROS.keys()):
+        info = VL_BOOKLET_INTROS[vl_id]
+        lenses.append({
+            "id": vl_id,
+            "name": info["name"],
+            "subtitle": info["subtitle"],
+            "lens_description": info["lens"],
+        })
+
+    lesson_entries = []
+    for vl_id in sorted(BOOK_LESSONS.keys()):
+        entry = BOOK_LESSONS[vl_id]
+        if entry:
+            lesson_entries.append({
+                "title": entry["title"],
+                "framework_id": vl_id,
+                "framework_name": VL_BOOKLET_INTROS[vl_id]["name"],
+            })
+
+    volume_context = {"lenses": lenses, "lessons": lesson_entries}
+    volume_query = booklet_query_block("volume-intro", volume_context)
+
+    # Optionally fill the intro query block
+    if fill.lower() in ("true", "1", "yes"):
+        try:
+            from query_agent import QueryAgent
+        except ImportError:
+            from .query_agent import QueryAgent
+        agent = QueryAgent(
+            llm=get_llm(DEFAULT_LLM),
+            cache_dir=str(DATA_DIR / "cache" / "query_agent"),
+            max_review_cycles=0,
+        )
+        volume_query = await asyncio.to_thread(agent.fill, volume_query)
+
+    # Build booklet links
+    booklet_links = []
+    for vl_id in sorted(BOOK_LESSONS.keys()):
+        info = VL_BOOKLET_INTROS[vl_id]
+        entry = BOOK_LESSONS[vl_id]
+        link = (
+            f'<li>'
+            f'<a href="/booklet?category={entry["category"]}&lesson={entry["lesson_id"]}&framework={vl_id}">'
+            f'{entry["title"]}</a>'
+            f'<span class="lens">{info["name"]} &mdash; {info["subtitle"]}</span>'
+            f'</li>'
+        )
+        booklet_links.append(link)
+
+    links_html = "<ol>" + "\n".join(booklet_links) + "</ol>"
+
+    # Build alternate links
+    alt_links = []
+    for vl_id in sorted(BOOK_ALTERNATES.keys()):
+        info = VL_BOOKLET_INTROS[vl_id]
+        entry = BOOK_ALTERNATES[vl_id]
+        if entry:
+            link = (
+                f'<li>'
+                f'<a href="/booklet?category={entry["category"]}&lesson={entry["lesson_id"]}&framework={vl_id}">'
+                f'{entry["title"]}</a>'
+                f'<span class="lens">{info["name"]} &mdash; {info["subtitle"]}</span>'
+                f'</li>'
+            )
+        else:
+            link = (
+                f'<li class="decided">'
+                f'<span class="lens">{info["name"]} &mdash; decided</span>'
+                f'</li>'
+            )
+        alt_links.append(link)
+
+    alts_html = "<ol>" + "\n".join(alt_links) + "</ol>"
+
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Companion Booklets</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Inter:wght@400;500;600&display=swap');
+        body {{
+            font-family: 'Lora', Georgia, serif;
+            max-width: 680px;
+            margin: 0 auto;
+            padding: 40px 24px;
+            line-height: 1.7;
+            color: #2c2c2c;
+            background: #faf9f7;
+        }}
+        h1 {{ font-size: 1.8em; margin-bottom: 8px; }}
+        h2 {{ font-size: 1.3em; margin: 32px 0 12px; color: #4a6741; }}
+        p {{ color: #555; margin-bottom: 16px; }}
+        ol {{ list-style: none; padding: 0; counter-reset: booklet; }}
+        li {{
+            padding: 16px;
+            border-bottom: 1px solid #e8e2d9;
+            counter-increment: booklet;
+        }}
+        li:first-child {{ border-top: 1px solid #e8e2d9; }}
+        li a {{
+            display: block;
+            color: #4a6741;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1.05em;
+        }}
+        li a:hover {{ text-decoration: underline; }}
+        .lens {{
+            display: block;
+            font-size: 0.85em;
+            color: #888;
+            margin-top: 2px;
+        }}
+        .decided {{ color: #ccc; font-style: italic; }}
+        .back {{ font-size: 0.85em; color: #999; margin-bottom: 20px; display: block; }}
+        .llm-query {{
+            margin: 20px 0;
+            padding: 12px 16px;
+            background: #fef9e7;
+            border: 1px dashed #d4ac0d;
+            border-radius: 6px;
+            font-size: 0.85em;
+            color: #856404;
+            font-family: monospace;
+        }}
+        .llm-query .query-prompt {{ margin: 0; }}
+        .llm-filled {{
+            margin: 20px 0;
+        }}
+        .llm-filled p {{
+            margin: 0 0 12px;
+        }}
+    </style>
+</head>
+<body>
+    <a href="/" class="back">&larr; Back to Analyzer</a>
+    <h1>Companion Booklets for Awareness Through Movement</h1>
+    {volume_query}
+    <h2>The Booklets</h2>
+    {links_html}
+    <h2>Alternates</h2>
+    {alts_html}
+</body>
+</html>"""
 
 
 def _booklet_picker_html() -> str:
-    """Simple lesson picker for the booklet page."""
+    """Lesson picker for the booklet page."""
     categories, display_names = get_available_lessons()
 
     # Two queries total instead of N per lesson:
@@ -4946,7 +5402,6 @@ def _booklet_picker_html() -> str:
     for cat_key, lessons in categories.items():
         cat_display = display_names.get(cat_key, cat_key)
         for lesson_key, lesson_display in lessons:
-            # For DB lessons, look up hash directly without loading text
             cache_key = doc_hashes.get(lesson_key)
             if cache_key and cache_key in cached_keys:
                 options.append(
@@ -4964,17 +5419,18 @@ def _booklet_picker_html() -> str:
 <head>
     <title>Lesson Booklets</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Inter:wght@400;500;600&display=swap');
         body {{
             font-family: 'Lora', Georgia, serif;
-            max-width: 600px;
+            max-width: 680px;
             margin: 0 auto;
             padding: 40px 24px;
-            line-height: 1.6;
+            line-height: 1.7;
             color: #2c2c2c;
             background: #faf9f7;
         }}
         h1 {{ font-size: 1.8em; margin-bottom: 8px; }}
-        p {{ color: #666; margin-bottom: 24px; }}
+        p {{ color: #555; margin-bottom: 16px; }}
         ul {{ list-style: none; padding: 0; }}
         li {{
             padding: 12px 16px;
@@ -4992,8 +5448,8 @@ def _booklet_picker_html() -> str:
 </head>
 <body>
     <a href="/" class="back">&larr; Back to Analyzer</a>
-    <h1>Lesson Booklets</h1>
-    <p>Select an analyzed lesson to view as a companion booklet.</p>
+    <h1>Lesson Companion Booklets</h1>
+    <p>Select a lesson to view its companion booklet.</p>
     {lesson_list}
 </body>
 </html>"""
