@@ -374,11 +374,21 @@ class QueryAgent:
         for i, block in enumerate(blocks):
             if block.block_id in filled:
                 text = filled[block.block_id]
+                bid = html_mod.escape(block.block_id)
+                qtype = html_mod.escape(block.query_type)
+                prompt = html_mod.escape(block.prompt)
                 replacements[i] = (
-                    f'<div class="llm-filled" '
-                    f'data-query-type="{html_mod.escape(block.query_type)}" '
-                    f'data-block-id="{html_mod.escape(block.block_id)}">'
+                    f'<div class="llm-filled-group" data-query-type="{qtype}" data-block-id="{bid}">'
+                    f'<div class="llm-tab-bar">'
+                    f'<button class="llm-tab active" data-show="response">Response</button>'
+                    f'<button class="llm-tab" data-show="prompt">Prompt</button>'
+                    f'</div>'
+                    f'<div class="llm-filled llm-tab-content active" data-panel="response">'
                     f"<p>{text}</p>"
+                    f"</div>"
+                    f'<div class="llm-query llm-tab-content" data-panel="prompt" style="display:none;">'
+                    f'<p class="query-prompt">{prompt}</p>'
+                    f"</div>"
                     f"</div>"
                 )
 

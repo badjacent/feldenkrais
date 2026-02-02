@@ -5367,6 +5367,30 @@ def build_booklet_html(analysis_result: dict, lesson_title: str = "", framework:
         .llm-filled p {{
             margin: 0;
         }}
+        .llm-filled-group {{
+            margin: 12px 0;
+        }}
+        .llm-tab-bar {{
+            display: flex;
+            gap: 0;
+            margin-bottom: -1px;
+        }}
+        .llm-tab {{
+            padding: 3px 12px;
+            border: 1px solid #ddd;
+            border-bottom: none;
+            background: #f5f5f5;
+            color: #888;
+            font-size: 0.78em;
+            cursor: pointer;
+            border-radius: 4px 4px 0 0;
+        }}
+        .llm-tab.active {{
+            background: #eafaf1;
+            color: #2c3e50;
+            border-color: #27ae60 #ddd transparent #ddd;
+            border-left-color: #27ae60;
+        }}
 
         /* Negotiation badge */
         .neg-badge {{
@@ -5520,6 +5544,18 @@ def build_booklet_html(analysis_result: dict, lesson_title: str = "", framework:
 <body>
     <a href="/book" class="back-link">&larr; All Booklets</a>
     {body}
+    <script>
+        document.querySelectorAll('.llm-tab').forEach(function(tab) {{
+            tab.addEventListener('click', function() {{
+                var group = tab.closest('.llm-filled-group');
+                group.querySelectorAll('.llm-tab').forEach(function(t) {{ t.classList.remove('active'); }});
+                group.querySelectorAll('.llm-tab-content').forEach(function(c) {{ c.style.display = 'none'; c.classList.remove('active'); }});
+                tab.classList.add('active');
+                var panel = group.querySelector('[data-panel="' + tab.dataset.show + '"]');
+                if (panel) {{ panel.style.display = ''; panel.classList.add('active'); }}
+            }});
+        }});
+    </script>
 </body>
 </html>"""
 
@@ -5763,6 +5799,29 @@ async def book_page(fill: str = ""):
         .llm-filled p {{
             margin: 0 0 12px;
         }}
+        .llm-filled-group {{
+            margin: 20px 0;
+        }}
+        .llm-tab-bar {{
+            display: flex;
+            gap: 0;
+            margin-bottom: -1px;
+        }}
+        .llm-tab {{
+            padding: 3px 12px;
+            border: 1px solid #ddd;
+            border-bottom: none;
+            background: #f5f5f5;
+            color: #888;
+            font-size: 0.78em;
+            cursor: pointer;
+            border-radius: 4px 4px 0 0;
+        }}
+        .llm-tab.active {{
+            background: #fff;
+            color: #2c3e50;
+            border-color: #ccc;
+        }}
         .booklet-section {{
             margin: 32px 0;
             padding: 24px 0;
@@ -5822,6 +5881,18 @@ async def book_page(fill: str = ""):
     {links_html}
     <h2>Alternates</h2>
     {alts_html}
+    <script>
+        document.querySelectorAll('.llm-tab').forEach(function(tab) {{
+            tab.addEventListener('click', function() {{
+                var group = tab.closest('.llm-filled-group');
+                group.querySelectorAll('.llm-tab').forEach(function(t) {{ t.classList.remove('active'); }});
+                group.querySelectorAll('.llm-tab-content').forEach(function(c) {{ c.style.display = 'none'; c.classList.remove('active'); }});
+                tab.classList.add('active');
+                var panel = group.querySelector('[data-panel="' + tab.dataset.show + '"]');
+                if (panel) {{ panel.style.display = ''; panel.classList.add('active'); }}
+            }});
+        }});
+    </script>
 </body>
 </html>"""
 
