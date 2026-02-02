@@ -53,7 +53,7 @@ The subcortical system (The Foundation) has found the solution.
 
 Apply the VL Framework logic provided below. Evaluate how each Somatic Event relates to:
 - The **Primary Inquiry** of this framework
-- Evidence of **Striver Mode** vs **Foundation Mode**
+- Evidence of **Shadow Mode** vs **Foundation Mode**
 - Progress toward the **Functional Goal**
 
 ---
@@ -63,7 +63,7 @@ Apply the VL Framework logic provided below. Evaluate how each Somatic Event rel
 ### 1. Somatic Narrative
 Provide a brief narrative summary including:
 - **Primary Inquiry**: The fundamental riddle of the lesson (in this framework's terms)
-- **Washing Gradient**: How the Striver is eroded through the lesson
+- **Washing Gradient**: How the Shadow is eroded through the lesson
 - **Threshold of Quiet**: The moment/movement where Integration emerges
 
 ### 2. VL Analytical Table

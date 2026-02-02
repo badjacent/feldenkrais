@@ -30,14 +30,14 @@
       "type": "object"
     },
     "Phase2Negotiation": {
-      "description": "Phase 2: The Negotiation Framework between Striver and Foundation.",
+      "description": "Phase 2: The Negotiation Framework between Shadow and Foundation.",
       "properties": {
-        "striver_observations": {
-          "description": "How the Postural Effort System (The Striver) manifests - cortical, voluntary, goal-oriented",
+        "shadow_observations": {
+          "description": "How the Postural Effort System (The Shadow) manifests - cortical, voluntary, goal-oriented",
           "items": {
             "type": "string"
           },
-          "title": "Striver Observations",
+          "title": "Shadow Observations",
           "type": "array"
         },
         "foundation_observations": {
@@ -49,13 +49,13 @@
           "type": "array"
         },
         "washing_gradient": {
-          "description": "How the Striver is gradually eroded through repetition, oscillation, or complexity",
+          "description": "How the Shadow is gradually eroded through repetition, oscillation, or complexity",
           "title": "Washing Gradient",
           "type": "string"
         }
       },
       "required": [
-        "striver_observations",
+        "shadow_observations",
         "foundation_observations",
         "washing_gradient"
       ],
@@ -111,7 +111,7 @@
           "type": "string"
         },
         "washing_gradient": {
-          "description": "How the Striver is gradually eroded (through speed, complexity, or unusual configurations)",
+          "description": "How the Shadow is gradually eroded (through speed, complexity, or unusual configurations)",
           "title": "Washing Gradient",
           "type": "string"
         },

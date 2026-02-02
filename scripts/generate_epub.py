@@ -120,7 +120,7 @@ blockquote {
     border-left: 3px solid #666;
 }
 .voice-box.person-inside { border-left-color: #3498db; }
-.voice-box.striver { border-left-color: #c0392b; }
+.voice-box.shadow-voice { border-left-color: #c0392b; }
 .voice-label {
     font-size: 0.8em;
     font-weight: bold;
@@ -128,7 +128,7 @@ blockquote {
     margin-bottom: 0.3em;
 }
 .person-inside .voice-label { color: #3498db; }
-.striver .voice-label { color: #c0392b; }
+.shadow-voice .voice-label { color: #c0392b; }
 ol, ul { margin: 0.5em 0 0.5em 1.5em; }
 li { margin-bottom: 0.4em; }
 .spiffer-hint {
@@ -290,32 +290,32 @@ def generate_epub(analysis: dict, lesson_title: str, output_path: str):
         <p>To make sense of the journey through this lesson, it helps to understand three ideas.
         They'll come up throughout the booklet.</p>
 
-        <h2>The Striver</h2>
+        <h2>The Shadow</h2>
         <p>When you first try a movement, there's a part of you that grips, pushes, and
-        forces. This is your voluntary muscular effort — we'll call it the <strong>Striver</strong>.
+        forces. This is your voluntary muscular effort — we'll call it the <strong>Shadow</strong>.
         It means well, but it's noisy. It uses ten muscles when two would do. It holds
         your breath. It treats every movement as a task to be conquered.</p>
 
         <h2>The Foundation</h2>
-        <p>Underneath the Striver, your skeleton and reflexes already know how to support you.
+        <p>Underneath the Shadow, your skeleton and reflexes already know how to support you.
         This deeper system — the <strong>Foundation</strong> — is quiet, efficient, and reflexive.
         It responds to gravity, finds balance, and transmits force through bone rather
         than muscle. The lesson's job is to let the Foundation emerge.</p>
 
         <h2>The Washing</h2>
-        <p>The lesson doesn't fight the Striver. It <em>washes</em> it away — through
+        <p>The lesson doesn't fight the Shadow. It <em>washes</em> it away — through
         repetition, variation, and gentle complexity. Like water over stone, the
         unnecessary effort gradually dissolves. You don't try to relax. You simply
-        repeat and vary until the Striver runs out of strategies and the Foundation
+        repeat and vary until the Shadow runs out of strategies and the Foundation
         is all that remains.</p>
 
         <h2>Three States</h2>
         <p>As you move through a lesson, you typically pass through three states:</p>
         <div class="state state-domination">
-            <strong>Domination</strong> — The Striver is in charge. You're "doing" the movement with voluntary effort.
+            <strong>Domination</strong> — The Shadow is in charge. You're "doing" the movement with voluntary effort.
         </div>
         <div class="state state-negotiation">
-            <strong>Negotiation</strong> — An active exchange. The Striver is losing its grip. You're exploring, confused in a good way.
+            <strong>Negotiation</strong> — An active exchange. The Shadow is losing its grip. You're exploring, confused in a good way.
         </div>
         <div class="state state-integration">
             <strong>Integration</strong> — The Foundation takes over. Movement becomes easy, quiet, almost involuntary.
@@ -370,7 +370,7 @@ def generate_epub(analysis: dict, lesson_title: str, output_path: str):
                 question = get_col_by_keyword(row, col_headers, "question")
                 goal = get_col_by_keyword(row, col_headers, "goal") or get_col_by_keyword(row, col_headers, "functional")
                 vl_voice = row.get("vl_voice", "")
-                striver = row.get("striver_shadow", "")
+                shadow_obs = row.get("shadow_voice", "")
 
                 if neg:
                     color = state_colors.get(neg.lower(), "#777")
@@ -381,8 +381,8 @@ def generate_epub(analysis: dict, lesson_title: str, output_path: str):
                     body += f'<p><strong>The functional goal:</strong> {goal}</p>'
                 if vl_voice:
                     body += f'<div class="voice-box person-inside"><div class="voice-label">The Person Inside</div><p>{vl_voice}</p></div>'
-                if striver:
-                    body += f'<div class="voice-box striver"><div class="voice-label">The Striver</div><p>{striver}</p></div>'
+                if shadow_obs:
+                    body += f'<div class="voice-box shadow-voice"><div class="voice-label">The Shadow</div><p>{shadow_obs}</p></div>'
 
         chapters.append(make_chapter(f"Part {gn}", body))
 
@@ -393,9 +393,9 @@ def generate_epub(analysis: dict, lesson_title: str, output_path: str):
         body += f'<h2>How the Lesson Washed Away Effort</h2><p>{somatic["washing_gradient"]}</p>'
     if somatic.get("threshold_of_quiet"):
         body += f'<h2>The Threshold of Quiet</h2><p>{somatic["threshold_of_quiet"]}</p>'
-    if negotiation.get("striver_observations"):
-        body += '<h2>What the Striver Was Doing</h2><ul>'
-        for obs in negotiation["striver_observations"]:
+    if negotiation.get("shadow_observations"):
+        body += '<h2>What the Shadow Was Doing</h2><ul>'
+        for obs in negotiation["shadow_observations"]:
             body += f"<li>{obs}</li>"
         body += "</ul>"
     if negotiation.get("foundation_observations"):

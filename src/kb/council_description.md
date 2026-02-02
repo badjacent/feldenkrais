@@ -3,13 +3,13 @@ Most of the time, we think of our "self" as a single pilot sitting behind our ey
 
 The Council of Five is a way of making sense of this. Instead of treating the body as a collection of muscles and bones, we treat it as a group of five distinct "people" living inside us. Each of these agents has its own job, its own personality, and its own "viewpoint" on what we are doing.
 
-The Problem: The Striver
+The Problem: The Shadow
 
-We usually live under the thumb of a sixth character: The Striver. This is our ego, the one who wants to do the lesson "right," who pushes through pain, and who treats the body like a tool to be used. The goal of a lesson is to "wash away" the Striver’s dominance so the Council of Five can actually do their jobs.
+We usually live under the thumb of a sixth character: The Shadow. This is our ego, the one who wants to do the lesson "right," who pushes through pain, and who treats the body like a tool to be used. The goal of a lesson is to "wash away" the Shadow’s dominance so the Council of Five can actually do their jobs.
 
 The Council Members
 
-When the Striver steps back, we can finally hear the five specialists who actually know how to run a human being:
+When the Shadow steps back, we can finally hear the five specialists who actually know how to run a human being:
 
 The Upright Self: The ancient navigator. They don't care about "looking good"; they only care about how the skeleton meets the floor to create height.
 
@@ -25,7 +25,7 @@ The Goal: From Bracing to Transmission
 
 By thinking of these as "people," we change our relationship with ourselves. We stop "correcting" our posture and start negotiating with our Council.
 
-We move from Bracing (the Striver trying to force things) through a phase of Softening (listening to the Council’s feedback), until we reach Transmission—that magical state where the Council is in total harmony and movement becomes a clear, skeletal statement of intent.
+We move from Bracing (the Shadow trying to force things) through a phase of Softening (listening to the Council’s feedback), until we reach Transmission—that magical state where the Council is in total harmony and movement becomes a clear, skeletal statement of intent.
 
 Why this works for us (the students):
 

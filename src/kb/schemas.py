@@ -21,15 +21,15 @@ class Phase1SPIFFERQ(BaseModel):
 
 
 class Phase2Negotiation(BaseModel):
-    """Phase 2: The Negotiation Framework between Striver and Foundation."""
-    striver_observations: list[str] = Field(
-        description="How the Postural Effort System (The Striver) manifests - cortical, voluntary, goal-oriented"
+    """Phase 2: The Negotiation Framework between Shadow and Foundation."""
+    shadow_observations: list[str] = Field(
+        description="How the Postural Effort System (The Shadow) manifests - cortical, voluntary, goal-oriented"
     )
     foundation_observations: list[str] = Field(
         description="How the Postural Support System (The Foundation) responds - subcortical, reflexive, seeks equilibrium"
     )
     washing_gradient: str = Field(
-        description="How the Striver is gradually eroded through repetition, oscillation, or complexity"
+        description="How the Shadow is gradually eroded through repetition, oscillation, or complexity"
     )
 
 
@@ -39,7 +39,7 @@ class SomaticNarrative(BaseModel):
         description="The fundamental neurological riddle of the lesson"
     )
     washing_gradient: str = Field(
-        description="How the Striver is gradually eroded (through speed, complexity, or unusual configurations)"
+        description="How the Shadow is gradually eroded (through speed, complexity, or unusual configurations)"
     )
     threshold_of_quiet: str = Field(
         description="The moment where the Foundation takes over and the Vertical Self emerges"
@@ -55,7 +55,7 @@ class VL1TableRow(BaseModel):
     spiffer_q_tags: list[str] = Field(description="Relevant SPIFFER-Q tags for this step")
     the_question: str = Field(description="The specific neurological riddle of this step")
     negotiation_state: NegotiationState = Field(
-        description="Domination (Striver in control), Negotiation (Washing in progress), or Integration (Foundation has taken over)"
+        description="Domination (Shadow in control), Negotiation (Washing in progress), or Integration (Foundation has taken over)"
     )
     functional_goal: str = Field(description="Intended structural outcome")
 

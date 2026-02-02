@@ -374,7 +374,7 @@ For each section of the chapter, report ONLY problems:
   a new perspective or is it redundant?
 - **Reflection/Checking Questions**: Are they generic self-help questions that could
   apply to any lesson, or are they specific to what this lesson actually taught?
-- **Concepts (Striver/Foundation/Washing)**: Is this section adding value here or
+- **Concepts (Shadow/Foundation/Washing)**: Is this section adding value here or
   just taking up space?
 
 For each problem found:
@@ -398,7 +398,7 @@ For each problem found:
    - "data:somatic_narrative" — the Pass B somatic narrative data
    - "data:pass_a" — the Pass A analysis data
    - "data:vl_analysis" — the VL lens analysis data
-   - "template:concepts" — the static Striver/Foundation/Washing section
+   - "template:concepts" — the static Shadow/Foundation/Washing section
 
 Rate each section: "adequate" (minor issues only), "needs_work" (significant issues),
 or "broken" (doesn't serve the reader). Do NOT use "strong", "good", or any positive

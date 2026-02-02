@@ -100,7 +100,7 @@ def main():
             # Narrative
             neg = data.get("negotiation_framework", {})
             if neg:
-                print(f"  Striver observations: {len(neg.get('striver_observations', []))}")
+                print(f"  Shadow observations: {len(neg.get('shadow_observations', []))}")
                 print(f"  Foundation observations: {len(neg.get('foundation_observations', []))}")
             narrative = data.get("somatic_narrative", {})
             if narrative:

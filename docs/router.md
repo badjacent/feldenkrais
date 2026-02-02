@@ -39,12 +39,12 @@ Identify the **Constraints**: Explicit instructions on what the student must *no
 
 ### 2.1 The Negotiation Framework
 Analyze the interaction between the two intelligence systems for every step:
-1.  **The Striver (Postural Effort):** Cortical, voluntary, "noisy" bracing.
+1.  **The Shadow (Postural Effort):** Cortical, voluntary, "noisy" bracing.
 2.  **The Foundation (Postural Support):** Subcortical, reflexive, "quiet" equilibrium.
 
 ### 2.2 Negotiation States
 Classify the "Washing Gradient" for each segment:
-* **Domination:** Striver-led (High effort, habitual bracing).
+* **Domination:** Shadow-led (High effort, habitual bracing).
 * **Negotiation:** The "Washing" phase (Exploration, confusion, erosion of habit).
 * **Integration:** Foundation-led (Skeletal clarity, involuntary ease).
 

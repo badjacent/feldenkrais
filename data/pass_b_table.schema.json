@@ -32,9 +32,9 @@
                 "type": "string",
                 "description": "First-person experience from the VL Person Inside at this point in the lesson"
               },
-              "striver_shadow": {
+              "shadow_voice": {
                 "type": "string",
-                "description": "What the Striver shadow is doing or experiencing at this point"
+                "description": "What the Shadow shadow is doing or experiencing at this point"
               }
             }
           }

@@ -11,9 +11,9 @@
     },
     "negotiation_framework": {
       "type": "object",
-      "description": "Observations about the Striver/Foundation negotiation",
+      "description": "Observations about the Shadow/Foundation negotiation",
       "properties": {
-        "striver_observations": {
+        "shadow_observations": {
           "type": "array",
           "items": {"type": "string"},
           "description": "How the Postural Effort System manifests"
@@ -25,10 +25,10 @@
         },
         "washing_gradient": {
           "type": "string",
-          "description": "How the Striver is eroded through the lesson"
+          "description": "How the Shadow is eroded through the lesson"
         }
       },
-      "required": ["striver_observations", "foundation_observations", "washing_gradient"]
+      "required": ["shadow_observations", "foundation_observations", "washing_gradient"]
     },
     "somatic_narrative": {
       "type": "object",

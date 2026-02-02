@@ -1,7 +1,7 @@
 # Feldenkrais Lesson Analysis Protocol (VL-1, v2.0)
 
 ## Overview
-Analyze the lesson transcript as a dialogue between the **Postural Effort System (The Striver)** and the **Postural Support System (The Foundation)**. The goal is to identify how the lesson "washes" away cortical noise to reveal the **Vertical Self**—a state of skeletal efficiency and longitudinal transmission of force.
+Analyze the lesson transcript as a dialogue between the **Postural Effort System (The Shadow)** and the **Postural Support System (The Foundation)**. The goal is to identify how the lesson "washes" away cortical noise to reveal the **Vertical Self**—a state of skeletal efficiency and longitudinal transmission of force.
 
 ## Phase 1: SPIFFER-Q Tagging
 Deconstruct the text into discrete steps using these tags:
@@ -16,9 +16,9 @@ Deconstruct the text into discrete steps using these tags:
 
 ## Phase 2: The Negotiation Framework
 Evaluate the interaction between the two internal intelligences:
-1.  **The Striver (Effort):** Cortical, voluntary, goal-oriented. Its failure mode is "noise" (bracing).
+1.  **The Shadow (Effort):** Cortical, voluntary, goal-oriented. Its failure mode is "noise" (bracing).
 2.  **The Foundation (Support):** Subcortical, reflexive, seeks equilibrium. Its aspiration is "Quiet."
-3.  **The Washing Gradient:** The gradual erosion of the Striver through repetition, oscillation, or complexity.
+3.  **The Washing Gradient:** The gradual erosion of the Shadow through repetition, oscillation, or complexity.
 
 ---
 
@@ -26,7 +26,7 @@ Evaluate the interaction between the two internal intelligences:
 
 ### 1. The Somatic Narrative (Linear Chunks)
 * **The Primary Inquiry:** Summarize the fundamental neurological riddle of the lesson.
-* **The Washing Gradient:** Describe how the Striver is gradually eroded (e.g., through speed, complexity, or unusual configurations).
+* **The Washing Gradient:** Describe how the Shadow is gradually eroded (e.g., through speed, complexity, or unusual configurations).
 * **The Threshold of Quiet:** Pinpoint the moment where the Foundation takes over and the Vertical Self emerges.
 
 ### 2. The VL-1 Analytical Table
@@ -52,6 +52,6 @@ column_headers: {
 ---
 
 ### How to use the "Negotiation State" column (column4):
-* **Braced:** The Striver is in control (high noise, muscular effort).
+* **Braced:** The Shadow is in control (high noise, muscular effort).
 * **Softening:** The Washing is in progress (confusion, exploration, varying effort).
 * **Clear:** The Foundation has taken over (skeletal clarity, "involuntary" ease).

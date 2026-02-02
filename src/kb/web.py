@@ -1357,9 +1357,9 @@ def render_pass_b_analysis(data: dict, pass_a_result: dict = None) -> str:
     if neg:
         html.append("<h3>Negotiation Framework</h3>")
 
-        if neg.get("striver_observations"):
-            html.append("<h4>The Striver (Effort System)</h4><ul>")
-            for obs in neg["striver_observations"]:
+        if neg.get("shadow_observations"):
+            html.append("<h4>The Shadow (Effort System)</h4><ul>")
+            for obs in neg["shadow_observations"]:
                 html.append(f"<li>{obs}</li>")
             html.append("</ul>")
 
@@ -1459,15 +1459,15 @@ def render_pass_b_analysis(data: dict, pass_a_result: dict = None) -> str:
                     html.append(f"<td>{val}</td>")
                 html.append("</tr>")
 
-                # Add voice/striver row if present
+                # Add voice/shadow row if present
                 vl_voice = row.get("vl_voice", "")
-                striver_shadow = row.get("striver_shadow", "")
-                if vl_voice or striver_shadow:
+                shadow_voice = row.get("shadow_voice", "") or row.get("striver_shadow", "")
+                if vl_voice or shadow_voice:
                     html.append(f'<tr><td colspan="{len(columns)}" style="background: #fafafa; padding: 8px 12px; font-size: 0.9em;">')
                     if vl_voice:
                         html.append(f'<div style="margin-bottom: 6px;"><span style="color: #007bff; font-weight: bold;">Person Inside:</span> <em>{vl_voice}</em></div>')
-                    if striver_shadow:
-                        html.append(f'<div><span style="color: #dc3545; font-weight: bold;">Striver:</span> <em>{striver_shadow}</em></div>')
+                    if shadow_voice:
+                        html.append(f'<div><span style="color: #dc3545; font-weight: bold;">Shadow:</span> <em>{shadow_voice}</em></div>')
                     html.append('</td></tr>')
 
             html.append("</tbody></table></div>")
@@ -1553,10 +1553,10 @@ def render_pass_b_analysis(data: dict, pass_a_result: dict = None) -> str:
                         </div>
                     ''')
 
-                # VL Voice and Striver Shadow
+                # VL Voice and Shadow Voice
                 vl_voice = row.get("vl_voice", "")
-                striver_shadow = row.get("striver_shadow", "")
-                if vl_voice or striver_shadow:
+                shadow_voice = row.get("shadow_voice", "") or row.get("striver_shadow", "")
+                if vl_voice or shadow_voice:
                     html.append('<div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">')
                     if vl_voice:
                         html.append(f'''
@@ -1565,11 +1565,11 @@ def render_pass_b_analysis(data: dict, pass_a_result: dict = None) -> str:
                                 <div style="font-style: italic; color: #333; line-height: 1.5;">{vl_voice}</div>
                             </div>
                         ''')
-                    if striver_shadow:
+                    if shadow_voice:
                         html.append(f'''
                             <div style="margin-bottom: 12px; padding: 12px 16px; background: #fff5f5; border-radius: 6px; border-left: 3px solid #dc3545;">
-                                <div style="font-size: 0.75em; font-weight: bold; color: #dc3545; text-transform: uppercase; margin-bottom: 4px;">The Striver</div>
-                                <div style="font-style: italic; color: #555; line-height: 1.5;">{striver_shadow}</div>
+                                <div style="font-size: 0.75em; font-weight: bold; color: #dc3545; text-transform: uppercase; margin-bottom: 4px;">The Shadow</div>
+                                <div style="font-style: italic; color: #555; line-height: 1.5;">{shadow_voice}</div>
                             </div>
                         ''')
                     html.append('</div>')
@@ -1669,12 +1669,12 @@ def render_analysis(data: dict, schema: dict, pass_a_result: dict = None) -> str
         phase2 = data[phase2_key]
         html.append("<h2>Phase 2: The Negotiation Framework</h2>")
 
-        # Striver observations
-        striver_key = next((k for k in phase2.keys() if "striver" in k.lower() or "effort" in k.lower()), None)
-        if striver_key and phase2.get(striver_key):
-            html.append("<h3>The Striver (Effort System)</h3>")
+        # Shadow observations (fallback: old "striver" key for cached data)
+        shadow_key = next((k for k in phase2.keys() if "shadow" in k.lower() or "striver" in k.lower() or "effort" in k.lower()), None)
+        if shadow_key and phase2.get(shadow_key):
+            html.append("<h3>The Shadow (Effort System)</h3>")
             html.append("<ul>")
-            for obs in phase2[striver_key]:
+            for obs in phase2[shadow_key]:
                 html.append(f"<li>{obs}</li>")
             html.append("</ul>")
 
@@ -4477,7 +4477,7 @@ BOOKLET_QUERY_TYPES = {
             "wants to understand what happened on the floor.\n\n"
             "IMPORTANT: A separate section called 'The Council of Five' follows immediately after "
             "your text. That section introduces the five analytical lenses and the conceptual "
-            "framework (Striver, Council members, Bracing→Softening→Transmission). Do NOT "
+            "framework (Shadow, Council members, Bracing→Softening→Transmission). Do NOT "
             "duplicate that material. Your job is to welcome the reader and orient them.\n\n"
             "The volume contains five booklets, one per analytical lens:\n{lens_summaries}\n\n"
             "The lessons included are:\n{lesson_list}\n\n"
@@ -4491,7 +4491,7 @@ BOOKLET_QUERY_TYPES = {
             "4. How to use them: do the lesson, then read the booklet. Pick any order. "
             "Each booklet stands alone. The Council of Five section below will introduce "
             "the shared framework.\n\n"
-            "Do NOT explain the five lenses or the Striver/Foundation framework — "
+            "Do NOT explain the five lenses or the Shadow/Foundation framework — "
             "the Council section handles that. Keep the tone personal and practical."
         ),
         "context_keys": [
@@ -4751,17 +4751,17 @@ def render_booklet_concepts() -> str:
             three ideas. They'll come up throughout the booklet.
         </p>
 
-        <h3>The Striver</h3>
+        <h3>The Shadow</h3>
         <p>
             When you first try a movement, there's a part of you that grips, pushes, and
-            forces. This is your voluntary muscular effort — we'll call it the <strong>Striver</strong>.
+            forces. This is your voluntary muscular effort — we'll call it the <strong>Shadow</strong>.
             It means well, but it's noisy. It uses ten muscles when two would do. It holds
             your breath. It treats every movement as a task to be conquered.
         </p>
 
         <h3>The Foundation</h3>
         <p>
-            Underneath the Striver, your skeleton and reflexes already know how to support you.
+            Underneath the Shadow, your skeleton and reflexes already know how to support you.
             This deeper system — the <strong>Foundation</strong> — is quiet, efficient, and reflexive.
             It responds to gravity, finds balance, and transmits force through bone rather
             than muscle. The lesson's job is to let the Foundation emerge.
@@ -4769,10 +4769,10 @@ def render_booklet_concepts() -> str:
 
         <h3>The Washing</h3>
         <p>
-            The lesson doesn't fight the Striver. It <em>washes</em> it away — through
+            The lesson doesn't fight the Shadow. It <em>washes</em> it away — through
             repetition, variation, and gentle complexity. Like water over stone, the
             unnecessary effort gradually dissolves. You don't try to relax. You simply
-            repeat and vary until the Striver runs out of strategies and the Foundation
+            repeat and vary until the Shadow runs out of strategies and the Foundation
             is all that remains.
         </p>
 
@@ -4783,11 +4783,11 @@ def render_booklet_concepts() -> str:
         <div class="three-states">
             <div class="state state-domination">
                 <strong>Domination</strong>
-                <span>The Striver is in charge. You're "doing" the movement with voluntary effort.</span>
+                <span>The Shadow is in charge. You're "doing" the movement with voluntary effort.</span>
             </div>
             <div class="state state-negotiation">
                 <strong>Negotiation</strong>
-                <span>An active exchange. The Striver is losing its grip. You're exploring, confused in a good way.</span>
+                <span>An active exchange. The Shadow is losing its grip. You're exploring, confused in a good way.</span>
             </div>
             <div class="state state-integration">
                 <strong>Integration</strong>
@@ -4903,7 +4903,7 @@ def render_booklet_journey(groups: list, steps: list, vl_analysis: dict, pass_a_
                 question = _get_column_by_keyword(row, column_headers, "question")
                 goal = _get_column_by_keyword(row, column_headers, "goal") or _get_column_by_keyword(row, column_headers, "functional")
                 vl_voice = row.get("vl_voice", "")
-                striver_shadow = row.get("striver_shadow", "")
+                shadow_voice = row.get("shadow_voice", "") or row.get("striver_shadow", "")
 
                 if neg_state:
                     color = state_colors.get(neg_state.lower(), "#7f8c8d")
@@ -4923,11 +4923,11 @@ def render_booklet_journey(groups: list, steps: list, vl_analysis: dict, pass_a_
                     </div>
                     """)
 
-                if striver_shadow:
+                if shadow_voice:
                     html.append(f"""
-                    <div class="voice-box striver">
-                        <div class="voice-label">The Striver</div>
-                        <p>{striver_shadow}</p>
+                    <div class="voice-box shadow-voice">
+                        <div class="voice-label">The Shadow</div>
+                        <p>{shadow_voice}</p>
                     </div>
                     """)
 
@@ -4991,15 +4991,15 @@ def render_booklet_arc(somatic_narrative: dict, negotiation: dict, groups: list,
 
         html.append("</div>")  # end arc-timeline
 
-    # Striver and Foundation observations
+    # Shadow and Foundation observations
     if negotiation:
-        striver_obs = negotiation.get("striver_observations", [])
+        shadow_obs = negotiation.get("shadow_observations", []) or negotiation.get("striver_observations", [])
         foundation_obs = negotiation.get("foundation_observations", [])
 
-        if striver_obs:
-            html.append('<h3>What the Striver Was Doing</h3>')
+        if shadow_obs:
+            html.append('<h3>What the Shadow Was Doing</h3>')
             html.append("<ul>")
-            for obs in striver_obs:
+            for obs in shadow_obs:
                 html.append(f"<li>{obs}</li>")
             html.append("</ul>")
 
@@ -5436,11 +5436,11 @@ def build_booklet_html(analysis_result: dict, lesson_title: str = "", framework:
         .person-inside .voice-label {{
             color: #3498db;
         }}
-        .striver {{
+        .shadow-voice {{
             background: #fff5f5;
             border-left: 3px solid #c0392b;
         }}
-        .striver .voice-label {{
+        .shadow-voice .voice-label {{
             color: #c0392b;
         }}
 

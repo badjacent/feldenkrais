@@ -41,28 +41,28 @@ The subcortical system (The Foundation) has found the solution.
 ## Framework-Specific Lens
 
 Apply the VL Framework logic provided below. For each step, evaluate:
-- Evidence of **Striver Mode** vs **Foundation Mode**
+- Evidence of **Shadow Mode** vs **Foundation Mode**
 - Progress toward the **Functional Goal**
 - The specific **Question** being asked through this framework's lens
 
 ## The Person Inside
 
-Each VL framework defines an inner experiencer — a "person inside the person" who receives the lesson from a specific point of view. The VL file describes this inner being and their shadow (the Striver in that VL's terms).
+Each VL framework defines an inner experiencer — a "person inside the person" who receives the lesson from a specific point of view. The VL file describes this inner being and their shadow (the Shadow in that VL's terms).
 
 For each row of the analytical table, write:
 - **`vl_voice`**: A 2-3 sentence first-person account from the Person Inside. What do they perceive, feel, or notice at this point in the lesson? Write as if this inner being is narrating their experience. Use present tense. Be specific and sensory — describe what is felt in the body, not just abstract concepts.
-- **`striver_shadow`**: A 1-2 sentence account of what the Shadow/Striver is doing at this point. Are they gripping? Bracing? Beginning to loosen? Have they stood down?
+- **`shadow_voice`**: A 1-2 sentence account of what the Shadow is doing at this point. Are they gripping? Bracing? Beginning to loosen? Have they stood down?
 
-The arc across the rows should show the Striver gradually disarming as the lesson progresses.
+The arc across the rows should show the Shadow gradually disarming as the lesson progresses.
 
 ---
 
 ## Output Format
 
 ### 1. Negotiation Framework Observations
-- **Striver observations**: How the Postural Effort System manifests in this lesson
+- **Shadow observations**: How the Postural Effort System manifests in this lesson
 - **Foundation observations**: How the Postural Support System emerges
-- **Washing gradient**: How the Striver is eroded through the lesson
+- **Washing gradient**: How the Shadow is eroded through the lesson
 
 ### 2. Somatic Narrative
 - **Primary Inquiry**: The fundamental riddle (in this framework's terms)
