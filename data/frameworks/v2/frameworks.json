@@ -19,10 +19,10 @@
         },
         {
           "id": "VL-2",
-          "key": "vl2_homunculus",
-          "name": "Homunculus",
+          "key": "vl2_body_mapping",
+          "name": "Body Mapping",
           "subtitle": "The Micro-Differentiation Lens",
-          "display_name": "VL-2 Homunculus",
+          "display_name": "VL-2 Body Mapping",
           "alt_names": [],
           "focus": "Micro-differentiation, joint resolution",
           "indicators": "Small precise movements, sensing specific joints, body mapping",

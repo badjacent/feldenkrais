@@ -1,4 +1,4 @@
-# VL-2: Homunculus Mapping (The Resolution Lens)
+# VL-2: Body Mapping (The Resolution Lens)
 
 ## Primary Inquiry
 Differentiation of joints and clarifying the cortical self-image. Where exactly is the movement happening?

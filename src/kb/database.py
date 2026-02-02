@@ -111,6 +111,18 @@ CREATE TABLE IF NOT EXISTS cache (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS pipeline_node_state (
+    name TEXT PRIMARY KEY,
+    status TEXT NOT NULL DEFAULT 'pending',
+    input_hash TEXT NOT NULL DEFAULT '',
+    output_hash TEXT NOT NULL DEFAULT '',
+    last_run_at TIMESTAMPTZ,
+    duration_seconds REAL,
+    error_message TEXT,
+    metadata JSONB,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
 """
 
 INDEXES = """
@@ -958,6 +970,25 @@ class Database:
         with self.get_cursor(commit=False) as cursor:
             cursor.execute("SELECT key FROM cache")
             return {row["key"] for row in cursor.fetchall()}
+
+    # Pipeline node state operations
+
+    def ensure_pipeline_node_state_table(self):
+        """Create pipeline_node_state table if it doesn't exist."""
+        with self.get_cursor() as cursor:
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS pipeline_node_state (
+                    name TEXT PRIMARY KEY,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    input_hash TEXT NOT NULL DEFAULT '',
+                    output_hash TEXT NOT NULL DEFAULT '',
+                    last_run_at TIMESTAMPTZ,
+                    duration_seconds REAL,
+                    error_message TEXT,
+                    metadata JSONB,
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
 
     def get_all_transcription_hashes(self) -> dict[str, str]:
         """Return {document_id: cache_key} for all documents with transcriptions.

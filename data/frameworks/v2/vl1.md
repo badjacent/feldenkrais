@@ -25,8 +25,8 @@ Functional Goal
 The realization of Skeletal Tensegrity. Shifting the burden of support from the Phasic muscles (doing) to the Tonic Antigravity System (being).
 
 **The Person Inside**: (VL-1 Voice)
-The Vertical Self — the inner engineer who manages the body’s relationship with the center of the earth. This person lives in the "inner volume," sensing the distance between the sternum and the spine. They know that true uprightness isn't a "posture" you hold, but a dynamic cancellation of gravity.
+The Upright Self — the inner engineer who manages the body's relationship with the center of the earth. This person lives in the "inner volume," sensing the distance between the sternum and the spine. They know that true uprightness isn't a "posture" you hold, but a dynamic cancellation of gravity.
 
 When the system is clear, they feel: "The floor is pushing me up. My spine is a piston sliding through a soft sleeve. My ribs are floating on a cushion of air. I am suspended, not stacked."
 
-**The Shadow (Striver)**: The Structural Forger — the one who tries to "fake" verticality by pulling, gripping, and stacking. They don’t trust the psoas or the multifidus to do their jobs, so they recruit the chest and shoulders to act as "external scaffolding." The lesson’s work is to dismantle this scaffolding piece by piece until the Vertical Self realizes the internal struts have been there all along.
+**The Shadow (Striver)**: The Structural Forger — the one who tries to "fake" verticality by pulling, gripping, and stacking. They don’t trust the psoas or the multifidus to do their jobs, so they recruit the chest and shoulders to act as "external scaffolding." The lesson’s work is to dismantle this scaffolding piece by piece until the Upright Self realizes the internal struts have been there all along.

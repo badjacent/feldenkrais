@@ -23,12 +23,79 @@ from dotenv import load_dotenv
 # Load .env from project root
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from llm import LLM
 
-app = FastAPI(title="Feldenkrais Lesson Analyzer")
+
+# ── Background pipeline runner ───────────────────────────────────────────
+
+_pipeline_task: asyncio.Task | None = None
+_pipeline_lock = asyncio.Lock()
+
+
+async def _pipeline_background_loop():
+    """Background loop that rebuilds stale pipeline nodes."""
+    await asyncio.sleep(5)  # let server finish starting
+    while True:
+        try:
+            if _pipeline_lock.locked():
+                await asyncio.sleep(30)
+                continue
+            async with _pipeline_lock:
+                await asyncio.to_thread(_run_pipeline_cycle)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            print(f"[pipeline] background error: {e}")
+        await asyncio.sleep(30)
+
+
+def _run_pipeline_cycle():
+    """One synchronous cycle: compute staleness, run stale nodes."""
+    try:
+        from pipeline import PipelineStateStore, PipelineExecutor
+        from pipeline_graph import build_book_pipeline
+    except ImportError:
+        from .pipeline import PipelineStateStore, PipelineExecutor
+        from .pipeline_graph import build_book_pipeline
+
+    graph = build_book_pipeline(_db)
+    store = PipelineStateStore(_db)
+    store.initialize()
+    executor = PipelineExecutor(graph, store)
+    results = executor.run_stale()
+    if results:
+        fresh = sum(1 for r in results if r.status.value == "fresh")
+        errors = sum(1 for r in results if r.status.value == "error")
+        print(f"[pipeline] cycle complete: {fresh} succeeded, {errors} errors out of {len(results)} nodes")
+
+
+@asynccontextmanager
+async def _lifespan(app):
+    global _pipeline_task
+    if _db and not IS_LAMBDA:
+        # Clear zombie RUNNING states from previous server run
+        with _db.get_cursor() as cur:
+            cur.execute(
+                "UPDATE pipeline_node_state SET status = 'stale' WHERE status = 'running'"
+            )
+        _pipeline_task = asyncio.create_task(_pipeline_background_loop())
+        print("[pipeline] background runner started")
+    yield
+    if _pipeline_task:
+        _pipeline_task.cancel()
+        try:
+            await _pipeline_task
+        except asyncio.CancelledError:
+            pass
+        print("[pipeline] background runner stopped")
+
+
+app = FastAPI(title="Feldenkrais Lesson Analyzer", lifespan=_lifespan)
 
 # Paths - handle both local development and Lambda environment
 IS_LAMBDA = bool(os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
@@ -2549,6 +2616,136 @@ async def analyze(
     )
 
 
+def _build_book_pipeline_section() -> str:
+    """Build the Book Pipeline status section for the dashboard."""
+    try:
+        from pipeline_graph import build_book_pipeline
+        from pipeline import PipelineStateStore, PipelineExecutor, NodeStatus
+    except ImportError:
+        from .pipeline_graph import build_book_pipeline
+        from .pipeline import PipelineStateStore, PipelineExecutor, NodeStatus
+
+    graph = build_book_pipeline(_db)
+    store = PipelineStateStore(_db)
+    store.initialize()
+    executor = PipelineExecutor(graph, store)
+    states = executor.compute_staleness()
+    order = graph.topological_order()
+    enabled_flags = store.load_enabled_flags()
+
+    stale_count = sum(
+        1 for s in states.values()
+        if s.status in (NodeStatus.STALE, NodeStatus.PENDING, NodeStatus.ERROR)
+    )
+    fresh_count = sum(1 for s in states.values() if s.status == NodeStatus.FRESH)
+    total = len(states)
+
+    status_colors = {
+        "fresh": "#28a745",
+        "stale": "#ffc107",
+        "pending": "#6c757d",
+        "error": "#dc3545",
+        "running": "#17a2b8",
+    }
+
+    # Show transforms first, then sources at the bottom
+    transforms = [n for n in order if graph.nodes[n].kind.value == "transform"]
+    sources = [n for n in order if graph.nodes[n].kind.value == "source"]
+    display_order = transforms + sources
+
+    rows = []
+    for name in display_order:
+        state = states.get(name)
+        if not state:
+            continue
+        spec = graph.nodes[name]
+        status_val = state.status.value
+        color = status_colors.get(status_val, "#333")
+        is_transform = spec.kind.value == "transform"
+
+        display_name = f"<strong>{name}</strong>" if is_transform else f'<span style="color: #888;">{name}</span>'
+        duration = f"{state.duration_seconds}s" if state.duration_seconds else "&mdash;"
+        status_label = status_val.upper() if status_val != "fresh" else "fresh"
+
+        error_row = ""
+        if state.status == NodeStatus.ERROR and state.error_message:
+            error_msg = state.error_message[:80]
+            error_row = f'<tr><td></td><td colspan="4" style="color: #dc3545; font-size: 0.8em; padding-top: 0;">{error_msg}</td></tr>'
+
+        # Convert UTC to Eastern
+        if state.last_run_at:
+            from datetime import timezone, timedelta
+            utc_str = str(state.last_run_at)
+            try:
+                from datetime import datetime
+                dt = datetime.fromisoformat(utc_str.replace("Z", "+00:00"))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                eastern = timezone(timedelta(hours=-5))
+                dt_est = dt.astimezone(eastern)
+                last_run = dt_est.strftime("%Y-%m-%d %H:%M")
+                sort_time = dt_est.isoformat()[:19]
+            except Exception:
+                last_run = utc_str[:16].replace("T", " ")
+                sort_time = utc_str[:19]
+        else:
+            last_run = "&mdash;"
+            sort_time = ""
+        sort_dur = str(state.duration_seconds) if state.duration_seconds else ""
+        kind = "transform" if is_transform else "source"
+        node_enabled = enabled_flags.get(name, True)
+        row_opacity = "1" if node_enabled else "0.4"
+        toggle_label = "on" if node_enabled else "off"
+        toggle_color = "#28a745" if node_enabled else "#999"
+
+        rows.append(f"""
+            <tr data-kind="{kind}" data-time="{sort_time}" data-dur="{sort_dur}" data-status="{status_val}" style="opacity: {row_opacity};">
+                <td>{display_name}</td>
+                <td><span style="color: {color}; font-weight: {'bold' if status_val != 'fresh' else 'normal'};">{status_label}</span></td>
+                <td>{last_run}</td>
+                <td>{duration}</td>
+                <td><button class="toggle-btn" data-node="{name}" style="background: none; border: 1px solid {toggle_color}; color: {toggle_color}; border-radius: 3px; padding: 1px 8px; cursor: pointer; font-size: 0.8em;">{toggle_label}</button></td>
+            </tr>
+            {error_row}
+        """)
+
+    rows_html = "\n".join(rows)
+
+    return f"""
+    <div class="cards" style="margin-top: 15px;">
+        <div class="card">
+            <div class="value">{total}</div>
+            <div class="label">Total Nodes</div>
+        </div>
+        <div class="card">
+            <div class="value" style="color: #28a745;">{fresh_count}</div>
+            <div class="label">Fresh</div>
+        </div>
+        <div class="card">
+            <div class="value" style="color: {('#ffc107' if stale_count else '#333')};">{stale_count}</div>
+            <div class="label">Stale / Pending</div>
+        </div>
+    </div>
+    <table class="compact" id="pipeline-table">
+        <thead>
+            <tr>
+                <th class="sortable" data-col="node">Node</th>
+                <th class="sortable" data-col="status">Status</th>
+                <th class="sortable active desc" data-col="time">Last Run &#x25BC;</th>
+                <th class="sortable" data-col="dur">Duration</th>
+                <th>Enabled</th>
+            </tr>
+        </thead>
+        <tbody>
+            {rows_html}
+        </tbody>
+    </table>
+    <p style="font-size: 0.85em; color: #999; margin-top: 10px;">
+        Rebuild stale nodes: <code>uv run python -m src.kb.pipeline run</code>
+    </p>
+    """
+
+
 def build_pipeline_html() -> str:
     """Build the pipeline dashboard HTML page."""
     if not _db:
@@ -2645,6 +2842,12 @@ def build_pipeline_html() -> str:
     events_html = "\n".join(event_rows) if event_rows else '<tr><td colspan="5" style="text-align: center; color: #999;">No events yet</td></tr>'
     docs_html = "\n".join(doc_rows) if doc_rows else '<tr><td colspan="5" style="text-align: center; color: #999;">No documents yet</td></tr>'
 
+    # Book pipeline section
+    try:
+        book_pipeline_html = _build_book_pipeline_section()
+    except Exception as e:
+        book_pipeline_html = f'<p style="color: #999;">Book pipeline not available: {e}</p>'
+
     return f"""
 <!DOCTYPE html>
 <html>
@@ -2702,66 +2905,221 @@ def build_pipeline_html() -> str:
             font-size: 0.9em;
         }}
         tr:hover {{ background: #f8f9fa; }}
+        table.compact th, table.compact td {{
+            padding: 3px 10px;
+            font-size: 0.88em;
+            line-height: 1.3;
+        }}
+        th.sortable {{
+            cursor: pointer;
+            user-select: none;
+        }}
+        th.sortable:hover {{
+            background: #e0e0e0;
+        }}
+        .tabs {{
+            display: flex;
+            gap: 0;
+            border-bottom: 2px solid #dee2e6;
+            margin-bottom: 20px;
+        }}
+        .tab {{
+            padding: 10px 24px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 1em;
+            color: #666;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: color 0.15s, border-color 0.15s;
+        }}
+        .tab:hover {{
+            color: #333;
+        }}
+        .tab.active {{
+            color: #007bff;
+            border-bottom-color: #007bff;
+            font-weight: 600;
+        }}
+        .tab-content {{
+            display: none;
+        }}
+        .tab-content.active {{
+            display: block;
+        }}
     </style>
 </head>
 <body>
     <div class="nav"><a href="/">&larr; Back to Analyzer</a></div>
     <h1>Pipeline Dashboard</h1>
 
-    <div class="cards">
-        <div class="card">
-            <div class="value">{doc_total}</div>
-            <div class="label">Total Documents</div>
-        </div>
-        <div class="card">
-            <div class="value">{transcribed}</div>
-            <div class="label">Transcribed</div>
-        </div>
-        <div class="card">
-            <div class="value">{pending_docs}</div>
-            <div class="label">Pending Docs</div>
-        </div>
-        <div class="card">
-            <div class="value">{pending_jobs}</div>
-            <div class="label">Pending Jobs</div>
-        </div>
-        <div class="card">
-            <div class="value" style="color: {('#dc3545' if failed_jobs else '#333')};">{failed_jobs}</div>
-            <div class="label">Failed Jobs</div>
-        </div>
+    <div class="tabs">
+        <button class="tab active" data-tab="analysis">Analysis</button>
+        <button class="tab" data-tab="ingestion">Document Ingestion</button>
     </div>
 
-    <h2>Recent Events</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>Time</th>
-                <th>Event</th>
-                <th>Title</th>
-                <th>Doc ID</th>
-                <th>Detail</th>
-            </tr>
-        </thead>
-        <tbody>
-            {events_html}
-        </tbody>
-    </table>
+    <div id="tab-analysis" class="tab-content active">
+        {book_pipeline_html}
+    </div>
 
-    <h2>Documents</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>Created</th>
-                <th>Title</th>
-                <th>Category</th>
-                <th>Status</th>
-                <th>Jobs</th>
-            </tr>
-        </thead>
-        <tbody>
-            {docs_html}
-        </tbody>
-    </table>
+    <div id="tab-ingestion" class="tab-content">
+        <div class="cards">
+            <div class="card">
+                <div class="value">{doc_total}</div>
+                <div class="label">Total Documents</div>
+            </div>
+            <div class="card">
+                <div class="value">{transcribed}</div>
+                <div class="label">Transcribed</div>
+            </div>
+            <div class="card">
+                <div class="value">{pending_docs}</div>
+                <div class="label">Pending Docs</div>
+            </div>
+            <div class="card">
+                <div class="value">{pending_jobs}</div>
+                <div class="label">Pending Jobs</div>
+            </div>
+            <div class="card">
+                <div class="value" style="color: {('#dc3545' if failed_jobs else '#333')};">{failed_jobs}</div>
+                <div class="label">Failed Jobs</div>
+            </div>
+        </div>
+
+        <h2>Recent Events</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Event</th>
+                    <th>Title</th>
+                    <th>Doc ID</th>
+                    <th>Detail</th>
+                </tr>
+            </thead>
+            <tbody>
+                {events_html}
+            </tbody>
+        </table>
+
+        <h2>Documents</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Created</th>
+                    <th>Title</th>
+                    <th>Category</th>
+                    <th>Status</th>
+                    <th>Jobs</th>
+                </tr>
+            </thead>
+            <tbody>
+                {docs_html}
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        document.querySelectorAll('.tab').forEach(function(btn) {{
+            btn.addEventListener('click', function() {{
+                document.querySelectorAll('.tab').forEach(function(t) {{ t.classList.remove('active'); }});
+                document.querySelectorAll('.tab-content').forEach(function(c) {{ c.classList.remove('active'); }});
+                btn.classList.add('active');
+                document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+            }});
+        }});
+
+        // Pipeline table sorting
+        (function() {{
+            var table = document.getElementById('pipeline-table');
+            if (!table) return;
+            var headers = table.querySelectorAll('th.sortable');
+            var tbody = table.querySelector('tbody');
+
+            function getRows() {{
+                // Group data rows with their error rows
+                var rows = tbody.querySelectorAll('tr[data-kind]');
+                var groups = [];
+                rows.forEach(function(row) {{
+                    var next = row.nextElementSibling;
+                    var errRow = (next && !next.dataset.kind) ? next : null;
+                    groups.push({{ row: row, err: errRow }});
+                }});
+                return groups;
+            }}
+
+            function sortVal(row, col) {{
+                if (col === 'node') return row.cells[0].textContent.trim().toLowerCase();
+                if (col === 'status') return row.dataset.status || '';
+                if (col === 'time') return row.dataset.time || '';
+                if (col === 'dur') return parseFloat(row.dataset.dur) || 0;
+                return '';
+            }}
+
+            headers.forEach(function(th) {{
+                th.addEventListener('click', function() {{
+                    var col = th.dataset.col;
+                    var desc = th.classList.contains('active') && th.classList.contains('desc') ? false : true;
+                    if (th.classList.contains('active') && !th.classList.contains('desc')) desc = true;
+                    if (th.classList.contains('active') && th.classList.contains('desc')) desc = false;
+
+                    headers.forEach(function(h) {{
+                        h.classList.remove('active', 'desc');
+                        h.textContent = h.textContent.replace(/[\\u25B2\\u25BC]/g, '').trim();
+                    }});
+                    th.classList.add('active');
+                    if (desc) th.classList.add('desc');
+                    th.textContent = th.textContent + ' ' + (desc ? '\\u25BC' : '\\u25B2');
+
+                    var groups = getRows();
+                    groups.sort(function(a, b) {{
+                        var va = sortVal(a.row, col);
+                        var vb = sortVal(b.row, col);
+                        var cmp = 0;
+                        if (typeof va === 'number' && typeof vb === 'number') cmp = va - vb;
+                        else cmp = String(va).localeCompare(String(vb));
+                        return desc ? -cmp : cmp;
+                    }});
+
+                    groups.forEach(function(g) {{
+                        tbody.appendChild(g.row);
+                        if (g.err) tbody.appendChild(g.err);
+                    }});
+                }});
+            }});
+        }})();
+
+        // Toggle enabled/disabled
+        document.querySelectorAll('.toggle-btn').forEach(function(btn) {{
+            btn.addEventListener('click', function() {{
+                var node = btn.dataset.node;
+                btn.disabled = true;
+                btn.textContent = '...';
+                fetch('/api/pipeline/toggle/' + encodeURIComponent(node), {{ method: 'POST' }})
+                    .then(function(r) {{ return r.json(); }})
+                    .then(function(data) {{
+                        var row = btn.closest('tr');
+                        if (data.enabled) {{
+                            btn.textContent = 'on';
+                            btn.style.color = '#28a745';
+                            btn.style.borderColor = '#28a745';
+                            row.style.opacity = '1';
+                        }} else {{
+                            btn.textContent = 'off';
+                            btn.style.color = '#999';
+                            btn.style.borderColor = '#999';
+                            row.style.opacity = '0.4';
+                        }}
+                        btn.disabled = false;
+                    }})
+                    .catch(function() {{
+                        btn.textContent = 'err';
+                        btn.disabled = false;
+                    }});
+            }});
+        }});
+    </script>
 </body>
 </html>
 """
@@ -2769,8 +3127,36 @@ def build_pipeline_html() -> str:
 
 @app.get("/pipeline", response_class=HTMLResponse)
 async def pipeline_dashboard():
-    """Pipeline monitoring dashboard."""
+    """Pipeline monitoring dashboard — ingestion + book generation."""
     return build_pipeline_html()
+
+
+@app.get("/review", response_class=HTMLResponse)
+async def review_page():
+    """Display the latest book review from the pipeline."""
+    if not _db:
+        return HTMLResponse("<p>Database not configured.</p>", status_code=503)
+    data = _db.get_cache("pipeline:review")
+    if not data or "report" not in data:
+        return HTMLResponse("<p>No review available yet. Run the pipeline to generate one.</p>")
+    import markdown
+    report_html = markdown.markdown(data["report"], extensions=["tables", "fenced_code"])
+    return f"""<!DOCTYPE html><html><head><title>Book Review</title>
+<style>
+body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+       max-width: 900px; margin: 0 auto; padding: 20px; line-height: 1.7; }}
+h1, h2, h3 {{ color: #333; }}
+h2 {{ border-bottom: 1px solid #ddd; padding-bottom: 5px; }}
+.nav {{ margin-bottom: 20px; }}
+.nav a {{ color: #007bff; text-decoration: none; }}
+.nav a:hover {{ text-decoration: underline; }}
+table {{ border-collapse: collapse; width: 100%; margin: 10px 0; }}
+th, td {{ border: 1px solid #ddd; padding: 6px 10px; text-align: left; }}
+th {{ background: #f0f0f0; }}
+</style></head><body>
+<div class="nav"><a href="/">&larr; Back to Analyzer</a> | <a href="/pipeline">Pipeline</a></div>
+{report_html}
+</body></html>"""
 
 
 # --- Pass 0b Experiment ---
@@ -4005,13 +4391,13 @@ VL_BOOKLET_INTROS = {
         "name": "The Vertical Self",
         "subtitle": "The Physics Lens",
         "lens": "How force travels through your skeleton from the floor to your crown. When you're truly vertical, the floor pushes up through your bones all the way to your head — you don't have to hold yourself up.",
-        "person_inside": "The Vertical One",
+        "person_inside": "The Upright Self",
         "person_description": "The inner being who senses your relationship with gravity. They feel weight dropping through bone, they know when the column is stacked and when it's collapsing. Every movement is received as: <em>What just happened to my column? Is force transmitting cleanly through my bones, or is something buckling?</em>",
         "shadow": "The Muscular Hoister",
         "shadow_description": "The one who can't trust the skeleton. They grip the lower back, clench the waist, pull the head up with the neck. They believe that without their effort, everything would collapse. The lesson shows that bones can do what muscles have been forcing.",
     },
     "VL-2": {
-        "name": "Homunculus Mapping",
+        "name": "Body Mapping",
         "subtitle": "The Micro-Differentiation Lens",
         "lens": "Your brain has a 'map' of your body — some parts are highly detailed, others are blurry. This lens sees how the lesson lights up the dark spots on that map, turning vague regions into articulated joints.",
         "person_inside": "The Cartographer",
@@ -4023,7 +4409,7 @@ VL_BOOKLET_INTROS = {
         "name": "Steering & Tone",
         "subtitle": "The Autonomic Lens",
         "lens": "Your eyes, jaw, and neck act like a volume knob for your entire nervous system's tension. If you stare hard or clench your jaw, everything tenses. This lens sees how the lesson teaches you to regulate yourself from these control points.",
-        "person_inside": "The Sentinel",
+        "person_inside": "The Aligner",
         "person_description": "The inner being who lives behind the eyes, in the jaw and tongue. They govern the whole system's tone through these ancient regulatory instruments. Every movement is received as: <em>Is it safe? Can I soften my gaze? Can I unclench? What happens to the rest of me when I let go of this vigilance?</em>",
         "shadow": "The Watchman",
         "shadow_description": "The one who stares with hard eyes, who clenches the jaw as if biting down on the world, who braces the neck against threat. They believe constant vigilance is required. The lesson shows that softening the eyes and jaw doesn't mean losing control — it means finding a deeper regulation.",
@@ -4032,7 +4418,7 @@ VL_BOOKLET_INTROS = {
         "name": "Proximal-Distal",
         "subtitle": "The Reach & Power Lens",
         "lens": "Most people move their arms and legs like separate machines. But your trunk is an engine — a real reach or kick starts in your spine and pelvis and flows outward. This lens sees how the lesson reconnects your limbs to their source of power.",
-        "person_inside": "The Connector",
+        "person_inside": "The Bridge",
         "person_description": "The inner being who feels the chain from core to fingertip, from pelvis to toe. They sense whether power flows outward from center or whether the limbs are working alone. Every movement is received as: <em>Is this coming from my center? Can I feel the path from my spine through my shoulder to my hand? Or is this limb orphaned?</em>",
         "shadow": "The Isolated Lifter",
         "shadow_description": "The one who hoists the arm from the shoulder alone, who kicks the leg without engaging the pelvis. They work each limb as a separate machine, disconnected from the engine of the trunk. The lesson restores the pathways until every reach is a whole-body event.",
@@ -4041,7 +4427,7 @@ VL_BOOKLET_INTROS = {
         "name": "Folding-Unfolding",
         "subtitle": "The Flexion-Extension Lens",
         "lens": "Many people can curl forward but feel stuck extending backward, or vice versa. This lens sees how the lesson teaches your spine to bend equally in both directions — to fold and unfold without bracing or protecting.",
-        "person_inside": "The Geometrist",
+        "person_inside": "The Guardian",
         "person_description": "The inner being who senses the body's capacity to round and arch. They live in the geometry of flexion and extension, feeling the spine as a curve that can go either way. Every movement is received as: <em>Which way is the curve going? Can I fold without bracing? Can I unfold without strain?</em>",
         "shadow": "The Bracer",
         "shadow_description": "The one who holds the belly tight as armor, who treats the front body as something that must be protected. They reflexively crunch at any hint of vulnerability. The lesson shows that neither direction is dangerous — the spine can curve freely both ways.",
@@ -4078,39 +4464,35 @@ SPIFFER_TRANSLATIONS = {
 BOOKLET_QUERY_TYPES = {
     "volume-intro": {
         "name": "Volume Introduction",
-        "location": "Top of booklet index page, before the lesson list",
-        "purpose": "Introduce a collected volume of lesson companion booklets to someone who does "
-                   "Feldenkrais ATM lessons from recordings. Orient them to the five lenses, the "
-                   "concepts (Striver, Foundation, Washing), and what the booklets will help them see.",
+        "location": "Top of booklet index page, before the Council of Five section and lesson list",
+        "purpose": "Welcome the reader and orient them to what these booklets are. The Council of "
+                   "Five section (which follows this intro) covers the conceptual framework in depth, "
+                   "so this intro should focus on the personal, practical welcome.",
         "voice": "Warm, direct, second-person. Writing for people who do ATM lessons and want to "
                  "understand what happened. Not a textbook, not promotional — a companion.",
-        "length": "4-6 paragraphs, ~500-700 words",
+        "length": "3-4 paragraphs, ~300-450 words",
         "prompt": (
-            "You are writing the introduction to a volume of companion booklets for Feldenkrais "
+            "You are writing the opening welcome for a volume of companion booklets for Feldenkrais "
             "Awareness Through Movement lessons. The audience does ATM lessons from recordings and "
             "wants to understand what happened on the floor.\n\n"
+            "IMPORTANT: A separate section called 'The Council of Five' follows immediately after "
+            "your text. That section introduces the five analytical lenses and the conceptual "
+            "framework (Striver, Council members, Bracing→Softening→Transmission). Do NOT "
+            "duplicate that material. Your job is to welcome the reader and orient them.\n\n"
             "The volume contains five booklets, one per analytical lens:\n{lens_summaries}\n\n"
             "The lessons included are:\n{lesson_list}\n\n"
-            "Every booklet uses a shared conceptual framework:\n"
-            "- The Striver: the part of you that grips, pushes, forces — voluntary muscular effort. "
-            "Means well but uses ten muscles when two would do.\n"
-            "- The Foundation: the skeleton and reflexes underneath. Quiet, efficient, reflexive. "
-            "Responds to gravity, finds balance, transmits force through bone.\n"
-            "- The Washing: the lesson dissolves the Striver through repetition, variation, and "
-            "gentle complexity — like water over stone.\n"
-            "- Three States: Domination (Striver in charge) → Negotiation (active exchange, "
-            "confused in a good way) → Integration (Foundation takes over, movement becomes easy).\n\n"
-            "Each booklet walks through a lesson section by section: what you did, what was happening "
-            "underneath, the arc from beginning to end, and the specific lens illuminating a different "
-            "dimension of the experience. Two voices appear — the Person Inside (sensing the Foundation) "
-            "and the Shadow (the Striver's voice, gradually losing grip).\n\n"
-            "Write 4-6 paragraphs introducing this volume. Include:\n"
-            "1. What these booklets are and who they're for\n"
-            "2. The core idea: movements aren't exercises, they're questions\n"
-            "3. Brief orientation to the Striver/Foundation/Washing framework\n"
-            "4. The five lenses — what each one sees, in a sentence or two each\n"
-            "5. How to use the booklets (do the lesson first, then read; pick any order)\n"
-            "6. The closing note: these are companions to experiences, not explanations of a method"
+            "Write 3-4 paragraphs that:\n"
+            "1. Welcome the reader — acknowledge they've been doing lessons from recordings, "
+            "lying on the floor, and wondering what just happened\n"
+            "2. Explain what these booklets are: companions to experiences. You do the lesson first, "
+            "then read. The booklet helps you see what you couldn't see while you were in it.\n"
+            "3. The core idea: the movements aren't exercises, they're questions. The lesson "
+            "is asking your nervous system something, and the booklet helps you hear the question.\n"
+            "4. How to use them: do the lesson, then read the booklet. Pick any order. "
+            "Each booklet stands alone. The Council of Five section below will introduce "
+            "the shared framework.\n\n"
+            "Do NOT explain the five lenses or the Striver/Foundation framework — "
+            "the Council section handles that. Keep the tone personal and practical."
         ),
         "context_keys": [
             "lenses",       # list of {id, name, subtitle, lens_description}
@@ -4414,6 +4796,14 @@ def render_booklet_concepts() -> str:
         </div>
     </section>
     """
+
+
+def render_council_section() -> str:
+    """Render the 'Council of Five' section from data/council_intro.html."""
+    path = DATA_DIR / "council_intro.html"
+    if path.exists():
+        return path.read_text()
+    return ""
 
 
 def render_booklet_journey(groups: list, steps: list, vl_analysis: dict, pass_a_steps: dict) -> str:
@@ -4887,15 +5277,15 @@ def build_booklet_html(analysis_result: dict, lesson_title: str = "", framework:
         .state span {{
             color: #555;
         }}
-        .state-domination {{
+        .state-domination, .state-bracing {{
             background: #fdf2f2;
             border-left: 4px solid #c0392b;
         }}
-        .state-negotiation {{
+        .state-negotiation, .state-softening {{
             background: #fef9f0;
             border-left: 4px solid #e67e22;
         }}
-        .state-integration {{
+        .state-integration, .state-transmission {{
             background: #f0f9f0;
             border-left: 4px solid #27ae60;
         }}
@@ -5191,9 +5581,9 @@ BOOK_LESSONS = {
         "title": "The Anti-Gravity Lesson",
     },
     "VL-2": {
-        "lesson_id": "cf787d50-2757-4e7e-bc16-25582e9dc810",
+        "lesson_id": "d7f7695d-a572-4888-929a-8d572778dbe5",
         "category": "db:4",
-        "title": "Chanukia, the Candle Holder Lesson",
+        "title": "Differentiation of Pelvic Movements by Means of an Imaginary Clock",
     },
     "VL-3": {
         "lesson_id": "90e72ae1-98bc-4b35-816c-4542e23bd928",
@@ -5214,11 +5604,7 @@ BOOK_LESSONS = {
 
 BOOK_ALTERNATES = {
     "VL-1": None,  # decided — no alternate
-    "VL-2": {
-        "lesson_id": "4decf333-7008-4070-84f8-84da64382098",
-        "category": "db:4:Feldenkrais Project ATM Book",
-        "title": "Spatial Relationships as a Means to Coordinated Action",
-    },
+    "VL-2": None,  # decided — no alternate
     "VL-3": {
         "lesson_id": "c2029d32-8c74-4bec-90cb-472d677051ae",
         "category": "db:4",
@@ -5276,6 +5662,9 @@ async def book_page(fill: str = ""):
             max_review_cycles=0,
         )
         volume_query = await asyncio.to_thread(agent.fill, volume_query)
+
+    # Render council section
+    council_section = render_council_section()
 
     # Build booklet links
     booklet_links = []
@@ -5374,12 +5763,61 @@ async def book_page(fill: str = ""):
         .llm-filled p {{
             margin: 0 0 12px;
         }}
+        .booklet-section {{
+            margin: 32px 0;
+            padding: 24px 0;
+            border-top: 1px solid #e8e2d9;
+        }}
+        .booklet-section h2 {{
+            margin-top: 0;
+        }}
+        .booklet-section h3 {{
+            font-size: 1.1em;
+            margin: 20px 0 8px;
+            color: #4a6741;
+        }}
+        .council-member {{
+            background: #faf9f7;
+        }}
+        .three-states {{
+            margin: 20px 0;
+        }}
+        .state {{
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 14px 18px;
+            margin: 8px 0;
+            border-radius: 6px;
+            font-size: 0.95em;
+        }}
+        .state strong {{
+            font-family: 'Inter', sans-serif;
+            white-space: nowrap;
+            min-width: 110px;
+        }}
+        .state span {{
+            color: #555;
+        }}
+        .state-bracing {{
+            background: #fdf2f2;
+            border-left: 4px solid #c0392b;
+        }}
+        .state-softening {{
+            background: #fef9f0;
+            border-left: 4px solid #e67e22;
+        }}
+        .state-transmission {{
+            background: #f0f9f0;
+            border-left: 4px solid #27ae60;
+        }}
     </style>
 </head>
 <body>
     <a href="/" class="back">&larr; Back to Analyzer</a>
     <h1>Companion Booklets for Awareness Through Movement</h1>
     {volume_query}
+    {council_section}
     <h2>The Booklets</h2>
     {links_html}
     <h2>Alternates</h2>
@@ -5484,6 +5922,22 @@ async def admin_precache(request: Request):
                     entry[mode] = f"error: {e}"
         results.append(entry)
     return JSONResponse({"results": results})
+
+
+@app.post("/api/pipeline/toggle/{node_name:path}")
+async def toggle_pipeline_node(node_name: str):
+    """Toggle the enabled/disabled state of a pipeline node."""
+    if not _db:
+        return JSONResponse({"error": "Database not configured"}, status_code=500)
+    try:
+        from pipeline import PipelineStateStore
+    except ImportError:
+        from .pipeline import PipelineStateStore
+    store = PipelineStateStore(_db)
+    store.initialize()
+    current = store.is_enabled(node_name)
+    store.set_enabled(node_name, not current)
+    return JSONResponse({"node": node_name, "enabled": not current})
 
 
 @app.post("/admin/clear-cache")
