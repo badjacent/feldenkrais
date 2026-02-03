@@ -4546,7 +4546,7 @@ BOOKLET_QUERY_TYPES = {
                    "lesson intimately, not generic Feldenkrais tips.",
         "voice": "Warm, specific, second-person. Reference actual movements and moments from THIS "
                  "lesson. Write for someone who will do this lesson again.",
-        "length": "2-3 paragraphs with 3-4 specific suggestions",
+        "length": "2-3 short paragraphs with exactly 3 suggestions",
         "prompt": (
             "You are writing the closing 'Next Time' section of a companion booklet for the "
             "Feldenkrais ATM lesson \"{lesson_title}\".\n\n"
@@ -4554,16 +4554,19 @@ BOOKLET_QUERY_TYPES = {
             "{lens_description}\n\n"
             "The lesson's central question was: {primary_inquiry}\n\n"
             "The lesson moved through these parts:\n{journey_summary}\n\n"
-            "Key pedagogical elements in this lesson: {tag_summary}\n\n"
-            "Write a 'Next Time' section that:\n"
-            "1. Opens with a brief frame that connects to the {person_inside}'s perspective — "
-            "what would THEY want the reader to notice next time? (1-2 sentences)\n"
-            "2. Offers 3-4 specific things to pay attention to next time, drawn from what "
-            "actually happened in THIS lesson. Reference specific movements or moments. "
-            "Don't give generic Feldenkrais advice — give advice for THIS lesson.\n"
-            "3. Closes with a single sentence that invites re-exploration.\n\n"
-            "Keep it concrete and personal. The reader has done this lesson; speak to their "
-            "experience of it."
+            "Some specific movements from this lesson:\n{movement_examples}\n\n"
+            "Key pedagogical elements: {tag_summary}\n\n"
+            "Write a 'Next Time' section with EXACTLY 3 suggestions. Each suggestion should:\n"
+            "- Be about 60% universal Feldenkrais wisdom (things that would apply to many lessons)\n"
+            "- Be about 40% specific to THIS lesson (referencing actual movements, the arc, or "
+            "the {person_inside}'s particular concerns)\n\n"
+            "Structure:\n"
+            "1. A 1-2 sentence opening that frames 'next time' through the {person_inside}'s lens\n"
+            "2. Exactly 3 suggestions as a bulleted list, each 1-2 sentences. Pick the 3 most "
+            "impactful things for someone revisiting this lesson.\n"
+            "3. A brief closing sentence that invites re-exploration.\n\n"
+            "The suggestions should reference specific movements or moments from THIS lesson "
+            "(like '{lesson_title}' movements) while also offering transferable insights."
         ),
         "context_keys": [
             "lesson_title",
@@ -4571,8 +4574,9 @@ BOOKLET_QUERY_TYPES = {
             "person_inside",
             "lens_description",
             "primary_inquiry",
-            "journey_summary",     # list of {group_number, label, description}
-            "tag_summary",         # prominent tags with human-readable names
+            "journey_summary",
+            "tag_summary",
+            "movement_examples",
         ],
     },
 }
@@ -4627,6 +4631,7 @@ def booklet_query_block(query_type: str, context: dict) -> str:
         "lens_description": context.get("lens_description", ""),
         "journey_summary": context.get("journey_summary", ""),
         "tag_summary": context.get("tag_summary", ""),
+        "movement_examples": context.get("movement_examples", ""),
     }
     filled_prompt = qtype["prompt"].format(**prompt_vars)
 
@@ -5092,6 +5097,19 @@ def render_booklet_reflection(
         for g in groups
     ])
 
+    # Extract key movement instructions (sample from different parts of lesson)
+    key_movements = []
+    if steps:
+        indices = [0, len(steps)//4, len(steps)//2, 3*len(steps)//4, len(steps)-1]
+        seen = set()
+        for i in indices:
+            if 0 <= i < len(steps):
+                instr = steps[i].get("instruction", "")
+                if instr and instr not in seen:
+                    key_movements.append(instr)
+                    seen.add(instr)
+    movement_examples = "\n".join(f"- {m}" for m in key_movements[:6])
+
     context = {
         "lesson_title": lesson_title,
         "framework_name": intro.get("name", framework_id),
@@ -5100,6 +5118,7 @@ def render_booklet_reflection(
         "primary_inquiry": somatic_narrative.get("primary_inquiry", ""),
         "journey_summary": journey_summary,
         "tag_summary": tag_summary,
+        "movement_examples": movement_examples,
     }
 
     html = ['<section class="booklet-section">']
@@ -5674,7 +5693,6 @@ async def booklet_page(category: str = "", lesson: str = "", fill: str = "", fra
             from .query_agent import QueryAgent
         agent = QueryAgent(
             llm=get_llm(DEFAULT_LLM),
-            db=_db,
             max_review_cycles=0,  # skip review for web; use CLI for iteration
         )
         html = await asyncio.to_thread(agent.fill, html)
@@ -5777,7 +5795,6 @@ async def book_page(fill: str = ""):
                 from .query_agent import QueryAgent
             agent = QueryAgent(
                 llm=get_llm(DEFAULT_LLM),
-                db=_db,
                 max_review_cycles=0,
             )
             volume_query = await asyncio.to_thread(agent.fill, volume_query)

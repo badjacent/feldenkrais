@@ -16,21 +16,16 @@ CLI:
     uv run python -m src.kb.query_agent --input booklet.html --dry-run
 """
 
-import hashlib
 import json
-import os
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from html.parser import HTMLParser
-from pathlib import Path
 from typing import Optional
 
 try:
     from llm import LLM
-    from database import Database
 except ImportError:
     from .llm import LLM
-    from .database import Database
 
 
 @dataclass
@@ -138,28 +133,20 @@ class QueryAgent:
 
     Phases:
         1. Extract all query blocks from the HTML
-        2. Generate text for each block via LLM (with per-block caching)
+        2. Generate text for each block via LLM
         3. Self-review the filled document for coherence
         4. Revise flagged blocks
 
-    Cache:
-        Each block's generated text is cached by a hash of (query_type, prompt, context).
-        Prefers database cache (via db param) with namespaced keys: query_agent:{hash}.
-        Falls back to file-based cache (cache_dir) if db is not provided.
-        Use --no-cache on the CLI to force regeneration.
+    Caching is handled at the pipeline level, not here.
     """
     llm: LLM
     review_llm: Optional[LLM] = None
     max_review_cycles: int = 1
     verbose: bool = False
-    db: Optional["Database"] = None
-    cache_dir: Optional[str] = None
 
     def __post_init__(self):
         if self.review_llm is None:
             self.review_llm = self.llm
-        if self.cache_dir:
-            Path(self.cache_dir).mkdir(parents=True, exist_ok=True)
 
     def fill(self, html: str) -> str:
         """Fill all query blocks in the HTML. Returns modified HTML."""
@@ -223,71 +210,8 @@ class QueryAgent:
         parser.feed(html)
         return parser.blocks
 
-    def _cache_key(self, block: QueryBlock) -> str:
-        """Compute a cache key for a block based on its query type, prompt, and context."""
-        content = json.dumps({
-            "query_type": block.query_type,
-            "prompt": block.prompt,
-            "context": block.context,
-        }, sort_keys=True)
-        return hashlib.sha256(content.encode()).hexdigest()[:16]
-
-    def _load_cached(self, block: QueryBlock) -> Optional[str]:
-        """Load cached result for a block, or None if not cached.
-
-        Prefers database cache (namespaced as query_agent:{hash}),
-        falls back to file cache if db is not available.
-        """
-        key = self._cache_key(block)
-
-        # Try database cache first
-        if self.db:
-            data = self.db.get_cache(f"query_agent:{key}")
-            if data:
-                return data.get("text")
-
-        # Fall back to file cache
-        if self.cache_dir:
-            cache_file = Path(self.cache_dir) / f"{key}.json"
-            if cache_file.exists():
-                try:
-                    data = json.loads(cache_file.read_text())
-                    return data.get("text")
-                except (json.JSONDecodeError, OSError):
-                    return None
-        return None
-
-    def _save_cached(self, block: QueryBlock, text: str) -> None:
-        """Save a block's result to the cache.
-
-        Prefers database cache (namespaced as query_agent:{hash}),
-        falls back to file cache if db is not available.
-        """
-        key = self._cache_key(block)
-        data = {
-            "query_type": block.query_type,
-            "prompt": block.prompt[:200],
-            "text": text,
-        }
-
-        # Prefer database cache
-        if self.db:
-            self.db.set_cache(f"query_agent:{key}", data)
-            return
-
-        # Fall back to file cache
-        if self.cache_dir:
-            cache_file = Path(self.cache_dir) / f"{key}.json"
-            cache_file.write_text(json.dumps(data, indent=2))
-
     def _generate(self, block: QueryBlock) -> str:
-        """Generate text for a single query block (with caching)."""
-        cached = self._load_cached(block)
-        if cached is not None:
-            if self.verbose:
-                print(f"    (cached)")
-            return cached
-
+        """Generate text for a single query block."""
         system = (
             "You are a skilled writer generating content for an inline section of a document. "
             "Write ONLY the requested text — no preamble, no explanation, no markdown formatting. "
@@ -301,9 +225,7 @@ class QueryAgent:
             )
         prompt = "\n".join(prompt_parts)
 
-        text = self.llm.complete(prompt, system=system).strip()
-        self._save_cached(block, text)
-        return text
+        return self.llm.complete(prompt, system=system).strip()
 
     def _review(
         self, html: str, blocks: list[QueryBlock], filled: dict[str, str]
@@ -477,16 +399,6 @@ def main():
         action="store_true",
         help="Extract and display blocks without making LLM calls",
     )
-    parser.add_argument(
-        "--cache-dir",
-        default="data/cache/query_agent",
-        help="Directory for per-block cache (default: data/cache/query_agent)",
-    )
-    parser.add_argument(
-        "--no-cache",
-        action="store_true",
-        help="Skip cache, regenerate all blocks",
-    )
     parser.add_argument("--verbose", "-v", action="store_true")
 
     args = parser.parse_args()
@@ -528,7 +440,6 @@ def main():
         review_llm=review_llm,
         max_review_cycles=args.review_cycles,
         verbose=args.verbose,
-        cache_dir=None if args.no_cache else args.cache_dir,
     )
 
     if args.query_type:

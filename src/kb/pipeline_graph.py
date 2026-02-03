@@ -128,8 +128,11 @@ def _make_analysis_b_transform(db, lesson_id: str, vl_id: str, fv: Optional[str]
     return transform
 
 
-def _make_booklet_render_transform(db, vl_id: str, title: str, lesson_id: str):
-    """Render booklet HTML from cached analysis data (non-LLM)."""
+def _make_booklet_template_transform(db, vl_id: str, title: str, lesson_id: str):
+    """Render booklet HTML template from cached analysis data (non-LLM).
+
+    Produces HTML with unfilled query blocks that will be filled by the booklet node.
+    """
     def transform(**_kwargs) -> str:
         w = _web()
 
@@ -157,14 +160,17 @@ def _make_booklet_render_transform(db, vl_id: str, title: str, lesson_id: str):
             original_title=title,
         )
 
-        db.set_cache(f"pipeline:booklet:{vl_id}", {"html": html})
+        db.set_cache(f"pipeline:booklet_template:{vl_id}", {"html": html})
         return html
 
     return transform
 
 
-def _make_fill_queries_transform(db, vl_id: str):
-    """Fill LLM query blocks in a booklet via QueryAgent."""
+def _make_booklet_transform(db, vl_id: str):
+    """Fill LLM query blocks in a booklet template via QueryAgent.
+
+    This is the final booklet node - produces the complete, filled booklet.
+    """
     def transform(**_kwargs) -> str:
         w = _web()
         try:
@@ -172,19 +178,18 @@ def _make_fill_queries_transform(db, vl_id: str):
         except ImportError:
             from src.kb.query_agent import QueryAgent
 
-        booklet_data = db.get_cache(f"pipeline:booklet:{vl_id}")
-        if not booklet_data or "html" not in booklet_data:
-            raise ValueError(f"Booklet HTML not found for {vl_id}")
+        template_data = db.get_cache(f"pipeline:booklet_template:{vl_id}")
+        if not template_data or "html" not in template_data:
+            raise ValueError(f"Booklet template not found for {vl_id}")
 
-        html = booklet_data["html"]
+        html = template_data["html"]
         agent = QueryAgent(
             llm=w.get_llm(w.DEFAULT_LLM),
-            db=db,
             max_review_cycles=0,
         )
         filled = agent.fill(html)
 
-        db.set_cache(f"pipeline:fill_queries:{vl_id}", {"html": filled})
+        db.set_cache(f"pipeline:booklet:{vl_id}", {"html": filled})
         return filled
 
     return transform
@@ -225,7 +230,6 @@ def _make_volume_intro_transform(db):
 
         agent = QueryAgent(
             llm=w.get_llm(w.DEFAULT_LLM),
-            db=db,
             max_review_cycles=0,
         )
         filled = agent.fill(volume_query)
@@ -250,7 +254,7 @@ def _make_book_assembly_transform(db):
 
         booklet_parts = []
         for vl_id in sorted(w.BOOK_LESSONS.keys()):
-            data = db.get_cache(f"pipeline:fill_queries:{vl_id}")
+            data = db.get_cache(f"pipeline:booklet:{vl_id}")
             if data and "html" in data:
                 booklet_parts.append(
                     f'<div class="booklet-chapter" data-vl="{vl_id}">\n'
@@ -290,7 +294,7 @@ def _make_review_transform(db):
 
         chapters_data = []
         for vl_id in sorted(w.BOOK_LESSONS.keys()):
-            data = db.get_cache(f"pipeline:fill_queries:{vl_id}")
+            data = db.get_cache(f"pipeline:booklet:{vl_id}")
             if data and "html" in data:
                 html = data["html"]
                 text = agent._html_to_text(agent._strip_style(html))
@@ -444,28 +448,29 @@ def build_book_pipeline(db, framework_version: Optional[str] = None) -> Pipeline
             tags={"vl": vl_id, "type": "llm"},
         )
 
-        # Transform: Render booklet HTML
+        # Transform: Render booklet template (unfilled HTML with query blocks)
         graph.add_transform(
-            f"booklet:{vl_id}",
+            f"booklet_template:{vl_id}",
             input_names=[
                 f"analysis_a:{vl_id}",
                 f"analysis_b:{vl_id}",
                 "src:booklet_config",
+                "src:query_types",
             ],
-            transform=_make_booklet_render_transform(db, vl_id, title, lesson_id),
-            description=f"Render booklet: {title}",
+            transform=_make_booklet_template_transform(db, vl_id, title, lesson_id),
+            description=f"Booklet template: {title}",
             tags={"vl": vl_id},
         )
 
-        # Transform: Fill LLM query blocks
+        # Transform: Fill query blocks to produce finished booklet
         graph.add_transform(
-            f"fill_queries:{vl_id}",
+            f"booklet:{vl_id}",
             input_names=[
-                f"booklet:{vl_id}",
+                f"booklet_template:{vl_id}",
                 "src:query_types",
             ],
-            transform=_make_fill_queries_transform(db, vl_id),
-            description=f"Fill queries: {title}",
+            transform=_make_booklet_transform(db, vl_id),
+            description=f"Booklet: {title}",
             tags={"vl": vl_id, "type": "llm"},
         )
 
@@ -480,7 +485,7 @@ def build_book_pipeline(db, framework_version: Optional[str] = None) -> Pipeline
     )
 
     book_inputs = ["volume_intro", "src:council_intro"] + [
-        f"fill_queries:{vl}" for vl in sorted(w.BOOK_LESSONS.keys())
+        f"booklet:{vl}" for vl in sorted(w.BOOK_LESSONS.keys())
     ]
     graph.add_transform(
         "book",

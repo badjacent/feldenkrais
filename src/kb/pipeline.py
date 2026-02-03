@@ -414,19 +414,13 @@ class PipelineExecutor:
                     duration_seconds=old.duration_seconds,
                 )
 
-            # Cascade: if any upstream is not fresh, this node is stale too
-            # Exception: disabled nodes with valid output are treated as "fresh enough"
+            # Cascade: if any upstream lacks cached output, this node is stale
+            # (Node status is informational; what matters is whether output exists)
             if spec.kind.value == "transform" and state.status == NodeStatus.FRESH:
                 for inp_name in spec.input_names:
                     upstream = states.get(inp_name)
-                    if not upstream:
-                        continue
-                    # Disabled node with valid output = fresh enough, don't cascade
-                    upstream_disabled = not enabled_flags.get(inp_name, True)
-                    if upstream_disabled and upstream.output_hash:
-                        continue
-                    # Otherwise, non-fresh upstream cascades staleness
-                    if upstream.status != NodeStatus.FRESH:
+                    if not upstream or not upstream.output_hash:
+                        # No cached output available from upstream
                         state.status = NodeStatus.STALE
                         break
 
@@ -535,12 +529,13 @@ class PipelineExecutor:
         for i, name in enumerate(to_run, 1):
             spec = self.graph.nodes[name]
 
-            # Skip if any ancestor is not fresh (errored, running, or skipped)
+            # Skip if any upstream lacks cached output (can't run without input data)
+            # Node status doesn't matter - only whether cached output exists
             blocked = False
             if spec.kind.value == "transform":
                 for inp in spec.input_names:
                     upstream = states.get(inp)
-                    if upstream and upstream.status not in (NodeStatus.FRESH,):
+                    if not upstream or not upstream.output_hash:
                         blocked = True
                         break
 
