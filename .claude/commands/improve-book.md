@@ -96,6 +96,21 @@ uv run python src/kb/pipeline.py invalidate "<affected_nodes>"
 uv run python src/kb/pipeline.py run
 ```
 
+## Changelog
+
+After each iteration, append an entry to `data/archive/improve_book_changelog.md` with:
+
+1. **Iteration number and date**
+2. **Issues addressed** — rank and one-line summary from the review
+3. **Changes made** — files modified and what changed (keep it brief)
+4. **Commit hash**
+5. **Performance** — booklet:VL-* generation times from `pipeline status` after the run completes
+6. **Review impact** — did the addressed issues disappear from the next review? Did new issues appear? Note any regressions.
+7. **Reverted/simplified** — if any changes were rolled back, note what and why
+
+Also note any changes that were removed for being too expensive (LLM calls, prompt bloat).
+See `data/archive/lens_synthesis_feature.md` for an example of documenting a removed feature.
+
 ## User input
 
 $ARGUMENTS
