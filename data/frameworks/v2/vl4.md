@@ -2,7 +2,7 @@
 
 ## Primary Inquiry
 
-The mechanics of transmission. How does power flow from your center to your edges? We explore the kinetic chain that allows the largest muscles and heaviest bones to "carry" the weight of the limbs.
+The mechanics of proximal-distal transmission. How does power flow from your center to your edges? We explore the kinetic chain that bridges the largest muscles and heaviest bones to the delicate instruments of the hands and feet — the proximal core "carrying" the distal limbs.
 
 ## The Shadow: Straining (The Isolate)
 
@@ -24,7 +24,7 @@ This is the state of **Core-Driven Flow**. When the Engine is connected to the l
 
 ## Functional Goal
 
-To achieve **Potency**. To move from "part-by-part" effort to "whole-body" action, where the limbs become weightless extensions of a powerful, mobile center.
+To achieve **Potency**. To move from "part-by-part" effort to "whole-body" action, where the limbs become weightless extensions of a powerful, mobile center. The proximal-distal bridge is restored.
 
 ## The Person Inside: The Engine
 

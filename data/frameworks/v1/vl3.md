@@ -2,30 +2,31 @@
 
 ## Primary Inquiry
 
-How does the quality of your attention change your physical tone? We explore the master switches of the nervous system—the eyes, jaw, and tongue—to find the "quiet" required for the Council to meet.
+How does the clarity of your intent affect the quality of your movement? We investigate the master switches of the nervous system—the eyes, jaw, and neck—to ensure the "motor plan" created in the mind can be successfully actuated in the body.
 
 ## The Shadow: Fixing (Obscured Intent)
 
-This is the habit of **vigilance without a target**. Because the intent isn't clear, the Shadow defaults to a "locked" state to create a false sense of stability.
+This is a breakdown in the **planning process**. Because the system cannot find its orientation, it defaults to a "locked" state, creating a false stability that prevents the movement plan from being carried out.
 
-* **Hard Eyes:** A fixed, staring gaze that narrows your world to a single point.
-* **The Clamped Gate:** A locked jaw and a tongue pressed against the roof of the mouth.
-* **The Pillar Neck:** Bracing the upper trapezius as if the head needs to be held up by force.
+* **Hard Eyes:** A fixed gaze that "grabs" at the world, freezing the neck and halting the flow of intent.
+* **The Clamped Gate:** A locked jaw that signals a "stop" command to the rest of the spine.
+* **Static Orientation:** Moving the body without moving the intent, leading to a mechanical, hollow execution.
 
 ## The Council Mode: Tuning
 
-This is the state of **Panoramic Awareness**. When the Tuner is active, the "noise" of the Shadow melts away, and the system becomes resonant and receptive.
+This is the state of **Panoramic Readiness**. When the Tuner is clear, the path from "thought" to "action" is wide open.
 
-* **Soft Eyes:** Engaging peripheral vision; receiving light rather than "grabbing" images.
-* **The Floating Pivot:** The head moves freely on the top vertebra without reflexive guarding.
-* **Liquid Tone:** A decoupling of effort from orientation; you can look left without "tightening" left.
+* **Soft Eyes:** Engaging peripheral vision to receive the environment, allowing the head to pivot freely.
+* **The Clear Horizon:** Using the eyes and head to define the direction of movement before the body begins to follow.
+* **Actuated Planning:** The motor plan travels from the brain to the muscles without being corrupted by reflexive guarding.
+* **Liquid Tone:** A state of readiness where intent translates immediately and accurately into skeletal change.
 
 ## Functional Goal
 
-To achieve **Congruency**. When the Tuner is clear, your internal "vibration" matches your external movement. The sub-occipital muscles release, the autonomic nervous system down-regulates, and the "Vertical Self" is granted permission to rise.
+To achieve **Congruency**. By clarifying the orientation of the eyes and jaw, we clear the noise of obscured intent. This allows the internal motor plan to be accurately and effortlessly actuated by the rest of the Council.
 
 ## The Person Inside: The Tuner
 
-The being who lives in the space between your ears and behind your eyes. They don't do the heavy lifting—they manage the **frequency** of the self. Every movement in the lesson is a question for The Tuner:
+The one who manages the "meeting" between your thoughts and your actions. They are the expert in **Actuation**. They don't generate the power, but they make sure the signal is clean. Every movement in the lesson is a question for The Tuner:
 
-> *"Is the air clear? Is the instrument in tune? Can I stay soft while I move, or does the world become a threat the moment I reach for it? What happens to the 'Riser' when I let my jaw go?"*
+> *"Is my plan clear? Am I looking where I intend to go, or am I 'Fixing' my eyes while my body tries to turn? Can I stay tuned to the horizon while I move, or does my plan get lost in the noise of my jaw?"*

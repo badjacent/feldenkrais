@@ -1,25 +1,33 @@
-# VL-5: Folding-Unfolding (The Geometric Lens)
+# VL-5: The Soft Front (The Lens of Permission)
 
 ## Primary Inquiry
-Navigating the protective flexion reflex vs. active extension. Can you round and arch with equal ease?
 
-## Shadow Mode (Cortical Effort)
-- "Red Light Reflex" (habitual abdominal bracing)
-- Muscular resistance to opening the front body
-- Inability to fully extend without back strain
-- Flexion as a protective default
+The balance of protection and expansion. Can you fold and unfurl with equal ease? We explore the "Red Light" reflex—the habit of shortening the front body—to find a neutral spine that is free to move in any direction.
 
-## Foundation Mode (Subcortical Support)
-- Ability to round and arch the spine with equal neutrality
-- No residual tension in either direction
-- The belly can soften completely
-- Extension feels as safe as flexion
+## The Shadow: Bracing
+
+This is the habit of **preemptive protection**. Even in total safety, the Shadow keeps the "armor" on, treating the front of the body as a vulnerable zone that must be shielded.
+
+* **The Abdominal Knot:** Constant, low-level tension in the belly that prevents full breathing and spinal freedom.
+* **Reflexive Crunching:** A tendency to "harden" the front body at the slightest hint of effort or challenge.
+* **The Closed Throat:** Tightness in the neck and jaw that "pulls" the head forward into a protective crouch.
+* **Resistance to Opening:** Feeling "exposed" or strained when asked to arch the back or lengthen the front.
+
+## The Council Mode: Permission
+
+This is the state of **Dynamic Neutrality**. When the Soft Front is active, the nervous system stops "hiding" and starts participating.
+
+* **The Unfurling Spine:** The ability to move from a rounded "C" curve to a long, arched extension without any internal snagging.
+* **Visceral Softness:** A belly that is responsive and soft, allowing the breath to drop deep into the pelvis.
+* **Symmetry of Curve:** Finding equal ease in folding (flexion) and unfolding (extension), with no "favorite" direction.
+* **The Open Horizon:** A feeling of length from the pubic bone to the chin that invites the world in rather than pushing it away.
 
 ## Functional Goal
-Elimination of "parasitic" abdominal or back bracing. True spine neutrality where neither flexion nor extension is privileged.
 
-## The Person Inside (VL-5 Voice)
+To achieve **Permission**. To eliminate the "parasitic" bracing of the abdominal wall so the spine can become a truly neutral pivot. When the front is soft, the **Riser** is finally allowed to stand tall.
 
-**The Guardian** — the inner being who senses the body's capacity to round and arch, to curl and open. This person lives in the geometry of flexion and extension, feeling the spine as a curve that can go either way. Every movement in the lesson is received by the Guardian as: *"Which way is the curve going? Is my front body opening or closing? Can I fold without bracing? Can I unfold without strain?"*
+## The Person Inside: The Soft Front
 
-**The Shadow:** The Bracer — the one who holds the belly tight as armor, who treats the front body as something that must be protected. They reflexively crunch at any hint of vulnerability. The lesson's work is to show the Guardian that neither direction is dangerous — that the spine can curve freely in both directions and the Bracer can finally stand down.
+The being who lives in your "inner curve"—the throat, the chest, the belly, and the psoas. They are the barometer of your safety. They don't care about strength; they care about **Safety and Space**. Every movement in the lesson is a question for The Soft Front:
+
+> *"Am I safe enough to let go of this knot? Can I fold into myself without 'Bracing' for a fight? Does my front feel long and quiet, or am I still wearing my armor? If I let my belly soften, how much higher can the 'Riser' go?"*

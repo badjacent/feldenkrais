@@ -1,25 +1,32 @@
-# VL-3: Steering & Tone (The Regulatory Lens)
+# VL-3: The Tuner (The Lens of Congruency)
 
 ## Primary Inquiry
-Inhibiting reflexive tension via the eyes, jaw, and tongue. How do the sensory organs affect global muscle tone?
 
-## Shadow Mode (Cortical Effort)
-- "Hard eyes" (staring, fixed gaze)
-- Jaw clenching, teeth grinding
-- Bracing of the neck and upper trapezius
-- Tongue pressed against palate or teeth
+How does the clarity of your intent affect the quality of your movement? We investigate the master switches of the nervous system—the eyes, jaw, and neck—to ensure the "motor plan" created in the mind can be successfully actuated in the body.
 
-## Foundation Mode (Subcortical Support)
-- "Soft eyes" (peripheral vision, relaxed focus)
-- Liquid neck, floating head
-- Decoupling of sensory organs from reflexive motor habits
-- Jaw and tongue at rest
+## The Shadow: Fixing (Obscured Intent)
+
+This is a breakdown in the **planning process**. Because the system cannot find its orientation, it defaults to a "locked" state, creating a false stability that prevents the movement plan from being carried out.
+
+* **Hard Eyes:** A fixed gaze that "grabs" at the world, freezing the neck and halting the flow of intent.
+* **The Clamped Gate:** A locked jaw that signals a "stop" command to the rest of the spine.
+* **Static Orientation:** Moving the body without moving the intent, leading to a mechanical, hollow execution.
+
+## The Council Mode: Tuning
+
+This is the state of **Panoramic Readiness**. When the Tuner is clear, the path from "thought" to "action" is wide open.
+
+* **Soft Eyes:** Engaging peripheral vision to receive the environment, allowing the head to pivot freely.
+* **The Clear Horizon:** Using the eyes and head to define the direction of movement before the body begins to follow.
+* **Actuated Planning:** The motor plan travels from the brain to the muscles without being corrupted by reflexive guarding.
+* **Liquid Tone:** A state of readiness where intent translates immediately and accurately into skeletal change.
 
 ## Functional Goal
-Autonomic down-regulation and sub-occipital release. The head floats freely on the spine without reflexive muscular guarding.
 
-## The Person Inside (VL-3 Voice)
+To achieve **Congruency**. By clarifying the orientation of the eyes and jaw, we clear the noise of obscured intent. This allows the internal motor plan to be accurately and effortlessly actuated by the rest of the Council.
 
-**The Aligner** — the inner being who lives behind the eyes, in the jaw, in the tongue and neck. This person governs the whole system's tone through these ancient regulatory instruments. Every movement in the lesson is received by the Aligner as: *"Is it safe? Can I soften my gaze? Can I unclench? What happens to the rest of me when I let go of this vigilance?"*
+## The Person Inside: The Tuner
 
-**The Shadow:** The Watchman — the one who stares with hard eyes, who clenches the jaw as if biting down on the world, who braces the neck against threat. They believe constant vigilance is required. The lesson's work is to show the Aligner that softening the eyes and jaw doesn't mean losing control — it means finding a deeper regulation.
+The one who manages the "meeting" between your thoughts and your actions. They are the expert in **Actuation**. They don't generate the power, but they make sure the signal is clean. Every movement in the lesson is a question for The Tuner:
+
+> *"Is my plan clear? Am I looking where I intend to go, or am I 'Fixing' my eyes while my body tries to turn? Can I stay tuned to the horizon while I move, or does my plan get lost in the noise of my jaw?"*

@@ -4,7 +4,7 @@
 
 The architecture of buoyancy. How do you partner with gravity to find height? We explore the longitudinal pressure wave that travels from the floor to the crown of the head.
 
-## The Shadow: Lifting (The Propper)
+## The Shadow: Propping
 
 This is the habit of **distrusting the ground**. Because you don't feel supported from below, you try to "prop" yourself up from above using muscular tension.
 

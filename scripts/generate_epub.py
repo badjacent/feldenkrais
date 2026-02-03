@@ -354,7 +354,7 @@ def generate_epub(analysis: dict, lesson_title: str, output_path: str):
     body += f'<p>{intro["lens"]}</p>'
     body += f'<h2>{intro["person_inside"]}</h2>'
     body += f'<p>{intro["person_description"]}</p>'
-    body += f'<h2>The Shadow: {intro["shadow"]}</h2>'
+    body += '<h2>The Shadow</h2>'
     body += f'<p>{intro["shadow_description"]}</p>'
     chapters.append(make_chapter("The Lens", body))
 

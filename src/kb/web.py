@@ -184,7 +184,6 @@ def get_vl_booklet_intros(framework_version: str | None = None) -> dict[str, dic
                 "lens": f.get("lens", ""),
                 "person_inside": f.get("person_inside", ""),
                 "person_description": f.get("person_description", ""),
-                "shadow": f.get("shadow", ""),
                 "shadow_description": f.get("shadow_description", ""),
             }
         _vl_booklet_intros_cache[v] = intros
@@ -5056,7 +5055,7 @@ def render_booklet_lens(framework_id: str, vl_analysis: dict) -> str:
     html.append(f'<p>{intro["person_description"]}</p>')
 
     # The Shadow
-    html.append(f'<h3>The Shadow: {intro["shadow"]}</h3>')
+    html.append('<h3>The Shadow</h3>')
     html.append(f'<p>{intro["shadow_description"]}</p>')
 
     html.append("</section>")

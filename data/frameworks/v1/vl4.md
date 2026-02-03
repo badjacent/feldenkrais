@@ -1,25 +1,33 @@
-# VL-4: Proximal-Distal (The Power Lens)
+# VL-4: The Engine (The Lens of Potency)
 
 ## Primary Inquiry
-Connecting the core "Engine" to the limb "Steering." How does movement flow from center to periphery?
 
-## Shadow Mode (Cortical Effort)
-- "Peripheral Effort" (lifting arm from shoulder or wrist alone)
-- Disconnected limbs working in isolation
-- Reaching without engaging the spine or pelvis
-- Heavy, effortful limb movement
+The mechanics of proximal-distal transmission. How does power flow from your center to your edges? We explore the kinetic chain that bridges the largest muscles and heaviest bones to the delicate instruments of the hands and feet — the proximal core "carrying" the distal limbs.
 
-## Foundation Mode (Subcortical Support)
-- Movement originates in the pelvis/chest and flows effortlessly through the limb
-- The limb is "carried" by the core
-- Clear transmission from center to fingertips/toes
-- Coordinated whole-body action
+## The Shadow: Straining (The Isolate)
+
+This is the habit of **functional disconnection**. You try to move the world using only your smallest, most delicate parts, cutting them off from the power of the core.
+
+* **Peripheral Effort:** Lifting the arm from the shoulder socket or the leg from the hip crease alone, without the spine's help.
+* **Orphaned Limbs:** Reaching or stepping as if the arm or leg were a separate attachment rather than an extension of the trunk.
+* **Local Fatigue:** Quick exhaustion in the wrists, neck, or ankles because they are trying to act as "engines" instead of "instruments."
+* **Short-Circuiting:** The power generated in the pelvis gets "stuck" in a tight shoulder or a rigid lower back.
+
+## The Council Mode: Potency
+
+This is the state of **Core-Driven Flow**. When the Engine is connected to the limbs, movement feels effortless because it is properly leveraged.
+
+* **Whole-Body Transmission:** Sensation of movement originating in the pelvis or chest and flowing like a wave to the fingertips.
+* **The Weightless Reach:** The limbs feel light and "floating" because the massive muscles of the center are doing the heavy lifting.
+* **Skeletal Leverage:** Using the length of the spine and the mass of the pelvis to find mechanical advantage.
+* **The Kinetic Chain:** A clear, open path where force travels from the floor, through the Engine, and out to the world.
 
 ## Functional Goal
-"Weightless" limbs and core-driven movement efficiency. The limbs become extensions of the spine rather than separate appendages.
 
-## The Person Inside (VL-4 Voice)
+To achieve **Potency**. To move from "part-by-part" effort to "whole-body" action, where the limbs become weightless extensions of a powerful, mobile center. The proximal-distal bridge is restored.
 
-**The Bridge** — the inner being who feels the chain from core to fingertip, from pelvis to toe. This person senses whether power flows outward from center or whether the limbs are working alone. Every movement in the lesson is received by the Bridge as: *"Is this coming from my center? Can I feel the path from my spine through my shoulder to my hand? Or is this limb orphaned, working by itself?"*
+## The Person Inside: The Engine
 
-**The Shadow:** The Isolated Lifter — the one who hoists the arm from the shoulder alone, who kicks the leg without engaging the pelvis. They work each limb as a separate machine, disconnected from the engine of the trunk. The lesson's work is to restore the pathways until every reach is a whole-body event and the Isolated Lifter has nothing left to do.
+The being who lives in your powerhouse—the pelvis, the low back, and the deep core. They provide the thrust and the initiation. They don't do the fine-tuning; they provide the **Volume**. Every movement in the lesson is a question for The Engine:
+
+> *"Is my power reaching the hand, or is it leaking out at the shoulder? Am I asking my wrist to do a job that my pelvis should be doing? How much lighter does my leg feel when I let my spine join the dance?"*
