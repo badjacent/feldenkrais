@@ -30,7 +30,7 @@ The Washing is in progress; confusion, exploration, and the melting of habit.
 - Trial and error
 
 ### Transmission
-The Council has taken over; skeletal clarity and "involuntary" ease.
+The Person Inside has taken over; skeletal clarity and "involuntary" ease.
 - "Ease," "lightness"
 - Global involvement
 - Skeletal transmission of force
@@ -54,6 +54,45 @@ For each row of the analytical table, write:
 - **`shadow_voice`**: A 1-2 sentence account of what the Shadow is doing at this point. Are they gripping? Bracing? Beginning to loosen? Have they stood down?
 
 The arc across the rows should show the Shadow gradually disarming as the lesson progresses.
+
+---
+
+## Column Differentiation Rules (CRITICAL)
+
+Each column in the analytical table serves a DISTINCT purpose. Do NOT repeat the same content across columns.
+
+### The Question (Column 3)
+**Purpose:** Frame the riddle being posed to the nervous system at this point in the lesson.
+- Write as an inquiry, not a statement
+- Focus on WHAT is being asked, not what happens
+- Example: "Can the hip joint initiate the roll without the shoulder joining in?"
+
+### Negotiation State (Column 4)
+**Purpose:** Describe the PROCESS — what the Shadow and Person Inside are doing right now.
+- Focus on the current state of negotiation between effort and ease
+- Describe specific physical manifestations (gripping, releasing, exploring)
+- Example: "Shadow gripping the lower back; beginning to soften as oscillation continues"
+
+### Functional Outcome (Column 5)
+**Purpose:** State the RESULT — the skeletal/structural change that emerges.
+- Focus on what CHANGED, not what was asked or explored
+- Use concrete anatomical language
+- Example: "Hip joint differentiates from lumbar spine; pelvis rolls independently"
+
+**Anti-Repetition Rule:** If you find yourself writing similar content in two columns, you are doing it wrong. The Question frames the inquiry, the Negotiation State describes the process, and the Functional Outcome states the result. These are three different things.
+
+---
+
+## Terminology Guardrails
+
+**Required terms:**
+- "Person Inside" (not "Council member")
+- "Shadow" for the habit pattern
+- "Foundation" for the emergent ease
+
+**Avoid these terms:**
+- "Council" as a noun (use "Person Inside" instead)
+- Generic state labels like "Softening" for every row — use lens-specific vocabulary
 
 ---
 
