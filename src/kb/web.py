@@ -5665,7 +5665,7 @@ async def booklet_page(category: str = "", lesson: str = "", fill: str = "", fra
             from .query_agent import QueryAgent
         agent = QueryAgent(
             llm=get_llm(DEFAULT_LLM),
-            cache_dir=str(DATA_DIR / "cache" / "query_agent"),
+            db=_db,
             max_review_cycles=0,  # skip review for web; use CLI for iteration
         )
         html = await asyncio.to_thread(agent.fill, html)
@@ -5727,42 +5727,51 @@ BOOK_ALTERNATES = {
 @app.get("/book", response_class=HTMLResponse)
 async def book_page(fill: str = ""):
     """Render the curated volume: intro + five booklet links."""
-    # Build lens info for the volume-intro query block
-    lenses = []
-    for vl_id in sorted(VL_BOOKLET_INTROS.keys()):
-        info = VL_BOOKLET_INTROS[vl_id]
-        lenses.append({
-            "id": vl_id,
-            "name": info["name"],
-            "subtitle": info["subtitle"],
-            "lens_description": info["lens"],
-        })
+    # Try to load pre-filled volume intro from pipeline cache
+    volume_query = None
+    if _db:
+        cached = _db.get_cache("pipeline:volume_intro")
+        if cached and "html" in cached:
+            volume_query = cached["html"]
 
-    lesson_entries = []
-    for vl_id in sorted(BOOK_LESSONS.keys()):
-        entry = BOOK_LESSONS[vl_id]
-        if entry:
-            lesson_entries.append({
-                "title": entry["title"],
-                "framework_id": vl_id,
-                "framework_name": VL_BOOKLET_INTROS[vl_id]["name"],
+    # Fall back to generating (and optionally filling) inline
+    if not volume_query:
+        # Build lens info for the volume-intro query block
+        lenses = []
+        for vl_id in sorted(VL_BOOKLET_INTROS.keys()):
+            info = VL_BOOKLET_INTROS[vl_id]
+            lenses.append({
+                "id": vl_id,
+                "name": info["name"],
+                "subtitle": info["subtitle"],
+                "lens_description": info["lens"],
             })
 
-    volume_context = {"lenses": lenses, "lessons": lesson_entries}
-    volume_query = booklet_query_block("volume-intro", volume_context)
+        lesson_entries = []
+        for vl_id in sorted(BOOK_LESSONS.keys()):
+            entry = BOOK_LESSONS[vl_id]
+            if entry:
+                lesson_entries.append({
+                    "title": entry["title"],
+                    "framework_id": vl_id,
+                    "framework_name": VL_BOOKLET_INTROS[vl_id]["name"],
+                })
 
-    # Optionally fill the intro query block
-    if fill.lower() in ("true", "1", "yes"):
-        try:
-            from query_agent import QueryAgent
-        except ImportError:
-            from .query_agent import QueryAgent
-        agent = QueryAgent(
-            llm=get_llm(DEFAULT_LLM),
-            cache_dir=str(DATA_DIR / "cache" / "query_agent"),
-            max_review_cycles=0,
-        )
-        volume_query = await asyncio.to_thread(agent.fill, volume_query)
+        volume_context = {"lenses": lenses, "lessons": lesson_entries}
+        volume_query = booklet_query_block("volume-intro", volume_context)
+
+        # Optionally fill the intro query block
+        if fill.lower() in ("true", "1", "yes"):
+            try:
+                from query_agent import QueryAgent
+            except ImportError:
+                from .query_agent import QueryAgent
+            agent = QueryAgent(
+                llm=get_llm(DEFAULT_LLM),
+                db=_db,
+                max_review_cycles=0,
+            )
+            volume_query = await asyncio.to_thread(agent.fill, volume_query)
 
     # Render council section
     council_section = render_council_section()
