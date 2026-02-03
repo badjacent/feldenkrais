@@ -3066,69 +3066,10 @@ def build_pipeline_html() -> str:
             }});
         }});
 
-        // Pipeline table sorting
-        (function() {{
-            var table = document.getElementById('pipeline-table');
-            if (!table) return;
-            var headers = table.querySelectorAll('th.sortable');
-            var tbody = table.querySelector('tbody');
-
-            function getRows() {{
-                // Group data rows with their error rows
-                var rows = tbody.querySelectorAll('tr[data-kind]');
-                var groups = [];
-                rows.forEach(function(row) {{
-                    var next = row.nextElementSibling;
-                    var errRow = (next && !next.dataset.kind) ? next : null;
-                    groups.push({{ row: row, err: errRow }});
-                }});
-                return groups;
-            }}
-
-            function sortVal(row, col) {{
-                if (col === 'node') return row.cells[0].textContent.trim().toLowerCase();
-                if (col === 'status') return row.dataset.status || '';
-                if (col === 'time') return row.dataset.time || '';
-                if (col === 'dur') return parseFloat(row.dataset.dur) || 0;
-                return '';
-            }}
-
-            headers.forEach(function(th) {{
-                th.addEventListener('click', function() {{
-                    var col = th.dataset.col;
-                    var desc = th.classList.contains('active') && th.classList.contains('desc') ? false : true;
-                    if (th.classList.contains('active') && !th.classList.contains('desc')) desc = true;
-                    if (th.classList.contains('active') && th.classList.contains('desc')) desc = false;
-
-                    headers.forEach(function(h) {{
-                        h.classList.remove('active', 'desc');
-                        h.textContent = h.textContent.replace(/[\\u25B2\\u25BC]/g, '').trim();
-                    }});
-                    th.classList.add('active');
-                    if (desc) th.classList.add('desc');
-                    th.textContent = th.textContent + ' ' + (desc ? '\\u25BC' : '\\u25B2');
-
-                    var groups = getRows();
-                    groups.sort(function(a, b) {{
-                        var va = sortVal(a.row, col);
-                        var vb = sortVal(b.row, col);
-                        var cmp = 0;
-                        if (typeof va === 'number' && typeof vb === 'number') cmp = va - vb;
-                        else cmp = String(va).localeCompare(String(vb));
-                        return desc ? -cmp : cmp;
-                    }});
-
-                    groups.forEach(function(g) {{
-                        tbody.appendChild(g.row);
-                        if (g.err) tbody.appendChild(g.err);
-                    }});
-                }});
-            }});
-        }})();
-
-        // Toggle enabled/disabled
-        document.querySelectorAll('.toggle-btn').forEach(function(btn) {{
-            btn.addEventListener('click', function() {{
+        // Event delegation for toggle and rebuild buttons (works after DOM updates)
+        document.getElementById('tab-analysis').addEventListener('click', function(e) {{
+            var btn = e.target;
+            if (btn.classList.contains('toggle-btn')) {{
                 var node = btn.dataset.node;
                 btn.disabled = true;
                 btn.textContent = '...';
@@ -3153,12 +3094,8 @@ def build_pipeline_html() -> str:
                         btn.textContent = 'err';
                         btn.disabled = false;
                     }});
-            }});
-        }});
-
-        // Invalidate node (mark stale)
-        document.querySelectorAll('.rebuild-btn').forEach(function(btn) {{
-            btn.addEventListener('click', function() {{
+            }}
+            if (btn.classList.contains('rebuild-btn')) {{
                 var node = btn.dataset.node;
                 btn.disabled = true;
                 btn.textContent = '...';
@@ -3166,7 +3103,6 @@ def build_pipeline_html() -> str:
                     .then(function(r) {{ return r.json(); }})
                     .then(function(data) {{
                         if (data.status === 'invalidated') {{
-                            // Update status cell to STALE
                             var row = btn.closest('tr');
                             var statusCell = row.querySelectorAll('td')[1];
                             if (statusCell) {{
@@ -3181,8 +3117,35 @@ def build_pipeline_html() -> str:
                         btn.style.color = '#dc3545';
                         btn.disabled = false;
                     }});
-            }});
+            }}
         }});
+
+        // Auto-refresh: poll pipeline status every 5 seconds
+        (function() {{
+            var container = document.getElementById('tab-analysis');
+            var refreshInterval = 5000;
+            var paused = false;
+
+            function refresh() {{
+                if (paused) return;
+                fetch('/api/pipeline/status')
+                    .then(function(r) {{ return r.text(); }})
+                    .then(function(html) {{
+                        container.innerHTML = html;
+                    }})
+                    .catch(function(e) {{
+                        console.error('Pipeline refresh failed:', e);
+                    }});
+            }}
+
+            setInterval(refresh, refreshInterval);
+
+            // Pause refresh when user is interacting with buttons
+            container.addEventListener('mousedown', function() {{ paused = true; }});
+            document.addEventListener('mouseup', function() {{
+                setTimeout(function() {{ paused = false; }}, 1000);
+            }});
+        }})();
     </script>
 </body>
 </html>
@@ -6066,6 +6029,18 @@ async def admin_precache(request: Request):
                     entry[mode] = f"error: {e}"
         results.append(entry)
     return JSONResponse({"results": results})
+
+
+@app.get("/api/pipeline/status")
+async def pipeline_status():
+    """Return the pipeline status section HTML for polling updates."""
+    if not _db:
+        return HTMLResponse("<p>Database not configured.</p>", status_code=503)
+    try:
+        html = _build_book_pipeline_section()
+        return HTMLResponse(html)
+    except Exception as e:
+        return HTMLResponse(f"<p style='color: red;'>Error: {e}</p>", status_code=500)
 
 
 @app.post("/api/pipeline/toggle/{node_name:path}")
