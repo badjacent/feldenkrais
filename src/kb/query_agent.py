@@ -210,8 +210,10 @@ class QueryAgent:
         parser.feed(html)
         return parser.blocks
 
-    def _generate(self, block: QueryBlock) -> str:
-        """Generate text for a single query block."""
+    def _generate(self, block: QueryBlock, max_retries: int = 3) -> str:
+        """Generate text for a single query block with retry logic."""
+        import time
+
         system = (
             "You are a skilled writer generating content for an inline section of a document. "
             "Write ONLY the requested text — no preamble, no explanation, no markdown formatting. "
@@ -225,7 +227,19 @@ class QueryAgent:
             )
         prompt = "\n".join(prompt_parts)
 
-        return self.llm.complete(prompt, system=system).strip()
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                return self.llm.complete(prompt, system=system).strip()
+            except Exception as e:
+                last_error = e
+                if attempt < max_retries - 1:
+                    wait = 2 ** attempt  # 1s, 2s, 4s
+                    if self.verbose:
+                        print(f"    Retry {attempt + 1}/{max_retries} after {wait}s: {e}")
+                    time.sleep(wait)
+
+        raise last_error
 
     def _review(
         self, html: str, blocks: list[QueryBlock], filled: dict[str, str]
