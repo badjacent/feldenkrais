@@ -739,13 +739,21 @@ class PipelineExecutor:
         pipeline_start = time.time()
 
         def _is_ready(name: str) -> bool:
-            """Check if a node's dependencies are all satisfied."""
+            """Check if a node's dependencies are all satisfied.
+
+            An upstream node must have output AND must not still be pending
+            execution in this cycle (i.e., it's either already fresh/completed
+            or not in to_run at all).
+            """
             spec = self.graph.nodes[name]
             if spec.kind.value == "source":
                 return True
             for inp in spec.input_names:
                 upstream = states.get(inp)
                 if not upstream or not upstream.output_hash:
+                    return False
+                # Upstream still needs to run in this cycle — not ready yet
+                if inp in remaining:
                     return False
             return True
 
