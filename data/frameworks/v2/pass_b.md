@@ -119,6 +119,10 @@ Each column in the analytical table serves a DISTINCT purpose. Do NOT repeat the
   - VL-4 (Engine): "leaking," "disconnected," "orphaned"
   - VL-5 (Soft Front): "armor," "bracing," "clenching"
 
+**Voice:**
+- Do NOT prescribe the reader's experience ("You felt," "You noticed," "You likely experienced"). Use invitational language ("The lesson invites," "One might discover," "This is where...").
+- Do NOT reuse the same paragraph in multiple sections. Each section (Question, Arc, Lens) serves a distinct purpose.
+
 ---
 
 ## Output Format

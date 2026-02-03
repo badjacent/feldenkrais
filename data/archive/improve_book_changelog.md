@@ -114,3 +114,28 @@ Awaiting next review.
 
 ### Skill updates
 - `fde44dd`: Added `loop N`, `auto`, `wait` arguments to /improve-book skill
+- `ea3b393`: Added changelog tracking to /improve-book workflow
+
+---
+
+## Iteration 5 — 2026-02-03
+
+### Issues addressed
+- #2 (high): Verbatim text repetition — "cortical noise" paragraphs duplicated between sections
+- #3 (high): Lens bleed VL-1 vs VL-4
+- #4 (high): Prescriptive sensory voice ("You felt," "You likely noticed")
+
+### Changes made
+- `data/frameworks/v2/vl4.md`: Added "Distinction from VL-1" section — VL-1=vertical force, VL-4=horizontal power. Forbids VL-1 language (gravity, ground reaction, vertical column) in Engine analysis.
+- `data/frameworks/v2/pass_b.md`: Added Voice constraints — no prescriptive "You felt" language, no reusing paragraphs across sections.
+
+### Commit
+(pending)
+
+### Performance
+Previous iteration with simplified prompts:
+- VL-1: 72.9s, VL-3: 63.6s, VL-4: 61.7s, VL-5: 68.2s
+(VL-2: 391.4s was built from old verbose templates)
+
+### Review impact
+Awaiting next review.

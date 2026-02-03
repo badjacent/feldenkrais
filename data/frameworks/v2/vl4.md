@@ -22,6 +22,10 @@ This is the state of **Core-Driven Flow**. When the Engine is connected to the l
 * **Skeletal Leverage:** Using the length of the spine and the mass of the pelvis to find mechanical advantage.
 * **The Kinetic Chain:** A clear, open path where force travels from the floor, through the Engine, and out to the world.
 
+## Distinction from VL-1 (The Riser)
+
+VL-1 is about **vertical force** — gravity dropping through stacked bones. VL-4 is about **horizontal power** — the pelvis driving force outward through the kinetic chain to the limbs. The Riser asks "is my column stacked?" The Engine asks "is my center powering my reach?" Do NOT use VL-1 language (gravity, ground reaction, vertical column) when writing through The Engine's lens.
+
 ## Functional Goal
 
 To achieve **Potency**. To move from "part-by-part" effort to "whole-body" action, where the limbs become weightless extensions of a powerful, mobile center. The proximal-distal bridge is restored.
