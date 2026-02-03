@@ -179,7 +179,7 @@ def _make_fill_queries_transform(db, vl_id: str):
         html = booklet_data["html"]
         agent = QueryAgent(
             llm=w.get_llm(w.DEFAULT_LLM),
-            cache_dir=str(w.DATA_DIR / "cache" / "query_agent"),
+            db=db,
             max_review_cycles=0,
         )
         filled = agent.fill(html)
@@ -225,7 +225,7 @@ def _make_volume_intro_transform(db):
 
         agent = QueryAgent(
             llm=w.get_llm(w.DEFAULT_LLM),
-            cache_dir=str(w.DATA_DIR / "cache" / "query_agent"),
+            db=db,
             max_review_cycles=0,
         )
         filled = agent.fill(volume_query)
