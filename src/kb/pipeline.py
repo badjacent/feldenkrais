@@ -392,8 +392,18 @@ class PipelineExecutor:
                     last_run_at=old.last_run_at,
                     duration_seconds=old.duration_seconds,
                 )
+            elif old.status == NodeStatus.STALE or not old.output_hash:
+                # Was manually invalidated or never completed → stay stale
+                state = NodeState(
+                    name=name,
+                    status=NodeStatus.STALE,
+                    input_hash=current_hash,
+                    output_hash=old.output_hash,
+                    last_run_at=old.last_run_at,
+                    duration_seconds=old.duration_seconds,
+                )
             else:
-                # Hash matches → fresh
+                # Hash matches and has output → fresh
                 state = NodeState(
                     name=name,
                     status=NodeStatus.FRESH,
