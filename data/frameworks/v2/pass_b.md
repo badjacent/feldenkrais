@@ -130,8 +130,10 @@ Each column in the analytical table serves a DISTINCT purpose. Do NOT repeat the
 
 ### 2. Somatic Narrative
 - **Primary Inquiry**: The fundamental riddle (in this framework's terms)
-- **Washing Gradient**: How cortical noise is reduced
+- **Washing Gradient**: How the Shadow is eroded (use lens-specific language, not "cortical noise")
 - **Threshold of Quiet**: The moment where Transmission emerges
+
+**CRITICAL:** The Primary Inquiry and Washing Gradient must be DISTINCT paragraphs with different content. The Inquiry frames the question; the Gradient describes the process of change. Do not reuse sentences between them.
 
 ### 3. VL Analytical Table
 

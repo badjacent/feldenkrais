@@ -4513,16 +4513,8 @@ BOOKLET_QUERY_TYPES = {
             "about lying there doing these particular movements? Ground it in the physical experience.\n"
             "2. Briefly mention what the booklet will illuminate about the lesson's arc.\n"
             "3. Invite the reader into exploration.\n\n"
-            "FORBIDDEN PHRASES (do not use these or close variants):\n"
-            "- 'companion rather than a manual'\n"
-            "- 'questions to be lived'\n"
-            "- 'welcome back from the floor'\n"
-            "- 'what just happened'\n"
-            "- 'go deeper into'\n"
-            "- 'the movements aren't exercises, they're questions'\n\n"
-            "Instead, find FRESH language that emerges from THIS lesson's specific movement vocabulary. "
-            "If the lesson involved rolling, speak of rolling. If it involved the eyes, speak of seeing. "
-            "Let the introduction be as specific as the lesson itself."
+            "Use FRESH language specific to THIS lesson's movements. Avoid generic phrases like "
+            "'companion rather than a manual' or 'questions to be lived.'"
         ),
         "context_keys": [
             "lesson_title",
@@ -4547,19 +4539,8 @@ BOOKLET_QUERY_TYPES = {
             "This section covers Part {group_number}: {group_label}. "
             "The steps in this part are: {steps_text}. "
             "The prominent pedagogical qualities are: {tag_labels}. "
-            "Write 1-2 sentences describing the functional intent of this part of the lesson.\n\n"
-            "VARY YOUR SENTENCE STRUCTURE. Do NOT use these patterns:\n"
-            "- 'The teacher [verb]s...'\n"
-            "- 'Here, the teacher...'\n"
-            "- 'This section [verb]s...'\n\n"
-            "Instead, try:\n"
-            "- Start with what the nervous system is being asked to do\n"
-            "- Start with the movement itself as subject\n"
-            "- Start with a 'why' or 'by' clause\n"
-            "- Describe the logic of the sequence, not the teacher's action\n\n"
-            "Example BAD: 'The teacher introduces small oscillations to soften the hip.'\n"
-            "Example GOOD: 'Small oscillations give the hip joint a chance to release its grip.'\n"
-            "Example GOOD: 'By keeping the movement tiny, the lesson bypasses the habit of efforting.'"
+            "Write 1-2 sentences about the functional logic of this part — why these "
+            "movements, in this order. Use the movement itself as subject, not 'the teacher.'"
         ),
         "context_keys": [
             "all_groups",           # list of {group_number, label, description} for arc awareness
@@ -4594,8 +4575,8 @@ BOOKLET_QUERY_TYPES = {
             "2. Exactly 3 suggestions as a bulleted list, each 1-2 sentences. Pick the 3 most "
             "impactful things for someone revisiting this lesson.\n"
             "3. A brief closing sentence that invites re-exploration.\n\n"
-            "The suggestions should reference specific movements or moments from THIS lesson "
-            "(like '{lesson_title}' movements) while also offering transferable insights."
+            "Each suggestion must name a specific movement from THIS lesson. "
+            "No platitudes or fortune-cookie wisdom — give actionable movement cues."
         ),
         "context_keys": [
             "lesson_title",
@@ -5109,7 +5090,7 @@ def render_booklet_arc(somatic_narrative: dict, negotiation: dict, groups: list,
 
 
 def render_booklet_lens(framework_id: str, vl_analysis: dict, somatic_narrative: dict = None) -> str:
-    """Render 'The Lens' section — framework introduction with lesson-specific synthesis."""
+    """Render 'The Lens' section — framework introduction."""
     intro = VL_BOOKLET_INTROS.get(framework_id, {})
     if not intro:
         return ""
@@ -5125,19 +5106,6 @@ def render_booklet_lens(framework_id: str, vl_analysis: dict, somatic_narrative:
     # The Shadow
     html.append('<h3>The Shadow</h3>')
     html.append(f'<p>{intro["shadow_description"]}</p>')
-
-    # Add lesson-specific synthesis as LLM query block
-    primary_inquiry = (somatic_narrative or {}).get("primary_inquiry", "")
-    if primary_inquiry:
-        context = {
-            "framework_name": intro.get("name", ""),
-            "person_inside": intro.get("person_inside", ""),
-            "lens_description": intro.get("lens", ""),
-            "shadow_description": intro.get("shadow_description", ""),
-            "primary_inquiry": primary_inquiry,
-        }
-        html.append('<h3>In This Lesson</h3>')
-        html.append(booklet_query_block("lens-synthesis", context))
 
     html.append("</section>")
     return "\n".join(html)
