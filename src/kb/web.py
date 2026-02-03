@@ -4538,6 +4538,43 @@ BOOKLET_QUERY_TYPES = {
             "target_group",         # {group_number, label, description, steps, prominent_tags, analytical_rows}
         ],
     },
+    "booklet-reflection": {
+        "name": "Next Time Reflection",
+        "location": "End of booklet, after The Lens section",
+        "purpose": "Give the reader specific, lesson-aware things to notice next time they do this "
+                   "lesson. Should feel like advice from a wise friend who knows this particular "
+                   "lesson intimately, not generic Feldenkrais tips.",
+        "voice": "Warm, specific, second-person. Reference actual movements and moments from THIS "
+                 "lesson. Write for someone who will do this lesson again.",
+        "length": "2-3 paragraphs with 3-4 specific suggestions",
+        "prompt": (
+            "You are writing the closing 'Next Time' section of a companion booklet for the "
+            "Feldenkrais ATM lesson \"{lesson_title}\".\n\n"
+            "The lens for this booklet is {framework_name} — the {person_inside}. "
+            "{lens_description}\n\n"
+            "The lesson's central question was: {primary_inquiry}\n\n"
+            "The lesson moved through these parts:\n{journey_summary}\n\n"
+            "Key pedagogical elements in this lesson: {tag_summary}\n\n"
+            "Write a 'Next Time' section that:\n"
+            "1. Opens with a brief frame that connects to the {person_inside}'s perspective — "
+            "what would THEY want the reader to notice next time? (1-2 sentences)\n"
+            "2. Offers 3-4 specific things to pay attention to next time, drawn from what "
+            "actually happened in THIS lesson. Reference specific movements or moments. "
+            "Don't give generic Feldenkrais advice — give advice for THIS lesson.\n"
+            "3. Closes with a single sentence that invites re-exploration.\n\n"
+            "Keep it concrete and personal. The reader has done this lesson; speak to their "
+            "experience of it."
+        ),
+        "context_keys": [
+            "lesson_title",
+            "framework_name",
+            "person_inside",
+            "lens_description",
+            "primary_inquiry",
+            "journey_summary",     # list of {group_number, label, description}
+            "tag_summary",         # prominent tags with human-readable names
+        ],
+    },
 }
 
 
@@ -4585,6 +4622,11 @@ def booklet_query_block(query_type: str, context: dict) -> str:
         "lesson_list": "\n".join(
             f"- {l.get('title', '')}" for l in lessons
         ) if lessons else "(lessons not yet selected)",
+        # booklet-reflection
+        "person_inside": context.get("person_inside", ""),
+        "lens_description": context.get("lens_description", ""),
+        "journey_summary": context.get("journey_summary", ""),
+        "tag_summary": context.get("tag_summary", ""),
     }
     filled_prompt = qtype["prompt"].format(**prompt_vars)
 
@@ -5025,46 +5067,45 @@ def render_booklet_lens(framework_id: str, vl_analysis: dict) -> str:
     return "\n".join(html)
 
 
-def render_booklet_reflection(steps: list) -> str:
-    """Render 'Next Time' section."""
+def render_booklet_reflection(
+    steps: list,
+    groups: list,
+    framework_id: str,
+    lesson_title: str,
+    somatic_narrative: dict,
+) -> str:
+    """Render 'Next Time' section as an LLM query block."""
+    intro = VL_BOOKLET_INTROS.get(framework_id, {})
+
     # Gather unique tags across all steps
     all_tags = set()
     for step in steps:
         all_tags.update(step.get("tags", []))
 
+    # Build human-readable tag summary
+    tag_labels = [SPIFFER_TRANSLATIONS.get(t, t) for t in sorted(all_tags) if t in SPIFFER_TRANSLATIONS]
+    tag_summary = ", ".join(tag_labels) if tag_labels else "varied pedagogical approaches"
+
+    # Build journey summary
+    journey_summary = "\n".join([
+        f"- Part {g.get('group_number', '?')}: {g.get('label', '')} — {g.get('description', '')}"
+        for g in groups
+    ])
+
+    context = {
+        "lesson_title": lesson_title,
+        "framework_name": intro.get("name", framework_id),
+        "person_inside": intro.get("person_inside", "Council member"),
+        "lens_description": intro.get("lens", ""),
+        "primary_inquiry": somatic_narrative.get("primary_inquiry", ""),
+        "journey_summary": journey_summary,
+        "tag_summary": tag_summary,
+    }
+
     html = ['<section class="booklet-section">']
     html.append("<h2>Next Time</h2>")
-    html.append("""
-    <p>
-        The question this lesson asks doesn't have a final answer. Each time you do it,
-        your nervous system finds a slightly different solution. Here are some things to
-        pay attention to next time:
-    </p>
-    <ul class="reflection-list">
-    """)
-
-    # Generate reflection prompts based on prominent tags
-    if "S" in all_tags:
-        html.append("<li>Notice the very first moment of sensing — before you move. What do you feel on the floor? What's the shape of your contact?</li>")
-    if "R" in all_tags:
-        html.append("<li>Pay attention to the connections. When you move one part, what ripples through to distant parts? Where do you feel unexpected responses?</li>")
-    if "E" in all_tags:
-        html.append("<li>Each time you're asked to reduce effort, see how little you can do and still have the movement happen. The answer might surprise you.</li>")
-    if "Q" in all_tags:
-        html.append("<li>When the teacher poses a question, resist the urge to find an answer. Let the question sit. Your body will answer in its own time.</li>")
-    if "P" in all_tags:
-        html.append("<li>Don't rush through the pauses. That's where the real work happens — your nervous system integrating what it just learned.</li>")
-    if "I" in all_tags:
-        html.append("<li>Let the imagery work on you. When you imagine a movement, your nervous system rehearses it almost as fully as if you did it. Imagination is movement.</li>")
-
-    html.append("""
-    </ul>
-    <p class="closing">
-        The lesson is a conversation between you and your nervous system.
-        Each time you listen a little more carefully, you hear something new.
-    </p>
-    </section>
-    """)
+    html.append(booklet_query_block("booklet-reflection", context))
+    html.append("</section>")
     return "\n".join(html)
 
 
@@ -5127,7 +5168,13 @@ def build_booklet_html(
         sections.append(render_booklet_arc(somatic_narrative, negotiation, groups, table, column_headers, pass_a_steps))
     sections.append(render_booklet_lens(framework_id, primary_vl))
     if steps:
-        sections.append(render_booklet_reflection(steps))
+        sections.append(render_booklet_reflection(
+            steps=steps,
+            groups=groups,
+            framework_id=framework_id,
+            lesson_title=title,
+            somatic_narrative=somatic_narrative,
+        ))
 
     body = "\n".join(sections)
 
