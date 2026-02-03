@@ -17,7 +17,9 @@ Examples:
 
 ## Workflow
 
-1. **Wait for pipeline** (if `wait` or `loop` mode) - Poll JSON status until fresh or error
+**IMPORTANT: If `wait`, `loop`, or if the pipeline has any stale/running nodes, you MUST wait for the pipeline to finish BEFORE reading the review summary. Do not skip this step.**
+
+1. **Wait for pipeline** - Run the wait_for_pipeline() function below. This is MANDATORY for `loop` and `wait` modes, and RECOMMENDED always. Do not proceed to step 2 until it returns "complete".
 2. **Read the review summary** from the pipeline cache
 3. **Analyze which issues are actionable** - check actual files, understand what can be changed
 4. **Select ~3 high-impact issues** that don't conflict with each other
@@ -25,56 +27,46 @@ Examples:
 6. **Present a plan** for user approval (skip if `auto`)
 7. **Implement changes** if approved
 8. **Commit and push** (in `auto` mode), recording the checkpoint commit hash
-9. **Wait for pipeline**, monitoring for errors and regressions
+9. **Wait for pipeline again** - MANDATORY. Poll until complete, monitoring for errors and regressions
 10. **Rollback if needed** - revert if pipeline errors or performance regresses
-11. **Repeat** (if `loop` mode and iterations remain)
+11. **Repeat** from step 1 (if `loop` mode and iterations remain)
 
-## Waiting for pipeline (JSON status)
+## Step 1: Waiting for pipeline (MANDATORY)
 
-Use the structured JSON status endpoint to poll pipeline state. This gives machine-readable data about errors, regressions, and progress.
+You MUST run this before reading the review summary. Execute this as a bash script and wait for it to complete:
 
 ```bash
-uv run python src/kb/pipeline.py status --json
-```
-
-Poll with early error detection:
-
-```python
-import subprocess, json, time
+uv run python -c "
+import subprocess, json, time, sys
 
 def get_pipeline_status():
     result = subprocess.run(
-        ["uv", "run", "python", "src/kb/pipeline.py", "status", "--json"],
-        capture_output=True, text=True, cwd="."
+        ['uv', 'run', 'python', 'src/kb/pipeline.py', 'status', '--json'],
+        capture_output=True, text=True
     )
     return json.loads(result.stdout)
 
-def wait_for_pipeline():
-    """Poll pipeline with early error detection. Returns status dict."""
-    while True:
-        status = get_pipeline_status()
-
-        if status["has_errors"]:
-            error_names = [e["name"] for e in status["errors"]]
-            print(f"Pipeline errors: {error_names}")
-            return {"result": "error", "status": status}
-
-        if status["all_fresh"]:
-            regressions = status.get("regressions", [])
-            if regressions:
-                print(f"Performance regressions detected: {regressions}")
-                return {"result": "regression", "status": status}
-            return {"result": "complete", "status": status}
-
-        running = [n["name"] for n in status["nodes"] if n["status"] == "running"]
-        stale = status["summary"]["stale"]
-        print(f"Pipeline: {stale} stale, running: {running}")
-        time.sleep(15)
+while True:
+    status = get_pipeline_status()
+    if status['has_errors']:
+        names = [e['name'] for e in status['errors']]
+        print(f'ERRORS: {names}', flush=True)
+        sys.exit(1)
+    if status['all_fresh']:
+        print('Pipeline complete - all nodes fresh', flush=True)
+        break
+    running = [n['name'] for n in status['nodes'] if n['status'] == 'running']
+    stale = status['summary']['stale']
+    print(f'Waiting... {stale} stale, running: {running}', flush=True)
+    time.sleep(15)
+"
 ```
 
-## How to proceed
+If this exits with an error, check the error nodes and decide whether to proceed or abort.
 
-First, read the review summary from the database:
+## Step 2: Read the review summary
+
+Only after the pipeline wait completes successfully, read the review summary:
 
 ```python
 from src.kb.database import Database
