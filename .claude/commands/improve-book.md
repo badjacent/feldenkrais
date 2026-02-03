@@ -17,45 +17,59 @@ Examples:
 
 ## Workflow
 
-1. **Wait for pipeline** (if `wait` or `loop` mode) - Poll until `review_summary` is fresh
+1. **Wait for pipeline** (if `wait` or `loop` mode) - Poll JSON status until fresh or error
 2. **Read the review summary** from the pipeline cache
 3. **Analyze which issues are actionable** - check actual files, understand what can be changed
 4. **Select ~3 high-impact issues** that don't conflict with each other
-5. **Present a plan** for user approval (skip if `auto`)
-6. **Implement changes** if approved
-7. **Commit and push** (in `auto` mode)
-8. **Repeat** (if `loop` mode and iterations remain)
+5. **Dry-run cost check** - run `pipeline.py run --dry-run --json` to estimate recomputation cost
+6. **Present a plan** for user approval (skip if `auto`)
+7. **Implement changes** if approved
+8. **Commit and push** (in `auto` mode), recording the checkpoint commit hash
+9. **Wait for pipeline**, monitoring for errors and regressions
+10. **Rollback if needed** - revert if pipeline errors or performance regresses
+11. **Repeat** (if `loop` mode and iterations remain)
 
-## Waiting for pipeline
+## Waiting for pipeline (JSON status)
 
-To wait for the pipeline to complete, poll the node status:
+Use the structured JSON status endpoint to poll pipeline state. This gives machine-readable data about errors, regressions, and progress.
 
 ```bash
-# Check if review_summary is stale or running
-uv run python src/kb/pipeline.py status 2>/dev/null | grep review_summary
+uv run python src/kb/pipeline.py status --json
 ```
 
-If it shows `stale` or is missing, the pipeline is still running. Poll every 30 seconds until it shows `fresh`:
+Poll with early error detection:
 
 ```python
-import subprocess
-import time
+import subprocess, json, time
 
-def is_review_summary_fresh():
+def get_pipeline_status():
     result = subprocess.run(
-        ["uv", "run", "python", "src/kb/pipeline.py", "status"],
-        capture_output=True, text=True
+        ["uv", "run", "python", "src/kb/pipeline.py", "status", "--json"],
+        capture_output=True, text=True, cwd="."
     )
-    for line in result.stdout.splitlines():
-        if "review_summary" in line and "fresh" in line:
-            return True
-    return False
+    return json.loads(result.stdout)
 
-# Poll until fresh
-while not is_review_summary_fresh():
-    print("Waiting for pipeline... (checking every 30s)")
-    time.sleep(30)
-print("Pipeline complete!")
+def wait_for_pipeline():
+    """Poll pipeline with early error detection. Returns status dict."""
+    while True:
+        status = get_pipeline_status()
+
+        if status["has_errors"]:
+            error_names = [e["name"] for e in status["errors"]]
+            print(f"Pipeline errors: {error_names}")
+            return {"result": "error", "status": status}
+
+        if status["all_fresh"]:
+            regressions = status.get("regressions", [])
+            if regressions:
+                print(f"Performance regressions detected: {regressions}")
+                return {"result": "regression", "status": status}
+            return {"result": "complete", "status": status}
+
+        running = [n["name"] for n in status["nodes"] if n["status"] == "running"]
+        stale = status["summary"]["stale"]
+        print(f"Pipeline: {stale} stale, running: {running}")
+        time.sleep(15)
 ```
 
 ## How to proceed
@@ -80,6 +94,15 @@ Then analyze the issues and propose fixes. For each selected issue:
 2. Read the current content
 3. Propose specific edits
 
+## Minimizing recomputation
+
+When possible, prefer changes to VL-specific files over shared files:
+- `data/frameworks/v2/vl1.md` through `vl5.md` - only affects one VL's subgraph
+- `data/frameworks/v2/pass_b.md` - affects ALL 5 VLs (use only when the fix applies broadly)
+- `src/kb/web.py` BOOKLET_QUERY_TYPES - affects ALL booklets
+
+If a fix targets one VL's analysis, edit the VL-specific prompt file.
+
 Configurable files:
 - `src/kb/web.py` - BOOKLET_QUERY_TYPES dict contains all query prompts
 - `data/frameworks/v2/frameworks.json` - VL framework definitions
@@ -88,13 +111,51 @@ Configurable files:
 - `data/frameworks/v2/pass_b.md` - Pass B (synthesis) prompt
 - `data/council_intro.html` - Council of Five static content
 
+## Dry-run cost check
+
+Before committing, estimate how much recomputation the changes will trigger:
+
+```bash
+uv run python src/kb/pipeline.py run --dry-run --json
+```
+
+This returns estimated durations based on historical data. If the total is unreasonably high, reconsider the changes (e.g., scope to one VL instead of all 5).
+
 ## After implementing
 
-Re-run the affected pipeline nodes to see if the changes improve the review:
+Re-run the affected pipeline nodes:
 ```bash
 uv run python src/kb/pipeline.py invalidate "<affected_nodes>"
 uv run python src/kb/pipeline.py run
 ```
+
+## Rollback protocol
+
+Before making changes, record the checkpoint:
+```bash
+git rev-parse HEAD  # save this as checkpoint_hash
+```
+
+After the pipeline completes, check for problems:
+```python
+status = get_pipeline_status()
+
+# Check for errors
+if status["has_errors"]:
+    print("Errors detected, rolling back")
+    # git revert HEAD --no-edit && git push
+
+# Check for performance regressions (>2x slower than baseline)
+if status["regressions"]:
+    print(f"Regressions: {status['regressions']}")
+    # git revert HEAD --no-edit && git push
+```
+
+If rollback is needed:
+1. `git revert HEAD --no-edit`
+2. `git push`
+3. Log the revert in the changelog with the reason
+4. Continue to next iteration (which will pick different issues)
 
 ## Changelog
 
@@ -104,7 +165,7 @@ After each iteration, append an entry to `data/archive/improve_book_changelog.md
 2. **Issues addressed** — rank and one-line summary from the review
 3. **Changes made** — files modified and what changed (keep it brief)
 4. **Commit hash**
-5. **Performance** — booklet:VL-* generation times from `pipeline status` after the run completes
+5. **Performance** — booklet:VL-* generation times from `pipeline status --json` after the run completes
 6. **Review impact** — did the addressed issues disappear from the next review? Did new issues appear? Note any regressions.
 7. **Reverted/simplified** — if any changes were rolled back, note what and why
 

@@ -13,7 +13,9 @@ import json
 import sys
 import time
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Callable, Optional
@@ -276,6 +278,83 @@ class PipelineStateStore:
                 ),
             )
 
+    def load_metadata(self, name: str) -> Optional[dict]:
+        """Load the metadata JSONB for a single node."""
+        with self.db.get_cursor(commit=False) as cursor:
+            cursor.execute(
+                "SELECT metadata FROM pipeline_node_state WHERE name = %s",
+                (name,),
+            )
+            row = cursor.fetchone()
+            if row and row["metadata"] and isinstance(row["metadata"], dict):
+                return row["metadata"]
+            return None
+
+    def _merge_metadata(self, name: str, patch: dict):
+        """Merge keys into metadata JSONB for a node."""
+        with self.db.get_cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE pipeline_node_state
+                SET metadata = COALESCE(metadata, '{}'::jsonb) || %s::jsonb,
+                    updated_at = NOW()
+                WHERE name = %s
+                """,
+                (json.dumps(patch), name),
+            )
+
+    def record_error(self, name: str):
+        """Increment error count and set next retry time with exponential backoff."""
+        meta = self.load_metadata(name) or {}
+        count = meta.get("error_count", 0) + 1
+        delay_minutes = min(2 ** (count - 1), 32)
+        next_retry = datetime.now(timezone.utc) + timedelta(minutes=delay_minutes)
+        self._merge_metadata(name, {
+            "error_count": count,
+            "last_error_at": datetime.now(timezone.utc).isoformat(),
+            "next_retry_at": next_retry.isoformat(),
+        })
+
+    def clear_error_backoff(self, name: str):
+        """Clear error tracking metadata on successful run."""
+        with self.db.get_cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE pipeline_node_state
+                SET metadata = metadata - 'error_count' - 'last_error_at' - 'next_retry_at'
+                WHERE name = %s AND metadata IS NOT NULL
+                """,
+                (name,),
+            )
+
+    def should_retry(self, name: str) -> bool:
+        """Check if an errored node is past its backoff period."""
+        meta = self.load_metadata(name)
+        if not meta:
+            return True
+        next_retry = meta.get("next_retry_at")
+        if not next_retry:
+            return True
+        try:
+            retry_at = datetime.fromisoformat(next_retry.replace("Z", "+00:00"))
+            return datetime.now(timezone.utc) >= retry_at
+        except Exception:
+            return True
+
+    def record_duration(self, name: str, duration: float):
+        """Append a duration to the node's history (keep last 10)."""
+        meta = self.load_metadata(name) or {}
+        history = meta.get("duration_history", [])
+        history.append(round(duration, 1))
+        if len(history) > 10:
+            history = history[-10:]
+        self._merge_metadata(name, {"duration_history": history})
+
+    def get_duration_history(self, name: str) -> list[float]:
+        """Get the duration history for a node."""
+        meta = self.load_metadata(name) or {}
+        return meta.get("duration_history", [])
+
     def clear(self, prefix: Optional[str] = None):
         """Delete state entries. If prefix given, only matching names."""
         with self.db.get_cursor() as cursor:
@@ -308,16 +387,30 @@ def _compute_input_hash_for_transform(
 
 
 class PipelineExecutor:
-    """Runs pipeline nodes in topological order, tracking staleness."""
+    """Runs pipeline nodes, tracking staleness. Supports parallel execution."""
 
-    def __init__(self, graph: PipelineGraph, store: PipelineStateStore):
+    def __init__(
+        self,
+        graph: PipelineGraph,
+        store: PipelineStateStore,
+        node_timeout_seconds: float = 300,
+        max_workers: int = 5,
+    ):
         self.graph = graph
         self.store = store
+        self.node_timeout_seconds = node_timeout_seconds
+        self.max_workers = max_workers
+
+    def _get_node_timeout(self, name: str) -> float:
+        """Get timeout for a node, checking metadata overrides."""
+        meta = self.store.load_metadata(name)
+        if meta and "timeout_seconds" in meta:
+            return float(meta["timeout_seconds"])
+        return self.node_timeout_seconds
 
     def compute_staleness(self) -> dict[str, NodeState]:
         """Check every node and return current states with staleness flags."""
         stored = self.store.load_all()
-        enabled_flags = self.store.load_enabled_flags()
         states: dict[str, NodeState] = {}
 
         for name in self.graph.topological_order():
@@ -337,10 +430,9 @@ class PipelineExecutor:
                     input_hash=current_hash,
                 )
             elif old.status == NodeStatus.RUNNING:
-                # Check if it's a zombie (stuck RUNNING for >10 min)
+                # Check if it's a zombie (stuck RUNNING for >5 min)
                 is_zombie = False
                 if old.last_run_at:
-                    from datetime import datetime, timezone, timedelta
                     try:
                         started = datetime.fromisoformat(
                             old.last_run_at.replace("Z", "+00:00")
@@ -420,11 +512,9 @@ class PipelineExecutor:
                 for inp_name in spec.input_names:
                     upstream = states.get(inp_name)
                     if not upstream or not upstream.output_hash:
-                        # No cached output available from upstream
                         state.status = NodeStatus.STALE
                         break
                     if upstream.status in (NodeStatus.STALE, NodeStatus.ERROR, NodeStatus.PENDING):
-                        # Upstream needs to run first
                         state.status = NodeStatus.STALE
                         break
 
@@ -437,13 +527,12 @@ class PipelineExecutor:
         spec = self.graph.nodes[name]
 
         if spec.kind.value == "source":
-            # Sources don't have a transform — just hash and mark fresh
             content_hash = _compute_input_hash_for_source(spec)
             state = NodeState(
                 name=name,
                 status=NodeStatus.FRESH,
                 input_hash=content_hash,
-                output_hash=content_hash,  # source output = its content hash
+                output_hash=content_hash,
             )
             self.store.save(state)
             states[name] = state
@@ -452,15 +541,20 @@ class PipelineExecutor:
         # Transform node — gather inputs and run
         input_hash = _compute_input_hash_for_transform(spec, states)
         state = NodeState(name=name, status=NodeStatus.RUNNING, input_hash=input_hash)
-        self.store.save(state)  # persist RUNNING so dashboard shows live progress
+        self.store.save(state)
 
+        timeout = self._get_node_timeout(name)
         t0 = time.time()
         try:
-            # Build input dict: {upstream_name: upstream_output_hash}
-            # The transform function receives the input names so it can
-            # look up actual data from cache or DB
             inputs = {inp: states[inp].output_hash for inp in spec.input_names}
-            result = spec.transform(**inputs)
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(spec.transform, **inputs)
+                try:
+                    result = future.result(timeout=timeout)
+                except FuturesTimeout:
+                    raise TimeoutError(
+                        f"Node {name} exceeded {timeout}s timeout"
+                    )
             elapsed = time.time() - t0
 
             output_hash = hashlib.sha256(
@@ -474,6 +568,8 @@ class PipelineExecutor:
                 output_hash=output_hash,
                 duration_seconds=round(elapsed, 1),
             )
+            self.store.clear_error_backoff(name)
+            self.store.record_duration(name, elapsed)
         except Exception as e:
             elapsed = time.time() - t0
             state = NodeState(
@@ -483,20 +579,91 @@ class PipelineExecutor:
                 duration_seconds=round(elapsed, 1),
                 error_message=str(e)[:500],
             )
+            self.store.record_error(name)
 
         self.store.save(state)
         states[name] = state
         return state
 
+    def check_regressions(
+        self, states: dict[str, NodeState], threshold: float = 2.0
+    ) -> list[dict]:
+        """Compare current durations to baselines. Return regressions > threshold."""
+        regressions = []
+        for name, state in states.items():
+            if state.status != NodeStatus.FRESH or not state.duration_seconds:
+                continue
+            history = self.store.get_duration_history(name)
+            if len(history) < 3:
+                continue
+            baseline = sum(history) / len(history)
+            if baseline > 0 and state.duration_seconds > baseline * threshold:
+                regressions.append({
+                    "node": name,
+                    "current": state.duration_seconds,
+                    "baseline": round(baseline, 1),
+                    "ratio": round(state.duration_seconds / baseline, 1),
+                })
+        return regressions
+
+    def status_json(self) -> dict:
+        """Return structured pipeline status for programmatic consumption."""
+        states = self.compute_staleness()
+        enabled_flags = self.store.load_enabled_flags()
+        order = self.graph.topological_order()
+
+        nodes = []
+        for name in order:
+            state = states.get(name, NodeState(name=name))
+            spec = self.graph.nodes[name]
+            nodes.append({
+                "name": name,
+                "kind": spec.kind.value,
+                "status": state.status.value,
+                "duration_seconds": state.duration_seconds,
+                "last_run_at": state.last_run_at,
+                "error_message": state.error_message,
+                "enabled": enabled_flags.get(name, True),
+                "tags": spec.tags,
+            })
+
+        error_nodes = [n for n in nodes if n["status"] == "error"]
+        running_nodes = [n for n in nodes if n["status"] == "running"]
+        stale_nodes = [n for n in nodes if n["status"] in ("stale", "pending")]
+        fresh_nodes = [n for n in nodes if n["status"] == "fresh"]
+
+        total_duration = sum(n["duration_seconds"] or 0 for n in fresh_nodes)
+        regressions = self.check_regressions(states)
+
+        return {
+            "all_fresh": len(stale_nodes) == 0 and len(error_nodes) == 0 and len(running_nodes) == 0,
+            "has_errors": len(error_nodes) > 0,
+            "is_running": len(running_nodes) > 0,
+            "summary": {
+                "total": len(nodes),
+                "fresh": len(fresh_nodes),
+                "stale": len(stale_nodes),
+                "error": len(error_nodes),
+                "running": len(running_nodes),
+            },
+            "total_duration_seconds": round(total_duration, 1),
+            "regressions": regressions,
+            "errors": [{"name": n["name"], "message": n["error_message"]} for n in error_nodes],
+            "nodes": nodes,
+        }
+
     def run_stale(
         self,
         dry_run: bool = False,
         target_node: Optional[str] = None,
-    ) -> list[NodeState]:
-        """Run all stale/pending nodes in topological order.
+        total_timeout_seconds: Optional[float] = None,
+    ) -> list[NodeState] | dict:
+        """Run stale/pending nodes with parallel execution of independent branches.
 
+        Nodes whose dependencies are all satisfied run concurrently via a thread pool.
         If target_node is given, only run that node and its stale ancestors.
-        Returns list of states for nodes that were (or would be) executed.
+        If dry_run is True, returns a dict with estimated durations.
+        Returns list of states for nodes that were executed.
         """
         states = self.compute_staleness()
         order = self.graph.topological_order()
@@ -523,45 +690,117 @@ class PipelineExecutor:
                 print(f"  [skip] {name} (disabled)")
             needs_run -= disabled
 
-        to_run = [n for n in order if n in needs_run]
+        # Skip errored nodes still in backoff
+        in_backoff = set()
+        for name in needs_run:
+            if states[name].status == NodeStatus.ERROR:
+                if not self.store.should_retry(name):
+                    in_backoff.add(name)
+        if in_backoff:
+            for name in sorted(in_backoff):
+                print(f"  [skip] {name} (in error backoff)")
+            needs_run -= in_backoff
+
+        to_run = set(n for n in order if n in needs_run)
 
         if dry_run:
-            return [states[n] for n in to_run]
+            estimated = []
+            for name in order:
+                if name not in to_run:
+                    continue
+                history = self.store.get_duration_history(name)
+                est = round(sum(history) / len(history), 1) if history else None
+                estimated.append({
+                    "name": name,
+                    "status": states[name].status.value,
+                    "estimated_seconds": est,
+                    "tags": self.graph.nodes[name].tags,
+                })
+            total_est = sum(e["estimated_seconds"] or 0 for e in estimated)
+            return {
+                "count": len(estimated),
+                "nodes": estimated,
+                "total_estimated_seconds": round(total_est, 1),
+            }
+
+        # ── Parallel DAG execution ──────────────────────────────────────
+        # Instead of a flat sequential loop, we find "ready" nodes (all deps
+        # satisfied) and submit them concurrently to a thread pool. As each
+        # finishes we recompute which nodes are newly unblocked.
 
         results = []
-        total = len(to_run)
-        for i, name in enumerate(to_run, 1):
-            spec = self.graph.nodes[name]
+        completed = set()
+        pipeline_start = time.time()
 
-            # Skip if any upstream lacks cached output (can't run without input data)
-            # Node status doesn't matter - only whether cached output exists
-            blocked = False
-            if spec.kind.value == "transform":
-                for inp in spec.input_names:
-                    upstream = states.get(inp)
-                    if not upstream or not upstream.output_hash:
-                        blocked = True
+        def _is_ready(name: str) -> bool:
+            """Check if a node's dependencies are all satisfied."""
+            spec = self.graph.nodes[name]
+            if spec.kind.value == "source":
+                return True
+            for inp in spec.input_names:
+                upstream = states.get(inp)
+                if not upstream or not upstream.output_hash:
+                    return False
+            return True
+
+        remaining = set(to_run)
+
+        with ThreadPoolExecutor(max_workers=self.max_workers) as pool:
+            while remaining:
+                # Check total time budget
+                if total_timeout_seconds:
+                    elapsed_total = time.time() - pipeline_start
+                    if elapsed_total > total_timeout_seconds:
+                        print(f"[pipeline] Time budget ({total_timeout_seconds}s) exceeded "
+                              f"after {len(completed)} nodes, {len(remaining)} remaining")
                         break
 
-            if blocked:
-                print(f"[{i}/{total}] Skipping {name} (upstream not ready)")
-                state = NodeState(
-                    name=name,
-                    status=NodeStatus.STALE,
-                    input_hash=states[name].input_hash if name in states else "",
-                )
-                states[name] = state
-                results.append(state)
-                continue
+                # Find all ready nodes
+                ready = {n for n in remaining if _is_ready(n)}
+                if not ready:
+                    # Nothing ready but nodes remain — they're blocked by errors/missing output
+                    for name in sorted(remaining):
+                        print(f"  [blocked] {name} (upstream not ready)")
+                        state = NodeState(
+                            name=name,
+                            status=NodeStatus.STALE,
+                            input_hash=states[name].input_hash if name in states else "",
+                        )
+                        states[name] = state
+                        results.append(state)
+                    break
 
-            print(f"[{i}/{total}] Running {name}...", end=" ", flush=True)
-            state = self.run_node(name, states)
-            if state.status == NodeStatus.FRESH:
-                dur = f"({state.duration_seconds}s)" if state.duration_seconds else ""
-                print(f"done {dur}")
-            else:
-                print(f"ERROR: {state.error_message}")
-            results.append(state)
+                # Submit ready nodes in parallel
+                futures = {}
+                for name in ready:
+                    done_count = len(completed) + len(futures) + 1
+                    total_count = len(to_run)
+                    print(f"[{done_count}/{total_count}] Running {name}...", flush=True)
+                    futures[pool.submit(self.run_node, name, states)] = name
+
+                remaining -= ready
+
+                # Wait for this batch to complete
+                from concurrent.futures import as_completed
+                for future in as_completed(futures):
+                    name = futures[future]
+                    try:
+                        state = future.result()
+                    except Exception as e:
+                        state = NodeState(
+                            name=name,
+                            status=NodeStatus.ERROR,
+                            error_message=str(e)[:500],
+                        )
+                        states[name] = state
+
+                    completed.add(name)
+                    if state.status == NodeStatus.FRESH:
+                        dur = f"({state.duration_seconds}s)" if state.duration_seconds else ""
+                        print(f"  {name} done {dur}")
+                    else:
+                        print(f"  {name} ERROR: {state.error_message}")
+                    results.append(state)
 
         return results
 
@@ -645,11 +884,14 @@ def main():
     # status
     status_p = sub.add_parser("status", help="Show node staleness")
     status_p.add_argument("--stale", action="store_true", help="Only show stale nodes")
+    status_p.add_argument("--json", action="store_true", help="Output JSON for programmatic use")
 
     # run
     run_p = sub.add_parser("run", help="Rebuild stale nodes")
     run_p.add_argument("--node", help="Target a specific node (+ stale ancestors)")
     run_p.add_argument("--dry-run", action="store_true", help="Show what would run")
+    run_p.add_argument("--json", action="store_true", help="Output JSON (for --dry-run)")
+    run_p.add_argument("--timeout", type=float, help="Total time budget in seconds")
 
     # graph
     sub.add_parser("graph", help="Print graph structure")
@@ -699,24 +941,41 @@ def main():
     executor = PipelineExecutor(graph, store)
 
     if args.command == "status":
-        states = executor.compute_staleness()
-        _print_status(graph, states, stale_only=args.stale)
+        if args.json:
+            print(json.dumps(executor.status_json(), indent=2))
+        else:
+            states = executor.compute_staleness()
+            _print_status(graph, states, stale_only=args.stale)
 
     elif args.command == "run":
         if args.dry_run:
-            results = executor.run_stale(dry_run=True, target_node=args.node)
-            if results:
-                print(f"Would run {len(results)} node(s):")
-                for s in results:
-                    print(f"  {s.name} ({_format_status(s.status)})")
+            result = executor.run_stale(dry_run=True, target_node=args.node)
+            if hasattr(args, "json") and args.json:
+                print(json.dumps(result, indent=2))
+            elif isinstance(result, dict):
+                nodes = result.get("nodes", [])
+                if nodes:
+                    print(f"Would run {len(nodes)} node(s):")
+                    for n in nodes:
+                        est = f" (~{n['estimated_seconds']}s)" if n["estimated_seconds"] else ""
+                        print(f"  {n['name']} ({n['status']}){est}")
+                    print(f"\nEstimated total: {result['total_estimated_seconds']}s")
+                else:
+                    print("Nothing to run — all nodes fresh.")
             else:
                 print("Nothing to run — all nodes fresh.")
         else:
-            results = executor.run_stale(target_node=args.node)
-            fresh = sum(1 for r in results if r.status == NodeStatus.FRESH)
-            errors = sum(1 for r in results if r.status == NodeStatus.ERROR)
-            if results:
-                print(f"\nComplete: {fresh} succeeded, {errors} errors")
+            results = executor.run_stale(
+                target_node=args.node,
+                total_timeout_seconds=args.timeout,
+            )
+            if isinstance(results, list):
+                fresh = sum(1 for r in results if r.status == NodeStatus.FRESH)
+                errors = sum(1 for r in results if r.status == NodeStatus.ERROR)
+                if results:
+                    print(f"\nComplete: {fresh} succeeded, {errors} errors")
+                else:
+                    print("Nothing to run — all nodes fresh.")
             else:
                 print("Nothing to run — all nodes fresh.")
 

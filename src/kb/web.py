@@ -67,8 +67,8 @@ def _run_pipeline_cycle():
     store = PipelineStateStore(_db)
     store.initialize()
     executor = PipelineExecutor(graph, store)
-    results = executor.run_stale()
-    if results:
+    results = executor.run_stale(total_timeout_seconds=900)
+    if isinstance(results, list) and results:
         fresh = sum(1 for r in results if r.status.value == "fresh")
         errors = sum(1 for r in results if r.status.value == "error")
         print(f"[pipeline] cycle complete: {fresh} succeeded, {errors} errors out of {len(results)} nodes")
