@@ -4688,6 +4688,8 @@ def booklet_query_block(query_type: str, context: dict) -> str:
         "journey_summary": context.get("journey_summary", ""),
         "tag_summary": context.get("tag_summary", ""),
         "movement_examples": context.get("movement_examples", ""),
+        # lens-synthesis
+        "shadow_description": context.get("shadow_description", ""),
     }
     filled_prompt = qtype["prompt"].format(**prompt_vars)
 
