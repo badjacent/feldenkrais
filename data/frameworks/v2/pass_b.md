@@ -15,22 +15,22 @@ Your task is to apply the specified VL Framework lens to interpret the lesson th
 
 For each step from Pass A, evaluate the **Negotiation State**:
 
-### Domination
-The student is "doing" the movement through voluntary muscular force.
+### Bracing
+The Shadow is in control; high noise, tension, and parasitic effort.
 - Localized effort
 - Speed, urgency
-- Bracing, holding breath
+- Gripping, holding breath
 - Linear "trying"
 
-### Negotiation
-The student is "exploring" the riddle.
+### Softening
+The Washing is in progress; confusion, exploration, and the melting of habit.
 - Oscillation, rhythm ("Washing" markers)
 - Micro-movements
 - Healthy confusion
 - Trial and error
 
-### Integration
-The subcortical system (The Foundation) has found the solution.
+### Transmission
+The Council has taken over; skeletal clarity and "involuntary" ease.
 - "Ease," "lightness"
 - Global involvement
 - Skeletal transmission of force
@@ -67,13 +67,13 @@ The arc across the rows should show the Shadow gradually disarming as the lesson
 ### 2. Somatic Narrative
 - **Primary Inquiry**: The fundamental riddle (in this framework's terms)
 - **Washing Gradient**: How cortical noise is reduced
-- **Threshold of Quiet**: The moment where Integration emerges
+- **Threshold of Quiet**: The moment where Transmission emerges
 
 ### 3. VL Analytical Table
 
 Use the **groups** from Pass A — one row per group. For each group, add:
 - The Question (through this VL's lens)
-- Negotiation State (Domination/Negotiation/Integration)
+- Negotiation State (Bracing/Softening/Transmission)
 - Functional Outcome (skeletal/structural result)
 
 **Column definitions:**

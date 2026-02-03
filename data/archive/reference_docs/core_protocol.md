@@ -26,22 +26,22 @@ Segment the transcript into discrete "Somatic Events" (movements/instructions) a
 
 For each Somatic Event, evaluate the **Negotiation State** using these indicators:
 
-### Domination
-The student is "doing" the movement through voluntary muscular force.
+### Bracing
+The Shadow is in control; high noise, tension, and parasitic effort.
 - Localized effort
 - Speed, urgency
-- Bracing, holding breath
+- Gripping, holding breath
 - Linear "trying"
 
-### Negotiation
-The student is "exploring" the riddle.
+### Softening
+The Washing is in progress; confusion, exploration, and the melting of habit.
 - Oscillation, rhythm ("Washing" markers)
 - Micro-movements
 - Healthy confusion
 - Trial and error
 
-### Integration
-The subcortical system (The Foundation) has found the solution.
+### Transmission
+The Council has taken over; skeletal clarity and "involuntary" ease.
 - "Ease," "lightness"
 - Global involvement
 - Skeletal transmission of force
@@ -64,7 +64,7 @@ Apply the VL Framework logic provided below. Evaluate how each Somatic Event rel
 Provide a brief narrative summary including:
 - **Primary Inquiry**: The fundamental riddle of the lesson (in this framework's terms)
 - **Washing Gradient**: How the Shadow is eroded through the lesson
-- **Threshold of Quiet**: The moment/movement where Integration emerges
+- **Threshold of Quiet**: The moment/movement where Transmission emerges
 
 ### 2. VL Analytical Table
 
@@ -83,6 +83,6 @@ column_headers: {
 
 | Seq | SPIFFER-Q | The Question | Negotiation State | Functional Outcome |
 |:----|:----------|:-------------|:------------------|:-------------------|
-| Movement ID | Relevant tags | The specific riddle | Domination/Negotiation/Integration | Skeletal/structural result |
+| Movement ID | Relevant tags | The specific riddle | Bracing/Softening/Transmission | Skeletal/structural result |
 
 The table should cover ALL major movements from beginning to end, including the final return to rest or recheck.

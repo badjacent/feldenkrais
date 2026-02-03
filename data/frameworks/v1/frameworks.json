@@ -7,15 +7,20 @@
       "frameworks": [
         {
           "id": "VL-1",
-          "key": "vl1_vertical_self",
-          "name": "Vertical Self",
+          "key": "vl1_riser",
+          "name": "The Riser",
           "subtitle": "The Physics Lens",
-          "display_name": "VL-1 Vertical Self",
+          "display_name": "VL-1 The Riser",
           "alt_names": [],
           "focus": "Gravity, skeletal columns, longitudinal force",
           "indicators": "Standing, weight transfer, spine as column, lengthening",
           "prompt_file": "vl1.md",
-          "active": true
+          "active": true,
+          "lens": "How force travels through your skeleton from the floor to your crown. When you're truly vertical, the floor pushes up through your bones all the way to your head — you don't have to hold yourself up.",
+          "person_inside": "The Riser",
+          "person_description": "The inner being who senses your relationship with gravity. They feel weight dropping through bone, they know when the column is stacked and when it's collapsing. Every movement is received as: <em>What just happened to my column? Is force transmitting cleanly through my bones, or is something buckling?</em>",
+          "shadow": "The Muscular Hoister",
+          "shadow_description": "The one who can't trust the skeleton. They grip the lower back, clench the waist, pull the head up with the neck. They believe that without their effort, everything would collapse. The lesson shows that bones can do what muscles have been forcing."
         },
         {
           "id": "VL-2",
@@ -27,7 +32,12 @@
           "focus": "Micro-differentiation, joint resolution",
           "indicators": "Small precise movements, sensing specific joints, body mapping",
           "prompt_file": "vl2.md",
-          "active": true
+          "active": true,
+          "lens": "Your brain has a 'map' of your body — some parts are highly detailed, others are blurry. This lens sees how the lesson lights up the dark spots on that map, turning vague regions into articulated joints.",
+          "person_inside": "The Cartographer",
+          "person_description": "The inner being who holds the cortical self-image. They see the body as a territory with bright regions and dark regions. Every movement is received as: <em>What just became visible? What pixel lit up that was dark before? Where did I discover a joint I didn't know I had?</em>",
+          "shadow": "The Blunt Mover",
+          "shadow_description": "The one who moves in clumps and blocks. They don't distinguish hip from waist, shoulder from arm, one vertebra from another. They move 'the leg' when only the ankle was asked. The lesson illuminates the map until the Blunt Mover dissolves into articulation."
         },
         {
           "id": "VL-3",
@@ -39,7 +49,12 @@
           "focus": "Eyes, jaw, neck, autonomic regulation",
           "indicators": "Eye movements, jaw relaxation, neck turning, breathing",
           "prompt_file": "vl3.md",
-          "active": true
+          "active": true,
+          "lens": "Your eyes, jaw, and neck act like a volume knob for your entire nervous system's tension. If you stare hard or clench your jaw, everything tenses. This lens sees how the lesson teaches you to regulate yourself from these control points.",
+          "person_inside": "The Aligner",
+          "person_description": "The inner being who lives behind the eyes, in the jaw and tongue. They govern the whole system's tone through these ancient regulatory instruments. Every movement is received as: <em>Is it safe? Can I soften my gaze? Can I unclench? What happens to the rest of me when I let go of this vigilance?</em>",
+          "shadow": "The Watchman",
+          "shadow_description": "The one who stares with hard eyes, who clenches the jaw as if biting down on the world, who braces the neck against threat. They believe constant vigilance is required. The lesson shows that softening the eyes and jaw doesn't mean losing control — it means finding a deeper regulation."
         },
         {
           "id": "VL-4",
@@ -51,7 +66,12 @@
           "focus": "Limb-to-core power, reach",
           "indicators": "Arm/leg reaching, connection to trunk, crawling patterns",
           "prompt_file": "vl4.md",
-          "active": true
+          "active": true,
+          "lens": "Most people move their arms and legs like separate machines. But your trunk is an engine — a real reach or kick starts in your spine and pelvis and flows outward. This lens sees how the lesson reconnects your limbs to their source of power.",
+          "person_inside": "The Bridge",
+          "person_description": "The inner being who feels the chain from core to fingertip, from pelvis to toe. They sense whether power flows outward from center or whether the limbs are working alone. Every movement is received as: <em>Is this coming from my center? Can I feel the path from my spine through my shoulder to my hand? Or is this limb orphaned?</em>",
+          "shadow": "The Isolated Lifter",
+          "shadow_description": "The one who hoists the arm from the shoulder alone, who kicks the leg without engaging the pelvis. They work each limb as a separate machine, disconnected from the engine of the trunk. The lesson restores the pathways until every reach is a whole-body event."
         },
         {
           "id": "VL-5",
@@ -63,7 +83,12 @@
           "focus": "Flexion/extension, protective reflexes",
           "indicators": "Curling/uncurling, abdominal engagement, fetal references",
           "prompt_file": "vl5.md",
-          "active": true
+          "active": true,
+          "lens": "Many people can curl forward but feel stuck extending backward, or vice versa. This lens sees how the lesson teaches your spine to bend equally in both directions — to fold and unfold without bracing or protecting.",
+          "person_inside": "The Guardian",
+          "person_description": "The inner being who senses the body's capacity to round and arch. They live in the geometry of flexion and extension, feeling the spine as a curve that can go either way. Every movement is received as: <em>Which way is the curve going? Can I fold without bracing? Can I unfold without strain?</em>",
+          "shadow": "The Bracer",
+          "shadow_description": "The one who holds the belly tight as armor, who treats the front body as something that must be protected. They reflexively crunch at any hint of vulnerability. The lesson shows that neither direction is dangerous — the spine can curve freely both ways."
         }
       ]
     }

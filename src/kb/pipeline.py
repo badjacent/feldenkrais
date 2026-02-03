@@ -220,6 +220,18 @@ class PipelineStateStore:
                 ),
             )
 
+    def invalidate(self, name: str):
+        """Mark a node as stale by clearing its input hash."""
+        with self.db.get_cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE pipeline_node_state
+                SET input_hash = '', status = 'stale', updated_at = NOW()
+                WHERE name = %s
+                """,
+                (name,),
+            )
+
     def load_enabled_flags(self) -> dict[str, bool]:
         """Load enabled flags for all nodes. Default is True (enabled)."""
         with self.db.get_cursor(commit=False) as cursor:

@@ -42,11 +42,11 @@ class SomaticNarrative(BaseModel):
         description="How the Shadow is gradually eroded (through speed, complexity, or unusual configurations)"
     )
     threshold_of_quiet: str = Field(
-        description="The moment where the Foundation takes over and the Vertical Self emerges"
+        description="The moment where the Foundation takes over and the Riser emerges"
     )
 
 
-NegotiationState = Literal["Domination", "Negotiation", "Integration"]
+NegotiationState = Literal["Bracing", "Softening", "Transmission"]
 
 
 class VL1TableRow(BaseModel):
@@ -55,7 +55,7 @@ class VL1TableRow(BaseModel):
     spiffer_q_tags: list[str] = Field(description="Relevant SPIFFER-Q tags for this step")
     the_question: str = Field(description="The specific neurological riddle of this step")
     negotiation_state: NegotiationState = Field(
-        description="Domination (Shadow in control), Negotiation (Washing in progress), or Integration (Foundation has taken over)"
+        description="Bracing (Shadow in control), Softening (Washing in progress), or Transmission (Council has taken over)"
     )
     functional_goal: str = Field(description="Intended structural outcome")
 

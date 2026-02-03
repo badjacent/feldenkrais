@@ -3,18 +3,18 @@
 ## 1. Core Evaluation Logic
 For every "Somatic Event" identified in Pass A, the Synthesis Agent must evaluate the **Negotiation State** by applying the following heuristic:
 
-* **Domination:** The student is "doing" the movement through voluntary muscular force. 
-    * *Indicators:* Localized effort, speed, bracing, holding breath, linear "trying."
-* **Negotiation:** The student is "exploring" the riddle. 
+* **Bracing:** The Shadow is in control; high noise, tension, and parasitic effort.
+    * *Indicators:* Localized effort, speed, gripping, holding breath, linear "trying."
+* **Softening:** The Washing is in progress; confusion, exploration, and the melting of habit.
     * *Indicators:* "Washing" markers (oscillation, rhythm), micro-movements, healthy confusion, trial and error.
-* **Integration:** The subcortical system (The Foundation) has found the solution. 
+* **Transmission:** The Council has taken over; skeletal clarity and "involuntary" ease.
     * *Indicators:* "Ease," "lightness," global involvement, skeletal transmission, "involuntary" quality.
 
 ---
 
 ## 2. Framework-Specific Logic Modules
 
-### [VL-1] Vertical Self (The Physics Lens)
+### [VL-1] The Riser (The Physics Lens)
 * **Primary Inquiry:** Longitudinal transmission and gravitational support.
 * **Shadow Mode:** Lifting or pushing using peripheral muscles; "crunched" or collapsed spine.
 * **Foundation Mode:** The skeleton acts as a coherent column; force travels clearly from the floor to the crown.
@@ -62,4 +62,4 @@ The agent must merge these logic modules into the **Unified Output Schema**. If 
 
 | Seq | SPIFFER-Q | The Question | Negotiation State | Functional Outcome |
 | :--- | :--- | :--- | :--- | :--- |
-| ID | Tags | The Riddle | Domination / Negotiation / Integration | Skeletal/Structural Result |
+| ID | Tags | The Riddle | Bracing / Softening / Transmission | Skeletal/Structural Result |

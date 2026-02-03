@@ -44,9 +44,9 @@ Analyze the interaction between the two intelligence systems for every step:
 
 ### 2.2 Negotiation States
 Classify the "Washing Gradient" for each segment:
-* **Domination:** Shadow-led (High effort, habitual bracing).
-* **Negotiation:** The "Washing" phase (Exploration, confusion, erosion of habit).
-* **Integration:** Foundation-led (Skeletal clarity, involuntary ease).
+* **Bracing:** Shadow-led (High noise, parasitic effort).
+* **Softening:** The "Washing" phase (Exploration, confusion, melting of habit).
+* **Transmission:** Council-led (Skeletal clarity, involuntary ease).
 
 ---
 
@@ -55,7 +55,7 @@ The final output must be rendered as a single, scannable table.
 
 | Seq | SPIFFER-Q | The Question | Negotiation State | Functional Outcome |
 |:---|:---|:---|:---|:---|
-| ID | Tags | The Riddle | Domination/Negotiation/Integration | Skeletal/Structural Result |
+| ID | Tags | The Riddle | Bracing/Softening/Transmission | Skeletal/Structural Result |
 
 ---
 

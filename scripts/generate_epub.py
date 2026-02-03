@@ -23,55 +23,7 @@ from ebooklib import epub
 # Add src/kb to path for database module
 sys.path.insert(0, str(Path(__file__).parent.parent / "src" / "kb"))
 from database import Database
-
-# --- VL Framework intros (same as web.py) ---
-VL_INTROS = {
-    "VL-1": {
-        "name": "The Vertical Self",
-        "subtitle": "The Physics Lens",
-        "lens": "How force travels through your skeleton from the floor to your crown. When you're truly vertical, the floor pushes up through your bones all the way to your head — you don't have to hold yourself up.",
-        "person_inside": "The Vertical One",
-        "person_description": "The inner being who senses your relationship with gravity. They feel weight dropping through bone, they know when the column is stacked and when it's collapsing.",
-        "shadow": "The Muscular Hoister",
-        "shadow_description": "The one who can't trust the skeleton. They grip the lower back, clench the waist, pull the head up with the neck. They believe that without their effort, everything would collapse.",
-    },
-    "VL-2": {
-        "name": "Homunculus Mapping",
-        "subtitle": "The Micro-Differentiation Lens",
-        "lens": "Your brain has a 'map' of your body — some parts are highly detailed, others are blurry. This lens sees how the lesson lights up the dark spots on that map, turning vague regions into articulated joints.",
-        "person_inside": "The Cartographer",
-        "person_description": "The inner being who holds the cortical self-image. They see the body as a territory with bright regions and dark regions.",
-        "shadow": "The Blunt Mover",
-        "shadow_description": "The one who moves in clumps and blocks. They don't distinguish hip from waist, shoulder from arm, one vertebra from another.",
-    },
-    "VL-3": {
-        "name": "Steering & Tone",
-        "subtitle": "The Autonomic Lens",
-        "lens": "Your eyes, jaw, and neck act like a volume knob for your entire nervous system's tension. This lens sees how the lesson teaches you to regulate yourself from these control points.",
-        "person_inside": "The Sentinel",
-        "person_description": "The inner being who lives behind the eyes, in the jaw and tongue. They govern the whole system's tone through these ancient regulatory instruments.",
-        "shadow": "The Watchman",
-        "shadow_description": "The one who stares with hard eyes, who clenches the jaw as if biting down on the world, who braces the neck against threat.",
-    },
-    "VL-4": {
-        "name": "Proximal-Distal",
-        "subtitle": "The Reach & Power Lens",
-        "lens": "Most people move their arms and legs like separate machines. But your trunk is an engine — a real reach or kick starts in your spine and pelvis and flows outward.",
-        "person_inside": "The Connector",
-        "person_description": "The inner being who feels the chain from core to fingertip, from pelvis to toe. They sense whether power flows outward from center or whether the limbs are working alone.",
-        "shadow": "The Isolated Lifter",
-        "shadow_description": "The one who hoists the arm from the shoulder alone, who kicks the leg without engaging the pelvis.",
-    },
-    "VL-5": {
-        "name": "Folding-Unfolding",
-        "subtitle": "The Flexion-Extension Lens",
-        "lens": "Many people can curl forward but feel stuck extending backward, or vice versa. This lens sees how the lesson teaches your spine to bend equally in both directions.",
-        "person_inside": "The Geometrist",
-        "person_description": "The inner being who senses the body's capacity to round and arch. They live in the geometry of flexion and extension.",
-        "shadow": "The Bracer",
-        "shadow_description": "The one who holds the belly tight as armor, who treats the front body as something that must be protected.",
-    },
-}
+from web import VL_BOOKLET_INTROS as VL_INTROS  # Single source of truth
 
 SPIFFER = {
     "S": "A moment of sensing — turning attention inward to feel what's actually happening.",
@@ -140,9 +92,9 @@ li { margin-bottom: 0.4em; }
     margin: 0.4em 0;
     padding: 0.4em 0.8em;
 }
-.state-domination { border-left: 3px solid #c0392b; }
-.state-negotiation { border-left: 3px solid #e67e22; }
-.state-integration { border-left: 3px solid #27ae60; }
+.state-bracing { border-left: 3px solid #c0392b; }
+.state-softening { border-left: 3px solid #e67e22; }
+.state-transmission { border-left: 3px solid #27ae60; }
 """
 
 
@@ -309,22 +261,13 @@ def generate_epub(analysis: dict, lesson_title: str, output_path: str):
         repeat and vary until the Shadow runs out of strategies and the Foundation
         is all that remains.</p>
 
-        <h2>Three States</h2>
-        <p>As you move through a lesson, you typically pass through three states:</p>
-        <div class="state state-domination">
-            <strong>Domination</strong> — The Shadow is in charge. You're "doing" the movement with voluntary effort.
-        </div>
-        <div class="state state-negotiation">
-            <strong>Negotiation</strong> — An active exchange. The Shadow is losing its grip. You're exploring, confused in a good way.
-        </div>
-        <div class="state state-integration">
-            <strong>Integration</strong> — The Foundation takes over. Movement becomes easy, quiet, almost involuntary.
-        </div>
     """)
     chapters.append(ch)
 
     # -- The Journey (one chapter per group) --
-    state_colors = {"domination": "#c0392b", "negotiation": "#e67e22", "integration": "#27ae60"}
+    state_colors = {"bracing": "#c0392b", "softening": "#e67e22", "transmission": "#27ae60",
+                     "domination": "#c0392b", "negotiation": "#e67e22", "integration": "#27ae60"}
+    state_display = {"domination": "Bracing", "negotiation": "Softening", "integration": "Transmission"}
 
     for g in groups:
         gn = g.get("group_number", "?")
@@ -374,7 +317,8 @@ def generate_epub(analysis: dict, lesson_title: str, output_path: str):
 
                 if neg:
                     color = state_colors.get(neg.lower(), "#777")
-                    body += f'<span class="neg-badge" style="background: {color};">{neg}</span>'
+                    display = state_display.get(neg.lower(), neg)
+                    body += f'<span class="neg-badge" style="background: {color};">{display}</span>'
                 if question:
                     body += f'<p><strong>The question being posed:</strong> {question}</p>'
                 if goal:

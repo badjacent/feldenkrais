@@ -47,11 +47,11 @@ column_headers: {
 **Row format:**
 | column1 | column2 | column3 | column4 | column5 |
 | :--- | :--- | :--- | :--- | :--- |
-| Physical Action | Relevant Tags | The specific riddle of this step | Domination / Negotiation / Integration | Intended structural outcome |
+| Physical Action | Relevant Tags | The specific riddle of this step | Bracing / Softening / Transmission | Intended structural outcome |
 
 ---
 
 ### How to use the "Negotiation State" column (column4):
-* **Braced:** The Shadow is in control (high noise, muscular effort).
-* **Softening:** The Washing is in progress (confusion, exploration, varying effort).
-* **Clear:** The Foundation has taken over (skeletal clarity, "involuntary" ease).
+* **Bracing:** The Shadow is in control (high noise, parasitic effort).
+* **Softening:** The Washing is in progress (confusion, exploration, melting of habit).
+* **Transmission:** The Council has taken over (skeletal clarity, "involuntary" ease).

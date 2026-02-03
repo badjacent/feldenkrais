@@ -32,6 +32,23 @@ See `terraform/OPERATIONS.md` for:
 - `src/kb/web.py` - FastAPI web interface for lesson analysis
 - `src/kb/agent.py` - Agent with LLM-powered transform layer
 
+## VL Framework Data (Single Source of Truth)
+
+**All VL framework metadata lives in `data/frameworks/{version}/frameworks.json`.**
+
+This includes:
+- Framework names, subtitles, focus areas
+- Person Inside names and descriptions (The Riser, The Cartographer, etc.)
+- Shadow names and descriptions
+- Lens descriptions for booklets
+
+**DO NOT** create or use separate .md files for VL prose descriptions. The following files in `data/archive/reference_docs/` are historical reference only and are NOT used by the code:
+- `new_vl.md`, `new_vl2.md` - Old framework notes
+- `council_description.md` - Council of Five prose (now in frameworks.json)
+- `core_protocol.md`, `router.md`, `arch.md` - Old architecture docs
+
+The `vl1.md` through `vl5.md` files in `data/frameworks/{version}/` ARE used - these are LLM prompts for analysis, separate from the UI prose in frameworks.json.
+
 ## Running the Web Interface
 
 ```bash

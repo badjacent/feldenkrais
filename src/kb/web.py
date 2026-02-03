@@ -168,6 +168,29 @@ def build_classification_table(framework_version: str | None = None) -> str:
     return header + "\n".join(rows)
 
 
+# Cache for VL booklet intros built from frameworks
+_vl_booklet_intros_cache: dict[str, dict] = {}
+
+
+def get_vl_booklet_intros(framework_version: str | None = None) -> dict[str, dict]:
+    """Build VL_BOOKLET_INTROS dict from frameworks.json (cached)."""
+    v = framework_version or FRAMEWORK_VERSION
+    if v not in _vl_booklet_intros_cache:
+        intros = {}
+        for f in load_frameworks(v):
+            intros[f["id"]] = {
+                "name": f.get("name", ""),
+                "subtitle": f.get("subtitle", ""),
+                "lens": f.get("lens", ""),
+                "person_inside": f.get("person_inside", ""),
+                "person_description": f.get("person_description", ""),
+                "shadow": f.get("shadow", ""),
+                "shadow_description": f.get("shadow_description", ""),
+            }
+        _vl_booklet_intros_cache[v] = intros
+    return _vl_booklet_intros_cache[v]
+
+
 def build_pass_a_schema(framework_version: str | None = None) -> dict:
     """Build Pass A schema with dynamic classification properties from registry."""
     schema = json.loads((DATA_DIR / "pass_a.schema.json").read_text())
@@ -712,6 +735,18 @@ def load_lesson(category: str, lesson_key: str) -> str:
     if path.exists() and path.is_file():
         return path.read_text()
     return ""
+
+
+def load_lesson_metadata(category: str, lesson_key: str) -> dict:
+    """Load lesson metadata (title, source_url) from DB."""
+    if category.startswith("db:") and _db:
+        doc = _db.get_document(lesson_key)
+        if doc:
+            return {
+                "title": doc.get("title"),
+                "source_url": doc.get("source_url"),
+            }
+    return {}
 
 
 def load_whisper_segments(category: str, lesson_key: str) -> list | None:
@@ -2705,6 +2740,7 @@ def _build_book_pipeline_section() -> str:
                 <td>{last_run}</td>
                 <td>{duration}</td>
                 <td><button class="toggle-btn" data-node="{name}" style="background: none; border: 1px solid {toggle_color}; color: {toggle_color}; border-radius: 3px; padding: 1px 8px; cursor: pointer; font-size: 0.8em;">{toggle_label}</button></td>
+                <td>{"<button class='rebuild-btn' data-node='" + name + "' style='background: none; border: 1px solid #17a2b8; color: #17a2b8; border-radius: 3px; padding: 1px 8px; cursor: pointer; font-size: 0.8em;'>invalidate</button>" if is_transform else ""}</td>
             </tr>
             {error_row}
         """)
@@ -2734,6 +2770,7 @@ def _build_book_pipeline_section() -> str:
                 <th class="sortable active desc" data-col="time">Last Run &#x25BC;</th>
                 <th class="sortable" data-col="dur">Duration</th>
                 <th>Enabled</th>
+                <th></th>
             </tr>
         </thead>
         <tbody>
@@ -3115,6 +3152,34 @@ def build_pipeline_html() -> str:
                     }})
                     .catch(function() {{
                         btn.textContent = 'err';
+                        btn.disabled = false;
+                    }});
+            }});
+        }});
+
+        // Invalidate node (mark stale)
+        document.querySelectorAll('.rebuild-btn').forEach(function(btn) {{
+            btn.addEventListener('click', function() {{
+                var node = btn.dataset.node;
+                btn.disabled = true;
+                btn.textContent = '...';
+                fetch('/api/pipeline/rebuild/' + encodeURIComponent(node), {{ method: 'POST' }})
+                    .then(function(r) {{ return r.json(); }})
+                    .then(function(data) {{
+                        if (data.status === 'invalidated') {{
+                            // Update status cell to STALE
+                            var row = btn.closest('tr');
+                            var statusCell = row.querySelectorAll('td')[1];
+                            if (statusCell) {{
+                                statusCell.innerHTML = '<span style="color: #ffc107; font-weight: bold;">STALE</span>';
+                            }}
+                        }}
+                        btn.textContent = 'invalidate';
+                        btn.disabled = false;
+                    }})
+                    .catch(function() {{
+                        btn.textContent = 'err';
+                        btn.style.color = '#dc3545';
                         btn.disabled = false;
                     }});
             }});
@@ -4386,53 +4451,9 @@ async def api_explore_round(
 
 # --- Lesson Booklet ---
 
-VL_BOOKLET_INTROS = {
-    "VL-1": {
-        "name": "The Vertical Self",
-        "subtitle": "The Physics Lens",
-        "lens": "How force travels through your skeleton from the floor to your crown. When you're truly vertical, the floor pushes up through your bones all the way to your head — you don't have to hold yourself up.",
-        "person_inside": "The Upright Self",
-        "person_description": "The inner being who senses your relationship with gravity. They feel weight dropping through bone, they know when the column is stacked and when it's collapsing. Every movement is received as: <em>What just happened to my column? Is force transmitting cleanly through my bones, or is something buckling?</em>",
-        "shadow": "The Muscular Hoister",
-        "shadow_description": "The one who can't trust the skeleton. They grip the lower back, clench the waist, pull the head up with the neck. They believe that without their effort, everything would collapse. The lesson shows that bones can do what muscles have been forcing.",
-    },
-    "VL-2": {
-        "name": "Body Mapping",
-        "subtitle": "The Micro-Differentiation Lens",
-        "lens": "Your brain has a 'map' of your body — some parts are highly detailed, others are blurry. This lens sees how the lesson lights up the dark spots on that map, turning vague regions into articulated joints.",
-        "person_inside": "The Cartographer",
-        "person_description": "The inner being who holds the cortical self-image. They see the body as a territory with bright regions and dark regions. Every movement is received as: <em>What just became visible? What pixel lit up that was dark before? Where did I discover a joint I didn't know I had?</em>",
-        "shadow": "The Blunt Mover",
-        "shadow_description": "The one who moves in clumps and blocks. They don't distinguish hip from waist, shoulder from arm, one vertebra from another. They move 'the leg' when only the ankle was asked. The lesson illuminates the map until the Blunt Mover dissolves into articulation.",
-    },
-    "VL-3": {
-        "name": "Steering & Tone",
-        "subtitle": "The Autonomic Lens",
-        "lens": "Your eyes, jaw, and neck act like a volume knob for your entire nervous system's tension. If you stare hard or clench your jaw, everything tenses. This lens sees how the lesson teaches you to regulate yourself from these control points.",
-        "person_inside": "The Aligner",
-        "person_description": "The inner being who lives behind the eyes, in the jaw and tongue. They govern the whole system's tone through these ancient regulatory instruments. Every movement is received as: <em>Is it safe? Can I soften my gaze? Can I unclench? What happens to the rest of me when I let go of this vigilance?</em>",
-        "shadow": "The Watchman",
-        "shadow_description": "The one who stares with hard eyes, who clenches the jaw as if biting down on the world, who braces the neck against threat. They believe constant vigilance is required. The lesson shows that softening the eyes and jaw doesn't mean losing control — it means finding a deeper regulation.",
-    },
-    "VL-4": {
-        "name": "Proximal-Distal",
-        "subtitle": "The Reach & Power Lens",
-        "lens": "Most people move their arms and legs like separate machines. But your trunk is an engine — a real reach or kick starts in your spine and pelvis and flows outward. This lens sees how the lesson reconnects your limbs to their source of power.",
-        "person_inside": "The Bridge",
-        "person_description": "The inner being who feels the chain from core to fingertip, from pelvis to toe. They sense whether power flows outward from center or whether the limbs are working alone. Every movement is received as: <em>Is this coming from my center? Can I feel the path from my spine through my shoulder to my hand? Or is this limb orphaned?</em>",
-        "shadow": "The Isolated Lifter",
-        "shadow_description": "The one who hoists the arm from the shoulder alone, who kicks the leg without engaging the pelvis. They work each limb as a separate machine, disconnected from the engine of the trunk. The lesson restores the pathways until every reach is a whole-body event.",
-    },
-    "VL-5": {
-        "name": "Folding-Unfolding",
-        "subtitle": "The Flexion-Extension Lens",
-        "lens": "Many people can curl forward but feel stuck extending backward, or vice versa. This lens sees how the lesson teaches your spine to bend equally in both directions — to fold and unfold without bracing or protecting.",
-        "person_inside": "The Guardian",
-        "person_description": "The inner being who senses the body's capacity to round and arch. They live in the geometry of flexion and extension, feeling the spine as a curve that can go either way. Every movement is received as: <em>Which way is the curve going? Can I fold without bracing? Can I unfold without strain?</em>",
-        "shadow": "The Bracer",
-        "shadow_description": "The one who holds the belly tight as armor, who treats the front body as something that must be protected. They reflexively crunch at any hint of vulnerability. The lesson shows that neither direction is dangerous — the spine can curve freely both ways.",
-    },
-}
+# VL_BOOKLET_INTROS is loaded from frameworks.json via get_vl_booklet_intros()
+# This alias provides backwards compatibility for code that imports VL_BOOKLET_INTROS
+VL_BOOKLET_INTROS = get_vl_booklet_intros()
 
 SPIFFER_TRANSLATIONS = {
     "S": "Sensing",
@@ -4654,17 +4675,22 @@ def _get_column_by_keyword(row: dict, column_headers: dict, keyword: str) -> str
     return ""
 
 
-def render_booklet_cover(title: str, framework_id: str) -> str:
+def render_booklet_cover(title: str, framework_id: str, source_url: str = "") -> str:
     """Render the booklet cover page."""
     intro = VL_BOOKLET_INTROS.get(framework_id, {})
     framework_name = intro.get("name", framework_id)
     subtitle = intro.get("subtitle", "")
+
+    source_link = ""
+    if source_url:
+        source_link = f'<p class="cover-source"><a href="{source_url}" target="_blank">Original Lesson &rarr;</a></p>'
 
     return f"""
     <div class="booklet-cover">
         <div class="cover-content">
             <h1 class="cover-title">{title}</h1>
             <p class="cover-subtitle">A Companion to This Lesson</p>
+            {source_link}
             <div class="cover-lens">
                 Explored through the lens of<br>
                 <strong><em>{framework_name}</em></strong>
@@ -4775,25 +4801,6 @@ def render_booklet_concepts() -> str:
             repeat and vary until the Shadow runs out of strategies and the Foundation
             is all that remains.
         </p>
-
-        <h3>Three States</h3>
-        <p>
-            As you move through a lesson, you typically pass through three states:
-        </p>
-        <div class="three-states">
-            <div class="state state-domination">
-                <strong>Domination</strong>
-                <span>The Shadow is in charge. You're "doing" the movement with voluntary effort.</span>
-            </div>
-            <div class="state state-negotiation">
-                <strong>Negotiation</strong>
-                <span>An active exchange. The Shadow is losing its grip. You're exploring, confused in a good way.</span>
-            </div>
-            <div class="state state-integration">
-                <strong>Integration</strong>
-                <span>The Foundation takes over. Movement becomes easy, quiet, almost involuntary.</span>
-            </div>
-        </div>
     </section>
     """
 
@@ -4822,9 +4829,19 @@ def render_booklet_journey(groups: list, steps: list, vl_analysis: dict, pass_a_
     step_lookup = {s["step_number"]: s for s in steps if "step_number" in s}
 
     state_colors = {
+        "bracing": "#c0392b",
+        "softening": "#e67e22",
+        "transmission": "#27ae60",
+        # Fallback for cached data with old nomenclature
         "domination": "#c0392b",
         "negotiation": "#e67e22",
         "integration": "#27ae60",
+    }
+    # Map old nomenclature to new for display
+    state_display = {
+        "domination": "Bracing",
+        "negotiation": "Softening",
+        "integration": "Transmission",
     }
 
     for g in groups:
@@ -4907,7 +4924,8 @@ def render_booklet_journey(groups: list, steps: list, vl_analysis: dict, pass_a_
 
                 if neg_state:
                     color = state_colors.get(neg_state.lower(), "#7f8c8d")
-                    html.append(f'<span class="neg-badge" style="background: {color};">{neg_state}</span>')
+                    display = state_display.get(neg_state.lower(), neg_state)
+                    html.append(f'<span class="neg-badge" style="background: {color};">{display}</span>')
 
                 if question:
                     html.append(f'<p class="table-question"><strong>The question being posed:</strong> {question}</p>')
@@ -4960,13 +4978,21 @@ def render_booklet_arc(somatic_narrative: dict, negotiation: dict, groups: list,
     # Visual timeline of negotiation states
     rows = table.get("rows", [])
     if rows and groups:
-        html.append('<h3>The Negotiation Arc</h3>')
+        html.append('<h3>The Arc</h3>')
         html.append('<div class="arc-timeline">')
 
         state_colors = {
+            "bracing": "#c0392b",
+            "softening": "#e67e22",
+            "transmission": "#27ae60",
             "domination": "#c0392b",
             "negotiation": "#e67e22",
             "integration": "#27ae60",
+        }
+        state_display = {
+            "domination": "Bracing",
+            "negotiation": "Softening",
+            "integration": "Transmission",
         }
 
         group_to_rows = map_groups_to_table_rows(groups, table, pass_a_steps)
@@ -4980,12 +5006,13 @@ def render_booklet_arc(somatic_narrative: dict, negotiation: dict, groups: list,
             if matched:
                 state = _get_negotiation_state(matched[0], column_headers)
             color = state_colors.get(state.lower(), "#bdc3c7") if state else "#bdc3c7"
+            display = state_display.get(state.lower(), state) if state else ""
 
             html.append(f"""
             <div class="arc-item">
                 <div class="arc-dot" style="background: {color};"></div>
                 <div class="arc-label">{gn}. {label}</div>
-                <div class="arc-state" style="color: {color};">{state}</div>
+                <div class="arc-state" style="color: {color};">{display}</div>
             </div>
             """)
 
@@ -5079,13 +5106,19 @@ def render_booklet_reflection(steps: list) -> str:
     return "\n".join(html)
 
 
-def build_booklet_html(analysis_result: dict, lesson_title: str = "", framework: str = "") -> str:
+def build_booklet_html(
+    analysis_result: dict,
+    lesson_title: str = "",
+    framework: str = "",
+    source_url: str = "",
+    original_title: str = "",
+) -> str:
     """Assemble the complete booklet HTML from cached analysis data."""
     pass_a = analysis_result.get("pass_a_result", {})
     vl_analyses = analysis_result.get("vl_analyses", {})
 
     # Use the lesson title from analysis or provided title
-    title = pass_a.get("lesson_title", "") or lesson_title or "Untitled Lesson"
+    title = pass_a.get("lesson_title", "") or original_title or lesson_title or "Untitled Lesson"
 
     # Get primary framework — explicit override wins, then Pass A classification, then fallback
     framework_id = framework or pass_a.get("primary_framework", "VL-1")
@@ -5119,7 +5152,7 @@ def build_booklet_html(analysis_result: dict, lesson_title: str = "", framework:
 
     # Assemble sections
     sections = []
-    sections.append(render_booklet_cover(title, framework_id))
+    sections.append(render_booklet_cover(title, framework_id, source_url))
     sections.append(render_booklet_intro(title, framework_id, somatic_narrative, groups))
     if home_position:
         sections.append(render_booklet_home(home_position))
@@ -5173,7 +5206,18 @@ def build_booklet_html(analysis_result: dict, lesson_title: str = "", framework:
             font-size: 1.1em;
             color: #777;
             font-style: italic;
+            margin-bottom: 10px;
+        }}
+        .cover-source {{
             margin-bottom: 40px;
+        }}
+        .cover-source a {{
+            color: #4a6741;
+            text-decoration: none;
+            font-size: 0.9em;
+        }}
+        .cover-source a:hover {{
+            text-decoration: underline;
         }}
         .cover-lens {{
             font-size: 0.95em;
@@ -5567,6 +5611,16 @@ async def booklet_page(category: str = "", lesson: str = "", fill: str = "", fra
         # Show a simple lesson picker
         return _booklet_picker_html()
 
+    # Check if this is a BOOK_LESSONS entry with pre-filled content in the pipeline
+    if _db and framework:
+        for vl_id, entry in BOOK_LESSONS.items():
+            if entry and entry.get("lesson_id") == lesson and vl_id == framework:
+                # Try to load pre-filled content from pipeline
+                filled_data = _db.get_cache(f"pipeline:fill_queries:{vl_id}")
+                if filled_data and filled_data.get("html"):
+                    return filled_data["html"]
+                break
+
     text = load_lesson(category, lesson).strip()
     if not text:
         return HTMLResponse("<h1>Lesson not found</h1>", status_code=404)
@@ -5589,7 +5643,18 @@ async def booklet_page(category: str = "", lesson: str = "", fill: str = "", fra
             lesson_title = display
             break
 
-    html = build_booklet_html(cached, lesson_title, framework=framework)
+    # Get lesson metadata (title, source_url) from DB
+    metadata = load_lesson_metadata(category, lesson)
+    source_url = metadata.get("source_url", "")
+    original_title = metadata.get("title", "")
+
+    html = build_booklet_html(
+        cached,
+        lesson_title,
+        framework=framework,
+        source_url=source_url,
+        original_title=original_title,
+    )
 
     # Optionally fill query blocks via QueryAgent
     if fill.lower() in ("true", "1", "yes"):
@@ -6009,6 +6074,22 @@ async def toggle_pipeline_node(node_name: str):
     current = store.is_enabled(node_name)
     store.set_enabled(node_name, not current)
     return JSONResponse({"node": node_name, "enabled": not current})
+
+
+@app.post("/api/pipeline/rebuild/{node_name:path}")
+async def rebuild_pipeline_node(node_name: str):
+    """Invalidate a pipeline node, marking it and its downstream as stale."""
+    if not _db:
+        return JSONResponse({"error": "Database not configured"}, status_code=500)
+    try:
+        from pipeline import PipelineStateStore
+    except ImportError:
+        from .pipeline import PipelineStateStore
+
+    store = PipelineStateStore(_db)
+    store.initialize()
+    store.invalidate(node_name)
+    return JSONResponse({"status": "invalidated", "node": node_name})
 
 
 @app.post("/admin/clear-cache")

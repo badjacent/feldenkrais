@@ -11,7 +11,7 @@ The Council Members
 
 When the Shadow steps back, we can finally hear the five specialists who actually know how to run a human being:
 
-The Upright Self: The ancient navigator. They don't care about "looking good"; they only care about how the skeleton meets the floor to create height.
+The Riser: The ancient navigator. They don't care about "looking good"; they only care about how the skeleton meets the floor to create height.
 
 The Cartographer: The obsessive map-maker. They live for the tiny details—the exact way a finger joints or a rib slides.
 

@@ -44,7 +44,7 @@
         },
         "threshold_of_quiet": {
           "type": "string",
-          "description": "The moment where Integration emerges"
+          "description": "The moment where Transmission emerges"
         }
       },
       "required": ["primary_inquiry", "washing_gradient", "threshold_of_quiet"]

@@ -1,4 +1,4 @@
-VL-1: Vertical Self
+VL-1: The Riser
 
 ## Primary Inquiry
 Longitudinal transmission and gravitational support. How does force travel through the skeleton from floor to crown without being absorbed by the "soft tissue envelope"?
@@ -25,8 +25,8 @@ Functional Goal
 The realization of Skeletal Tensegrity. Shifting the burden of support from the Phasic muscles (doing) to the Tonic Antigravity System (being).
 
 **The Person Inside**: (VL-1 Voice)
-The Upright Self — the inner engineer who manages the body's relationship with the center of the earth. This person lives in the "inner volume," sensing the distance between the sternum and the spine. They know that true uprightness isn't a "posture" you hold, but a dynamic cancellation of gravity.
+The Riser — the inner engineer who manages the body's relationship with the center of the earth. This person lives in the "inner volume," sensing the distance between the sternum and the spine. They know that true uprightness isn't a "posture" you hold, but a dynamic cancellation of gravity.
 
 When the system is clear, they feel: "The floor is pushing me up. My spine is a piston sliding through a soft sleeve. My ribs are floating on a cushion of air. I am suspended, not stacked."
 
-**The Shadow**: The Structural Forger — the one who tries to "fake" verticality by pulling, gripping, and stacking. They don’t trust the psoas or the multifidus to do their jobs, so they recruit the chest and shoulders to act as "external scaffolding." The lesson’s work is to dismantle this scaffolding piece by piece until the Upright Self realizes the internal struts have been there all along.
+**The Shadow**: The Structural Forger — the one who tries to "fake" verticality by pulling, gripping, and stacking. They don't trust the psoas or the multifidus to do their jobs, so they recruit the chest and shoulders to act as "external scaffolding." The lesson's work is to dismantle this scaffolding piece by piece until the Riser realizes the internal struts have been there all along.

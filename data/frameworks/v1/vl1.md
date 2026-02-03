@@ -1,25 +1,32 @@
-# VL-1: Vertical Self (The Physics Lens)
+# VL-1: The Riser (The Lens of Integrity)
 
 ## Primary Inquiry
-Longitudinal transmission and gravitational support. How does force travel through the skeleton from floor to crown?
 
-## Shadow Mode (Cortical Effort)
-- Lifting or pushing using peripheral muscles
-- "Crunched" or collapsed spine
-- Holding up the head with neck muscles
-- Bracing the waist or lower back
+The architecture of buoyancy. How do you partner with gravity to find height? We explore the longitudinal pressure wave that travels from the floor to the crown of the head.
 
-## Foundation Mode (Subcortical Support)
-- The skeleton acts as a coherent column
-- Force travels clearly from the floor to the crown
-- The spine lengthens under load
-- Weight drops through the bones, not the muscles
+## The Shadow: Lifting (The Propper)
+
+This is the habit of **distrusting the ground**. Because you don't feel supported from below, you try to "prop" yourself up from above using muscular tension.
+
+* **Shoulder-Lifting:** Pulling the torso upward with the neck and traps, as if trying to fly away from the floor.
+* **The Crunched Axis:** Collapsing at the waist or chest, then "bracing" the low back to stop the fall.
+* **Muscle-Holding:** Using the small muscles of the spine to "stand up straight" instead of letting the bones stack.
+
+## The Council Mode: Rising
+
+This is the state of **Skeletal Resonance**. When the Riser is active, you aren't "standing"—you are being "stood."
+
+* **The Pressure Wave:** Feeling the floor as a source of upward energy that flows through the feet and up the spine.
+* **Skeletal Stacking:** The bones align so precisely that the muscles can finally become "quiet."
+* **Spinal Lengthening:** The sensation that the crown of the head is ascending effortlessly, like a bubble in water.
+* **Weight-Dropping:** Letting the mass of the body fall clearly through the bones into the floor.
 
 ## Functional Goal
-Realization of "Verticality" through skeletal stacking rather than muscular holding. The sense of being supported from below.
 
-## The Person Inside (VL-1 Voice)
+The realization of **Verticality**. To move from "muscular holding" to "skeletal integrity," where the skeleton acts as a coherent, buoyant column that carries weight without effort.
 
-**The Upright Self** — the inner being who senses and manages the person's relationship with gravity. This person lives along the axis from floor to crown. They feel weight dropping through bone, they know when the column is stacked and when it is collapsing. Every movement in the lesson is received by the Upright Self as: *"What just happened to my column? Did the floor come closer or farther? Is force transmitting cleanly through my bones, or is something buckling?"*
+## The Person Inside: The Riser
 
-**The Shadow:** The Holder — the one who can't trust the skeleton. They grip the lower back, clench the waist, pull the head up with the neck. They believe that without their effort, everything would collapse. The lesson's work is to make this one unnecessary — to show the Upright Self that the bones can do what the muscles have been forcing.
+The being who lives along your central axis. They are the specialist in the "Upward Flow." They don't think in terms of muscles; they think in terms of **Support**. Every movement in the lesson is a question for The Riser:
+
+> *"Am I stacking my columns or buckling them? Can I trust the floor to hold me, or am I still 'Lifting' myself away from it? What happens to my height when I stop trying to be tall?"*

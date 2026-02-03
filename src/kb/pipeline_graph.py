@@ -128,7 +128,7 @@ def _make_analysis_b_transform(db, lesson_id: str, vl_id: str, fv: Optional[str]
     return transform
 
 
-def _make_booklet_render_transform(db, vl_id: str, title: str):
+def _make_booklet_render_transform(db, vl_id: str, title: str, lesson_id: str):
     """Render booklet HTML from cached analysis data (non-LLM)."""
     def transform(**_kwargs) -> str:
         w = _web()
@@ -143,7 +143,19 @@ def _make_booklet_render_transform(db, vl_id: str, title: str):
             "vl_analyses": {vl_id: {"status": "complete", "result": pass_b}},
         }
 
-        html = w.build_booklet_html(combined, lesson_title=title, framework=vl_id)
+        # Get source_url from document metadata
+        source_url = ""
+        doc = db.get_document(lesson_id)
+        if doc:
+            source_url = doc.get("source_url", "") or ""
+
+        html = w.build_booklet_html(
+            combined,
+            lesson_title=title,
+            framework=vl_id,
+            source_url=source_url,
+            original_title=title,
+        )
 
         db.set_cache(f"pipeline:booklet:{vl_id}", {"html": html})
         return html
@@ -440,7 +452,7 @@ def build_book_pipeline(db, framework_version: Optional[str] = None) -> Pipeline
                 f"analysis_b:{vl_id}",
                 "src:booklet_config",
             ],
-            transform=_make_booklet_render_transform(db, vl_id, title),
+            transform=_make_booklet_render_transform(db, vl_id, title, lesson_id),
             description=f"Render booklet: {title}",
             tags={"vl": vl_id},
         )

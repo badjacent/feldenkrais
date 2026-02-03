@@ -27,8 +27,10 @@ from typing import Optional
 
 try:
     from llm import LLM
+    from database import Database
 except ImportError:
     from .llm import LLM
+    from .database import Database
 
 
 @dataclass
@@ -142,13 +144,15 @@ class QueryAgent:
 
     Cache:
         Each block's generated text is cached by a hash of (query_type, prompt, context).
-        Set cache_dir to a directory path to enable caching. Cached results are stored as
-        individual JSON files. Use --no-cache on the CLI to force regeneration.
+        Prefers database cache (via db param) with namespaced keys: query_agent:{hash}.
+        Falls back to file-based cache (cache_dir) if db is not provided.
+        Use --no-cache on the CLI to force regeneration.
     """
     llm: LLM
     review_llm: Optional[LLM] = None
     max_review_cycles: int = 1
     verbose: bool = False
+    db: Optional["Database"] = None
     cache_dir: Optional[str] = None
 
     def __post_init__(self):
@@ -229,29 +233,52 @@ class QueryAgent:
         return hashlib.sha256(content.encode()).hexdigest()[:16]
 
     def _load_cached(self, block: QueryBlock) -> Optional[str]:
-        """Load cached result for a block, or None if not cached."""
-        if not self.cache_dir:
-            return None
-        cache_file = Path(self.cache_dir) / f"{self._cache_key(block)}.json"
-        if cache_file.exists():
-            try:
-                data = json.loads(cache_file.read_text())
+        """Load cached result for a block, or None if not cached.
+
+        Prefers database cache (namespaced as query_agent:{hash}),
+        falls back to file cache if db is not available.
+        """
+        key = self._cache_key(block)
+
+        # Try database cache first
+        if self.db:
+            data = self.db.get_cache(f"query_agent:{key}")
+            if data:
                 return data.get("text")
-            except (json.JSONDecodeError, OSError):
-                return None
+
+        # Fall back to file cache
+        if self.cache_dir:
+            cache_file = Path(self.cache_dir) / f"{key}.json"
+            if cache_file.exists():
+                try:
+                    data = json.loads(cache_file.read_text())
+                    return data.get("text")
+                except (json.JSONDecodeError, OSError):
+                    return None
         return None
 
     def _save_cached(self, block: QueryBlock, text: str) -> None:
-        """Save a block's result to the cache."""
-        if not self.cache_dir:
-            return
-        cache_file = Path(self.cache_dir) / f"{self._cache_key(block)}.json"
+        """Save a block's result to the cache.
+
+        Prefers database cache (namespaced as query_agent:{hash}),
+        falls back to file cache if db is not available.
+        """
+        key = self._cache_key(block)
         data = {
             "query_type": block.query_type,
             "prompt": block.prompt[:200],
             "text": text,
         }
-        cache_file.write_text(json.dumps(data, indent=2))
+
+        # Prefer database cache
+        if self.db:
+            self.db.set_cache(f"query_agent:{key}", data)
+            return
+
+        # Fall back to file cache
+        if self.cache_dir:
+            cache_file = Path(self.cache_dir) / f"{key}.json"
+            cache_file.write_text(json.dumps(data, indent=2))
 
     def _generate(self, block: QueryBlock) -> str:
         """Generate text for a single query block (with caching)."""
