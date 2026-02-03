@@ -411,6 +411,7 @@ class PipelineExecutor:
     def compute_staleness(self) -> dict[str, NodeState]:
         """Check every node and return current states with staleness flags."""
         stored = self.store.load_all()
+        enabled_flags = self.store.load_enabled_flags()
         states: dict[str, NodeState] = {}
 
         for name in self.graph.topological_order():
@@ -506,6 +507,11 @@ class PipelineExecutor:
                     last_run_at=old.last_run_at,
                     duration_seconds=old.duration_seconds,
                 )
+
+            # Disabled nodes with cached output are treated as fresh — downstream
+            # can use the cached result without recomputing this node.
+            if not enabled_flags.get(name, True) and state.output_hash:
+                state.status = NodeStatus.FRESH
 
             # Cascade: if any upstream is stale/error/pending or lacks output, this node is stale
             if spec.kind.value == "transform" and state.status == NodeStatus.FRESH:
