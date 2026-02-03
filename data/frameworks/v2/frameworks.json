@@ -25,11 +25,11 @@
         {
           "id": "VL-2",
           "key": "vl2_body_mapping",
-          "name": "Body Mapping",
+          "name": "The Cartographer",
           "subtitle": "The Lens of Differentiation and Illumination",
           "mechanism": "Cortical differentiation — small, precise movements light up dormant regions of the sensory-motor homunculus.",
           "how_achieved": "Illumination occurs through micro-differentiation, lighting up dormant cortical pixels to transform undifferentiated 'clumps' into high-definition movement.",
-          "display_name": "VL-2 Body Mapping",
+          "display_name": "VL-2 The Cartographer",
           "focus": "Micro-differentiation, joint resolution",
           "indicators": "Small precise movements, sensing specific joints, body mapping",
           "prompt_file": "vl2.md",

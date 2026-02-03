@@ -4547,9 +4547,19 @@ BOOKLET_QUERY_TYPES = {
             "This section covers Part {group_number}: {group_label}. "
             "The steps in this part are: {steps_text}. "
             "The prominent pedagogical qualities are: {tag_labels}. "
-            "Write 1-2 sentences describing what the teacher is doing pedagogically here. "
-            "Be concrete — reference the actual movements, not generic tag definitions. "
-            "Consider where this part falls in the overall lesson arc."
+            "Write 1-2 sentences describing the functional intent of this part of the lesson.\n\n"
+            "VARY YOUR SENTENCE STRUCTURE. Do NOT use these patterns:\n"
+            "- 'The teacher [verb]s...'\n"
+            "- 'Here, the teacher...'\n"
+            "- 'This section [verb]s...'\n\n"
+            "Instead, try:\n"
+            "- Start with what the nervous system is being asked to do\n"
+            "- Start with the movement itself as subject\n"
+            "- Start with a 'why' or 'by' clause\n"
+            "- Describe the logic of the sequence, not the teacher's action\n\n"
+            "Example BAD: 'The teacher introduces small oscillations to soften the hip.'\n"
+            "Example GOOD: 'Small oscillations give the hip joint a chance to release its grip.'\n"
+            "Example GOOD: 'By keeping the movement tiny, the lesson bypasses the habit of efforting.'"
         ),
         "context_keys": [
             "all_groups",           # list of {group_number, label, description} for arc awareness
@@ -4596,6 +4606,33 @@ BOOKLET_QUERY_TYPES = {
             "journey_summary",
             "tag_summary",
             "movement_examples",
+        ],
+    },
+    "lens-synthesis": {
+        "name": "Lens Synthesis",
+        "location": "The Lens section, after static framework description",
+        "purpose": "Synthesize the lens's philosophy with THIS specific lesson's mechanics. "
+                   "Show how the general framework illuminates what happened in this particular lesson.",
+        "voice": "Reflective, specific. Write as if explaining to someone who just experienced "
+                 "both the lesson and read the framework description.",
+        "length": "2-3 sentences",
+        "prompt": (
+            "You just read about {framework_name} — the {person_inside}. The lens description says: "
+            "\"{lens_description}\"\n\n"
+            "The Shadow for this lens is: \"{shadow_description}\"\n\n"
+            "This particular lesson's central question was: \"{primary_inquiry}\"\n\n"
+            "Write 2-3 sentences that synthesize the lens with THIS lesson. How does {framework_name}'s "
+            "perspective specifically illuminate what happened in this lesson? What would the "
+            "{person_inside} have noticed? How did the Shadow manifest in the movements you just did?\n\n"
+            "Be SPECIFIC to this lesson — do not repeat the generic framework description. "
+            "Show the reader how the lens applies HERE."
+        ),
+        "context_keys": [
+            "framework_name",
+            "person_inside",
+            "lens_description",
+            "shadow_description",
+            "primary_inquiry",
         ],
     },
 }
@@ -5069,8 +5106,8 @@ def render_booklet_arc(somatic_narrative: dict, negotiation: dict, groups: list,
     return "\n".join(html)
 
 
-def render_booklet_lens(framework_id: str, vl_analysis: dict) -> str:
-    """Render 'The Lens' section — framework introduction."""
+def render_booklet_lens(framework_id: str, vl_analysis: dict, somatic_narrative: dict = None) -> str:
+    """Render 'The Lens' section — framework introduction with lesson-specific synthesis."""
     intro = VL_BOOKLET_INTROS.get(framework_id, {})
     if not intro:
         return ""
@@ -5086,6 +5123,19 @@ def render_booklet_lens(framework_id: str, vl_analysis: dict) -> str:
     # The Shadow
     html.append('<h3>The Shadow</h3>')
     html.append(f'<p>{intro["shadow_description"]}</p>')
+
+    # Add lesson-specific synthesis as LLM query block
+    primary_inquiry = (somatic_narrative or {}).get("primary_inquiry", "")
+    if primary_inquiry:
+        context = {
+            "framework_name": intro.get("name", ""),
+            "person_inside": intro.get("person_inside", ""),
+            "lens_description": intro.get("lens", ""),
+            "shadow_description": intro.get("shadow_description", ""),
+            "primary_inquiry": primary_inquiry,
+        }
+        html.append('<h3>In This Lesson</h3>')
+        html.append(booklet_query_block("lens-synthesis", context))
 
     html.append("</section>")
     return "\n".join(html)
@@ -5204,7 +5254,7 @@ def build_booklet_html(
         sections.append(render_booklet_journey(groups, steps, primary_vl, pass_a_steps))
     if somatic_narrative or negotiation:
         sections.append(render_booklet_arc(somatic_narrative, negotiation, groups, table, column_headers, pass_a_steps))
-    sections.append(render_booklet_lens(framework_id, primary_vl))
+    sections.append(render_booklet_lens(framework_id, primary_vl, somatic_narrative))
     if steps:
         sections.append(render_booklet_reflection(
             steps=steps,
