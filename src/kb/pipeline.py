@@ -415,13 +415,16 @@ class PipelineExecutor:
                     duration_seconds=old.duration_seconds,
                 )
 
-            # Cascade: if any upstream lacks cached output, this node is stale
-            # (Node status is informational; what matters is whether output exists)
+            # Cascade: if any upstream is stale/error/pending or lacks output, this node is stale
             if spec.kind.value == "transform" and state.status == NodeStatus.FRESH:
                 for inp_name in spec.input_names:
                     upstream = states.get(inp_name)
                     if not upstream or not upstream.output_hash:
                         # No cached output available from upstream
+                        state.status = NodeStatus.STALE
+                        break
+                    if upstream.status in (NodeStatus.STALE, NodeStatus.ERROR, NodeStatus.PENDING):
+                        # Upstream needs to run first
                         state.status = NodeStatus.STALE
                         break
 
