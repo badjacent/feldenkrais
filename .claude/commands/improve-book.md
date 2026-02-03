@@ -4,25 +4,59 @@ Analyze the book review summary and plan improvements.
 
 Reads the ranked issue list from `pipeline:review_summary` and creates an actionable plan to address the top issues.
 
-## Prerequisites
+## Arguments
 
-The pipeline must have run through `review_summary`:
-```bash
-uv run python src/kb/pipeline.py status | grep review_summary
-```
+- `loop N` or `loop=N` - Run N improvement iterations, waiting for pipeline between each
+- `auto` - Skip user approval, commit and push automatically
+- `wait` - Wait for pipeline to complete before reading review summary
 
-If stale, run:
-```bash
-uv run python src/kb/pipeline.py run --node review_summary
-```
+Examples:
+- `/improve-book` - Single iteration with approval
+- `/improve-book auto` - Single iteration, no approval needed
+- `/improve-book loop 3 auto` - 3 iterations, no approval, wait for pipeline between each
 
 ## Workflow
 
-1. **Read the review summary** from the pipeline cache
-2. **Analyze which issues are actionable** - check actual files, understand what can be changed
-3. **Select ~3 high-impact issues** that don't conflict with each other
-4. **Present a plan** for user approval
-5. **Implement changes** if approved
+1. **Wait for pipeline** (if `wait` or `loop` mode) - Poll until `review_summary` is fresh
+2. **Read the review summary** from the pipeline cache
+3. **Analyze which issues are actionable** - check actual files, understand what can be changed
+4. **Select ~3 high-impact issues** that don't conflict with each other
+5. **Present a plan** for user approval (skip if `auto`)
+6. **Implement changes** if approved
+7. **Commit and push** (in `auto` mode)
+8. **Repeat** (if `loop` mode and iterations remain)
+
+## Waiting for pipeline
+
+To wait for the pipeline to complete, poll the node status:
+
+```bash
+# Check if review_summary is stale or running
+uv run python src/kb/pipeline.py status 2>/dev/null | grep review_summary
+```
+
+If it shows `stale` or is missing, the pipeline is still running. Poll every 30 seconds until it shows `fresh`:
+
+```python
+import subprocess
+import time
+
+def is_review_summary_fresh():
+    result = subprocess.run(
+        ["uv", "run", "python", "src/kb/pipeline.py", "status"],
+        capture_output=True, text=True
+    )
+    for line in result.stdout.splitlines():
+        if "review_summary" in line and "fresh" in line:
+            return True
+    return False
+
+# Poll until fresh
+while not is_review_summary_fresh():
+    print("Waiting for pipeline... (checking every 30s)")
+    time.sleep(30)
+print("Pipeline complete!")
+```
 
 ## How to proceed
 
