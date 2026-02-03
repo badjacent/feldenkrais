@@ -4453,7 +4453,7 @@ BOOKLET_QUERY_TYPES = {
                    "so this intro should focus on the personal, practical welcome.",
         "voice": "Warm, direct, second-person. Writing for people who do ATM lessons and want to "
                  "understand what happened. Not a textbook, not promotional — a companion.",
-        "length": "3-4 paragraphs, ~300-450 words",
+        "length": "4-5 paragraphs, ~400-550 words",
         "prompt": (
             "You are writing the opening welcome for a volume of companion booklets for Feldenkrais "
             "Awareness Through Movement lessons. The audience does ATM lessons from recordings and "
@@ -4464,7 +4464,7 @@ BOOKLET_QUERY_TYPES = {
             "duplicate that material. Your job is to welcome the reader and orient them.\n\n"
             "The volume contains five booklets, one per analytical lens:\n{lens_summaries}\n\n"
             "The lessons included are:\n{lesson_list}\n\n"
-            "Write 3-4 paragraphs that:\n"
+            "Write 4-5 paragraphs that:\n"
             "1. Welcome the reader — acknowledge they've been doing lessons from recordings, "
             "lying on the floor, and wondering what just happened\n"
             "2. Explain what these booklets are: companions to experiences. You do the lesson first, "
@@ -4473,7 +4473,13 @@ BOOKLET_QUERY_TYPES = {
             "is asking your nervous system something, and the booklet helps you hear the question.\n"
             "4. How to use them: do the lesson, then read the booklet. Pick any order. "
             "Each booklet stands alone. The Council of Five section below will introduce "
-            "the shared framework.\n\n"
+            "the shared framework.\n"
+            "5. A note on repetition: Each booklet is designed to be self-contained — the reading "
+            "experience is complete on its own, like a Feldenkrais lesson. If you read multiple "
+            "booklets, you'll notice some ideas repeat. This is intentional. Just as a lesson "
+            "uses repetition to guide you through an experience, each booklet carries you through "
+            "its own reading journey with the framing it needs. The philosophical scaffolding "
+            "appears where it's needed so you can pick up any booklet and have the full experience.\n\n"
             "Do NOT explain the five lenses or the Shadow/Foundation framework — "
             "the Council section handles that. Keep the tone personal and practical."
         ),
