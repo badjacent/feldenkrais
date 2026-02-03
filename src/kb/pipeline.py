@@ -373,12 +373,13 @@ class PipelineExecutor:
                         duration_seconds=old.duration_seconds,
                     )
             elif old.status == NodeStatus.ERROR:
-                # Keep error status visible, but update hash
+                # Keep error status visible, but CLEAR output_hash so downstream
+                # nodes become stale (they can't use output from a failed run)
                 state = NodeState(
                     name=name,
                     status=NodeStatus.ERROR,
                     input_hash=current_hash,
-                    output_hash=old.output_hash,
+                    output_hash="",  # Clear so downstream becomes stale
                     last_run_at=old.last_run_at,
                     duration_seconds=old.duration_seconds,
                     error_message=old.error_message,
