@@ -441,7 +441,7 @@ class PipelineExecutor:
                         if started.tzinfo is None:
                             started = started.replace(tzinfo=timezone.utc)
                         age = datetime.now(timezone.utc) - started
-                        is_zombie = age > timedelta(minutes=5)
+                        is_zombie = age > timedelta(minutes=10)
                     except Exception:
                         is_zombie = True
 
