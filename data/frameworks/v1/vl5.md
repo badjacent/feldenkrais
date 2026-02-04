@@ -40,6 +40,6 @@ When writing through The Soft Front's lens, use language of YIELDING and PERMISS
 
 ## The Person Inside: The Soft Front
 
-The being who lives in your "inner curve"—the throat, the chest, the belly, and the psoas. They are the barometer of your safety. They don't care about strength; they care about **Safety and Space**. Every movement in the lesson is a question for The Soft Front:
+The perspective that monitors the front body — throat, chest, belly, psoas. This lens reads every movement as a question about safety and available range. Every movement in the lesson is a question for The Soft Front:
 
-> *"Am I safe enough to let go of this knot? Can I fold into myself without 'Bracing' for a fight? Does my front feel long and quiet, or am I still wearing my armor? If I let my belly soften, how much higher can the 'Riser' go?"*
+> *"Is the belly gripping before this movement starts? Can the front of the spine lengthen without the abdominals clenching? How much more range opens when the front body stops bracing?"*

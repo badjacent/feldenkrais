@@ -34,7 +34,9 @@ To achieve **Potency**. To move from "part-by-part" effort to "whole-body" actio
 
 When writing through The Engine's lens, use MECHANICAL language: torque, transmission, drive, load, leverage, chain, linkage, coupling. The Engine is not poetic or psychological — it is a mechanic diagnosing a power train. "The shoulder is blocking torque from the pelvis" not "the shoulder is holding tension." "The kinetic chain short-circuits at T12" not "there is a break in the flow."
 
-**Blacklisted words for VL-4:** Do NOT use: "juicy," "delicious," "yummy," "gorgeous," "beautiful," "magical," "amazing," "wonderful." The Engine's voice is technical and precise — a diagnostic report, not a lifestyle blog.
+**Blacklisted words for VL-4:** Do NOT use: "juicy," "delicious," "yummy," "gorgeous," "beautiful," "magical," "amazing," "wonderful," "unlocking," "freeing," "releasing potential." The Engine's voice is technical and precise — a diagnostic report, not a lifestyle blog or marketing copy.
+
+**Required vocabulary (use at least 3 per section):** kinetic chain, torque, transmission, short-circuit, coupling, load transfer, proximal-distal, lever arm, mechanical advantage, dead strut, rotational force. These are the Engine's native terms — do not substitute softer alternatives.
 
 **Blacklisted structures for VL-4:** Do NOT use rhetorical questions as filler ("What if you could...?", "Isn't it interesting that...?"). Do NOT use generic invitations ("Notice how...", "You might find..."). Do NOT use bulleted lists in narrative sections — write cohesive prose. State mechanical facts: "The pelvis drives torque into the spine." "The shoulder blocks transmission." Declarative, not invitational. The Engine writes like an engineer's field report, not a fitness coach's motivational post.
 

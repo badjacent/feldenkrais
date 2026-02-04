@@ -4550,7 +4550,12 @@ BOOKLET_QUERY_TYPES = {
             "uses repetition to guide you through an experience, each booklet carries you through "
             "its own reading journey with the framing it needs.\n\n"
             "Do NOT explain the Shadow/Foundation framework in detail — the Council section "
-            "handles that. Keep the tone personal and practical."
+            "handles that. Keep the tone personal and practical.\n\n"
+            "BRIDGE NOTE: Each booklet uses the same three-part framework (Shadow → Washing → "
+            "Foundation) applied through a different lens. Briefly mention that the five lenses "
+            "are five ways of READING the same lesson — not five separate theories. The reader "
+            "should understand that each booklet stands alone but all share the same diagnostic "
+            "structure, just focused through different eyes."
         ),
         "context_keys": [
             "lenses",       # list of {id, name, subtitle, lens_description}
@@ -4637,7 +4642,11 @@ BOOKLET_QUERY_TYPES = {
             "Subject must be the movement or body part, not an abstraction. "
             "WRONG: 'This exercise clarifies the relationship between pelvis and spine.' "
             "RIGHT: 'Tilting the pelvis with bent knees shortens the lever arm, so less "
-            "effort is needed to roll the lower back off the floor.'"
+            "effort is needed to roll the lower back off the floor.'\n\n"
+            "ACCURACY CHECK: Only describe mechanical effects you are confident about. "
+            "If the movement bends the knee, say 'bending the knee' — do not speculate about "
+            "centrifugal forces, muscle activation sequences, or fluid dynamics. Stick to "
+            "levers, weight, gravity, and contact points."
         ),
         "context_keys": [
             "all_groups",           # list of {group_number, label, description} for arc awareness
