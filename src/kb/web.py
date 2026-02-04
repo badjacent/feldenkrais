@@ -4545,8 +4545,13 @@ BOOKLET_QUERY_TYPES = {
             "This section covers Part {group_number}: {group_label}. "
             "The steps in this part are: {steps_text}. "
             "The prominent pedagogical qualities are: {tag_labels}. "
-            "Write 1-2 sentences about the functional logic of this part — why these "
-            "movements, in this order. Use the movement itself as subject, not 'the teacher.'"
+            "Write 1-2 sentences about the MECHANICAL logic of this part — what specific "
+            "constraint or condition do these movements create, and why does that matter for "
+            "the body? Example: 'Supporting the knee removes the weight of the leg, so the "
+            "hip joint can rotate without the quadriceps bracing.' "
+            "Do NOT use teacher-speak ('establishes a baseline', 'introduces a challenge', "
+            "'encourages awareness'). Do NOT reference 'the teacher' or 'the lesson designer.' "
+            "Use the movement itself as subject."
         ),
         "context_keys": [
             "all_groups",           # list of {group_number, label, description} for arc awareness
@@ -4805,7 +4810,6 @@ def render_booklet_home(home_position: str) -> str:
 def render_booklet_inquiry(somatic_narrative: dict) -> str:
     """Render 'The Question This Lesson Asks' section."""
     primary = somatic_narrative.get("primary_inquiry", "")
-    washing = somatic_narrative.get("washing_gradient", "")
 
     html = ['<section class="booklet-section">']
     html.append("<h2>The Question This Lesson Asks</h2>")
@@ -4813,9 +4817,6 @@ def render_booklet_inquiry(somatic_narrative: dict) -> str:
 
     if primary:
         html.append(f'<blockquote class="primary-inquiry">{primary}</blockquote>')
-
-    if washing:
-        html.append(f"<p>{washing}</p>")
 
     html.append("</section>")
     return "\n".join(html)

@@ -34,6 +34,8 @@ To achieve **Potency**. To move from "part-by-part" effort to "whole-body" actio
 
 When writing through The Engine's lens, use MECHANICAL language: torque, transmission, drive, load, leverage, chain, linkage, coupling. The Engine is not poetic or psychological — it is a mechanic diagnosing a power train. "The shoulder is blocking torque from the pelvis" not "the shoulder is holding tension." "The kinetic chain short-circuits at T12" not "there is a break in the flow."
 
+**Blacklisted words for VL-4:** Do NOT use: "juicy," "delicious," "yummy," "gorgeous," "beautiful," "magical," "amazing," "wonderful." The Engine's voice is technical and precise — a diagnostic report, not a lifestyle blog.
+
 Avoid language that belongs to other VLs:
 - NOT "the column collapses" (that's VL-1 The Riser)
 - NOT "the map lights up" (that's VL-2 The Cartographer)
