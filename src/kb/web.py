@@ -4823,38 +4823,17 @@ def render_booklet_inquiry(somatic_narrative: dict) -> str:
 
 
 def render_booklet_concepts() -> str:
-    """Render the 'How Feldenkrais Lessons Work' section."""
+    """Render the 'How Feldenkrais Lessons Work' section — condensed key terms."""
     return """
-    <section class="booklet-section">
-        <h2>How Feldenkrais Lessons Work</h2>
+    <section class="booklet-section booklet-concepts">
+        <h2>Key Terms</h2>
         <p>
-            To make sense of the journey through this lesson, it helps to understand
-            three ideas. They'll come up throughout the booklet.
-        </p>
-
-        <h3>The Shadow</h3>
-        <p>
-            When you first try a movement, there's a part of you that grips, pushes, and
-            forces. This is your voluntary muscular effort — we'll call it the <strong>Shadow</strong>.
-            It means well, but it's noisy. It uses ten muscles when two would do. It holds
-            your breath. It treats every movement as a task to be conquered.
-        </p>
-
-        <h3>The Foundation</h3>
-        <p>
-            Underneath the Shadow, your skeleton and reflexes already know how to support you.
-            This deeper system — the <strong>Foundation</strong> — is quiet, efficient, and reflexive.
-            It responds to gravity, finds balance, and transmits force through bone rather
-            than muscle. The lesson's job is to let the Foundation emerge.
-        </p>
-
-        <h3>The Washing</h3>
-        <p>
-            The lesson doesn't fight the Shadow. It <em>washes</em> it away — through
-            repetition, variation, and gentle complexity. Like water over stone, the
-            unnecessary effort gradually dissolves. You don't try to relax. You simply
-            repeat and vary until the Shadow runs out of strategies and the Foundation
-            is all that remains.
+            Three ideas run through this booklet.
+            The <strong>Shadow</strong> is the habitual muscular effort — the gripping,
+            bracing, and forcing that your body defaults to. The <strong>Foundation</strong>
+            is what's underneath: the skeletal support and reflexes that already know how
+            to carry you. The <strong>Washing</strong> is how the lesson erodes the Shadow
+            through repetition and variation, until the Foundation is what remains.
         </p>
     </section>
     """
@@ -5029,49 +5008,6 @@ def render_booklet_arc(somatic_narrative: dict, negotiation: dict, groups: list,
     if threshold:
         html.append('<h3>The Threshold of Quiet</h3>')
         html.append(f"<p>{threshold}</p>")
-
-    # Visual timeline of negotiation states
-    rows = table.get("rows", [])
-    if rows and groups:
-        html.append('<h3>The Arc</h3>')
-        html.append('<div class="arc-timeline">')
-
-        state_colors = {
-            "bracing": "#c0392b",
-            "softening": "#e67e22",
-            "transmission": "#27ae60",
-            "domination": "#c0392b",
-            "negotiation": "#e67e22",
-            "integration": "#27ae60",
-        }
-        state_display = {
-            "domination": "Bracing",
-            "negotiation": "Softening",
-            "integration": "Transmission",
-        }
-
-        group_to_rows = map_groups_to_table_rows(groups, table, pass_a_steps)
-
-        for g in groups:
-            gn = g.get("group_number", "?")
-            label = g.get("label", "")
-            matched = group_to_rows.get(gn, [])
-            # Get the negotiation state from the first matched row
-            state = ""
-            if matched:
-                state = _get_negotiation_state(matched[0], column_headers)
-            color = state_colors.get(state.lower(), "#bdc3c7") if state else "#bdc3c7"
-            display = state_display.get(state.lower(), state) if state else ""
-
-            html.append(f"""
-            <div class="arc-item">
-                <div class="arc-dot" style="background: {color};"></div>
-                <div class="arc-label">{gn}. {label}</div>
-                <div class="arc-state" style="color: {color};">{display}</div>
-            </div>
-            """)
-
-        html.append("</div>")  # end arc-timeline
 
     # Shadow and Foundation observations
     if negotiation:

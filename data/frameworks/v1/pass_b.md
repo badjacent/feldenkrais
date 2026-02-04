@@ -117,7 +117,8 @@ Each column in the analytical table serves a DISTINCT purpose. Do NOT repeat the
 - "Council" as a noun (use "Person Inside" instead)
 - Generic state labels like "Softening" for every row — use lens-specific vocabulary
 
-**Limit overused explanations:**
+**Limit overused imagery:**
+- "ripple," "wave," "ripple effect," "wave of ease" — use at most ONCE per booklet. Find specific alternatives: "force traveling through," "transmission opening," "connection restoring."
 - "Cortical noise" — use at most ONCE per booklet. Find lens-specific alternatives:
   - VL-1 (Riser): "collapse," "buckling," "compression"
   - VL-2 (Cartographer): "blur," "clumping," "undifferentiated"

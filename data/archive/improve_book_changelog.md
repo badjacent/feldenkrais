@@ -139,3 +139,36 @@ Previous iteration with simplified prompts:
 
 ### Review impact
 Awaiting next review.
+
+---
+
+## Iteration 6 — 2026-02-03
+
+*Note: Prior session also committed b99bb1f (pass_b anti-repetition rules, VL-4 mechanical metaphors, shadow voice structure rules) which is reflected in the baseline review.*
+
+### Issues addressed
+- #1 (high): Verbatim repetition between 'The Question' and 'How the Lesson Washed Away Effort'
+- #3 (high): VL-4 voice inconsistency — shifting from analytical to 'influencer' language
+- #4 (medium): Pedagogical glosses using academic teacher-speak
+
+### Changes made
+- `src/kb/web.py`: Removed `washing_gradient` from `render_booklet_inquiry()` — it was displayed in both Question and Arc sections, causing verbatim duplication. Now only appears in Arc.
+- `src/kb/web.py`: Rewrote pedagogical-gloss prompt to require mechanical logic with example ("Supporting the knee removes leg weight..."), blacklisted teacher-speak phrases.
+- `data/frameworks/v1/vl4.md`: Added blacklist of informal adjectives (juicy, delicious, magical, etc.) to enforce technical diagnostic voice.
+
+### Commit
+`c7acbbc`
+
+### Performance
+- booklet:VL-1: 16.8s
+- booklet:VL-2: 17.7s
+- booklet:VL-3: 15.6s
+- booklet:VL-4: 10.8s
+- booklet:VL-5: 15.8s
+
+### Review impact
+- Old #1 (Question/Arc verbatim repetition) **resolved** — no longer appears in review
+- VL-4 voice still flagged (#3) but improved — now about "lacks technical rigor" not "influencer fluff"
+- Pedagogical glosses still flagged (#4) but improved — now about "abstract jargon" not "teacher-speak"
+- New #1: Static 'How Lessons Work' boilerplate (was #10 last time, now top priority)
+- New #2: Arc timeline redundant with Journey badges (persistent issue)
