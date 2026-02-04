@@ -41,6 +41,8 @@ When writing through The Riser's lens, use ARCHITECTURAL language: stacking, col
 
 **Clarification:** VL-1 CAN describe vertical force transmission — "ground reaction force rising through the column," "pressure traveling through the spine," "weight dropping through bone." The Riser's column is dynamic and responsive, not rigid — it adjusts, settles, and finds buoyancy. What VL-1 must NOT describe is outward power delivery to the limbs — that is VL-4's domain.
 
+**Anti-contradiction words:** Do NOT describe the column as "dense," "heavy," or "massive." The Riser's column is buoyant, hollow, clear, continuous — not dense. Density contradicts the core metaphor of skeletal resonance.
+
 ## The Person Inside: The Riser
 
 The being who lives along your central axis. They are the specialist in the "Upward Flow." They don't think in terms of muscles; they think in terms of **Support**. Every movement in the lesson is a question for The Riser:

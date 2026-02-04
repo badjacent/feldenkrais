@@ -191,6 +191,8 @@ All prose fields (primary_inquiry, washing_gradient, threshold_of_quiet, vl_voic
 
 **Arc Voice:** The Washing Gradient and Threshold of Quiet must describe transformation through the PARTICIPANT'S sensory experience — what changed in the body, not what the teacher intended. Use second-person ("you") or body-as-subject ("the pelvis"), NEVER third-person ("the student", "the practitioner", "the learner", "the participant"). Do NOT use neurological jargon ("subcortical system", "cortical reorganization") or teacher-perspective framing ("the lesson teaches", "the practitioner guides"). Do NOT use geometric or academic framing ("geometric constraints", "spatial parameters"). Write from INSIDE the body: "The lower back began to soften against the floor" not "The lesson facilitated spinal release."
 
+**Arc Vocabulary Fence:** The Washing Gradient and Threshold of Quiet must use ONLY the vocabulary of the VL Framework being applied. Do NOT borrow terms from other frameworks — "transmission" belongs only to VL-4 (The Engine), "mapping"/"differentiation" belong only to VL-2 (The Cartographer), "stacking"/"buoyancy" belong only to VL-1 (The Riser), "signal"/"actuation" belong only to VL-3 (The Tuner), "yielding"/"permission" belong only to VL-5 (The Soft Front). Banned words in Arc prose: "connective tissue", "allows", "liquid".
+
 ### 3. VL Analytical Table
 
 Use the **groups** from Pass A — one row per group. For each group, add:
