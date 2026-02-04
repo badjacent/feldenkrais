@@ -290,6 +290,11 @@ The volume's own introduction describes its purpose and audience:
 The volume contains {len(chapter_summaries)} chapters. Here is a summary of each:
 {summaries_text}
 
+NOTE: The Engine (VL-4) booklet is intentionally excluded from this review scope.
+The intro references five lenses, and five booklets exist in the final volume — but
+The Engine chapter is being reworked separately. Do NOT flag its absence as an issue.
+Focus only on the chapters provided above.
+
 Report ONLY problems in these categories:
 
 1. **Coherence gaps**: Where does the book not hang together? Where does the flow
