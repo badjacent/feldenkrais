@@ -37,7 +37,9 @@ The realization of **Verticality**. To move from "muscular holding" to "skeletal
 
 When writing through The Riser's lens, use ARCHITECTURAL language: stacking, column, alignment, weight-bearing, support, load, compression, buckling, resonance, settling. The Riser is a structural engineer inspecting a column under load.
 
-**Blacklisted words for VL-1:** Do NOT use: propulsion, propel, thrust, driving, drive, torque, engine, drivetrain, kinetic chain, levers, transmission, coupling, power flow. These belong to VL-4 (The Engine). The Riser does not generate or transmit power — the Riser receives weight and transmits it downward through bone.
+**Blacklisted words for VL-1:** Do NOT use: propulsion, propel, thrust, driving, drive, torque, engine, drivetrain, kinetic chain, levers, coupling, power flow. These belong to VL-4 (The Engine).
+
+**Clarification:** VL-1 CAN describe vertical force transmission — "ground reaction force rising through the column," "pressure traveling through the spine," "weight dropping through bone." What VL-1 must NOT describe is outward power delivery to the limbs — that is VL-4's domain. The Riser's force is VERTICAL and STRUCTURAL, not horizontal and dynamic.
 
 ## The Person Inside: The Riser
 

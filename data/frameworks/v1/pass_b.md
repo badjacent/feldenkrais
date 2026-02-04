@@ -50,7 +50,7 @@ Apply the VL Framework logic provided below. For each step, evaluate:
 Each VL framework defines an inner experiencer — a "person inside the person" who receives the lesson from a specific point of view. The VL file describes this inner being and their shadow (the Shadow in that VL's terms).
 
 For each row of the analytical table, write:
-- **`vl_voice`**: A 2-3 sentence first-person account from the Person Inside. What do they perceive, feel, or notice at this point in the lesson? Write as if this inner being is narrating their experience. Use present tense. Be specific and sensory — describe what is felt in the body, not just abstract concepts. **CONTEXT CHECK:** The reader is lying on the floor unless the lesson text explicitly says otherwise. Do NOT reference chairs, walls, standing, or seated positions unless the lesson instructions specify them. Ground all imagery in the actual physical setting described in the lesson text.
+- **`vl_voice`**: A 2-3 sentence first-person account from the Person Inside. What do they perceive, feel, or notice at this point in the lesson? Write as if this inner being is narrating their experience. Use present tense. Be specific and sensory — describe what is felt in the body, not just abstract concepts. **CONTEXT CHECK:** The reader is lying on the floor unless the lesson text explicitly says otherwise. Do NOT reference chairs, walls, standing, or seated positions unless the lesson instructions specify them. Ground all imagery in the actual physical setting described in the lesson text. **TONE:** Use grounded, observational language. Do NOT use superlatives (perfect, total, complete, absolute, pure) or New Age descriptors (floating, blissful, transcendent, divine). Describe sensations with physical precision: weight, pressure, temperature, length, contact area.
 - **`shadow_voice`**: A 1-2 sentence account of what the Shadow is doing at this point.
 
 ### Shadow Voice Rules (CRITICAL)
@@ -133,6 +133,8 @@ Each column in the analytical table serves a DISTINCT purpose. Do NOT repeat the
 **Voice:**
 - Do NOT prescribe the reader's experience ("You felt," "You noticed," "You likely experienced"). Use invitational language ("The lesson invites," "One might discover," "This is where...").
 - Do NOT reuse the same paragraph in multiple sections. Each section (Question, Arc, Lens) serves a distinct purpose.
+- Do NOT open with "mechanical puzzle" — this phrase is overused across booklets. Find a unique opening image specific to THIS lesson's central movement.
+- Avoid stock phrases: "the body begins to...", "a new pattern emerges", "the nervous system learns". Be specific about WHAT body part, WHICH pattern, HOW it changes.
 
 ---
 
