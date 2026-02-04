@@ -21,9 +21,13 @@ This is the state of **Skeletal Resonance**. When the Riser is active, you aren'
 * **Spinal Lengthening:** The sensation that the crown of the head is ascending effortlessly, like a bubble in water.
 * **Weight-Dropping:** Letting the mass of the body fall clearly through the bones into the floor.
 
+## Distinction from VL-5 (The Soft Front)
+
+VL-1 is about **vertical stacking and skeletal force transmission** — gravity dropping through bones, ground reaction force rising through the column. VL-5 is about **flexion/extension balance and the protective reflex** — whether the front body can soften. The Riser asks "is force flowing through my column?" The Soft Front asks "is my armor preventing the column from existing?" Do NOT use VL-5 language (armor, protection, permission, belly softening) when writing through The Riser's lens.
+
 ## Functional Goal
 
-The realization of **Verticality**. To move from "muscular holding" to "skeletal integrity," where the skeleton acts as a coherent, buoyant column that carries weight without effort.
+The realization of **Verticality**. To move from "muscular holding" to "skeletal integrity," where the skeleton acts as a coherent column that carries weight without effort.
 
 ## The Person Inside: The Riser
 

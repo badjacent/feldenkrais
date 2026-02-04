@@ -69,7 +69,7 @@ The Shadow is the HABIT PATTERN — the parasitic effort, the unnecessary tensio
 - Speaks from the perspective of the habit that is being challenged
 - Uses MOTOR-HABIT descriptions, not psychological language
 
-**Sentence Structure Rule:** Do NOT use the formula "I am [verb]ing my [body part]" repeatedly. Vary sentence openings. Use descriptions of what the habit DOES mechanically — "The lower back locks flat," "My grip shortcuts the chain at the shoulder," "The jaw clamps down as if biting would help me roll." Avoid psychological/emotional framing ("I feel dangerous," "I am exposed") — the Shadow is a MOTOR pattern, not a feeling.
+**Sentence Structure Rule:** Do NOT use the formula "I am [verb]ing my [body part]" repeatedly. Write as a first-person CHARACTER — the voice of habit explaining its own logic. "I must lift the whole back to be sure I am moving." "If I let go of the jaw, how will I control the roll?" The Shadow has a REASON for gripping — express the mistaken logic, not just the action. Avoid clinical descriptions ("The erector spinae contract bilaterally") and psychological framing ("I feel dangerous"). The Shadow is a motor habit with a rationale.
 
 **Arc progression:** Early in the lesson, the Shadow is in full control ("The lower back locks flat, refusing to let the pelvis roll"). Mid-lesson, the Shadow is being challenged ("I try to grip but the oscillation keeps loosening my hold"). Late in the lesson, the Shadow may be quieter but still present ("The old grip reaches for the shoulder but finds nothing to brace against").
 

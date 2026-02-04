@@ -22,9 +22,13 @@ This is the state of **Dynamic Neutrality**. When the Soft Front is active, the 
 * **Symmetry of Curve:** Finding equal ease in folding (flexion) and unfolding (extension), with no "favorite" direction.
 * **The Open Horizon:** A feeling of length from the pubic bone to the chin that invites the world in rather than pushing it away.
 
+## Distinction from VL-1 (The Riser)
+
+VL-5 is about **flexion/extension balance** — the protective reflex that shortens the front body. VL-1 is about **vertical force transmission** — stacking the column for skeletal integrity. The Soft Front asks "can my front body release its armor?" The Riser asks "is force flowing through my bones?" Do NOT use VL-1 language (stacking, ground reaction, column, buoyancy) when writing through The Soft Front's lens. The overlap is that a soft front ENABLES the Riser, but VL-5 focuses on the permission mechanism, not the resulting vertical.
+
 ## Functional Goal
 
-To achieve **Permission**. To eliminate the "parasitic" bracing of the abdominal wall so the spine can become a truly neutral pivot. When the front is soft, the **Riser** is finally allowed to stand tall.
+To achieve **Permission**. To eliminate the "parasitic" bracing of the abdominal wall so the spine can become a truly neutral pivot.
 
 ## The Person Inside: The Soft Front
 

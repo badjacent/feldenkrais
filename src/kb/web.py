@@ -4596,10 +4596,12 @@ BOOKLET_QUERY_TYPES = {
             "constraint or condition do these movements create, and why does that matter for "
             "the body? Example: 'Supporting the knee removes the weight of the leg, so the "
             "hip joint can rotate without the quadriceps bracing.' "
-            "Do NOT use teacher-speak ('establishes a baseline', 'introduces a challenge', "
-            "'encourages awareness'). Do NOT use: 'explores,' 'reveals,' 'highlights,' "
-            "'invites,' 'cultivates.' Do NOT reference 'the teacher' or 'the lesson designer.' "
-            "Use the movement itself as subject — describe what the constraint DOES mechanically."
+            "Do NOT use teacher-speak. WRONG: 'This section challenges the nervous system "
+            "to sense asymmetries.' RIGHT: 'Bending the knees unloads the hip flexors, so "
+            "the pelvis can tilt without muscular interference.' "
+            "Banned verbs: explores, reveals, highlights, invites, cultivates, challenges, "
+            "encourages, allows, introduces. No references to 'the teacher.' "
+            "Subject must be the movement or body part, not an abstraction."
         ),
         "context_keys": [
             "all_groups",           # list of {group_number, label, description} for arc awareness
