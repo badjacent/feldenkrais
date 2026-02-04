@@ -31,6 +31,50 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from llm import LLM
 
 
+# ── Pipeline lock (DB-based, 5-minute expiry) ───────────────────────────
+
+PIPELINE_LOCK_KEY = "pipeline:global_lock"
+PIPELINE_LOCK_TTL_SECONDS = 300  # 5 minutes
+
+
+def acquire_pipeline_lock(reason: str = "") -> bool:
+    """Acquire the global pipeline lock. Returns True if acquired."""
+    import time
+    if not _db:
+        return False
+    now = time.time()
+    existing = _db.get_cache(PIPELINE_LOCK_KEY)
+    if existing and (now - existing.get("acquired_at", 0)) < PIPELINE_LOCK_TTL_SECONDS:
+        return False
+    _db.set_cache(PIPELINE_LOCK_KEY, {"acquired_at": now, "reason": reason})
+    print(f"[pipeline] lock acquired: {reason}", flush=True)
+    return True
+
+
+def release_pipeline_lock():
+    """Release the global pipeline lock."""
+    if not _db:
+        return
+    _db.set_cache(PIPELINE_LOCK_KEY, None)
+    print("[pipeline] lock released", flush=True)
+
+
+def _is_pipeline_locked() -> bool:
+    """Check if the pipeline lock is held (and not expired)."""
+    import time
+    if not _db:
+        return False
+    existing = _db.get_cache(PIPELINE_LOCK_KEY)
+    if not existing:
+        return False
+    age = time.time() - existing.get("acquired_at", 0)
+    if age >= PIPELINE_LOCK_TTL_SECONDS:
+        print(f"[pipeline] lock expired ({age:.0f}s), releasing", flush=True)
+        release_pipeline_lock()
+        return False
+    return True
+
+
 # ── Background pipeline runner ───────────────────────────────────────────
 
 _pipeline_task: asyncio.Task | None = None
@@ -44,6 +88,9 @@ async def _pipeline_background_loop():
         try:
             if _pipeline_lock.locked():
                 await asyncio.sleep(30)
+                continue
+            if _is_pipeline_locked():
+                await asyncio.sleep(10)
                 continue
             async with _pipeline_lock:
                 await asyncio.to_thread(_run_pipeline_cycle)

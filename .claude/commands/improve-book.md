@@ -25,8 +25,8 @@ Examples:
 4. **Select ~3 high-impact issues** that don't conflict with each other
 5. **Dry-run cost check** - run `pipeline.py run --dry-run --json` to estimate recomputation cost
 6. **Present a plan** for user approval (skip if `auto`)
-7. **Implement changes** if approved
-8. **Commit and push** (in `auto` mode), recording the checkpoint commit hash
+7. **Acquire pipeline lock, then implement changes** - grab the lock BEFORE editing any files so the pipeline doesn't start processing partial changes
+8. **Commit and push, then release pipeline lock** (in `auto` mode), recording the checkpoint commit hash
 9. **Wait for pipeline again** - MANDATORY. Poll until complete, monitoring for errors and regressions
 10. **Rollback if needed** - revert if pipeline errors or performance regresses
 11. **Repeat** from step 1 (if `loop` mode and iterations remain)
@@ -102,6 +102,48 @@ Configurable files:
 - `data/frameworks/v2/pass_a.md` - Pass A (segmentation) prompt
 - `data/frameworks/v2/pass_b.md` - Pass B (synthesis) prompt
 - `data/council_intro.html` - Council of Five static content
+
+## Step 7: Acquire pipeline lock
+
+**MANDATORY** before editing any files. This prevents the pipeline from processing partial changes. The lock auto-expires after 5 minutes.
+
+```bash
+uv run python -c "
+from dotenv import load_dotenv
+import os, sys
+load_dotenv()
+sys.path.insert(0, 'src/kb')
+from web import acquire_pipeline_lock
+if acquire_pipeline_lock('improve-book iteration'):
+    print('Lock acquired')
+else:
+    print('ERROR: Lock already held, waiting...')
+    import time
+    for i in range(30):
+        time.sleep(10)
+        if acquire_pipeline_lock('improve-book iteration'):
+            print('Lock acquired')
+            break
+    else:
+        print('FAILED to acquire lock after 5 minutes')
+        sys.exit(1)
+"
+```
+
+## Step 8: Release pipeline lock
+
+**MANDATORY** after committing and pushing. Run this AFTER `git push`:
+
+```bash
+uv run python -c "
+from dotenv import load_dotenv
+import os, sys
+load_dotenv()
+sys.path.insert(0, 'src/kb')
+from web import release_pipeline_lock
+release_pipeline_lock()
+"
+```
 
 ## Dry-run cost check
 
