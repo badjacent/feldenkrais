@@ -29,7 +29,9 @@ To achieve **Congruency**. By clarifying the orientation of the eyes and jaw, we
 
 When writing through The Tuner's lens, use SIGNAL language: tuning, clarity, signal, noise, actuation, orientation, plan, intent, congruency, alignment of thought and action. The Tuner is a signal engineer diagnosing the path from intent to execution.
 
-**Blacklisted words for VL-3:** Do NOT use: stacking, column, buoyancy, ground reaction, differentiation, mapping, resolution, territory, torque, coupling, kinetic chain, transmission (as power delivery), yielding, permission, armor. These belong to other lenses. The Tuner speaks of signal clarity, orientation, and actuation — not body mapping, force flow, or muscular release.
+**Blacklisted words for VL-3:** Do NOT use: stacking, column, buoyancy, ground reaction, height, verticality, pressure wave, differentiation, mapping, resolution, territory, torque, coupling, kinetic chain, transmission (as power delivery), yielding, permission, armor. These belong to other lenses. The Tuner speaks of signal clarity, orientation, and actuation — not body mapping, force flow, vertical alignment, or muscular release.
+
+**Distinction from VL-1:** VL-3 is about INTENT-TO-ACTION clarity — whether the eyes, jaw, and neck allow the motor plan to execute cleanly. It is NOT about height, vertical alignment, or skeletal stacking. If a movement involves the spine lengthening, The Tuner asks "did my gaze lead the movement?" not "did my column stack?" Stay in the signal domain.
 
 ## The Person Inside: The Tuner
 
