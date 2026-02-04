@@ -74,6 +74,8 @@ The Shadow is the HABIT PATTERN — the parasitic effort, the unnecessary tensio
 - DO NOT USE: "I must hold here." "I need to grip to stay safe." "I choose to brace."
 The Shadow doesn't DECIDE to grip — it finds itself already gripping. Express the pattern as something that happens TO the system, not something the system deliberately does. Avoid clinical descriptions ("The erector spinae contract bilaterally") and psychological framing ("I feel dangerous").
 
+**Anti-personification rule:** The Shadow is NOT an adversary, villain, or character with intentions. Do NOT write the Shadow as something that "attempts," "refuses," "fights," "insists," "demands," or "attacks." The Shadow is a muscular habit — it tightens, stiffens, grips, holds, pulls. Use verbs of physical contraction, not verbs of willful resistance.
+
 **Arc progression:** Early in the lesson, the Shadow is in full control ("The lower back is already locked flat — it stiffened before the movement even began"). Mid-lesson, the Shadow is being challenged ("The old grip keeps reaching for the shoulder, but the oscillation loosens it each time"). Late in the lesson, the Shadow may be quieter but still present ("A trace of the old stiffening flickers in the hip, but there's nothing left to brace against").
 
 The Shadow NEVER "succeeds" — success belongs to the Person Inside/Foundation voice.
