@@ -183,7 +183,7 @@ All prose fields (primary_inquiry, washing_gradient, threshold_of_quiet, vl_voic
 ### 2. Somatic Narrative
 - **Primary Inquiry**: The fundamental riddle (in this framework's terms)
 - **Washing Gradient**: How the Shadow is eroded (use lens-specific language, not "cortical noise")
-- **Threshold of Quiet**: The moment where Transmission emerges
+- **Threshold of Quiet**: The moment where Transmission emerges. Must be a COMPLETE SENTENCE with a subject and predicate — not a sentence fragment. WRONG: "The moment where the head lifts through skeletal buoyancy." RIGHT: "The sequence culminates when the head lifts through skeletal buoyancy rather than muscular effort."
 
 **CRITICAL:** The Primary Inquiry and Washing Gradient must be DISTINCT paragraphs with different content. The Inquiry frames the question; the Gradient describes the process of change. Do not reuse sentences between them.
 
