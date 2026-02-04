@@ -4862,6 +4862,8 @@ BOOKLET_QUERY_TYPES = {
             "Use concrete physical verbs instead.\n"
             "Banned nouns/subjects: 'the student', 'the practitioner', 'the learner'. "
             "The subject must be the body part or movement, never a person label.\n\n"
+            "FORMATTING: Use proper sentence-case capitalization throughout. Start each "
+            "sentence with a capital letter. Do NOT write in all-lowercase.\n\n"
             "ACCURACY: Do not invent numbers, counts, or geometric specifications not "
             "present in the lesson text. If the lesson uses a clock face, there are 12 "
             "positions, not 36. Stay grounded in what the lesson actually describes."

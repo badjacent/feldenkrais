@@ -162,6 +162,7 @@ Each column in the analytical table serves a DISTINCT purpose. Do NOT repeat the
 - Do NOT open with "mechanical puzzle" — this phrase is overused across booklets. Find a unique opening image specific to THIS lesson's central movement.
 - Avoid stock phrases: "the body begins to...", "a new pattern emerges", "the nervous system learns". Be specific about WHAT body part, WHICH pattern, HOW it changes.
 - Ban absolutist language in ALL prose fields: "without resistance", "no resistance at all", "completely releases", "total ease", "fully integrated", "allows everything". Transformation in Feldenkrais is partial and ongoing — describe what SHIFTED, not what was perfected.
+- Banned words across ALL prose fields: "liquid", "liquidity", "liquid rotation", "liquid twist". Use alternatives: "smooth", "continuous", "unbroken", "easy".
 
 ---
 
