@@ -70,9 +70,15 @@ The Shadow is the HABIT PATTERN — the parasitic effort, the unnecessary tensio
 - Uses MOTOR-HABIT descriptions, not psychological language
 
 **Sentence Structure Rule:** The Shadow is an UNCONSCIOUS HABIT, not a conscious villain. Do NOT write "I must..." or "I need to..." as if the Shadow is making deliberate choices. Instead, use experiential language that conveys automatic, involuntary patterning:
-- USE: "I find myself gripping before I know it." "The back stiffens — it doesn't know another way." "Something in the shoulder pulls tight whenever the pelvis moves."
+- USE varied sentence starters — do NOT begin every shadow_voice with "I find myself":
+  "The back stiffens — it doesn't know another way."
+  "Something in the shoulder pulls tight whenever the pelvis moves."
+  "My neck locks before the roll even starts."
+  "There it is again — the belly hardens on its own."
+  "The old grip reaches for the jaw without being asked."
+  "Everything above the waist tightens into one block."
 - DO NOT USE: "I must hold here." "I need to grip to stay safe." "I choose to brace."
-The Shadow doesn't DECIDE to grip — it finds itself already gripping. Express the pattern as something that happens TO the system, not something the system deliberately does. Avoid clinical descriptions ("The erector spinae contract bilaterally") and psychological framing ("I feel dangerous").
+The Shadow doesn't DECIDE to grip — it finds itself already gripping. Express the pattern as something that happens TO the system, not something the system deliberately does. Avoid clinical descriptions ("The erector spinae contract bilaterally") and psychological framing ("I feel dangerous"). VARIETY: Do not use the same sentence opener for more than 2 shadow_voice entries in the same lesson.
 
 **Anti-personification rule:** The Shadow is NOT an adversary, villain, or character with intentions. Do NOT write the Shadow as something that "attempts," "refuses," "fights," "insists," "demands," or "attacks." The Shadow is a muscular habit — it tightens, stiffens, grips, holds, pulls. Use verbs of physical contraction, not verbs of willful resistance.
 
