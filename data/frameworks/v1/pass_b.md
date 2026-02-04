@@ -69,9 +69,12 @@ The Shadow is the HABIT PATTERN — the parasitic effort, the unnecessary tensio
 - Speaks from the perspective of the habit that is being challenged
 - Uses MOTOR-HABIT descriptions, not psychological language
 
-**Sentence Structure Rule:** Do NOT use the formula "I am [verb]ing my [body part]" repeatedly. Write as a first-person CHARACTER — the voice of habit explaining its own logic. "I must lift the whole back to be sure I am moving." "If I let go of the jaw, how will I control the roll?" The Shadow has a REASON for gripping — express the mistaken logic, not just the action. Avoid clinical descriptions ("The erector spinae contract bilaterally") and psychological framing ("I feel dangerous"). The Shadow is a motor habit with a rationale.
+**Sentence Structure Rule:** The Shadow is an UNCONSCIOUS HABIT, not a conscious villain. Do NOT write "I must..." or "I need to..." as if the Shadow is making deliberate choices. Instead, use experiential language that conveys automatic, involuntary patterning:
+- USE: "I find myself gripping before I know it." "The back stiffens — it doesn't know another way." "Something in the shoulder pulls tight whenever the pelvis moves."
+- DO NOT USE: "I must hold here." "I need to grip to stay safe." "I choose to brace."
+The Shadow doesn't DECIDE to grip — it finds itself already gripping. Express the pattern as something that happens TO the system, not something the system deliberately does. Avoid clinical descriptions ("The erector spinae contract bilaterally") and psychological framing ("I feel dangerous").
 
-**Arc progression:** Early in the lesson, the Shadow is in full control ("The lower back locks flat, refusing to let the pelvis roll"). Mid-lesson, the Shadow is being challenged ("I try to grip but the oscillation keeps loosening my hold"). Late in the lesson, the Shadow may be quieter but still present ("The old grip reaches for the shoulder but finds nothing to brace against").
+**Arc progression:** Early in the lesson, the Shadow is in full control ("The lower back is already locked flat — it stiffened before the movement even began"). Mid-lesson, the Shadow is being challenged ("The old grip keeps reaching for the shoulder, but the oscillation loosens it each time"). Late in the lesson, the Shadow may be quieter but still present ("A trace of the old stiffening flickers in the hip, but there's nothing left to brace against").
 
 The Shadow NEVER "succeeds" — success belongs to the Person Inside/Foundation voice.
 

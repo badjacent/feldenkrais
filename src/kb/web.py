@@ -4603,9 +4603,14 @@ BOOKLET_QUERY_TYPES = {
             "to sense asymmetries.' RIGHT: 'Bending the knees unloads the hip flexors, so "
             "the pelvis can tilt without muscular interference.' "
             "Banned verbs: explores, reveals, highlights, invites, cultivates, challenges, "
-            "encourages, allows, introduces, notices, softens, senses, promotes. "
-            "No references to 'the teacher.' "
-            "Subject must be the movement or body part, not an abstraction."
+            "encourages, allows, introduces, notices, softens, senses, promotes, prevents, "
+            "clarifies, forces, engages, facilitates, develops. "
+            "Banned nouns: exercise, practitioner, student. "
+            "No references to 'the teacher' or 'the nervous system' as subject. "
+            "Subject must be the movement or body part, not an abstraction. "
+            "WRONG: 'This exercise clarifies the relationship between pelvis and spine.' "
+            "RIGHT: 'Tilting the pelvis with bent knees shortens the lever arm, so less "
+            "effort is needed to roll the lower back off the floor.'"
         ),
         "context_keys": [
             "all_groups",           # list of {group_number, label, description} for arc awareness
