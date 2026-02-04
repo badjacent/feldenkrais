@@ -55,7 +55,8 @@ def release_pipeline_lock():
     """Release the global pipeline lock."""
     if not _db:
         return
-    _db.set_cache(PIPELINE_LOCK_KEY, None)
+    with _db.get_cursor() as cursor:
+        cursor.execute("DELETE FROM cache WHERE key = %s", (PIPELINE_LOCK_KEY,))
     print("[pipeline] lock released", flush=True)
 
 
@@ -103,6 +104,9 @@ async def _pipeline_background_loop():
 
 def _run_pipeline_cycle():
     """One synchronous cycle: compute staleness, run stale nodes."""
+    if _is_pipeline_locked():
+        return
+
     try:
         from pipeline import PipelineStateStore, PipelineExecutor
         from pipeline_graph import build_book_pipeline
