@@ -30,6 +30,14 @@ VL-5 is about **flexion/extension balance** — the protective reflex that short
 
 To achieve **Permission**. To eliminate the "parasitic" bracing of the abdominal wall so the spine can become a truly neutral pivot.
 
+## Writing Voice for VL-5
+
+When writing through The Soft Front's lens, use language of YIELDING and PERMISSION: softening, releasing, opening, unclenching, lengthening the front, letting go. The Soft Front is about what STOPS RESISTING, not what actively drives. The central metaphor is armor coming off — not force being generated.
+
+**Terminology note:** When referencing the "Red Light reflex," always define or paraphrase it on first use (e.g., "the protective shortening of the front body"). Do not assume the reader knows this term.
+
+**Mechanical focus:** VL-5 is about FLEXION and EXTENSION — the front body's ability to lengthen and shorten freely. When describing movements, focus on what the belly, chest, and throat are doing. Do NOT borrow "floor rising" or "pressure wave" imagery from VL-1 — the Soft Front's concern is whether the front body is AVAILABLE, not whether force is transmitting through the column.
+
 ## The Person Inside: The Soft Front
 
 The being who lives in your "inner curve"—the throat, the chest, the belly, and the psoas. They are the barometer of your safety. They don't care about strength; they care about **Safety and Space**. Every movement in the lesson is a question for The Soft Front:

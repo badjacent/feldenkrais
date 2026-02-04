@@ -50,7 +50,7 @@ Apply the VL Framework logic provided below. For each step, evaluate:
 Each VL framework defines an inner experiencer — a "person inside the person" who receives the lesson from a specific point of view. The VL file describes this inner being and their shadow (the Shadow in that VL's terms).
 
 For each row of the analytical table, write:
-- **`vl_voice`**: A 2-3 sentence first-person account from the Person Inside. What do they perceive, feel, or notice at this point in the lesson? Write as if this inner being is narrating their experience. Use present tense. Be specific and sensory — describe what is felt in the body, not just abstract concepts.
+- **`vl_voice`**: A 2-3 sentence first-person account from the Person Inside. What do they perceive, feel, or notice at this point in the lesson? Write as if this inner being is narrating their experience. Use present tense. Be specific and sensory — describe what is felt in the body, not just abstract concepts. **CONTEXT CHECK:** The reader is lying on the floor unless the lesson text explicitly says otherwise. Do NOT reference chairs, walls, standing, or seated positions unless the lesson instructions specify them. Ground all imagery in the actual physical setting described in the lesson text.
 - **`shadow_voice`**: A 1-2 sentence account of what the Shadow is doing at this point.
 
 ### Shadow Voice Rules (CRITICAL)

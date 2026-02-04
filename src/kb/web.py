@@ -4580,7 +4580,10 @@ BOOKLET_QUERY_TYPES = {
             "Use FRESH language specific to THIS lesson's movements. Avoid generic phrases like "
             "'companion rather than a manual', 'questions to be lived', or 'the arc of this lesson.' "
             "Instead of 'arc,' use the lens's metaphor: map (Cartographer), tuning (Tuner), "
-            "drivetrain (Engine), column (Riser), unfolding (Soft Front)."
+            "drivetrain (Engine), column (Riser), unfolding (Soft Front).\n\n"
+            "Banned phrases: 'You likely encountered', 'You may have noticed', 'illuminate', "
+            "'journey', 'decode', 'neurological'. Write as if describing a physical experience, "
+            "not a self-help program."
         ),
         "context_keys": [
             "lesson_title",
@@ -4655,7 +4658,13 @@ BOOKLET_QUERY_TYPES = {
             "2. Exactly 3 suggestions as a bulleted list, each 1-2 sentences. Pick the 3 most "
             "impactful things for someone revisiting this lesson.\n"
             "3. A brief closing sentence that invites re-exploration.\n\n"
-            "Each suggestion must name a specific movement from THIS lesson. "
+            "Each suggestion must name a specific movement from THIS lesson and include at "
+            "least one MECHANICAL VARIABLE — a specific thing to track (timing, weight shift, "
+            "pressure point, range of motion). "
+            "WRONG: 'Notice how your attention shifts as you sense the pelvis.' "
+            "RIGHT: 'During the pelvic tilt, track whether your lower back leaves the floor "
+            "before or after the tailbone lifts.' "
+            "Banned words: sensing, attention, awareness, expression, illuminate, discover. "
             "No platitudes or fortune-cookie wisdom — give actionable movement cues."
         ),
         "context_keys": [
@@ -4690,11 +4699,13 @@ BOOKLET_QUERY_TYPES = {
             "introduction. Do NOT redefine them. Instead, show what this lens DISCOVERED in "
             "THIS lesson's specific movements.\n\n"
             "CRITICAL OUTPUT RULES: Your output is the FINAL TEXT the reader sees. "
-            "Do NOT include any internal codes (VL-1, VL-4), banned-word lists, "
-            "prompt instructions, negative constraints, or meta-commentary about the framework. "
-            "Do NOT refer to 'the Person Inside' as a being or character — write analytically "
+            "FORBIDDEN in output: internal codes (VL-1, VL-4, etc.), 'Do NOT use' instructions, "
+            "banned-word lists, meta-commentary about the framework, any text that reads like "
+            "a prompt instruction rather than reader-facing prose. "
+            "Do NOT anthropomorphize the lens ('the being who lives in...') — write analytically "
             "about what this perspective REVEALS about the lesson's mechanics. "
-            "Write pure prose — no headers, no bullets, no formatting."
+            "Write pure prose — no headers, no bullets, no formatting. "
+            "Banned words: illuminate, discover, journey."
         ),
         "context_keys": [
             "framework_name",
