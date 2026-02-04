@@ -262,6 +262,7 @@ class LLM:
         if is_gemini3:
             from google.genai import types as _gtypes
             config["thinking_config"] = _gtypes.ThinkingConfig(thinking_level="MINIMAL")
+            config["top_p"] = 0.95
         if system:
             config["system_instruction"] = system
             total_chars += len(system)
