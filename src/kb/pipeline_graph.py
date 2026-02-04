@@ -325,8 +325,14 @@ def _make_review_transform(db):
         if intro_data and "html" in intro_data:
             intro_text = agent._html_to_text(intro_data["html"])
 
+        # Skip VL-4 — the chapter is being reworked and its review
+        # feedback currently pulls the overall review off-track.
+        skip_vl_ids = {"VL-4"}
+
         chapters_data = []
         for vl_id in sorted(w.BOOK_LESSONS.keys()):
+            if vl_id in skip_vl_ids:
+                continue
             data = db.get_cache(f"pipeline:booklet:{vl_id}")
             if data and "html" in data:
                 html = data["html"]
@@ -537,6 +543,11 @@ def build_book_pipeline(db, framework_version: Optional[str] = None) -> Pipeline
         file_hasher(w.DATA_DIR / "council_intro.html"),
         description="Council of Five intro section",
     )
+    graph.add_source(
+        "src:review_agent",
+        file_hasher(Path(__file__).parent / "review_agent.py"),
+        description="Review agent prompts",
+    )
 
     # ── Per-lesson source + transform nodes ──
 
@@ -642,7 +653,7 @@ def build_book_pipeline(db, framework_version: Optional[str] = None) -> Pipeline
 
     graph.add_transform(
         "review",
-        input_names=["book"],
+        input_names=["book", "src:review_agent"],
         transform=_make_review_transform(db),
         description="Book review",
         tags={"type": "llm"},

@@ -54,7 +54,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Section:
     """A named section within a booklet chapter."""
-    name: str       # "Cover", "Journey Part 3", "Arc", "Lens", etc.
+    name: str       # "Cover", "Journey Part 3", "The Riser", etc.
     html: str       # the section HTML
     text: str       # stripped text for summaries
 
@@ -300,8 +300,10 @@ Report ONLY problems in these categories:
    does it create that the chapters don't deliver on?
 4. **Repetition**: What concepts, phrases, or framings are repeated too much across
    chapters? Be specific — quote the repeated elements.
-5. **Lens bleed**: Where do chapters overlap — covering the same ground under
-   different lens names? Which pairs of chapters feel too similar?
+5. **Lens bleed**: The five lenses are not conceptually orthogonal — some thematic
+   overlap is expected and healthy. Only flag lens bleed when two chapters feel
+   INTERCHANGEABLE — covering the same movements with the same conclusions under
+   different names. Minor shared themes are fine.
 6. **Weakest chapter**: Which chapter is the weakest and why?
 7. **Per-chapter notes**: For each chapter, list 1-3 specific problems. Skip chapters
    that work fine.
@@ -361,21 +363,25 @@ Here is the chapter HTML:
 {clean_html}
 ---
 
+IMPORTANT: The booklet sections are NOT conceptually orthogonal. Some thematic
+overlap and bleed between sections is expected and desirable — the same lesson
+is being explored from different angles. Do NOT flag overlap as a problem unless
+it is pure redundancy (the same sentence or idea repeated verbatim with no new
+angle). A concept appearing in both the Person Inside narrative and the Journey
+dialogue is fine if each adds something.
+
 For each section of the chapter, report ONLY problems:
 
-- **Intro/Opening**: Does it fail to orient the reader? Is it generic rather than
-  specific to this lesson?
+- **Person Inside Narrative**: Does the first-person story feel generic or
+  disconnected from the actual movements in this lesson? Does it read like a
+  template that could apply to any lesson? Is it too short or too long?
 - **Journey (each part)**: Are pedagogical glosses generic rather than specific to
-  the actual movements described? Do the Person Inside / Shadow voices sound fake,
-  repetitive, or disconnected from what the teacher is actually asking?
-- **Arc**: Do state transitions feel forced or unsupported by the content?
-  Does the arc just assert states without showing how they emerge from the movements?
-- **Lens**: Does it just repeat the journey in different words? Does it actually add
-  a new perspective or is it redundant?
-- **Reflection/Checking Questions**: Are they generic self-help questions that could
-  apply to any lesson, or are they specific to what this lesson actually taught?
-- **Concepts (Shadow/Foundation/Washing)**: Is this section adding value here or
-  just taking up space?
+  the actual movements described? Do the Person Inside / Shadow dialogue voices
+  sound fake, repetitive, or disconnected from what the teacher is actually asking?
+- **How Feldenkrais Lessons Work**: Does this section contextualize the key concepts
+  for THIS lesson, or is it generic boilerplate?
+- **How the Lesson Washed Away Effort**: Does the washing gradient feel earned by
+  the movements described, or does it just assert transformation?
 
 For each problem found:
 1. Quote the problematic text (the exact excerpt)
@@ -385,20 +391,16 @@ For each problem found:
    - "prompt:pedagogical-gloss" — the LLM prompt that generated pedagogical glosses
    - "prompt:person-inside" — the Person Inside voice prompt
    - "prompt:shadow-voice" — the Shadow voice prompt
-   - "prompt:booklet-intro" — the booklet intro prompt
+   - "prompt:lens-synthesis" — the Person Inside narrative prompt
+   - "prompt:lesson-concepts" — the How Feldenkrais Lessons Work prompt
    - "prompt:volume-intro" — the volume intro prompt
-   - "prompt:arc-narrative" — the arc/state-transition prompt
-   - "prompt:lens-analysis" — the lens-specific analysis prompt
-   - "prompt:reflection" — the reflection/checking questions prompt
    - "render:booklet_journey" — the render_booklet_journey() function in web.py
-   - "render:booklet_arc" — the render_booklet_arc() function
-   - "render:booklet_lens" — the render_booklet_lens() function
-   - "render:booklet_intro" — the render_booklet_intro() function
-   - "render:booklet_reflection" — the render_booklet_reflection() function
+   - "render:booklet_person_inside_narrative" — the Person Inside narrative renderer
+   - "render:booklet_washing" — the washing gradient section renderer
+   - "render:booklet_concepts" — the lesson concepts section renderer
    - "data:somatic_narrative" — the Pass B somatic narrative data
    - "data:pass_a" — the Pass A analysis data
    - "data:vl_analysis" — the VL lens analysis data
-   - "template:concepts" — the static Shadow/Foundation/Washing section
 
 Rate each section: "adequate" (minor issues only), "needs_work" (significant issues),
 or "broken" (doesn't serve the reader). Do NOT use "strong", "good", or any positive
