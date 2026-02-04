@@ -15,12 +15,12 @@ This is the habit of **functional disconnection**. You try to move the world usi
 
 ## The Council Mode: Potency
 
-This is the state of **Core-Driven Flow**. When the Engine is connected to the limbs, movement feels effortless because it is properly leveraged.
+This is the state of **Core-Driven Flow**. When the Engine is connected to the limbs, movement feels effortless because it is properly leveraged. Think of the pelvis as the crankshaft: it converts the raw input (floor contact, breath, weight shift) into rotational and translational force. The limbs are the drive shafts — they don't generate power, they deliver it.
 
-* **Whole-Body Transmission:** Sensation of movement originating in the pelvis or chest and flowing like a wave to the fingertips.
-* **The Weightless Reach:** The limbs feel light and "floating" because the massive muscles of the center are doing the heavy lifting.
-* **Skeletal Leverage:** Using the length of the spine and the mass of the pelvis to find mechanical advantage.
-* **The Kinetic Chain:** A clear, open path where force travels from the floor, through the Engine, and out to the world.
+* **Whole-Body Transmission:** The pelvis fires, torque travels through the spine, and the arm arrives at the target already loaded. The hand doesn't "reach" — it is *delivered*.
+* **The Weightless Reach:** The limbs feel light because the massive muscles of the center are doing the heavy lifting — like a crane where the boom is light because the counterweight does the work.
+* **Skeletal Leverage:** Using the length of the spine and the mass of the pelvis to find mechanical advantage — bones as levers, joints as fulcrums.
+* **The Kinetic Chain:** A clear, open path where force travels from the floor, through the Engine, and out to the world. Every link in the chain must be mobile enough to transmit, not so rigid it blocks.
 
 ## Distinction from VL-1 (The Riser)
 
@@ -30,8 +30,18 @@ VL-1 is about **vertical force** — gravity dropping through stacked bones. VL-
 
 To achieve **Potency**. To move from "part-by-part" effort to "whole-body" action, where the limbs become weightless extensions of a powerful, mobile center. The proximal-distal bridge is restored.
 
+## Writing Voice for VL-4
+
+When writing through The Engine's lens, use MECHANICAL language: torque, transmission, drive, load, leverage, chain, linkage, coupling. The Engine is not poetic or psychological — it is a mechanic diagnosing a power train. "The shoulder is blocking torque from the pelvis" not "the shoulder is holding tension." "The kinetic chain short-circuits at T12" not "there is a break in the flow."
+
+Avoid language that belongs to other VLs:
+- NOT "the column collapses" (that's VL-1 The Riser)
+- NOT "the map lights up" (that's VL-2 The Cartographer)
+- NOT "the intent clarifies" (that's VL-3 The Tuner)
+- NOT "the armor softens" (that's VL-5 The Soft Front)
+
 ## The Person Inside: The Engine
 
-The being who lives in your powerhouse—the pelvis, the low back, and the deep core. They provide the thrust and the initiation. They don't do the fine-tuning; they provide the **Volume**. Every movement in the lesson is a question for The Engine:
+The being who lives in your powerhouse — the pelvis, the low back, and the deep core. They provide the thrust and the initiation. They don't do the fine-tuning; they provide the **Volume**. They think in terms of torque, coupling, and transmission — like a mechanic listening to whether the drivetrain is connected or slipping. Every movement in the lesson is a question for The Engine:
 
-> *"Is my power reaching the hand, or is it leaking out at the shoulder? Am I asking my wrist to do a job that my pelvis should be doing? How much lighter does my leg feel when I let my spine join the dance?"*
+> *"Is my power reaching the hand, or is it leaking out at the shoulder? Am I asking my wrist to do a job that my pelvis should be doing? Where in the chain is the torque getting lost?"*

@@ -67,8 +67,11 @@ The Shadow is the HABIT PATTERN — the parasitic effort, the unnecessary tensio
 - Describes gripping, bracing, holding, clenching, or pulling
 - Uses language of effort, resistance, or protection
 - Speaks from the perspective of the habit that is being challenged
+- Uses MOTOR-HABIT descriptions, not psychological language
 
-**Arc progression:** Early in the lesson, the Shadow is in full control ("I am clenching the jaw, pulling the shoulders up"). Mid-lesson, the Shadow is being challenged ("I try to grip but the oscillation keeps loosening my hold"). Late in the lesson, the Shadow may be quieter but still present ("I still want to grab, but there is less to hold onto").
+**Sentence Structure Rule:** Do NOT use the formula "I am [verb]ing my [body part]" repeatedly. Vary sentence openings. Use descriptions of what the habit DOES mechanically — "The lower back locks flat," "My grip shortcuts the chain at the shoulder," "The jaw clamps down as if biting would help me roll." Avoid psychological/emotional framing ("I feel dangerous," "I am exposed") — the Shadow is a MOTOR pattern, not a feeling.
+
+**Arc progression:** Early in the lesson, the Shadow is in full control ("The lower back locks flat, refusing to let the pelvis roll"). Mid-lesson, the Shadow is being challenged ("I try to grip but the oscillation keeps loosening my hold"). Late in the lesson, the Shadow may be quieter but still present ("The old grip reaches for the shoulder but finds nothing to brace against").
 
 The Shadow NEVER "succeeds" — success belongs to the Person Inside/Foundation voice.
 
@@ -82,6 +85,7 @@ Each column in the analytical table serves a DISTINCT purpose. Do NOT repeat the
 **Purpose:** Frame the riddle being posed to the nervous system at this point in the lesson.
 - Write as an inquiry, not a statement
 - Focus on WHAT is being asked, not what happens
+- Use the specific language of this VL's lens — not generic anatomy
 - Example: "Can the hip joint initiate the roll without the shoulder joining in?"
 
 ### Negotiation State (Column 4)
@@ -97,6 +101,8 @@ Each column in the analytical table serves a DISTINCT purpose. Do NOT repeat the
 - Example: "Hip joint differentiates from lumbar spine; pelvis rolls independently"
 
 **Anti-Repetition Rule:** If you find yourself writing similar content in two columns, you are doing it wrong. The Question frames the inquiry, the Negotiation State describes the process, and the Functional Outcome states the result. These are three different things.
+
+**Cross-Section Anti-Repetition Rule (CRITICAL):** The column-3 Questions in the table are PER-GROUP inquiries. The Primary Inquiry in the Somatic Narrative is the OVERALL riddle of the entire lesson. Do NOT repeat the Primary Inquiry phrasing in individual table rows, and do NOT summarize the table Questions back into the Primary Inquiry. They operate at different scales: the Primary Inquiry is the macro question; the per-group Questions are micro-questions that unfold it.
 
 ---
 
@@ -138,6 +144,8 @@ Each column in the analytical table serves a DISTINCT purpose. Do NOT repeat the
 - **Threshold of Quiet**: The moment where Transmission emerges
 
 **CRITICAL:** The Primary Inquiry and Washing Gradient must be DISTINCT paragraphs with different content. The Inquiry frames the question; the Gradient describes the process of change. Do not reuse sentences between them.
+
+**CRITICAL:** The Primary Inquiry appears in the booklet's "The Question This Lesson Asks" section. The Washing Gradient and Threshold of Quiet appear in "The Arc" section. These sections are shown SEPARATELY to the reader. Do NOT write the Primary Inquiry as a summary of the Arc — write it as the single overarching riddle the lesson poses. The Arc content (Washing Gradient, Threshold of Quiet) should describe the PROCESS of transformation, not restate the question.
 
 ### 3. VL Analytical Table
 
