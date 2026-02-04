@@ -4555,7 +4555,11 @@ BOOKLET_QUERY_TYPES = {
             "Foundation) applied through a different lens. Briefly mention that the five lenses "
             "are five ways of READING the same lesson — not five separate theories. The reader "
             "should understand that each booklet stands alone but all share the same diagnostic "
-            "structure, just focused through different eyes."
+            "structure, just focused through different eyes.\n\n"
+            "VOICE NOTE: Each booklet opens with a first-person narrative from the lens's "
+            "Person Inside — an inner experiencer who tells the story of the lesson from their "
+            "perspective. Mention this so the shift from second-person ('you') in this intro "
+            "to first-person ('I') in the booklets feels intentional, not jarring."
         ),
         "context_keys": [
             "lenses",       # list of {id, name, subtitle, lens_description}
@@ -4811,7 +4815,9 @@ BOOKLET_QUERY_TYPES = {
             "'signal' belong only to The Tuner; 'yielding' and 'permission' belong only to "
             "The Soft Front.\n\n"
             "Write pure prose — no bullets, no headers, no formatting. "
-            "No internal codes (VL-1, etc.)."
+            "No internal codes (VL-1, etc.). "
+            "Banned verbs: seeks, utilizes, identifies, inviting, explores, reveals, "
+            "challenges, encourages, facilitates. Use concrete physical verbs instead."
         ),
         "context_keys": [
             "lesson_title",

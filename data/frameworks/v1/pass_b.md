@@ -140,6 +140,8 @@ Each column in the analytical table serves a DISTINCT purpose. Do NOT repeat the
 - "ripple," "wave," "ripple effect," "wave of ease" — use at most ONCE per booklet. Find specific alternatives: "force traveling through," "connection restoring."
 - "transmission" — use at most TWICE per booklet. Find alternatives: "force reaching," "power arriving," "torque delivered."
 - "crown of the head" — use at most ONCE per booklet. Alternatives: "the top of the skull," "the highest point of the spine."
+- "dissolve," "dissolves," "dissolving" — use at most ONCE per booklet. Find alternatives: "loosens," "releases its hold," "loses its grip," "fades."
+- "monolithic block," "undifferentiated block" — use at most ONCE per booklet. Vary with: "clump," "fused region," "blurred zone."
 - "Cortical noise" — use at most ONCE per booklet. Find lens-specific alternatives:
   - VL-1 (Riser): "collapse," "buckling," "compression"
   - VL-2 (Cartographer): "blur," "clumping," "undifferentiated"
