@@ -127,7 +127,9 @@ Each column in the analytical table serves a DISTINCT purpose. Do NOT repeat the
   - VL-5: "yielding," "opening," "permitting"
 
 **Limit overused imagery:**
-- "ripple," "wave," "ripple effect," "wave of ease" — use at most ONCE per booklet. Find specific alternatives: "force traveling through," "transmission opening," "connection restoring."
+- "ripple," "wave," "ripple effect," "wave of ease" — use at most ONCE per booklet. Find specific alternatives: "force traveling through," "connection restoring."
+- "transmission" — use at most TWICE per booklet. Find alternatives: "force reaching," "power arriving," "torque delivered."
+- "crown of the head" — use at most ONCE per booklet. Alternatives: "the top of the skull," "the highest point of the spine."
 - "Cortical noise" — use at most ONCE per booklet. Find lens-specific alternatives:
   - VL-1 (Riser): "collapse," "buckling," "compression"
   - VL-2 (Cartographer): "blur," "clumping," "undifferentiated"

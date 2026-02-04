@@ -38,6 +38,8 @@ When writing through The Soft Front's lens, use language of YIELDING and PERMISS
 
 **Mechanical focus:** VL-5 is about FLEXION and EXTENSION — the front body's ability to lengthen and shorten freely. When describing movements, focus on what the belly, chest, and throat are doing. Do NOT borrow "floor rising" or "pressure wave" imagery from VL-1 — the Soft Front's concern is whether the front body is AVAILABLE, not whether force is transmitting through the column.
 
+**Negative tone constraint:** Do NOT use metaphysical or New Age language when writing through VL-5. Banned: "vessel," "container," "sacred space," "divine," "transcendent," "being who lives in," "the one who dwells." The Soft Front is a FUNCTIONAL perspective about flexion/extension mechanics, not a spiritual metaphor. Describe anatomy and movement, not consciousness or inner beings.
+
 ## The Person Inside: The Soft Front
 
 The perspective that monitors the front body — throat, chest, belly, psoas. This lens reads every movement as a question about safety and available range. Every movement in the lesson is a question for The Soft Front:
