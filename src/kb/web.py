@@ -4711,45 +4711,44 @@ BOOKLET_QUERY_TYPES = {
         ],
     },
     "lens-synthesis": {
-        "name": "Lens Synthesis",
-        "location": "The Lens section, after static framework description",
-        "purpose": "Synthesize the lens's philosophy with THIS specific lesson's mechanics. "
-                   "Show how the general framework illuminates what happened in this particular lesson.",
-        "voice": "Reflective, specific. Write as if explaining to someone who just experienced "
-                 "both the lesson and read the framework description.",
-        "length": "2-3 sentences",
+        "name": "Lens Narrative",
+        "location": "The Lens section, after Person Inside and Shadow descriptions",
+        "purpose": "Retell the lesson as a condensed first-person narrative from the Person Inside's "
+                   "perspective, weaving the per-step vl_voice entries into a coherent arc.",
+        "voice": "First-person, present tense, from the Person Inside. Sensory and grounded — "
+                 "describe what is felt in the body, not abstract concepts.",
+        "length": "2-4 paragraphs",
         "prompt": (
-            "You just read about {framework_name} — the {person_inside}. The lens description says: "
-            "\"{lens_description}\"\n\n"
-            "The Shadow for this lens is: \"{shadow_description}\"\n\n"
-            "This particular lesson's central question was: \"{primary_inquiry}\"\n\n"
-            "Write 2-3 sentences that synthesize the lens with THIS lesson. Name a specific "
-            "movement from the lesson and explain what it reveals through this lens's mechanics. "
-            "Where did the Shadow show up? What changed when it softened?\n\n"
-            "EXAMPLE of good lens synthesis (for The Riser on a pelvic clock lesson): "
-            "'When the pelvis tilted toward twelve o'clock, the lower back pressed into the "
-            "floor and the weight shifted cleanly through the sacrum — the column found its "
-            "stack. But at three and nine, the waist muscles grabbed, propping the spine "
-            "instead of letting the bones carry the load.'\n\n"
-            "Be SPECIFIC to this lesson — do not repeat the generic framework description. "
-            "The reader has ALREADY read the lens definition and the Shadow definition in the "
-            "introduction. Do NOT redefine them. Instead, show what this lens DISCOVERED in "
-            "THIS lesson's specific movements.\n\n"
-            "CRITICAL OUTPUT RULES: Your output is the FINAL TEXT the reader sees. "
-            "FORBIDDEN in output: internal codes (VL-1, VL-4, etc.), 'Do NOT use' instructions, "
-            "banned-word lists, meta-commentary about the framework, any text that reads like "
-            "a prompt instruction rather than reader-facing prose. "
-            "Do NOT anthropomorphize the lens ('the being who lives in...') — write analytically "
-            "about what this perspective REVEALS about the lesson's mechanics. "
-            "Write pure prose — no headers, no bullets, no formatting. "
-            "Banned words: illuminate, discover, journey."
+            "You are {person_inside} — {person_description}\n\n"
+            "This lesson's central question was: \"{primary_inquiry}\"\n\n"
+            "Below are your moment-by-moment observations as the lesson unfolded. "
+            "Each entry is what you noticed at one stage of the lesson:\n\n"
+            "{vl_voices}\n\n"
+            "And here is what the Shadow — the habit pattern — was doing at each stage:\n\n"
+            "{shadow_voices}\n\n"
+            "Now write a CONDENSED NARRATIVE (2-4 paragraphs) that retells this lesson's "
+            "arc from your perspective as {person_inside}. Weave the step-by-step observations "
+            "into a flowing story: how the lesson began (what was tight, stuck, or braced), "
+            "what shifted as the movements progressed, and what emerged by the end.\n\n"
+            "RULES:\n"
+            "- Write in FIRST PERSON, present tense ('I feel...', 'Something releases...')\n"
+            "- Reference SPECIFIC body parts and movements from the observations above\n"
+            "- Show the arc: early bracing → exploration/softening → emergence\n"
+            "- Do NOT list the observations one by one — synthesize them into prose\n"
+            "- Do NOT redefine who you are or what the Shadow is — the reader already knows\n"
+            "- Use grounded, physical language — weight, pressure, length, contact area\n"
+            "- No superlatives (perfect, total, complete). No New Age language (transcendent, "
+            "blissful, sacred). No internal codes (VL-1, etc.)\n"
+            "- Write pure prose — no headers, no bullets, no formatting.\n"
+            "- Banned words: illuminate, discover, journey, vessel, container."
         ),
         "context_keys": [
             "framework_name",
             "person_inside",
-            "lens_description",
-            "shadow_description",
+            "person_description",
             "primary_inquiry",
+            "vl_voices",
+            "shadow_voices",
         ],
     },
 }
@@ -4807,6 +4806,9 @@ def booklet_query_block(query_type: str, context: dict) -> str:
         "movement_examples": context.get("movement_examples", ""),
         # lens-synthesis
         "shadow_description": context.get("shadow_description", ""),
+        "person_description": context.get("person_description", ""),
+        "vl_voices": context.get("vl_voices", ""),
+        "shadow_voices": context.get("shadow_voices", ""),
     }
     filled_prompt = qtype["prompt"].format(**prompt_vars)
 
@@ -5157,23 +5159,50 @@ def render_booklet_arc(somatic_narrative: dict, negotiation: dict, groups: list,
     return "\n".join(html)
 
 
-def render_booklet_lens(framework_id: str, vl_analysis: dict, somatic_narrative: dict = None) -> str:
-    """Render 'The Lens' section — framework introduction."""
+def render_booklet_lens(framework_id: str, vl_analysis: dict, somatic_narrative: dict = None, groups: list = None) -> str:
+    """Render 'The Lens' section — framework intro + LLM-generated Person Inside narrative."""
     intro = VL_BOOKLET_INTROS.get(framework_id, {})
     if not intro:
         return ""
 
     html = ['<section class="booklet-section">']
     html.append(f'<h2>The Lens: {intro["name"]}</h2>')
-    html.append(f'<p class="lens-description">{intro["lens"]}</p>')
 
-    # The Person Inside
+    # The Person Inside — static description
     html.append(f'<h3>{intro["person_inside"]}</h3>')
     html.append(f'<p>{intro["person_description"]}</p>')
 
-    # The Shadow
+    # The Shadow — static description
     html.append('<h3>The Shadow</h3>')
     html.append(f'<p>{intro["shadow_description"]}</p>')
+
+    # Collect vl_voice and shadow_voice entries from analytical table rows
+    result = vl_analysis.get("result", {})
+    table = result.get("analytical_table", {})
+    rows = table.get("rows", [])
+
+    vl_voice_parts = []
+    shadow_voice_parts = []
+    for i, row in enumerate(rows, 1):
+        vl_v = row.get("vl_voice", "")
+        sh_v = row.get("shadow_voice", "") or row.get("striver_shadow", "")
+        if vl_v:
+            vl_voice_parts.append(f"Stage {i}: {vl_v}")
+        if sh_v:
+            shadow_voice_parts.append(f"Stage {i}: {sh_v}")
+
+    if vl_voice_parts:
+        primary_inquiry = (somatic_narrative or {}).get("primary_inquiry", "")
+        context = {
+            "framework_name": intro.get("name", ""),
+            "person_inside": intro.get("person_inside", ""),
+            "person_description": intro.get("person_description", ""),
+            "primary_inquiry": primary_inquiry,
+            "vl_voices": "\n".join(vl_voice_parts),
+            "shadow_voices": "\n".join(shadow_voice_parts) if shadow_voice_parts else "(no shadow observations)",
+        }
+        html.append('<h3>The Lesson Through This Lens</h3>')
+        html.append(booklet_query_block("lens-synthesis", context))
 
     html.append("</section>")
     return "\n".join(html)
@@ -5292,7 +5321,7 @@ def build_booklet_html(
         sections.append(render_booklet_journey(groups, steps, primary_vl, pass_a_steps))
     if somatic_narrative or negotiation:
         sections.append(render_booklet_arc(somatic_narrative, negotiation, groups, table, column_headers, pass_a_steps))
-    sections.append(render_booklet_lens(framework_id, primary_vl, somatic_narrative))
+    sections.append(render_booklet_lens(framework_id, primary_vl, somatic_narrative, groups))
     if steps:
         sections.append(render_booklet_reflection(
             steps=steps,
