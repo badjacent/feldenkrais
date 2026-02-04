@@ -4817,7 +4817,10 @@ BOOKLET_QUERY_TYPES = {
             "Write pure prose — no bullets, no headers, no formatting. "
             "No internal codes (VL-1, etc.). "
             "Banned verbs: seeks, utilizes, identifies, inviting, explores, reveals, "
-            "challenges, encourages, facilitates. Use concrete physical verbs instead."
+            "challenges, encourages, facilitates. Use concrete physical verbs instead.\n\n"
+            "ACCURACY: Do not invent numbers, counts, or geometric specifications not "
+            "present in the lesson text. If the lesson uses a clock face, there are 12 "
+            "positions, not 36. Stay grounded in what the lesson actually describes."
         ),
         "context_keys": [
             "lesson_title",

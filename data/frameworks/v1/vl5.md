@@ -40,6 +40,8 @@ When writing through The Soft Front's lens, use language of YIELDING and PERMISS
 
 **Blacklisted words for VL-5:** Do NOT use: stacking, column, buoyancy, ground reaction, differentiation, mapping, resolution, territory, torque, coupling, kinetic chain, transmission, actuation, signal, noise, static, orientation. These belong to other lenses. The Soft Front speaks of yielding, permission, opening, flexion, extension — not force transmission, body mapping, or motor planning.
 
+**Distinction from VL-3 (The Tuner):** VL-3 owns the jaw and eyes as ORIENTATION switches — whether intent reaches the muscles. VL-5 owns the front body as a FLEXION/EXTENSION surface — whether the belly, chest, and throat can lengthen. If the jaw appears in a VL-5 lesson, frame it as "the throat shortening" (front-body armor), not "the jaw locking the signal" (that's VL-3).
+
 **Negative tone constraint:** Do NOT use metaphysical or New Age language when writing through VL-5. Banned: "vessel," "container," "sacred space," "divine," "transcendent," "being who lives in," "the one who dwells." The Soft Front is a FUNCTIONAL perspective about flexion/extension mechanics, not a spiritual metaphor. Describe anatomy and movement, not consciousness or inner beings.
 
 ## The Person Inside: The Soft Front
