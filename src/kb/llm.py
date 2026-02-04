@@ -102,7 +102,8 @@ class LLM:
             elif self.provider == "gemini":
                 mod = get_genai()
                 self._client = mod.Client(
-                    api_key=self.api_key or os.environ.get("GOOGLE_API_KEY")
+                    api_key=self.api_key or os.environ.get("GOOGLE_API_KEY"),
+                    http_options={"timeout": 120_000},  # 120s request timeout
                 )
         return self._client
 
@@ -232,6 +233,8 @@ class LLM:
         temperature: float,
     ) -> str:
         """Call Google Gemini API (using google-genai SDK)."""
+        import time as _time
+
         # Extract system instruction
         if system is None:
             for msg in messages:
@@ -242,10 +245,12 @@ class LLM:
         # Convert messages to Gemini format
         # Gemini uses "user" and "model" roles
         contents = []
+        total_chars = 0
         for msg in messages:
             if msg["role"] == "system":
                 continue
             role = "model" if msg["role"] == "assistant" else "user"
+            total_chars += len(msg["content"])
             contents.append({"role": role, "parts": [{"text": msg["content"]}]})
 
         # Build config
@@ -255,12 +260,26 @@ class LLM:
         }
         if system:
             config["system_instruction"] = system
+            total_chars += len(system)
+
+        t0 = _time.time()
+        print(f"[llm] Gemini request: model={self.model}, input_chars={total_chars}, max_tokens={max_tokens}", flush=True)
 
         response = self.client.models.generate_content(
             model=self.model,
             contents=contents,
             config=config,
         )
+
+        elapsed = _time.time() - t0
+        finish_reason = None
+        if response.candidates:
+            finish_reason = response.candidates[0].finish_reason
+        usage = ""
+        if hasattr(response, 'usage_metadata') and response.usage_metadata:
+            u = response.usage_metadata
+            usage = f", tokens_in={getattr(u, 'prompt_token_count', '?')}, tokens_out={getattr(u, 'candidates_token_count', '?')}"
+        print(f"[llm] Gemini response: {elapsed:.1f}s, finish={finish_reason}{usage}", flush=True)
 
         return response.text
 
