@@ -89,7 +89,8 @@ Each column in the analytical table serves a DISTINCT purpose. Do NOT repeat the
 - Write as an inquiry, not a statement
 - Focus on WHAT is being asked, not what happens
 - Use the specific language of this VL's lens — not generic anatomy
-- Example: "Can the hip joint initiate the roll without the shoulder joining in?"
+- Use open-ended "How" or "Where" questions that direct attention, NOT binary "Can you..." questions that test the reader
+- Example: "Where does the roll initiate — hip joint or shoulder?" NOT "Can the hip joint initiate the roll without the shoulder joining in?"
 
 ### Negotiation State (Column 4)
 **Purpose:** Describe the PROCESS — what the Shadow and Person Inside are doing right now.
@@ -142,6 +143,7 @@ Each column in the analytical table serves a DISTINCT purpose. Do NOT repeat the
 - Do NOT reuse the same paragraph in multiple sections. Each section (Question, Arc, Lens) serves a distinct purpose.
 - Do NOT open with "mechanical puzzle" — this phrase is overused across booklets. Find a unique opening image specific to THIS lesson's central movement.
 - Avoid stock phrases: "the body begins to...", "a new pattern emerges", "the nervous system learns". Be specific about WHAT body part, WHICH pattern, HOW it changes.
+- Ban absolutist language in ALL prose fields: "without resistance", "no resistance at all", "completely releases", "total ease", "fully integrated", "allows everything". Transformation in Feldenkrais is partial and ongoing — describe what SHIFTED, not what was perfected.
 
 ---
 

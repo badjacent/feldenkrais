@@ -4746,7 +4746,12 @@ BOOKLET_QUERY_TYPES = {
             "- No superlatives (perfect, total, complete). No New Age language (transcendent, "
             "blissful, sacred). No internal codes (VL-1, etc.)\n"
             "- Write pure prose — no headers, no bullets, no formatting.\n"
-            "- Banned words: illuminate, discover, journey, vessel, container."
+            "- Banned words: illuminate, discover, journey, vessel, container.\n"
+            "- GROUNDING: Only use metaphors and imagery that come from the lesson's "
+            "actual movements or from {person_inside}'s established vocabulary. Do NOT "
+            "invent metaphors from outside the lesson context (no 'quiet masks', no "
+            "foreign-language words, no literary references). If you need an image, "
+            "derive it from what the body is literally doing on the floor."
         ),
         "context_keys": [
             "framework_name",
