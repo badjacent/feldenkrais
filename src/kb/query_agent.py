@@ -150,21 +150,23 @@ class QueryAgent:
 
     def fill(self, html: str) -> str:
         """Fill all query blocks in the HTML. Returns modified HTML."""
+        import time as _time
         blocks = self._extract_blocks(html)
         if not blocks:
             if self.verbose:
                 print("No query blocks found.")
             return html
 
-        if self.verbose:
-            print(f"Found {len(blocks)} query block(s).")
+        print(f"[query_agent] Found {len(blocks)} query block(s).", flush=True)
 
         # Phase 2: Generate fills
         filled: dict[str, str] = {}
-        for block in blocks:
-            if self.verbose:
-                print(f"  Filling {block.block_id} ({block.query_type})...")
+        for i, block in enumerate(blocks, 1):
+            print(f"[query_agent] [{i}/{len(blocks)}] Filling {block.block_id} ({block.query_type})...", flush=True)
+            t0 = _time.time()
             filled[block.block_id] = self._generate(block)
+            elapsed = _time.time() - t0
+            print(f"[query_agent] [{i}/{len(blocks)}] {block.query_type} done ({elapsed:.1f}s)", flush=True)
 
         # Phase 3-4: Review and revise
         result_html = self._replace_blocks(html, blocks, filled)
