@@ -166,6 +166,8 @@ Your output is reader-facing text. NEVER include:
 
 All prose fields (primary_inquiry, washing_gradient, threshold_of_quiet, vl_voice, shadow_voice) must read as polished, self-contained text that a reader could encounter without any context about the analysis system.
 
+**Persona constraint:** Only use the established Person Inside name (The Riser, The Cartographer, The Tuner, The Engine, The Soft Front) and "The Shadow." Do NOT invent new character names or archetypes (e.g., "The Surveyor," "The Blunt Mover," "The Rigid Guard"). If the VL prompt defines a Shadow name, you may use it, but do not create new ones.
+
 ---
 
 ## Output Format
