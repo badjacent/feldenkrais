@@ -4751,6 +4751,36 @@ BOOKLET_QUERY_TYPES = {
             "shadow_voices",
         ],
     },
+    "lesson-concepts": {
+        "name": "Lesson Concepts",
+        "location": "How Feldenkrais Lessons Work section",
+        "purpose": "Explain Shadow, Foundation, and Washing in the context of THIS specific lesson.",
+        "voice": "Clear, direct, grounded. Write for someone who just finished the lesson.",
+        "length": "3-4 sentences",
+        "prompt": (
+            "This lesson is called \"{lesson_title}\" and its central question was: "
+            "\"{primary_inquiry}\"\n\n"
+            "The lesson was explored through the lens of {framework_name}.\n\n"
+            "The lesson moved through these sections: {group_summary}\n\n"
+            "Write a short paragraph (3-4 sentences) explaining three ideas that run through "
+            "this booklet, customized for THIS lesson:\n"
+            "1. The SHADOW — the habitual effort pattern this lesson challenges. Name the "
+            "specific kind of gripping or bracing this lesson targets.\n"
+            "2. The FOUNDATION — what's underneath once the Shadow softens. Name the specific "
+            "skeletal or reflexive support this lesson reveals.\n"
+            "3. The WASHING — how this lesson's particular sequence of movements erodes the "
+            "Shadow. Name the specific strategy (repetition, variation, contrast, etc.).\n\n"
+            "Do NOT define these as abstract concepts. Tie each one to THIS lesson's movements. "
+            "Write pure prose — no bullets, no headers, no formatting. "
+            "No internal codes (VL-1, etc.)."
+        ),
+        "context_keys": [
+            "lesson_title",
+            "primary_inquiry",
+            "framework_name",
+            "group_summary",
+        ],
+    },
 }
 
 
@@ -4786,10 +4816,10 @@ def booklet_query_block(query_type: str, context: dict) -> str:
         "lesson_title": context.get("lesson_title", ""),
         "primary_inquiry": context.get("primary_inquiry", ""),
         "framework_name": context.get("framework_name", ""),
-        "group_summary": ", ".join(
+        "group_summary": context.get("group_summary", "") or (", ".join(
             f"Part {g.get('group_number', '?')}: {g.get('label', '')}"
             for g in groups_summary
-        ) if groups_summary else "",
+        ) if groups_summary else ""),
         # volume-intro
         "lens_summaries": "\n".join(
             f"- {l.get('name', '')} ({l.get('subtitle', '')}): {l.get('lens_description', '')}"
@@ -4949,21 +4979,69 @@ def render_booklet_inquiry(somatic_narrative: dict) -> str:
     return "\n".join(html)
 
 
-def render_booklet_concepts() -> str:
-    """Render the 'How Feldenkrais Lessons Work' section — condensed key terms."""
-    return """
-    <section class="booklet-section booklet-concepts">
-        <h2>Key Terms</h2>
-        <p>
-            Three ideas run through this booklet.
-            The <strong>Shadow</strong> is the habitual muscular effort — the gripping,
-            bracing, and forcing that your body defaults to. The <strong>Foundation</strong>
-            is what's underneath: the skeletal support and reflexes that already know how
-            to carry you. The <strong>Washing</strong> is how the lesson erodes the Shadow
-            through repetition and variation, until the Foundation is what remains.
-        </p>
-    </section>
-    """
+def render_booklet_person_inside_narrative(framework_id: str, vl_analysis: dict, somatic_narrative: dict = None) -> str:
+    """Render the opening Person Inside narrative — full lesson story in one paragraph."""
+    intro = VL_BOOKLET_INTROS.get(framework_id, {})
+    if not intro:
+        return ""
+
+    result = vl_analysis.get("result", {})
+    table = result.get("analytical_table", {})
+    rows = table.get("rows", [])
+
+    vl_voice_parts = []
+    shadow_voice_parts = []
+    for i, row in enumerate(rows, 1):
+        vl_v = row.get("vl_voice", "")
+        sh_v = row.get("shadow_voice", "") or row.get("striver_shadow", "")
+        if vl_v:
+            vl_voice_parts.append(f"Stage {i}: {vl_v}")
+        if sh_v:
+            shadow_voice_parts.append(f"Stage {i}: {sh_v}")
+
+    if not vl_voice_parts:
+        return ""
+
+    primary_inquiry = (somatic_narrative or {}).get("primary_inquiry", "")
+    context = {
+        "framework_name": intro.get("name", ""),
+        "person_inside": intro.get("person_inside", ""),
+        "person_description": intro.get("person_description", ""),
+        "primary_inquiry": primary_inquiry,
+        "vl_voices": "\n".join(vl_voice_parts),
+        "shadow_voices": "\n".join(shadow_voice_parts) if shadow_voice_parts else "(no shadow observations)",
+    }
+
+    html = ['<section class="booklet-section">']
+    html.append(f'<h2>{intro["person_inside"]}</h2>')
+    html.append(booklet_query_block("lens-synthesis", context))
+    html.append("</section>")
+    return "\n".join(html)
+
+
+def render_booklet_concepts(lesson_title: str = "", framework_id: str = "",
+                            somatic_narrative: dict = None, groups: list = None) -> str:
+    """Render 'How Feldenkrais Lessons Work' section — LLM-customized for this lesson."""
+    somatic_narrative = somatic_narrative or {}
+    groups = groups or []
+    intro = VL_BOOKLET_INTROS.get(framework_id, {})
+
+    group_summary = ", ".join(
+        f"Part {g.get('group_number', '?')}: {g.get('label', '')}" for g in groups
+    )
+
+    context = {
+        "lesson_title": lesson_title,
+        "primary_inquiry": somatic_narrative.get("primary_inquiry", ""),
+        "framework_name": intro.get("name", framework_id),
+        "group_summary": group_summary,
+    }
+
+    html = ['<section class="booklet-section booklet-concepts">']
+    html.append("<h2>How Feldenkrais Lessons Work</h2>")
+    html.append(booklet_query_block("lesson-concepts", context))
+    html.append("</section>")
+    return "\n".join(html)
 
 
 def render_council_section() -> str:
@@ -4974,11 +5052,14 @@ def render_council_section() -> str:
     return ""
 
 
-def render_booklet_journey(groups: list, steps: list, vl_analysis: dict, pass_a_steps: dict) -> str:
+def render_booklet_journey(groups: list, steps: list, vl_analysis: dict, pass_a_steps: dict, framework_id: str = "") -> str:
     """Render the main 'Journey' section — group by group walkthrough."""
     html = ['<section class="booklet-section booklet-journey">']
     html.append("<h2>The Journey</h2>")
-    html.append("<p>Here's what happened in this lesson, section by section. For each part, you'll see what you did and what was happening underneath.</p>")
+
+    # Get Person Inside name for play-format dialogue
+    intro = VL_BOOKLET_INTROS.get(framework_id, {})
+    person_inside_name = intro.get("person_inside", "The Person Inside")
 
     # Get analytical table data from the primary VL analysis
     result = vl_analysis.get("result", {})
@@ -4989,16 +5070,6 @@ def render_booklet_journey(groups: list, steps: list, vl_analysis: dict, pass_a_
 
     step_lookup = {s["step_number"]: s for s in steps if "step_number" in s}
 
-    # Map old nomenclature to new for display
-    state_display = {
-        "domination": "Bracing",
-        "negotiation": "Softening",
-        "integration": "Transmission",
-        "bracing": "Bracing",
-        "softening": "Softening",
-        "transmission": "Transmission",
-    }
-
     for g in groups:
         group_num = g.get("group_number", "?")
         group_label = g.get("label", f"Group {group_num}")
@@ -5007,12 +5078,8 @@ def render_booklet_journey(groups: list, steps: list, vl_analysis: dict, pass_a_
 
         html.append(f'<div class="journey-group">')
         html.append(f'<h3>Part {group_num}: {group_label}</h3>')
-        if group_desc:
-            html.append(f'<p class="group-description">{group_desc}</p>')
 
-        # What You Did — steps list
-        html.append('<div class="what-you-did">')
-        html.append('<h4>What You Did</h4>')
+        # Step list (no header)
         html.append('<ol class="step-list">')
         for sn in group_step_nums:
             step = step_lookup.get(sn)
@@ -5021,8 +5088,7 @@ def render_booklet_journey(groups: list, steps: list, vl_analysis: dict, pass_a_
                 html.append(f"<li>{instruction}</li>")
         html.append("</ol>")
 
-        # Pedagogical gloss — what the teacher is doing in this group
-        # Collect the SPIFFER tags and step instructions for context
+        # Pedagogical gloss — joined as opening paragraph
         group_instructions = []
         all_tags = []
         for sn in group_step_nums:
@@ -5037,7 +5103,6 @@ def render_booklet_journey(groups: list, steps: list, vl_analysis: dict, pass_a_
             if prominent:
                 tag_labels = [SPIFFER_TRANSLATIONS.get(t, t) for t in prominent]
 
-                # Build the matched analytical rows for this group
                 matched_rows = group_to_rows.get(group_num, [])
                 matched_rows_summary = []
                 for row in matched_rows:
@@ -5062,60 +5127,22 @@ def render_booklet_journey(groups: list, steps: list, vl_analysis: dict, pass_a_
                 }
                 html.append(booklet_query_block("pedagogical-gloss", query_context))
 
-        html.append("</div>")  # end what-you-did
-
-        # What Was Happening — from analytical table
+        # The Question + Person Inside / Shadow dialogue
         matched_rows = group_to_rows.get(group_num, [])
         if matched_rows:
-            html.append('<div class="what-was-happening">')
-            html.append('<h4>What Was Happening</h4>')
-
             for row in matched_rows:
-                neg_state = _get_negotiation_state(row, column_headers)
                 question = _get_column_by_keyword(row, column_headers, "question")
-                goal = _get_column_by_keyword(row, column_headers, "goal") or _get_column_by_keyword(row, column_headers, "functional")
                 vl_voice = row.get("vl_voice", "")
                 shadow_voice = row.get("shadow_voice", "") or row.get("striver_shadow", "")
 
-                # Combine negotiation state, question, and goal into a paragraph
-                parts = []
-                if neg_state:
-                    display = state_display.get(neg_state.lower(), neg_state)
-                    if question:
-                        parts.append(f"{question}")
-                    if display.lower() == "bracing":
-                        parts.append(f"The Shadow is still in control here.")
-                    elif display.lower() == "softening":
-                        parts.append(f"The old pattern is being challenged.")
-                    elif display.lower() == "transmission":
-                        parts.append(f"Skeletal clarity is emerging.")
-                    if goal:
-                        parts.append(goal)
-                elif question:
-                    parts.append(question)
-                    if goal:
-                        parts.append(goal)
-
-                if parts:
-                    html.append(f'<p class="what-happening-text">{" ".join(parts)}</p>')
+                if question:
+                    html.append(f'<p class="the-question"><strong>The question:</strong> {question}</p>')
 
                 if vl_voice:
-                    html.append(f"""
-                    <div class="voice-box person-inside">
-                        <div class="voice-label">The Person Inside</div>
-                        <p>{vl_voice}</p>
-                    </div>
-                    """)
+                    html.append(f'<p><strong>{person_inside_name}:</strong> <em>{vl_voice}</em></p>')
 
                 if shadow_voice:
-                    html.append(f"""
-                    <div class="voice-box shadow-voice">
-                        <div class="voice-label">The Shadow</div>
-                        <p>{shadow_voice}</p>
-                    </div>
-                    """)
-
-            html.append("</div>")  # end what-was-happening
+                    html.append(f'<p><strong>The Shadow:</strong> <em>{shadow_voice}</em></p>')
 
         html.append("</div>")  # end journey-group
 
@@ -5209,6 +5236,24 @@ def render_booklet_lens(framework_id: str, vl_analysis: dict, somatic_narrative:
         html.append('<h3>The Lesson Through This Lens</h3>')
         html.append(booklet_query_block("lens-synthesis", context))
 
+    html.append("</section>")
+    return "\n".join(html)
+
+
+def render_booklet_washing(somatic_narrative: dict) -> str:
+    """Render 'How the Lesson Washed Away Effort' — washing gradient + threshold of quiet."""
+    washing = somatic_narrative.get("washing_gradient", "")
+    threshold = somatic_narrative.get("threshold_of_quiet", "")
+
+    if not washing and not threshold:
+        return ""
+
+    html = ['<section class="booklet-section">']
+    html.append("<h2>How the Lesson Washed Away Effort</h2>")
+    if washing:
+        html.append(f"<p>{washing}</p>")
+    if threshold:
+        html.append(f"<p>{threshold}</p>")
     html.append("</section>")
     return "\n".join(html)
 
@@ -5316,25 +5361,14 @@ def build_booklet_html(
     # Assemble sections
     sections = []
     sections.append(render_booklet_cover(title, framework_id, source_url))
-    sections.append(render_booklet_intro(title, framework_id, somatic_narrative, groups))
-    if home_position:
-        sections.append(render_booklet_home(home_position))
+    sections.append(render_booklet_person_inside_narrative(framework_id, primary_vl, somatic_narrative))
     if somatic_narrative:
         sections.append(render_booklet_inquiry(somatic_narrative))
-    sections.append(render_booklet_concepts())
+    sections.append(render_booklet_concepts(title, framework_id, somatic_narrative, groups))
     if groups and steps:
-        sections.append(render_booklet_journey(groups, steps, primary_vl, pass_a_steps))
-    if somatic_narrative or negotiation:
-        sections.append(render_booklet_arc(somatic_narrative, negotiation, groups, table, column_headers, pass_a_steps))
-    sections.append(render_booklet_lens(framework_id, primary_vl, somatic_narrative, groups))
-    if steps:
-        sections.append(render_booklet_reflection(
-            steps=steps,
-            groups=groups,
-            framework_id=framework_id,
-            lesson_title=title,
-            somatic_narrative=somatic_narrative,
-        ))
+        sections.append(render_booklet_journey(groups, steps, primary_vl, pass_a_steps, framework_id))
+    if somatic_narrative:
+        sections.append(render_booklet_washing(somatic_narrative))
 
     body = "\n".join(sections)
 
