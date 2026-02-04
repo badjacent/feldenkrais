@@ -316,7 +316,7 @@ def _make_review_transform(db):
         except ImportError:
             from src.kb.review_agent import ReviewAgent, BookReview, format_report
 
-        llm = w.get_llm(w.DEFAULT_LLM)
+        llm = w.get_llm("gemini-review")
         agent = ReviewAgent(llm=llm)
 
         # Collect chapter data from pipeline cache
@@ -446,7 +446,7 @@ Return as a JSON object with this structure:
 }}
 """
 
-        llm = w.get_llm(w.DEFAULT_LLM)
+        llm = w.get_llm("gemini-review")
         result = llm.complete_structured_json(prompt, {
             "type": "object",
             "properties": {

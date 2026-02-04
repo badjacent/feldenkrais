@@ -670,6 +670,13 @@ LLM_CONFIGS = {
         "api_key_env": "GOOGLE_API_KEY",
         "default_max_tokens": 65536,
     },
+    "gemini-review": {
+        "provider": "gemini",
+        "model": "gemini-3-flash-preview",
+        "api_key_env": "GOOGLE_API_KEY",
+        "default_max_tokens": 65536,
+        "thinking_level": "MEDIUM",
+    },
     "gemini-2.0-flash": {
         "provider": "gemini",
         "model": "gemini-2.0-flash",
@@ -713,6 +720,7 @@ def get_llm(provider_key: str | None = None) -> LLM:
         model=config["model"],
         api_key=api_key,
         default_max_tokens=config["default_max_tokens"],
+        thinking_level=config.get("thinking_level"),
     )
 
 

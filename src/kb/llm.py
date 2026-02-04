@@ -77,6 +77,7 @@ class LLM:
     api_key: Optional[str] = None
     default_max_tokens: int = 4096
     default_temperature: float = 0.0
+    thinking_level: Optional[str] = None  # Gemini 3 only: MINIMAL, LOW, MEDIUM, HIGH
 
     # Clients are created lazily
     _client: object = field(default=None, init=False, repr=False)
@@ -261,7 +262,8 @@ class LLM:
         }
         if is_gemini3:
             from google.genai import types as _gtypes
-            config["thinking_config"] = _gtypes.ThinkingConfig(thinking_level="MINIMAL")
+            level = self.thinking_level or "MINIMAL"
+            config["thinking_config"] = _gtypes.ThinkingConfig(thinking_level=level)
             config["top_p"] = 0.95
         if system:
             config["system_instruction"] = system
