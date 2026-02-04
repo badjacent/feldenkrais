@@ -103,7 +103,7 @@ class LLM:
                 mod = get_genai()
                 self._client = mod.Client(
                     api_key=self.api_key or os.environ.get("GOOGLE_API_KEY"),
-                    http_options={"timeout": 120_000},  # 120s request timeout
+                    http_options={"timeout": 600_000},  # 10min request timeout
                 )
         return self._client
 
