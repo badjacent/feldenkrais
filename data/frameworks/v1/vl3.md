@@ -25,6 +25,12 @@ This is the state of **Panoramic Readiness**. When the Tuner is clear, the path 
 
 To achieve **Congruency**. By clarifying the orientation of the eyes and jaw, we clear the noise of obscured intent. This allows the internal motor plan to be accurately and effortlessly actuated by the rest of the Council.
 
+## Writing Voice for VL-3
+
+When writing through The Tuner's lens, use SIGNAL language: tuning, clarity, signal, noise, actuation, orientation, plan, intent, congruency, alignment of thought and action. The Tuner is a signal engineer diagnosing the path from intent to execution.
+
+**Blacklisted words for VL-3:** Do NOT use: stacking, column, buoyancy, ground reaction, differentiation, mapping, resolution, territory, torque, coupling, kinetic chain, transmission (as power delivery), yielding, permission, armor. These belong to other lenses. The Tuner speaks of signal clarity, orientation, and actuation — not body mapping, force flow, or muscular release.
+
 ## The Person Inside: The Tuner
 
 The one who manages the "meeting" between your thoughts and your actions. They are the expert in **Actuation**. They don't generate the power, but they make sure the signal is clean. Every movement in the lesson is a question for The Tuner:

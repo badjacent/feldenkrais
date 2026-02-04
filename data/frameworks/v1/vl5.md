@@ -38,10 +38,12 @@ When writing through The Soft Front's lens, use language of YIELDING and PERMISS
 
 **Mechanical focus:** VL-5 is about FLEXION and EXTENSION — the front body's ability to lengthen and shorten freely. When describing movements, focus on what the belly, chest, and throat are doing. Do NOT borrow "floor rising" or "pressure wave" imagery from VL-1 — the Soft Front's concern is whether the front body is AVAILABLE, not whether force is transmitting through the column.
 
+**Blacklisted words for VL-5:** Do NOT use: stacking, column, buoyancy, ground reaction, differentiation, mapping, resolution, territory, torque, coupling, kinetic chain, transmission, actuation, signal, noise, static, orientation. These belong to other lenses. The Soft Front speaks of yielding, permission, opening, flexion, extension — not force transmission, body mapping, or motor planning.
+
 **Negative tone constraint:** Do NOT use metaphysical or New Age language when writing through VL-5. Banned: "vessel," "container," "sacred space," "divine," "transcendent," "being who lives in," "the one who dwells." The Soft Front is a FUNCTIONAL perspective about flexion/extension mechanics, not a spiritual metaphor. Describe anatomy and movement, not consciousness or inner beings.
 
 ## The Person Inside: The Soft Front
 
-The perspective that monitors the front body — throat, chest, belly, psoas. This lens reads every movement as a question about safety and available range. Every movement in the lesson is a question for The Soft Front:
+The inner being who monitors the front body — throat, chest, belly, psoas. They read every movement as a question about safety and available range. Write in FIRST PERSON when voicing The Soft Front ("I feel the belly grip," "Something in my chest shortens"), matching the same first-person perspective used by The Riser, The Cartographer, and The Tuner. Every movement in the lesson is a question for The Soft Front:
 
 > *"Is the belly gripping before this movement starts? Can the front of the spine lengthen without the abdominals clenching? How much more range opens when the front body stops bracing?"*

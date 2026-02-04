@@ -27,3 +27,5 @@ Increased "Degrees of Freedom" and clarity in joint location (e.g., distinguishi
 ## Writing Voice for VL-2
 
 When writing through The Cartographer's lens, vary the mapping metaphors. Do NOT rely solely on "pixels" and "resolution." Use the FULL range: territory, survey, contour, topography, relief map, boundary line, border, region, zone, scale, detail. The Cartographer is a surveyor charting unknown terrain — sometimes zooming in (joint articulation) and sometimes pulling back (whole-limb relationships). "Pixel" is ONE tool in the kit, not the only one.
+
+**Blacklisted words for VL-2:** Do NOT use: stacking, column, buoyancy, ground reaction, torque, coupling, kinetic chain, transmission, actuation, signal, orientation, yielding, permission, armor. These belong to other lenses. The Cartographer speaks of mapping, differentiation, resolution, territory — not force transmission or motor planning.
