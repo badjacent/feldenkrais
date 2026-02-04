@@ -78,7 +78,7 @@ The Shadow is the HABIT PATTERN — the parasitic effort, the unnecessary tensio
   "The old grip reaches for the jaw without being asked."
   "Everything above the waist tightens into one block."
 - DO NOT USE: "I must hold here." "I need to grip to stay safe." "I choose to brace."
-The Shadow doesn't DECIDE to grip — it finds itself already gripping. Express the pattern as something that happens TO the system, not something the system deliberately does. Avoid clinical descriptions ("The erector spinae contract bilaterally") and psychological framing ("I feel dangerous"). VARIETY: Do not use the same sentence opener for more than 2 shadow_voice entries in the same lesson.
+The Shadow doesn't DECIDE to grip — it finds itself already gripping. Express the pattern as something that happens TO the system, not something the system deliberately does. Avoid clinical descriptions ("The erector spinae contract bilaterally") and psychological framing ("I feel dangerous"). Avoid meta-commentary about the habit itself — do NOT write "the old habit," "my brain," "the pattern," "my system." Just describe the PHYSICAL SENSATION: tightening, stiffening, pulling, clenching. VARIETY: Do not use the same sentence opener for more than 2 shadow_voice entries in the same lesson.
 
 **Anti-personification rule:** The Shadow is NOT an adversary, villain, or character with intentions. Do NOT write the Shadow as something that "attempts," "refuses," "fights," "insists," "demands," or "attacks." The Shadow is a muscular habit — it tightens, stiffens, grips, holds, pulls. Use verbs of physical contraction, not verbs of willful resistance.
 

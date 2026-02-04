@@ -43,6 +43,8 @@ When writing through The Riser's lens, use ARCHITECTURAL language: stacking, col
 
 **Anti-contradiction words:** Do NOT describe the column as "dense," "heavy," or "massive." The Riser's column is buoyant, hollow, clear, continuous — not dense. Density contradicts the core metaphor of skeletal resonance.
 
+**Jargon ban:** Do NOT use engineering jargon that a student wouldn't think: "load-path," "mechanical piston," "force vector," "cantilever," "tensegrity." The Riser is an inner EXPERIENCER who feels weight and support — they don't analyze mechanics. Use felt language: "something stacks," "weight drops through," "the floor pushes back."
+
 ## The Person Inside: The Riser
 
 The being who lives along your central axis. They are the specialist in the "Upward Flow." They don't think in terms of muscles; they think in terms of **Support**. Every movement in the lesson is a question for The Riser:
