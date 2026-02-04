@@ -210,8 +210,14 @@ def _make_booklet_transform(db, vl_id: str):
             raise ValueError(f"Booklet template not found for {vl_id}")
 
         html = template_data["html"]
+        # Check node metadata for model override
+        llm_key = w.DEFAULT_LLM
+        meta = db.get_cache(f"pipeline_meta:booklet:{vl_id}")
+        if meta and meta.get("llm"):
+            llm_key = meta["llm"]
+            print(f"[booklet:{vl_id}] Using model override: {llm_key}", flush=True)
         agent = QueryAgent(
-            llm=w.get_llm(w.DEFAULT_LLM),
+            llm=w.get_llm(llm_key),
             max_review_cycles=0,
         )
         filled = agent.fill(html)

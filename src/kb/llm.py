@@ -265,6 +265,23 @@ class LLM:
         t0 = _time.time()
         print(f"[llm] Gemini request: model={self.model}, input_chars={total_chars}, max_tokens={max_tokens}", flush=True)
 
+        # Dump full request to file for debugging
+        try:
+            import datetime, pathlib
+            dump_dir = pathlib.Path("/tmp/gemini_requests")
+            dump_dir.mkdir(exist_ok=True)
+            ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+            dump_file = dump_dir / f"{ts}.json"
+            dump_file.write_text(json.dumps({
+                "model": self.model,
+                "system": system,
+                "contents": contents,
+                "config": {k: str(v) for k, v in config.items()},
+            }, indent=2, default=str))
+            print(f"[llm] Request dumped to {dump_file}", flush=True)
+        except Exception:
+            pass
+
         response = self.client.models.generate_content(
             model=self.model,
             contents=contents,
