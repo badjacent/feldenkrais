@@ -76,6 +76,13 @@ The Shadow doesn't DECIDE to grip — it finds itself already gripping. Express 
 
 **Anti-personification rule:** The Shadow is NOT an adversary, villain, or character with intentions. Do NOT write the Shadow as something that "attempts," "refuses," "fights," "insists," "demands," or "attacks." The Shadow is a muscular habit — it tightens, stiffens, grips, holds, pulls. Use verbs of physical contraction, not verbs of willful resistance.
 
+**Lens-specific shadow rule:** The Shadow's behavior must reflect the SPECIFIC lens. Do not default to generic "clenching/jaw softening" for every lens. Map the Shadow to the lens's mechanical concern:
+- VL-1 (Riser): The Shadow collapses or props the column — buckling, bracing, lifting away from the floor
+- VL-2 (Cartographer): The Shadow moves in clumps — undifferentiated blocks, skipped joints, blurry regions
+- VL-3 (Tuner): The Shadow fixes or disconnects intent — locked eyes, clamped jaw, moving without looking
+- VL-4 (Engine): The Shadow orphans the limbs — peripheral effort, disconnected reach, leaking torque
+- VL-5 (Soft Front): The Shadow armors the front body — belly tension, chest shortening, protective curling
+
 **Arc progression:** Early in the lesson, the Shadow is in full control ("The lower back is already locked flat — it stiffened before the movement even began"). Mid-lesson, the Shadow is being challenged ("The old grip keeps reaching for the shoulder, but the oscillation loosens it each time"). Late in the lesson, the Shadow may be quieter but still present ("A trace of the old stiffening flickers in the hip, but there's nothing left to brace against").
 
 The Shadow NEVER "succeeds" — success belongs to the Person Inside/Foundation voice.

@@ -4652,7 +4652,13 @@ BOOKLET_QUERY_TYPES = {
             "ACCURACY CHECK: Only describe mechanical effects you are confident about. "
             "If the movement bends the knee, say 'bending the knee' — do not speculate about "
             "centrifugal forces, muscle activation sequences, or fluid dynamics. Stick to "
-            "levers, weight, gravity, and contact points."
+            "levers, weight, gravity, and contact points.\n\n"
+            "LENS VOCABULARY: This booklet uses the {framework_name} lens. Frame your "
+            "mechanical explanation using that lens's vocabulary. For The Riser: stacking, "
+            "column, weight-dropping, buoyancy. For The Cartographer: mapping, differentiation, "
+            "resolution. For The Tuner: signal, orientation, actuation. For The Engine: torque, "
+            "coupling, transmission, kinetic chain. For The Soft Front: yielding, opening, "
+            "flexion/extension. Do not use vocabulary from other lenses."
         ),
         "context_keys": [
             "all_groups",           # list of {group_number, label, description} for arc awareness
@@ -4740,7 +4746,9 @@ BOOKLET_QUERY_TYPES = {
             "section already presents those. Your job is to SYNTHESIZE — tell the story "
             "of the whole lesson, not collage the parts. If you catch yourself stringing "
             "stage-by-stage observations together ('First... then... next...'), stop and "
-            "rewrite as a continuous arc with its own momentum.\n"
+            "rewrite as a continuous arc with its own momentum. Banned chronological markers: "
+            "'then', 'next', 'after that', 'in the next part', 'finally', 'at last'. "
+            "Use thematic transitions instead — what CHANGED, not what came next.\n"
             "- Do NOT invent new archetypes or named characters (e.g., 'The Blunt Mover', "
             "'The Rigid Guard'). Use only established terms: the Person Inside name "
             "({person_inside}), the Shadow, the Foundation.\n"
@@ -5080,9 +5088,10 @@ def render_booklet_journey(groups: list, steps: list, vl_analysis: dict, pass_a_
     html = ['<section class="booklet-section booklet-journey">']
     html.append("<h2>The Journey</h2>")
 
-    # Get Person Inside name for play-format dialogue
+    # Get Person Inside name and framework name for play-format dialogue
     intro = VL_BOOKLET_INTROS.get(framework_id, {})
     person_inside_name = intro.get("person_inside", "The Person Inside")
+    framework_name = intro.get("name", "")
 
     # Get analytical table data from the primary VL analysis
     result = vl_analysis.get("result", {})
@@ -5147,6 +5156,7 @@ def render_booklet_journey(groups: list, steps: list, vl_analysis: dict, pass_a_
                         "prominent_tags": tag_labels,
                         "analytical_rows": matched_rows_summary,
                     },
+                    "framework_name": framework_name,
                 }
                 html.append(booklet_query_block("pedagogical-gloss", query_context))
 
