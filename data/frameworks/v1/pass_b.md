@@ -142,6 +142,7 @@ Each column in the analytical table serves a DISTINCT purpose. Do NOT repeat the
 - "crown of the head" — use at most ONCE per booklet. Alternatives: "the top of the skull," "the highest point of the spine."
 - "dissolve," "dissolves," "dissolving" — use at most ONCE per booklet. Find alternatives: "loosens," "releases its hold," "loses its grip," "fades."
 - "monolithic block," "undifferentiated block" — use at most ONCE per booklet. Vary with: "clump," "fused region," "blurred zone."
+- "floating head," "head floats," "heavy head" — use at most ONCE per booklet. Find lens-specific resolution images instead of defaulting to head-floating as the universal payoff.
 - "Cortical noise" — use at most ONCE per booklet. Find lens-specific alternatives:
   - VL-1 (Riser): "collapse," "buckling," "compression"
   - VL-2 (Cartographer): "blur," "clumping," "undifferentiated"
@@ -188,7 +189,7 @@ All prose fields (primary_inquiry, washing_gradient, threshold_of_quiet, vl_voic
 
 **CRITICAL:** The Primary Inquiry appears in the booklet's "The Question This Lesson Asks" section. The Washing Gradient and Threshold of Quiet appear in "The Arc" section. These sections are shown SEPARATELY to the reader. Do NOT write the Primary Inquiry as a summary of the Arc — write it as the single overarching riddle the lesson poses. The Arc content (Washing Gradient, Threshold of Quiet) should describe the PROCESS of transformation, not restate the question.
 
-**Arc Voice:** The Washing Gradient and Threshold of Quiet must describe transformation through the PARTICIPANT'S sensory experience — what changed in the body, not what the teacher intended. Use second-person ("you") or body-as-subject ("the pelvis"), NEVER third-person ("the student", "the practitioner", "the learner"). Do NOT use neurological jargon ("subcortical system", "cortical reorganization") or teacher-perspective framing ("the lesson teaches", "the practitioner guides"). Write from INSIDE the body: "The lower back began to soften against the floor" not "The lesson facilitated spinal release."
+**Arc Voice:** The Washing Gradient and Threshold of Quiet must describe transformation through the PARTICIPANT'S sensory experience — what changed in the body, not what the teacher intended. Use second-person ("you") or body-as-subject ("the pelvis"), NEVER third-person ("the student", "the practitioner", "the learner", "the participant"). Do NOT use neurological jargon ("subcortical system", "cortical reorganization") or teacher-perspective framing ("the lesson teaches", "the practitioner guides"). Do NOT use geometric or academic framing ("geometric constraints", "spatial parameters"). Write from INSIDE the body: "The lower back began to soften against the floor" not "The lesson facilitated spinal release."
 
 ### 3. VL Analytical Table
 
