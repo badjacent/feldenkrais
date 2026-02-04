@@ -51,7 +51,7 @@ Each VL framework defines an inner experiencer — a "person inside the person" 
 
 For each row of the analytical table, write:
 - **`vl_voice`**: A 2-3 sentence first-person account from the Person Inside. What do they perceive, feel, or notice at this point in the lesson? Write as if this inner being is narrating their experience. Use present tense. Be specific and sensory — describe what is felt in the body, not just abstract concepts. **CONTEXT CHECK:** The reader is lying on the floor unless the lesson text explicitly says otherwise. Do NOT reference chairs, walls, standing, or seated positions unless the lesson instructions specify them. Ground all imagery in the actual physical setting described in the lesson text. **TONE:** Use grounded, observational language. Do NOT use superlatives (perfect, total, complete, absolute, pure) or New Age descriptors (floating, blissful, transcendent, divine). Describe sensations with physical precision: weight, pressure, temperature, length, contact area.
-- **`shadow_voice`**: A 1-2 sentence account of what the Shadow is doing at this point.
+- **`shadow_voice`**: A 1-2 sentence first-person account of what the Shadow is doing at this point. Write as "I" — the habit speaking about itself, not a clinical observer diagnosing it. NOT "The system braces" but "I find myself already braced before the movement starts."
 
 ### Shadow Voice Rules (CRITICAL)
 
