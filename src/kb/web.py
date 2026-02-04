@@ -4605,7 +4605,7 @@ BOOKLET_QUERY_TYPES = {
             "Banned verbs: explores, reveals, highlights, invites, cultivates, challenges, "
             "encourages, allows, introduces, notices, softens, senses, promotes, prevents, "
             "clarifies, forces, engages, facilitates, develops. "
-            "Banned nouns: exercise, practitioner, student. "
+            "Banned nouns: exercise, practitioner, student, stretch, stretching. "
             "No references to 'the teacher' or 'the nervous system' as subject. "
             "Subject must be the movement or body part, not an abstraction. "
             "WRONG: 'This exercise clarifies the relationship between pelvis and spine.' "

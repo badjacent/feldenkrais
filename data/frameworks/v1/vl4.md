@@ -38,6 +38,12 @@ When writing through The Engine's lens, use MECHANICAL language: torque, transmi
 
 **Blacklisted structures for VL-4:** Do NOT use rhetorical questions as filler ("What if you could...?", "Isn't it interesting that...?"). Do NOT use generic invitations ("Notice how...", "You might find..."). Do NOT use bulleted lists in narrative sections — write cohesive prose. State mechanical facts: "The pelvis drives torque into the spine." "The shoulder blocks transmission." Declarative, not invitational. The Engine writes like an engineer's field report, not a fitness coach's motivational post.
 
+**Style density examples for VL-4:** Match this level of diagnostic specificity:
+- "The pelvis generates rotational torque but the glenohumeral joint locks at 90 degrees of abduction, converting the arm into a dead strut instead of a loaded lever."
+- "Coupling between L5-S1 and the femoral head breaks down: the hip flexes but the lumbar spine stays flat, so the kinetic chain short-circuits at the lumbosacral junction."
+- "The hand arrives at the target but it arrives empty — the force that started in the pelvic floor leaked out through a rigid thoracolumbar fascia that refused to transmit."
+Do NOT settle for vague statements like "the movement becomes easier" or "the body finds its rhythm." Diagnose WHERE in the chain, WHAT is blocking, and WHY the transmission fails.
+
 Avoid language that belongs to other VLs:
 - NOT "the column collapses" (that's VL-1 The Riser)
 - NOT "the map lights up" (that's VL-2 The Cartographer)

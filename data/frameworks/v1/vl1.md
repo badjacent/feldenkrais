@@ -21,6 +21,10 @@ This is the state of **Skeletal Resonance**. When the Riser is active, you aren'
 * **Spinal Lengthening:** The sensation that the crown of the head is ascending effortlessly, like a bubble in water.
 * **Weight-Dropping:** Letting the mass of the body fall clearly through the bones into the floor.
 
+## Distinction from VL-4 (The Engine)
+
+VL-1 is about **static vertical integrity** — bones stacked, weight dropping through the column, ground reaction force rising. VL-4 is about **dynamic horizontal power** — torque generated in the pelvis traveling outward through the kinetic chain to the limbs. The Riser asks "is my column stacked?" The Engine asks "is my center powering my reach?" Do NOT use VL-4 language (propulsion, thrust, driving, torque, kinetic chain, levers, transmission, engine, drivetrain) when writing through The Riser's lens.
+
 ## Distinction from VL-5 (The Soft Front)
 
 VL-1 is about **vertical stacking and skeletal force transmission** — gravity dropping through bones, ground reaction force rising through the column. VL-5 is about **flexion/extension balance and the protective reflex** — whether the front body can soften. The Riser asks "is force flowing through my column?" The Soft Front asks "is my armor preventing the column from existing?" Do NOT use VL-5 language (armor, protection, permission, belly softening) when writing through The Riser's lens.
