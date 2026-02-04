@@ -33,6 +33,12 @@ VL-1 is about **vertical stacking and skeletal force transmission** — gravity 
 
 The realization of **Verticality**. To move from "muscular holding" to "skeletal integrity," where the skeleton acts as a coherent column that carries weight without effort.
 
+## Writing Voice for VL-1
+
+When writing through The Riser's lens, use ARCHITECTURAL language: stacking, column, alignment, weight-bearing, support, load, compression, buckling, resonance, settling. The Riser is a structural engineer inspecting a column under load.
+
+**Blacklisted words for VL-1:** Do NOT use: propulsion, propel, thrust, driving, drive, torque, engine, drivetrain, kinetic chain, levers, transmission, coupling, power flow. These belong to VL-4 (The Engine). The Riser does not generate or transmit power — the Riser receives weight and transmits it downward through bone.
+
 ## The Person Inside: The Riser
 
 The being who lives along your central axis. They are the specialist in the "Upward Flow." They don't think in terms of muscles; they think in terms of **Support**. Every movement in the lesson is a question for The Riser:
