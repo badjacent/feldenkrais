@@ -119,7 +119,12 @@ Each column in the analytical table serves a DISTINCT purpose. Do NOT repeat the
 
 **Avoid these terms:**
 - "Council" as a noun (use "Person Inside" instead)
-- Generic state labels like "Softening" for every row — use lens-specific vocabulary
+- Generic state labels like "Softening" for every row — use lens-specific vocabulary:
+  - VL-1: "settling," "stacking," "finding support"
+  - VL-2: "differentiating," "resolving," "mapping"
+  - VL-3: "tuning," "clarifying," "orienting"
+  - VL-4: "coupling," "transmitting," "loading"
+  - VL-5: "yielding," "opening," "permitting"
 
 **Limit overused imagery:**
 - "ripple," "wave," "ripple effect," "wave of ease" — use at most ONCE per booklet. Find specific alternatives: "force traveling through," "transmission opening," "connection restoring."
@@ -166,7 +171,7 @@ All prose fields (primary_inquiry, washing_gradient, threshold_of_quiet, vl_voic
 
 **CRITICAL:** The Primary Inquiry appears in the booklet's "The Question This Lesson Asks" section. The Washing Gradient and Threshold of Quiet appear in "The Arc" section. These sections are shown SEPARATELY to the reader. Do NOT write the Primary Inquiry as a summary of the Arc — write it as the single overarching riddle the lesson poses. The Arc content (Washing Gradient, Threshold of Quiet) should describe the PROCESS of transformation, not restate the question.
 
-**Arc Voice:** The Washing Gradient and Threshold of Quiet must describe transformation through the PARTICIPANT'S sensory experience — what changed in the body, not what the teacher intended. Do NOT use neurological jargon ("subcortical system", "cortical reorganization") or teacher-perspective framing ("the lesson teaches", "the practitioner guides"). Write from INSIDE the body: "The lower back began to soften against the floor" not "The lesson facilitated spinal release."
+**Arc Voice:** The Washing Gradient and Threshold of Quiet must describe transformation through the PARTICIPANT'S sensory experience — what changed in the body, not what the teacher intended. Use second-person ("you") or body-as-subject ("the pelvis"), NEVER third-person ("the student", "the practitioner", "the learner"). Do NOT use neurological jargon ("subcortical system", "cortical reorganization") or teacher-perspective framing ("the lesson teaches", "the practitioner guides"). Write from INSIDE the body: "The lower back began to soften against the floor" not "The lesson facilitated spinal release."
 
 ### 3. VL Analytical Table
 

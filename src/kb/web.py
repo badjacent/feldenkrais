@@ -4583,8 +4583,10 @@ BOOKLET_QUERY_TYPES = {
             "about doing these particular movements? Ground it in the physical experience. "
             "Do NOT start with 'As you lie on the floor' or 'As you lay on your back' — find a "
             "more specific entry point: a sensation, a paradox, a mechanical puzzle.\n"
-            "2. Briefly preview what the booklet will illuminate — use the lens's specific "
-            "vocabulary, not the generic word 'arc.'\n"
+            "2. Briefly preview what the booklet explores — use the lens's specific "
+            "vocabulary, not the generic word 'arc.' Do NOT use guide-speak: 'This guide traces', "
+            "'We will examine', 'This booklet walks you through'. Write as immersive description, "
+            "not a table of contents.\n"
             "3. Invite the reader into exploration — through a specific physical detail, "
             "not an abstract promise. No New Age or metaphysical language.\n\n"
             "Use FRESH language specific to THIS lesson's movements. Avoid generic phrases like "
@@ -4688,6 +4690,9 @@ BOOKLET_QUERY_TYPES = {
             "RIGHT: 'During the pelvic tilt, track whether your lower back leaves the floor "
             "before or after the tailbone lifts.' "
             "Banned words: sensing, attention, awareness, expression, illuminate, discover. "
+            "Banned structures: 'Whenever you...' (too generic), 'Whether X or Y' (too abstract), "
+            "'Notice how...' (too passive). Each suggestion must be a SPECIFIC INSTRUCTION "
+            "tied to a specific moment in this lesson. "
             "No platitudes or fortune-cookie wisdom — give actionable movement cues."
         ),
         "context_keys": [
