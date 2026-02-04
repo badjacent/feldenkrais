@@ -4571,7 +4571,9 @@ BOOKLET_QUERY_TYPES = {
             "The analytical framework used is: {framework_name}\n\n"
             "Write 2-3 short paragraphs that:\n"
             "1. Open with a UNIQUE hook specific to THIS lesson's movement theme — what was distinctive "
-            "about lying there doing these particular movements? Ground it in the physical experience.\n"
+            "about doing these particular movements? Ground it in the physical experience. "
+            "Do NOT start with 'As you lie on the floor' or 'As you lay on your back' — find a "
+            "more specific entry point: a sensation, a paradox, a mechanical puzzle.\n"
             "2. Briefly preview what the booklet will illuminate — use the lens's specific "
             "vocabulary, not the generic word 'arc.'\n"
             "3. Invite the reader into exploration.\n\n"
@@ -4684,7 +4686,13 @@ BOOKLET_QUERY_TYPES = {
             "perspective specifically illuminate what happened in this lesson? What would the "
             "{person_inside} have noticed? How did the Shadow manifest in the movements you just did?\n\n"
             "Be SPECIFIC to this lesson — do not repeat the generic framework description. "
-            "Show the reader how the lens applies HERE."
+            "Show the reader how the lens applies HERE.\n\n"
+            "CRITICAL OUTPUT RULES: Your output is the FINAL TEXT the reader sees. "
+            "Do NOT include any internal codes (VL-1, VL-4), banned-word lists, "
+            "prompt instructions, negative constraints, or meta-commentary about the framework. "
+            "Do NOT refer to 'the Person Inside' as a being or character — write analytically "
+            "about what this perspective REVEALS about the lesson's mechanics. "
+            "Write pure prose — no headers, no bullets, no formatting."
         ),
         "context_keys": [
             "framework_name",
