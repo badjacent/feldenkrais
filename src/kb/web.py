@@ -4564,10 +4564,13 @@ BOOKLET_QUERY_TYPES = {
             "Write 2-3 short paragraphs that:\n"
             "1. Open with a UNIQUE hook specific to THIS lesson's movement theme — what was distinctive "
             "about lying there doing these particular movements? Ground it in the physical experience.\n"
-            "2. Briefly mention what the booklet will illuminate about the lesson's arc.\n"
+            "2. Briefly preview what the booklet will illuminate — use the lens's specific "
+            "vocabulary, not the generic word 'arc.'\n"
             "3. Invite the reader into exploration.\n\n"
             "Use FRESH language specific to THIS lesson's movements. Avoid generic phrases like "
-            "'companion rather than a manual' or 'questions to be lived.'"
+            "'companion rather than a manual', 'questions to be lived', or 'the arc of this lesson.' "
+            "Instead of 'arc,' use the lens's metaphor: map (Cartographer), tuning (Tuner), "
+            "drivetrain (Engine), column (Riser), unfolding (Soft Front)."
         ),
         "context_keys": [
             "lesson_title",
@@ -4600,7 +4603,8 @@ BOOKLET_QUERY_TYPES = {
             "to sense asymmetries.' RIGHT: 'Bending the knees unloads the hip flexors, so "
             "the pelvis can tilt without muscular interference.' "
             "Banned verbs: explores, reveals, highlights, invites, cultivates, challenges, "
-            "encourages, allows, introduces. No references to 'the teacher.' "
+            "encourages, allows, introduces, notices, softens, senses, promotes. "
+            "No references to 'the teacher.' "
             "Subject must be the movement or body part, not an abstraction."
         ),
         "context_keys": [

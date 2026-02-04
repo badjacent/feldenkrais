@@ -36,7 +36,7 @@ When writing through The Engine's lens, use MECHANICAL language: torque, transmi
 
 **Blacklisted words for VL-4:** Do NOT use: "juicy," "delicious," "yummy," "gorgeous," "beautiful," "magical," "amazing," "wonderful." The Engine's voice is technical and precise — a diagnostic report, not a lifestyle blog.
 
-**Blacklisted structures for VL-4:** Do NOT use rhetorical questions as filler ("What if you could...?", "Isn't it interesting that...?"). Do NOT use generic invitations ("Notice how...", "You might find..."). State mechanical facts: "The pelvis drives torque into the spine." "The shoulder blocks transmission." Declarative, not invitational.
+**Blacklisted structures for VL-4:** Do NOT use rhetorical questions as filler ("What if you could...?", "Isn't it interesting that...?"). Do NOT use generic invitations ("Notice how...", "You might find..."). Do NOT use bulleted lists in narrative sections — write cohesive prose. State mechanical facts: "The pelvis drives torque into the spine." "The shoulder blocks transmission." Declarative, not invitational. The Engine writes like an engineer's field report, not a fitness coach's motivational post.
 
 Avoid language that belongs to other VLs:
 - NOT "the column collapses" (that's VL-1 The Riser)
