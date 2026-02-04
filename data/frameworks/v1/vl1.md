@@ -23,11 +23,11 @@ This is the state of **Skeletal Resonance**. When the Riser is active, you aren'
 
 ## Distinction from VL-4 (The Engine)
 
-VL-1 is about **static vertical integrity** — bones stacked, weight dropping through the column, ground reaction force rising. VL-4 is about **dynamic horizontal power** — torque generated in the pelvis traveling outward through the kinetic chain to the limbs. The Riser asks "is my column stacked?" The Engine asks "is my center powering my reach?" Do NOT use VL-4 language (propulsion, thrust, driving, torque, kinetic chain, levers, transmission, engine, drivetrain) when writing through The Riser's lens.
+VL-1 is about **vertical alignment and buoyancy** — bones stacked, weight dropping through the column, ground reaction force rising. The column is not rigid; it is responsive, constantly adjusting to maintain upward flow. VL-4 is about **core-to-extremity organization** — torque generated in the pelvis traveling outward through the kinetic chain to the limbs. The Riser asks "is my column buoyant?" The Engine asks "is my center powering my reach?" Do NOT use VL-4 language (propulsion, thrust, driving, torque, kinetic chain, levers, transmission, engine, drivetrain) when writing through The Riser's lens.
 
 ## Distinction from VL-5 (The Soft Front)
 
-VL-1 is about **vertical stacking and skeletal force transmission** — gravity dropping through bones, ground reaction force rising through the column. VL-5 is about **flexion/extension balance and the protective reflex** — whether the front body can soften. The Riser asks "is force flowing through my column?" The Soft Front asks "is my armor preventing the column from existing?" Do NOT use VL-5 language (armor, protection, permission, belly softening) when writing through The Riser's lens.
+VL-1 is about **vertical alignment and buoyancy** — gravity dropping through bones, ground reaction force rising through the column. VL-5 is about **flexion/extension balance and the protective reflex** — whether the front body can soften. The Riser asks "is force flowing through my column?" The Soft Front asks "is my armor preventing the column from existing?" Do NOT use VL-5 language (armor, protection, permission, belly softening) when writing through The Riser's lens.
 
 ## Functional Goal
 
@@ -35,11 +35,11 @@ The realization of **Verticality**. To move from "muscular holding" to "skeletal
 
 ## Writing Voice for VL-1
 
-When writing through The Riser's lens, use ARCHITECTURAL language: stacking, column, alignment, weight-bearing, support, load, compression, buckling, resonance, settling. The Riser is a structural engineer inspecting a column under load.
+When writing through The Riser's lens, use ARCHITECTURAL language: stacking, column, alignment, buoyancy, weight-bearing, support, load, compression, buckling, resonance, settling. The Riser is a structural engineer inspecting a responsive column under load — one that finds its height through balance, not rigidity.
 
 **Blacklisted words for VL-1:** Do NOT use: propulsion, propel, thrust, driving, drive, torque, engine, drivetrain, kinetic chain, levers, coupling, power flow. These belong to VL-4 (The Engine).
 
-**Clarification:** VL-1 CAN describe vertical force transmission — "ground reaction force rising through the column," "pressure traveling through the spine," "weight dropping through bone." What VL-1 must NOT describe is outward power delivery to the limbs — that is VL-4's domain. The Riser's force is VERTICAL and STRUCTURAL, not horizontal and dynamic.
+**Clarification:** VL-1 CAN describe vertical force transmission — "ground reaction force rising through the column," "pressure traveling through the spine," "weight dropping through bone." The Riser's column is dynamic and responsive, not rigid — it adjusts, settles, and finds buoyancy. What VL-1 must NOT describe is outward power delivery to the limbs — that is VL-4's domain.
 
 ## The Person Inside: The Riser
 

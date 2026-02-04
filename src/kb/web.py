@@ -4989,20 +4989,14 @@ def render_booklet_journey(groups: list, steps: list, vl_analysis: dict, pass_a_
 
     step_lookup = {s["step_number"]: s for s in steps if "step_number" in s}
 
-    state_colors = {
-        "bracing": "#c0392b",
-        "softening": "#e67e22",
-        "transmission": "#27ae60",
-        # Fallback for cached data with old nomenclature
-        "domination": "#c0392b",
-        "negotiation": "#e67e22",
-        "integration": "#27ae60",
-    }
     # Map old nomenclature to new for display
     state_display = {
         "domination": "Bracing",
         "negotiation": "Softening",
         "integration": "Transmission",
+        "bracing": "Bracing",
+        "softening": "Softening",
+        "transmission": "Transmission",
     }
 
     for g in groups:
@@ -5083,16 +5077,27 @@ def render_booklet_journey(groups: list, steps: list, vl_analysis: dict, pass_a_
                 vl_voice = row.get("vl_voice", "")
                 shadow_voice = row.get("shadow_voice", "") or row.get("striver_shadow", "")
 
+                # Combine negotiation state, question, and goal into a paragraph
+                parts = []
                 if neg_state:
-                    color = state_colors.get(neg_state.lower(), "#7f8c8d")
                     display = state_display.get(neg_state.lower(), neg_state)
-                    html.append(f'<span class="neg-badge" style="background: {color};">{display}</span>')
+                    if question:
+                        parts.append(f"{question}")
+                    if display.lower() == "bracing":
+                        parts.append(f"The Shadow is still in control here.")
+                    elif display.lower() == "softening":
+                        parts.append(f"The old pattern is being challenged.")
+                    elif display.lower() == "transmission":
+                        parts.append(f"Skeletal clarity is emerging.")
+                    if goal:
+                        parts.append(goal)
+                elif question:
+                    parts.append(question)
+                    if goal:
+                        parts.append(goal)
 
-                if question:
-                    html.append(f'<p class="table-question"><strong>The question being posed:</strong> {question}</p>')
-
-                if goal:
-                    html.append(f'<p class="table-goal"><strong>The functional goal:</strong> {goal}</p>')
+                if parts:
+                    html.append(f'<p class="what-happening-text">{" ".join(parts)}</p>')
 
                 if vl_voice:
                     html.append(f"""

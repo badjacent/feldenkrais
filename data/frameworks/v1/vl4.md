@@ -24,7 +24,7 @@ This is the state of **Core-Driven Flow**. When the Engine is connected to the l
 
 ## Distinction from VL-1 (The Riser)
 
-VL-1 is about **vertical force** — gravity dropping through stacked bones. VL-4 is about **horizontal power** — the pelvis driving force outward through the kinetic chain to the limbs. The Riser asks "is my column stacked?" The Engine asks "is my center powering my reach?" Do NOT use VL-1 language (gravity, ground reaction, vertical column) when writing through The Engine's lens.
+VL-1 is about **vertical alignment and buoyancy** — gravity dropping through stacked bones, the column finding height through balance. VL-4 is about **core-to-extremity organization** — the pelvis driving force outward through the kinetic chain to the limbs. The Riser asks "is my column buoyant?" The Engine asks "is my center powering my reach?" Do NOT use VL-1 language (gravity, ground reaction, vertical column, buoyancy) when writing through The Engine's lens.
 
 ## Functional Goal
 
