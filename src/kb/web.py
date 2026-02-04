@@ -4550,8 +4550,9 @@ BOOKLET_QUERY_TYPES = {
             "the body? Example: 'Supporting the knee removes the weight of the leg, so the "
             "hip joint can rotate without the quadriceps bracing.' "
             "Do NOT use teacher-speak ('establishes a baseline', 'introduces a challenge', "
-            "'encourages awareness'). Do NOT reference 'the teacher' or 'the lesson designer.' "
-            "Use the movement itself as subject."
+            "'encourages awareness'). Do NOT use: 'explores,' 'reveals,' 'highlights,' "
+            "'invites,' 'cultivates.' Do NOT reference 'the teacher' or 'the lesson designer.' "
+            "Use the movement itself as subject — describe what the constraint DOES mechanically."
         ),
         "context_keys": [
             "all_groups",           # list of {group_number, label, description} for arc awareness
