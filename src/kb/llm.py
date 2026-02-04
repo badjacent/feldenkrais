@@ -254,10 +254,14 @@ class LLM:
             contents.append({"role": role, "parts": [{"text": msg["content"]}]})
 
         # Build config
+        is_gemini3 = "gemini-3" in self.model
         config = {
             "max_output_tokens": max_tokens,
-            "temperature": temperature,
+            "temperature": 1.0 if is_gemini3 else temperature,
         }
+        if is_gemini3:
+            from google.genai import types as _gtypes
+            config["thinking_config"] = _gtypes.ThinkingConfig(thinking_level="MINIMAL")
         if system:
             config["system_instruction"] = system
             total_chars += len(system)
@@ -403,12 +407,16 @@ class LLM:
         temperature: float,
     ) -> T:
         """Get structured output from Gemini using response_schema."""
+        is_gemini3 = "gemini-3" in self.model
         config = {
             "max_output_tokens": max_tokens,
-            "temperature": temperature,
+            "temperature": 1.0 if is_gemini3 else temperature,
             "response_mime_type": "application/json",
             "response_schema": response_model,
         }
+        if is_gemini3:
+            from google.genai import types as _gtypes
+            config["thinking_config"] = _gtypes.ThinkingConfig(thinking_level="MINIMAL")
         if system:
             config["system_instruction"] = system
 
@@ -542,12 +550,16 @@ class LLM:
         # Strip fields Gemini doesn't accept in JSON Schema mode
         clean_schema = {k: v for k, v in schema.items() if k not in ("$schema", "$id")}
 
+        is_gemini3 = "gemini-3" in self.model
         config = {
             "max_output_tokens": max_tokens,
-            "temperature": temperature,
+            "temperature": 1.0 if is_gemini3 else temperature,
             "response_mime_type": "application/json",
             "response_json_schema": clean_schema,
         }
+        if is_gemini3:
+            from google.genai import types as _gtypes
+            config["thinking_config"] = _gtypes.ThinkingConfig(thinking_level="MINIMAL")
         if system:
             config["system_instruction"] = system
 
