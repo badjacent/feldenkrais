@@ -95,6 +95,7 @@ Each column in the analytical table serves a DISTINCT purpose. Do NOT repeat the
 **Purpose:** Describe the PROCESS — what the Shadow and Person Inside are doing right now.
 - Focus on the current state of negotiation between effort and ease
 - Describe specific physical manifestations (gripping, releasing, exploring)
+- Use PLAIN LANGUAGE — no invented jargon, no internal classification codes, no abstract metaphors like "Clamped Gate" or "Unlocked Portal"
 - Example: "Shadow gripping the lower back; beginning to soften as oscillation continues"
 
 ### Functional Outcome (Column 5)
@@ -135,6 +136,18 @@ Each column in the analytical table serves a DISTINCT purpose. Do NOT repeat the
 
 ---
 
+## Output Cleanliness Rules (CRITICAL)
+
+Your output is reader-facing text. NEVER include:
+- Internal codes (VL-1, VL-4, SPIFFER-Q tags) in prose sections
+- Prompt instructions or negative constraints ("Do NOT use...")
+- Metadata, classification scores, or system labels
+- References to "the prompt" or "the framework definition"
+
+All prose fields (primary_inquiry, washing_gradient, threshold_of_quiet, vl_voice, shadow_voice) must read as polished, self-contained text that a reader could encounter without any context about the analysis system.
+
+---
+
 ## Output Format
 
 ### 1. Negotiation Framework Observations
@@ -150,6 +163,8 @@ Each column in the analytical table serves a DISTINCT purpose. Do NOT repeat the
 **CRITICAL:** The Primary Inquiry and Washing Gradient must be DISTINCT paragraphs with different content. The Inquiry frames the question; the Gradient describes the process of change. Do not reuse sentences between them.
 
 **CRITICAL:** The Primary Inquiry appears in the booklet's "The Question This Lesson Asks" section. The Washing Gradient and Threshold of Quiet appear in "The Arc" section. These sections are shown SEPARATELY to the reader. Do NOT write the Primary Inquiry as a summary of the Arc — write it as the single overarching riddle the lesson poses. The Arc content (Washing Gradient, Threshold of Quiet) should describe the PROCESS of transformation, not restate the question.
+
+**Arc Voice:** The Washing Gradient and Threshold of Quiet must describe transformation through the PARTICIPANT'S sensory experience — what changed in the body, not what the teacher intended. Do NOT use neurological jargon ("subcortical system", "cortical reorganization") or teacher-perspective framing ("the lesson teaches", "the practitioner guides"). Write from INSIDE the body: "The lower back began to soften against the floor" not "The lesson facilitated spinal release."
 
 ### 3. VL Analytical Table
 
