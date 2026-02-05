@@ -4637,7 +4637,11 @@ BOOKLET_QUERY_TYPES = {
             "MOVEMENT GROUNDING: Your intro MUST reference at least one specific movement "
             "from the lesson sections listed above. Name the body part and what it did "
             "(e.g., 'the pelvis tilting', 'the head rolling', 'the arm reaching across'). "
-            "This grounds the booklet's question in THIS lesson, not in abstract philosophy."
+            "This grounds the booklet's question in THIS lesson, not in abstract philosophy.\n\n"
+            "NO FILLER: Every sentence must earn its place. Delete any sentence that: "
+            "(a) could appear in any booklet unchanged, (b) restates the lesson title, "
+            "(c) says 'this booklet' or 'in the pages ahead.' If you can cut a sentence "
+            "and lose nothing, cut it. Aim for 4-6 sentences total, each one specific."
         ),
         "context_keys": [
             "lesson_title",
@@ -4984,6 +4988,10 @@ BOOKLET_QUERY_TYPES = {
             "  The Soft Front speaks like someone removing armor — unclenching, yielding, "
             "permitting, breathing room. Tender, careful, protective.\n"
             "  Do NOT let all voices converge into the same poetic-clinical register.\n"
+            "- EVERY METAPHOR NEEDS A BODY: If you write a metaphor (e.g., 'the path "
+            "clears'), the NEXT clause must name a specific body part and what it did "
+            "(e.g., '...my head turns farther right without my shoulder lifting'). "
+            "Never leave a metaphor floating without a physical anchor.\n"
             "- GROUNDING: Only use metaphors and imagery that come from the lesson's "
             "actual movements or from {person_inside}'s established vocabulary. Do NOT "
             "invent metaphors from outside the lesson context (no 'quiet masks', no "
