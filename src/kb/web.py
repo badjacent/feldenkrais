@@ -4629,7 +4629,11 @@ BOOKLET_QUERY_TYPES = {
             "WRONG: 'Awareness Through Movement lessons work by...' "
             "RIGHT: 'Your left foot was pressing into the floor while your right knee "
             "floated — and somewhere in between, the pelvis started to roll on its own.' "
-            "The first sentence is a litmus test: if it could open ANY booklet, rewrite it."
+            "The first sentence is a litmus test: if it could open ANY booklet, rewrite it.\n\n"
+            "PLAIN ANATOMY: Use everyday words for body parts. 'sacrum' → 'tailbone', "
+            "'cervical' → 'neck', 'lumbar' → 'lower back', 'thoracic' → 'upper back', "
+            "'articulation' → 'joint' or 'connection'. The reader is not a medical "
+            "professional — use words they'd use to describe their own body."
         ),
         "context_keys": [
             "lesson_title",
@@ -4678,7 +4682,10 @@ BOOKLET_QUERY_TYPES = {
             "Banned nouns: exercise, practitioner, student, stretch, stretching, synovial fluid, "
             "fascia, proprioception, longitudinal, long bones, superficial musculature, "
             "motor plan, motor cortex, kinetic chain, force vector, pelvis-and-femur unit, "
-            "load path, contralateral, ipsilateral. "
+            "load path, contralateral, ipsilateral, vertical column, signal static, "
+            "visual field, articulation, sacrum (use 'tailbone'). "
+            "Banned movement descriptors: longitudinal rocking (use 'rocking along your "
+            "spine'), lateral shifts (use 'side-to-side movements'). "
             "No pseudo-medical or anatomical terminology — describe what MOVES, not "
             "biological structures or processes. "
             "No references to 'the teacher' or 'the nervous system' as subject. "

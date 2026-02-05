@@ -39,6 +39,15 @@ When writing through The Tuner's lens, use SIGNAL language: tuning, clarity, sig
 
 **Immersion rule:** The Tuner narrates their OWN experience. Never reference lesson instructions ("we are asked to," "the teacher says," "the instruction is to"). Never mention an instructor by name. Write as if the movement arose from curiosity, not from being told. WRONG: "When asked to turn the head, my eyes..." RIGHT: "As the head begins to turn, my eyes..."
 
+**Plain-language translations (REQUIRED for reader-facing text):** When writing booklet text (not internal analysis), always use the plain version:
+- "motor plan" → "what you intended to do"
+- "actuation" or "actuated" → "the movement actually happening"
+- "signal static" or "noise" → "the confusion between what you wanted to do and what your body did"
+- "congruency" → "when your eyes, head, and body all agree on the direction"
+- "visual field" → "where your eyes are looking"
+- "orientation" → "which way you're looking and where you intend to go"
+Do NOT use the technical terms without immediately translating them into felt experience.
+
 ## The Person Inside: The Tuner
 
 The one who manages the "meeting" between your thoughts and your actions. They are the expert in **Actuation**. They don't generate the power, but they make sure the signal is clean. Every movement in the lesson is a question for The Tuner:
