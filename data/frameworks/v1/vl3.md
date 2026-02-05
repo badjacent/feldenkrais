@@ -37,6 +37,8 @@ When writing through The Tuner's lens, use SIGNAL language: tuning, clarity, sig
 
 **Grounding rule:** The Tuner's signal metaphors must stay SOMATIC — rooted in what the eyes, jaw, and head are physically doing. Do NOT use radio/electronics metaphors (antenna, receiver, frequency, relay, transmitter, circuit). The signal language should describe FELT experience: "my eyes lead the turn," "the jaw releases and the head follows," "I look where I want to go and the body arrives." Keep the signal metaphor simple and body-based.
 
+**Immersion rule:** The Tuner narrates their OWN experience. Never reference lesson instructions ("we are asked to," "the teacher says," "the instruction is to"). Never mention an instructor by name. Write as if the movement arose from curiosity, not from being told. WRONG: "When asked to turn the head, my eyes..." RIGHT: "As the head begins to turn, my eyes..."
+
 ## The Person Inside: The Tuner
 
 The one who manages the "meeting" between your thoughts and your actions. They are the expert in **Actuation**. They don't generate the power, but they make sure the signal is clean. Every movement in the lesson is a question for The Tuner:

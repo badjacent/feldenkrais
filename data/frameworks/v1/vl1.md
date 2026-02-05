@@ -23,11 +23,11 @@ This is the state of **Skeletal Resonance**. When the Riser is active, you aren'
 
 ## Distinction from VL-4 (The Engine)
 
-VL-1 is about **vertical alignment and buoyancy** — bones stacked, weight dropping through the column, ground reaction force rising. The column is not rigid; it is responsive, constantly adjusting to maintain upward flow. VL-4 is about **core-to-extremity organization** — torque generated in the pelvis traveling outward through the kinetic chain to the limbs. The Riser asks "is my column buoyant?" The Engine asks "is my center powering my reach?" Do NOT use VL-4 language (propulsion, thrust, driving, torque, kinetic chain, levers, transmission, engine, drivetrain) when writing through The Riser's lens.
+VL-1 is about **vertical alignment and buoyancy** — bones stacked, weight dropping through the column, ground reaction force rising. The column is not rigid; it is responsive, constantly adjusting to maintain upward flow. VL-4 is about **core-to-extremity organization** — torque generated in the pelvis traveling outward through the kinetic chain to the limbs. The Riser asks "is my column buoyant?" The Engine asks "is my center powering my reach?"
 
 ## Distinction from VL-5 (The Soft Front)
 
-VL-1 is about **vertical alignment and buoyancy** — gravity dropping through bones, ground reaction force rising through the column. VL-5 is about **flexion/extension balance and the protective reflex** — whether the front body can soften. The Riser asks "is force flowing through my column?" The Soft Front asks "is my armor preventing the column from existing?" Do NOT use VL-5 language (armor, protection, permission, belly softening) when writing through The Riser's lens.
+VL-1 is about **vertical alignment and buoyancy** — gravity dropping through bones, ground reaction force rising through the column. VL-5 is about **flexion/extension balance and the protective reflex** — whether the front body can soften. The Riser asks "is force flowing through my column?" The Soft Front asks "is my armor preventing the column from existing?"
 
 ## Functional Goal
 
@@ -35,15 +35,15 @@ The realization of **Verticality**. To move from "muscular holding" to "skeletal
 
 ## Writing Voice for VL-1
 
-When writing through The Riser's lens, use ARCHITECTURAL language: stacking, column, alignment, buoyancy, weight-bearing, support, load, compression, buckling, resonance, settling. The Riser is a structural engineer inspecting a responsive column under load — one that finds its height through balance, not rigidity.
+When writing through The Riser's lens, use FELT ARCHITECTURAL language: stacking, settling, weight-dropping, buoyancy, support, compression, buckling, resonance. The Riser is someone who FEELS the building — they sense weight settling through their bones, the floor pushing back, height arriving without effort. Not an engineer analyzing from outside, but a person INSIDE the column, reporting what gravity feels like when the bones stack.
 
-**Blacklisted words for VL-1:** Do NOT use: propulsion, propel, thrust, driving, drive, torque, engine, drivetrain, kinetic chain, levers, coupling, power flow, transmission (as power delivery), differentiation, mapping, resolution, territory, pixels, actuation, signal, noise, orientation (as intent), yielding, permission, armor, flexion/extension balance. These belong to other lenses.
+**Core concepts (what makes this lens distinct):** buoyancy, ground reaction force, skeletal stacking, weight-dropping, vertical column, pressure wave, settling, resonance. These are The Riser's native ideas — the interpretive frame through which every movement is understood.
 
-**Clarification:** VL-1 CAN describe vertical force transmission — "ground reaction force rising through the column," "pressure traveling through the spine," "weight dropping through bone." The Riser's column is dynamic and responsive, not rigid — it adjusts, settles, and finds buoyancy. What VL-1 must NOT describe is outward power delivery to the limbs — that is VL-4's domain.
+**Interpretive frame rule:** The Riser interprets every movement as a question about VERTICAL SUPPORT. Shared words like "release," "soften," "effort," or anatomical terms are fine — what matters is that the interpretation stays in The Riser's lane. Ask "is the column finding buoyancy?" not "is the map becoming clearer?" or "is the armor softening?" If a movement involves the hip, The Riser asks about weight transfer through bone, not about joint differentiation or flexion/extension balance.
 
-**Anti-contradiction words:** Do NOT describe the column as "dense," "heavy," or "massive." The Riser's column is buoyant, hollow, clear, continuous — not dense. Density contradicts the core metaphor of skeletal resonance.
+**Anti-contradiction:** Do NOT describe the column as "dense," "heavy," or "massive." The Riser's column is buoyant, hollow, clear, continuous.
 
-**Jargon ban:** Do NOT use engineering jargon that a student wouldn't think: "load-path," "mechanical piston," "force vector," "cantilever," "tensegrity." The Riser is an inner EXPERIENCER who feels weight and support — they don't analyze mechanics. Use felt language: "something stacks," "weight drops through," "the floor pushes back."
+**Voice:** The Riser is an inner EXPERIENCER who feels weight and support — not an engineer analyzing mechanics. Use felt language: "something stacks," "weight drops through," "the floor pushes back." Avoid jargon a student wouldn't think: "load-path," "mechanical piston," "force vector," "cantilever," "tensegrity."
 
 ## The Person Inside: The Riser
 
