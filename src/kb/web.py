@@ -4633,7 +4633,11 @@ BOOKLET_QUERY_TYPES = {
             "PLAIN ANATOMY: Use everyday words for body parts. 'sacrum' → 'tailbone', "
             "'cervical' → 'neck', 'lumbar' → 'lower back', 'thoracic' → 'upper back', "
             "'articulation' → 'joint' or 'connection'. The reader is not a medical "
-            "professional — use words they'd use to describe their own body."
+            "professional — use words they'd use to describe their own body.\n\n"
+            "MOVEMENT GROUNDING: Your intro MUST reference at least one specific movement "
+            "from the lesson sections listed above. Name the body part and what it did "
+            "(e.g., 'the pelvis tilting', 'the head rolling', 'the arm reaching across'). "
+            "This grounds the booklet's question in THIS lesson, not in abstract philosophy."
         ),
         "context_keys": [
             "lesson_title",
@@ -4822,7 +4826,12 @@ BOOKLET_QUERY_TYPES = {
             "Describe CONCRETE PHYSICAL CHANGES the reader can verify: 'the floor feels "
             "flatter under your back', 'your head turns farther to the left', 'the hip "
             "rolls without your belly tightening.' The reader should be able to check each "
-            "suggestion against their own body."
+            "suggestion against their own body.\n\n"
+            "SELF-CHECK: Before finalizing, re-read every sentence. For each one ask: "
+            "'Would a 12-year-old understand every word?' If not, replace the hard "
+            "word with something simpler. 'Resonant state' → 'everything clicked.' "
+            "'Actuation' → 'the movement happening.' 'Longitudinal' → 'along your spine.' "
+            "'Oscillation' → 'rocking.'"
         ),
         "context_keys": [
             "lesson_title",
@@ -5050,8 +5059,12 @@ BOOKLET_QUERY_TYPES = {
             "motor cortex, proprioceptive, afferent, efferent, kinetic chain, force vector, "
             "load path, parasitic effort, skeletal resonance, heavy propping, force to flow, "
             "Red Light reflex, buoyant column, ground reaction force, motor plan, longitudinal, "
-            "cervical (use 'neck'), lateral (use 'sideways'), supine (use 'lying on your back'), "
-            "prone (use 'lying face down'), neutral pivot, bilateral. "
+            "cervical (use 'neck'), lumbar (use 'lower back'), thoracic (use 'upper back'), "
+            "lateral (use 'sideways'), supine (use 'lying on your back'), "
+            "prone (use 'lying face down'), sacrum (use 'tailbone'), "
+            "longitudinal tilts (use 'rocking along the spine'), "
+            "neutral pivot, bilateral, oscillation (use 'rocking'), "
+            "actuation (use 'the movement happening'). "
             "Replace with everyday language: "
             "'head-pelvis coordination' → 'how your head and pelvis move together', "
             "'skeletal support' → 'your bones holding you up', "
