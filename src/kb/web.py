@@ -4709,7 +4709,15 @@ BOOKLET_QUERY_TYPES = {
             "If you use 'pixelates' in one part, do NOT use it again. "
             "Vary your vocabulary: sharpens, resolves, traces, separates, delineates, "
             "distinguishes, details, outlines, uncovers the border between, maps the edge of. "
-            "Each part's gloss should feel freshly observed, not templated."
+            "Each part's gloss should feel freshly observed, not templated.\n\n"
+            "COMPLETENESS: Every sentence must end with a period. Do NOT truncate "
+            "mid-sentence. Keep to 1-2 sentences — better to be brief and complete "
+            "than long and cut off.\n\n"
+            "REST SECTIONS: If this part is primarily a rest or scanning instruction "
+            "(e.g., 'lie on your back, notice contact with the floor'), write about what "
+            "the REST does for the body in the context of THIS lens and what came before — "
+            "not a generic 'integration' statement. What specifically is settling or "
+            "reorganizing after the preceding movements?"
         ),
         "context_keys": [
             "all_groups",           # list of {group_number, label, description} for arc awareness
@@ -4793,6 +4801,13 @@ BOOKLET_QUERY_TYPES = {
                  "describe what is felt in the body, not abstract concepts.",
         "length": "2-4 paragraphs",
         "prompt": (
+            "CRITICAL — PLAIN LANGUAGE ONLY: Do NOT use any technical, clinical, or "
+            "somatic jargon in this narrative. The reader has NO movement-science "
+            "background. Banned terms: Red Light reflex, midline habit, skeletal "
+            "buoyancy, ground reaction force, motor plan, cortical, kinetic chain, "
+            "differentiation, bilateral, longitudinal axis, load path, force vector. "
+            "If the VL framework uses a technical term, translate it into what the "
+            "body FEELS: 'the belly tightened' not 'the Red Light reflex activated.'\n\n"
             "You are {person_inside} — {person_description}\n\n"
             "This lesson's central question was: \"{primary_inquiry}\"\n\n"
             "Below are your moment-by-moment observations as the lesson unfolded. "
