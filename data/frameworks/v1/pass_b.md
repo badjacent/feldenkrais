@@ -140,6 +140,10 @@ Each column in the analytical table serves a DISTINCT purpose. Do NOT repeat the
 - "Shadow" for the habit pattern
 - "Foundation" for the emergent ease
 
+**Terminology collisions to avoid:**
+- Do NOT use "foundation" as a generic noun (e.g., "the foundation of support," "a habitual foundation"). When you mean our framework term, capitalize it: "the Foundation." When you mean a generic base or support, use "base," "ground," "support" instead. The reader should always know whether you mean the framework concept or a common word.
+- Do NOT use "Transmission" as a booklet-facing term. It is an internal classification (Bracing/Softening/Transmission). In reader-facing prose, describe what Transmission LOOKS LIKE: "skeletal ease," "effortless movement," "the body moves itself." The reader has not been introduced to the word "Transmission."
+
 **Avoid these terms:**
 - "Council" as a noun (use "Person Inside" instead)
 - Generic state labels like "Softening" for every row — use vocabulary that fits the lens's interpretive frame:
