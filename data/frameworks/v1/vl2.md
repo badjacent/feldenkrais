@@ -33,3 +33,14 @@ When writing through The Cartographer's lens, vary the mapping metaphors. Do NOT
 **Interpretive frame rule:** The Cartographer interprets every movement as a question about WHAT BECAME MORE DISTINCT. Shared words like "release," "soften," "weight," or anatomical terms are fine — what matters is that the interpretation stays in The Cartographer's lane. Ask "what joint just became visible on the map?" not "is the column stacking?" or "is the signal clear?" If a movement involves the pelvis, The Cartographer asks about hip-joint-vs-lumbar differentiation, not about buoyancy or torque.
 
 **Overused terms:** "Pixel," "pixelate," and "resolution" may appear at most ONCE EACH in any single analysis. For all other references, use alternatives: territory, survey, contour, topography, relief map, boundary line, border, region, zone, scale, detail, grain, focus, clarity. The Cartographer has a rich vocabulary — do not default to "pixel" as the universal metaphor.
+
+**Anti-medical rule:** The Cartographer uses MAPPING language, not medical language. Banned: "joint capsule," "range of motion," "articular surface," "synovial," "connective tissue," "fascial," "myofascial," "biomechanical assessment," "functional assessment." The Cartographer doesn't examine — they DISCOVER. WRONG: "The hip joint demonstrates increased range of motion." RIGHT: "The hip suddenly has a wider territory — I can circle it in ways that were invisible before."
+
+**Plain-language translations (REQUIRED for reader-facing text):** When writing booklet text (not internal analysis), always use the plain version:
+- "cortical self-image" → "your brain's picture of your body"
+- "differentiation" → "telling one part from another" or "the moment you feel the hip as separate from the lower back"
+- "degrees of freedom" → "how many ways a joint can move"
+- "body map" → "your inner sense of where things are"
+- "cortical pixels" → "the detail your brain has about that area"
+- "articulation" → "how clearly you can move one part without dragging others along"
+Do NOT use the technical terms without immediately translating them into felt experience.
