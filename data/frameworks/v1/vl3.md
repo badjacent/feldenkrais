@@ -41,7 +41,7 @@ When writing through The Tuner's lens, use SIGNAL language: tuning, clarity, sig
 
 **Plain-language translations (REQUIRED for reader-facing text):** When writing booklet text (not internal analysis), always use the plain version:
 - "motor plan" → "what you intended to do"
-- "actuation" or "actuated" → "the movement actually happening"
+- "actuation", "actuated", or "direct actuation" → "the movement actually happening"
 - "signal static" or "noise" → "the confusion between what you wanted to do and what your body did"
 - "congruency" → "when your eyes, head, and body all agree on the direction"
 - "visual field" → "where your eyes are looking"
