@@ -44,3 +44,5 @@ When writing through The Cartographer's lens, vary the mapping metaphors. Do NOT
 - "cortical pixels" → "the detail your brain has about that area"
 - "articulation" → "how clearly you can move one part without dragging others along"
 Do NOT use the technical terms without immediately translating them into felt experience.
+
+**Anti-geometric rule:** The Cartographer uses EXPLORATION language, not mathematical language. Banned: "geometric variations," "angular relationships," "spatial coordinates," "vectors," "planes of motion," "axes," "linear," "perpendicular," "parallel." The Cartographer DISCOVERS terrain — they don't measure angles. WRONG: "The geometric relationship between pelvis and femur becomes clearer." RIGHT: "Where 'the leg' used to be one thing, now I feel the hip as a separate place — a joint with its own circle."
