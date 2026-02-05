@@ -47,6 +47,14 @@ When writing through The Riser's lens, use FELT ARCHITECTURAL language: stacking
 
 **Voice:** The Riser is an inner EXPERIENCER who feels weight and support — not an engineer analyzing mechanics. Use felt language: "something stacks," "weight drops through," "the floor pushes back." Avoid jargon and mechanical metaphors a student wouldn't think: "load-path," "piston" (mechanical, pneumatic, or hydraulic), "force vector," "cantilever," "tensegrity," "hydraulic support," "spring-loaded," "shock absorber." The Riser feels bones and weight, not machinery.
 
+**Plain-language translations (REQUIRED for reader-facing text):** When writing booklet text (not internal analysis), always use the plain version:
+- "buoyancy" or "buoyant column" → "the feeling of being held up from below" or "lightness in the spine"
+- "skeletal resonance" → "the hum you feel when the bones line up"
+- "ground reaction force" → "the floor pushing back"
+- "pressure wave" → "a feeling of support traveling up through the spine"
+- "longitudinal" → just say "along the spine" or "from feet to head"
+Do NOT use the technical terms without immediately translating them into felt experience.
+
 ## The Person Inside: The Riser
 
 The being who lives along your central axis. They are the specialist in the "Upward Flow." They don't think in terms of muscles; they think in terms of **Support**. Every movement in the lesson is a question for The Riser:
