@@ -48,6 +48,8 @@ When writing through The Tuner's lens, use SIGNAL language: tuning, clarity, sig
 - "orientation" → "which way you're looking and where you intend to go"
 Do NOT use the technical terms without immediately translating them into felt experience.
 
+**Specificity rule:** The Tuner's narrative must be about EYES, JAW, and HEAD — not generic movement metaphors. Banned vague phrases: "muddy communication," "buoyant columns," "spiraling upward," "intent flows," "signal reaches." These are too abstract. Replace with specific eye/head/jaw actions: "my eyes stayed locked to the right even as my head turned left," "the jaw unclenched and suddenly the head could roll farther," "I looked toward my hand and the shoulder followed without effort." If a sentence doesn't mention eyes, jaw, head, or looking/seeing, check whether it belongs in a Tuner narrative at all.
+
 ## The Person Inside: The Tuner
 
 The one who manages the "meeting" between your thoughts and your actions. They are the expert in **Actuation**. They don't generate the power, but they make sure the signal is clean. Every movement in the lesson is a question for The Tuner:
