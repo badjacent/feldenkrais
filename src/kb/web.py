@@ -4759,12 +4759,15 @@ BOOKLET_QUERY_TYPES = {
             "mark, or exclamation mark). Do NOT leave any sentence fragment or cut-off text. "
             "If you are running long, write fewer suggestions — never truncate mid-sentence.\n\n"
             "PLAIN LANGUAGE: Do NOT use scientific or technical jargon. Banned: motor plan, "
-            "high-resolution, skeletal buoyancy, ground reaction force, cortical, kinetic chain, "
-            "proprioceptive, differentiation. Write as a friend who did the lesson with you: "
+            "high-resolution, skeletal buoyancy, skeletal resonance, ground reaction force, "
+            "cortical, kinetic chain, proprioceptive, differentiation, asymmetrical "
+            "side-sitting, eye-differentiation challenges, midline habit, Red Light reflex, "
+            "longitudinal axis, bilateral. Write as a friend who did the lesson with you: "
             "'notice whether your lower back touches the floor earlier' not 'track the "
             "proprioceptive shift in lumbar contact.'\n\n"
             "NO ABSTRACT METAPHORS: Banned imagery: muscular armor, sensory rinse, washing "
-            "away effort, dissolving tension, peeling layers, neurological rewiring. "
+            "away effort, dissolving tension, peeling layers, neurological rewiring, "
+            "heavy propping, force to flow. "
             "Describe CONCRETE PHYSICAL CHANGES the reader can verify: 'the floor feels "
             "flatter under your back', 'your head turns farther to the left', 'the hip "
             "rolls without your belly tightening.' The reader should be able to check each "
@@ -4961,10 +4964,13 @@ BOOKLET_QUERY_TYPES = {
             "or 'telling apart'), asymmetrical variations (use 'one-sided movements' or "
             "'lopsided positions'), proximal, distal, flexion, extension, lateral flexion, "
             "motor cortex, proprioceptive, afferent, efferent, kinetic chain, force vector, "
-            "load path, parasitic effort. Replace clinical terms with everyday language: "
+            "load path, parasitic effort, skeletal resonance, heavy propping, force to flow. "
+            "Replace clinical terms with everyday language: "
             "'head-pelvis coordination' → 'how your head and pelvis move together', "
             "'skeletal support' → 'your bones holding you up', "
-            "'postural tone' → 'background muscle tension'. "
+            "'postural tone' → 'background muscle tension', "
+            "'skeletal resonance' → 'the feeling of weight passing through your bones'. "
+            "Use everyday physics: gravity, weight, leverage, friction, balance. "
             "The reader just got off the floor — talk to them like a friend, not a textbook."
         ),
         "context_keys": [
@@ -5034,6 +5040,14 @@ def booklet_query_block(query_type: str, context: dict) -> str:
         "shadow_voices": context.get("shadow_voices", ""),
     }
     filled_prompt = qtype["prompt"].format(**prompt_vars)
+
+    # Global accessibility constraint for all booklet text
+    if query_type != "volume-intro":
+        filled_prompt += (
+            "\n\nREADING LEVEL: Write at an 8th-grade reading level. Use short sentences. "
+            "Prefer common words over specialized ones. If you must use a technical term, "
+            "immediately explain it in plain language."
+        )
 
     context_json = json.dumps(context)
     return (
