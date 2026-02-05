@@ -172,3 +172,93 @@ Awaiting next review.
 - Pedagogical glosses still flagged (#4) but improved — now about "abstract jargon" not "teacher-speak"
 - New #1: Static 'How Lessons Work' boilerplate (was #10 last time, now top priority)
 - New #2: Arc timeline redundant with Journey badges (persistent issue)
+
+---
+
+## Iterations 11-20 — 2026-02-05
+
+*Automated batch of 10 iterations targeting accessibility, jargon elimination, and boilerplate removal.*
+
+### Iteration 11
+- **Issues:** #1 jargon in lesson-concepts, #2 boilerplate booklet-intro, #3 truncation
+- **Changes:** Added jargon ban to lesson-concepts (contralateral, proximal, etc.), anti-boilerplate rule to booklet-intro, completeness guards to booklet-reflection and lens-synthesis
+- **Commit:** `80d0f09`
+- **Impact:** Truncation (#3) fully resolved. Jargon (#1) dropped to #4.
+
+### Iteration 12
+- **Issues:** #1 lens-synthesis boilerplate, #2 abstract jargon, #3 scientific tone in reflection
+- **Changes:** Added anti-boilerplate and jargon ban to lens-synthesis prompt, plain language ban to booklet-reflection
+- **Commit:** `20eabb0`
+- **Impact:** Boilerplate shifted — now about hardcoded HTML, not LLM output.
+
+### Iteration 13
+- **Issues:** #1 hardcoded "Every Feldenkrais lesson..." boilerplate, #2 undefined Washing/Foundation, #3 abstract metaphors
+- **Changes:** Removed hardcoded Question preamble from HTML template, added inline-definition requirement for Washing/Foundation in lesson-concepts, banned abstract metaphors in booklet-reflection
+- **Commit:** `2ac7a4b`
+- **Impact:** Hardcoded boilerplate fully eliminated. Jargon issues now focus on VL-specific terms.
+
+### Iteration 14
+- **Issues:** #1 dry Journey glosses, #2 clinical jargon in gloss, #5 VL-5 assessment language
+- **Changes:** Reframed pedagogical-gloss to focus on "felt consequence", expanded gloss banned nouns (motor plan, etc.), added clinical assessment ban to vl5.md
+- **Files:** `src/kb/web.py`, `data/frameworks/v1/vl5.md`
+- **Commit:** `b64840f`
+
+### Iteration 15
+- **Issues:** #1 instruction-echoing in Journey, #2 jargon leaking through lens-synthesis, #5 generic rest
+- **Changes:** Reframed gloss as "invisible lesson", strengthened jargon ban with compound-term prohibition (eye-differentiation challenges, midline habit), added rest-section specificity rule
+- **Commit:** `8fc8277`
+
+### Iteration 16
+- **Issues:** #1 clinical jargon in booklet-reflection, #4 abstract vocab in lesson-concepts, #8 inconsistent accessibility
+- **Changes:** Expanded reflection jargon ban (skeletal resonance, heavy propping, etc.), added everyday-physics requirement to lesson-concepts, added global 8th-grade reading level constraint to all booklet queries
+- **Commit:** `14aabc7`
+
+### Iteration 17
+- **Issues:** #1 abrupt endings in Journey, #2 jargon still in lens-synthesis, #5 generic rest instructions
+- **Changes:** Added completeness guard to pedagogical-gloss, moved jargon ban to TOP of lens-synthesis prompt (primacy effect), added lens-specific rest handling rule
+- **Commit:** `725094b`
+
+### Iteration 18
+- **Issues:** #1 VL-5 Red Light reflex jargon, #2 VL-1 "buoyant column", #4 textbook tone
+- **Changes:** Added plain-language translation table to vl1.md (buoyancy → "feeling of being held up", etc.), expanded lesson-concepts jargon ban (Red Light reflex, buoyant column, ground reaction force), banned reorganize/integrate verbs
+- **Files:** `data/frameworks/v1/vl1.md`, `src/kb/web.py`
+- **Commit:** `fe1d1c0`
+
+### Iteration 19
+- **Issues:** #1 anatomical terms (cervical, supine), #4 VL-5 Red Light reflex, #5 voice inconsistency
+- **Changes:** Banned cervical/lateral/supine/prone in lesson-concepts with translations, added plain-language translation table to vl5.md, enforced second-person voice in pedagogical-gloss
+- **Files:** `data/frameworks/v1/vl5.md`, `src/kb/web.py`
+- **Commit:** `fc7d94c`
+
+### Iteration 20
+- **Issues:** #1 clinical movement terms in Journey, #4 VL-3 signal jargon, #7 anatomy in booklet-intro
+- **Changes:** Added plain-language translation table to vl3.md (motor plan → "what you intended to do", etc.), expanded gloss banned terms (vertical column, signal static, visual field, sacrum), added plain anatomy rule to booklet-intro
+- **Files:** `data/frameworks/v1/vl3.md`, `src/kb/web.py`
+- **Commit:** `86bf15b`
+
+### Performance (all iterations)
+Booklet generation times remained stable throughout:
+- booklet:VL-1: 16.5s
+- booklet:VL-2: 15.0s
+- booklet:VL-3: 14.4s
+- booklet:VL-4: 13.7s
+- booklet:VL-5: 15.1s
+
+No regressions detected. No rollbacks needed.
+
+### Summary of progress
+**Resolved issues:**
+- Hardcoded "Every Feldenkrais lesson..." boilerplate (eliminated in iter 13)
+- Truncated text in booklet-reflection and lens-synthesis (eliminated in iter 11)
+- Undefined Washing/Foundation jargon (inline definitions added in iter 13)
+
+**Significantly improved:**
+- Clinical/anatomical jargon (extensive ban lists across all components, plain-language translations for VL-1, VL-3, VL-5)
+- Generic boilerplate in booklet-intro (anti-boilerplate, unique hooks required)
+- Journey section tone (shifted from instruction-echoing to "invisible lesson" framing)
+- Reading level (global 8th-grade constraint added)
+
+**Persistent issues (addressable in future iterations):**
+- Textbook tone still creeps into "What Changed" sections via lens-synthesis
+- VL-3 (Tuner) specificity remains challenging — signal metaphors need more grounding
+- Generic rest/scanning instructions still appear in Journey despite rules
