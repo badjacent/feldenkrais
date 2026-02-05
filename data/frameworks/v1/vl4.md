@@ -4,9 +4,9 @@
 
 The mechanics of proximal-distal transmission. How does power flow from your center to your edges? We explore the kinetic chain that bridges the largest muscles and heaviest bones to the delicate instruments of the hands and feet — the proximal core "carrying" the distal limbs.
 
-## The Shadow: Straining (The Isolate)
+## The Habit: Disconnecting (The Isolate)
 
-This is the habit of **functional disconnection**. You try to move the world using only your smallest, most delicate parts, cutting them off from the power of the core.
+This is the habit of **functional disconnection**. The default is to move using only the smallest, most delicate parts, cutting them off from the power of the core.
 
 * **Peripheral Effort:** Lifting the arm from the shoulder socket or the leg from the hip crease alone, without the spine's help.
 * **Orphaned Limbs:** Reaching or stepping as if the arm or leg were a separate attachment rather than an extension of the trunk.

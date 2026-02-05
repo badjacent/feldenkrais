@@ -1,0 +1,96 @@
+{
+  "current_version": "v1",
+  "versions": {
+    "v1": {
+      "created": "2025-01-29",
+      "note": "Initial registry — 5 frameworks from existing implementation",
+      "frameworks": [
+        {
+          "id": "VL-1",
+          "key": "vl1_riser",
+          "name": "The Riser",
+          "subtitle": "The Lens of Integrity",
+          "mechanism": "Skeletal force transmission — weight drops through bone while ground reaction force rises to the crown.",
+          "how_achieved": "Integrity is achieved by stacking the skeletal columns to allow the floor's upward pressure wave to transmit force effortlessly from earth to crown.",
+          "display_name": "VL-1 The Riser",
+          "focus": "Gravity, skeletal columns, longitudinal force",
+          "indicators": "Standing, weight transfer, spine as column, lengthening",
+          "prompt_file": "vl1.md",
+          "active": true,
+          "lens": "How force travels through your skeleton from the floor to your crown. When you're truly vertical, the floor pushes up through your bones all the way to your head — you don't have to hold yourself up.",
+          "person_inside": "The Riser",
+          "person_description": "The inner being who senses your relationship with gravity. They feel weight dropping through bone, they know when the column is stacked and when it's collapsing. Every movement is received as: <em>What just happened to my column? Is force transmitting cleanly through my bones, or is something buckling?</em>",
+          "shadow_description": "The habit of distrusting the ground. They grip the lower back, clench the waist, pull the head up with the neck. They believe that without their effort, everything would collapse. The lesson shows that bones can do what muscles have been forcing."
+        },
+        {
+          "id": "VL-2",
+          "key": "vl2_body_mapping",
+          "name": "The Cartographer",
+          "subtitle": "The Lens of Differentiation and Illumination",
+          "mechanism": "Cortical differentiation — small, precise movements light up dormant regions of the sensory-motor homunculus.",
+          "how_achieved": "Illumination occurs through micro-differentiation, lighting up dormant cortical pixels to transform undifferentiated 'clumps' into high-definition movement.",
+          "display_name": "VL-2 The Cartographer",
+          "focus": "Micro-differentiation, joint resolution",
+          "indicators": "Small precise movements, sensing specific joints, body mapping",
+          "prompt_file": "vl2.md",
+          "active": true,
+          "lens": "Your brain has a 'map' of your body — some parts are highly detailed, others are blurry. This lens sees how the lesson lights up the dark spots on that map, turning vague regions into articulated joints.",
+          "person_inside": "The Cartographer",
+          "person_description": "The inner being who holds the cortical self-image. They see the body as a territory with bright regions and dark regions. Every movement is received as: <em>What just became visible? What pixel lit up that was dark before? Where did I discover a joint I didn't know I had?</em>",
+          "shadow_description": "The habit of sensory blurring — moving in clumps and blocks. When the map is dark, the brain defaults to moving everything at once because it cannot distinguish the individual parts. The lesson illuminates the map until the blur dissolves into articulation."
+        },
+        {
+          "id": "VL-3",
+          "key": "vl3_tuner",
+          "name": "The Tuner",
+          "subtitle": "The Lens of Congruency",
+          "mechanism": "Motor plan actuation via eyes, jaw, and neck — these orientation structures determine whether intent can be cleanly executed.",
+          "how_achieved": "Congruency is achieved by clarifying the orientation of the eyes and jaw, which clears the noise of obscured intent and allows the motor plan to be accurately actuated.",
+          "display_name": "VL-3 The Tuner",
+          "focus": "Intent-to-action clarity, motor plan actuation, orientation",
+          "indicators": "Eye movements, jaw relaxation, neck freedom, movement-intent alignment",
+          "prompt_file": "vl3.md",
+          "active": true,
+          "lens": "How does the clarity of your intent affect the quality of your movement? This lens investigates the master switches — eyes, jaw, neck — to ensure the motor plan created in the mind can be successfully actuated in the body.",
+          "person_inside": "The Tuner",
+          "person_description": "The one who manages the 'meeting' between your thoughts and your actions. They are the expert in <em>Actuation</em>. They don't generate the power, but they make sure the signal is clean. Every movement is received as: <em>Is my plan clear? Am I looking where I intend to go, or am I 'Fixing' my eyes while my body tries to turn?</em>",
+          "shadow_description": "A breakdown in the planning process. Because the system cannot find its orientation, it defaults to a 'locked' state — hard eyes that freeze the neck, a clamped jaw that signals 'stop' to the spine, moving the body without moving the intent. The lesson clears the path from thought to action."
+        },
+        {
+          "id": "VL-4",
+          "key": "vl4_engine",
+          "name": "The Engine",
+          "subtitle": "The Lens of Potency",
+          "mechanism": "Proximal-distal transmission — power generated in the core flows through the kinetic chain to the limbs.",
+          "how_achieved": "Potency relies on the skeletal kinetic chain to transmit the massive power of the pelvis and core out to the limbs as weightless extensions.",
+          "display_name": "VL-4 The Engine",
+          "focus": "Proximal-distal transmission, core-to-limb power, kinetic chain",
+          "indicators": "Arm/leg reaching, connection to trunk, weightless limbs, whole-body movement",
+          "prompt_file": "vl4.md",
+          "active": true,
+          "lens": "The mechanics of proximal-distal transmission. How does power flow from your center to your edges? This lens explores the kinetic chain that bridges the core to the limbs — the proximal 'carrying' the distal.",
+          "person_inside": "The Engine",
+          "person_description": "The being who lives in your powerhouse — the pelvis, the low back, and the deep core. They provide the thrust and initiation. Every movement is received as: <em>Is my power reaching the hand, or is it leaking out at the shoulder? Am I asking my wrist to do a job that my pelvis should be doing?</em>",
+          "shadow_description": "The habit of functional disconnection. Lifting the arm from the shoulder alone, kicking the leg without engaging the pelvis — working each limb as a separate machine cut off from the engine of the trunk. The lesson restores the proximal-distal bridge until every reach is a whole-body event."
+        },
+        {
+          "id": "VL-5",
+          "key": "vl5_soft_front",
+          "name": "The Soft Front",
+          "subtitle": "The Lens of Permission",
+          "mechanism": "Flexion-extension balance — releasing the protective 'red light' reflex to find true spinal neutrality.",
+          "how_achieved": "Permission is granted by inhibiting the protective flexion reflex, allowing the abdominal wall to soften so the spine can unfurl into its full vertical length.",
+          "display_name": "VL-5 The Soft Front",
+          "focus": "Flexion/extension, protective reflexes, front body availability",
+          "indicators": "Curling/uncurling, abdominal softening, breathing depth, spinal neutrality",
+          "prompt_file": "vl5.md",
+          "active": true,
+          "lens": "The balance of protection and expansion. Can you fold and unfurl with equal ease? This lens explores the 'Red Light' reflex — the habit of shortening the front body — to find a neutral spine free to move in any direction.",
+          "person_inside": "The Soft Front",
+          "person_description": "The being who lives in your 'inner curve' — the throat, the chest, the belly, and the psoas. They are the barometer of your safety. They don't care about strength; they care about <em>Safety and Space</em>. Every movement is received as: <em>Am I safe enough to let go of this knot? Does my front feel long and quiet, or am I still wearing my armor?</em>",
+          "shadow_description": "The habit of preemptive protection. Even in total safety, the Shadow keeps the 'armor' on — constant low-level belly tension, reflexive crunching at any hint of challenge, resistance to opening. The lesson proves it is safe to soften, giving the nervous system permission to let go."
+        }
+      ]
+    }
+  }
+}

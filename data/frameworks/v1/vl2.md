@@ -3,7 +3,7 @@
 ## Primary Inquiry
 Differentiation of joints and clarifying the cortical self-image. Where exactly is the movement happening?
 
-## Shadow Mode (Cortical Effort)
+## The Habit: Blurring
 - Moving body parts as undifferentiated "clumps" or rigid blocks
 - Confusing hip for waist, shoulder for arm
 - Gross, undifferentiated movement patterns
@@ -22,7 +22,7 @@ Increased "Degrees of Freedom" and clarity in joint location (e.g., distinguishi
 
 **The Cartographer** — the inner being who maps the body, who holds the cortical self-image. This person sees the body as a territory with bright regions and dark regions, detailed zones and blank spots. Every movement in the lesson is received by the Cartographer as: *"What just became visible? What pixel lit up that was dark before? Where did I discover a joint I didn't know I had?"*
 
-**The Shadow:** The Blunt Mover — the one who can only move in clumps and blocks. They don't distinguish hip from waist, shoulder from arm, one vertebra from another. They move "the leg" when only the ankle was asked. The lesson's work is to illuminate the map until the Blunt Mover dissolves into articulation.
+**The habit:** Blunt movement — moving in clumps and blocks without distinguishing hip from waist, shoulder from arm, one vertebra from another. "The leg" moves when only the ankle was asked. The lesson lights up the map until the blur dissolves into articulation.
 
 ## Writing Voice for VL-2
 

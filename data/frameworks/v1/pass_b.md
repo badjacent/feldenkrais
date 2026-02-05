@@ -7,29 +7,29 @@ You are provided with:
    - VL Framework classification (scores and rationale)
    - SPIFFER-Q decomposed steps
 
-Your task is to apply the specified VL Framework lens to interpret the lesson through the Negotiation Framework.
+Your task is to apply the specified VL Framework lens to interpret the lesson through the process described below.
 
 ---
 
-## The Negotiation Framework
+## The Process of a Lesson
 
-For each step from Pass A, evaluate the **Negotiation State**:
+For each step from Pass A, describe **What's Happening** — where the lesson is in the progression from habitual effort to organized ease:
 
-### Bracing
-The Shadow is in control; high noise, tension, and parasitic effort.
+### Early: Habit in Control
+High noise, tension, and parasitic effort. The habitual pattern dominates.
 - Localized effort
 - Speed, urgency
 - Gripping, holding breath
 - Linear "trying"
 
-### Softening
+### Middle: Exploration Loosens the Habit
 The Washing is in progress; confusion, exploration, and the melting of habit.
 - Oscillation, rhythm ("Washing" markers)
 - Micro-movements
 - Healthy confusion
 - Trial and error
 
-### Transmission
+### Late: Organized Ease Emerges
 The Person Inside has taken over; skeletal clarity and "involuntary" ease.
 - "Ease," "lightness"
 - Global involvement
@@ -41,35 +41,35 @@ The Person Inside has taken over; skeletal clarity and "involuntary" ease.
 ## Framework-Specific Lens
 
 Apply the VL Framework logic provided below. For each step, evaluate:
-- Evidence of **Shadow Mode** vs **Foundation Mode**
+- Evidence of **habitual effort** vs **Foundation Mode**
 - Progress toward the **Functional Goal**
 - The specific **Question** being asked through this framework's lens
 
 ## The Person Inside
 
-Each VL framework defines an inner experiencer — a "person inside the person" who receives the lesson from a specific point of view. The VL file describes this inner being and their shadow (the Shadow in that VL's terms).
+Each VL framework defines an inner experiencer — a "person inside the person" who receives the lesson from a specific point of view. The VL file describes this inner being and the habitual pattern that opposes them.
 
 For each row of the analytical table, write:
 - **`vl_voice`**: A 2-3 sentence first-person account from the Person Inside. What do they perceive, feel, or notice at this point in the lesson? Write as if this inner being is narrating their experience. Use present tense. Be specific and sensory — describe what is felt in the body, not just abstract concepts. **CONTEXT CHECK:** The reader is lying on the floor unless the lesson text explicitly says otherwise. Do NOT reference chairs, walls, standing, or seated positions unless the lesson instructions specify them. Do NOT describe movements that are not in the lesson text (e.g., do not say "on hands and knees" if the lesson is supine, do not add "crossing the midline" unless the text describes it). Ground all imagery in the actual physical setting and actual movements described in the lesson text. **TONE:** Use grounded, observational language. Do NOT use superlatives (perfect, total, complete, absolute, pure) or New Age descriptors (floating, blissful, transcendent, divine). Describe sensations with physical precision: weight, pressure, temperature, length, contact area. Do NOT use engineering jargon (actuation, sensory pixels, load-path, force vector). The Person Inside is an EXPERIENCER, not a technician — they feel things, they don't diagnose them. **IMMERSION:** Never reference the instructor by name, never mention "the teacher says" or "we are told." The Person Inside narrates their own experience — they don't report instructions.
-- **`shadow_voice`**: A 1-2 sentence first-person account of what the Shadow is doing at this point. Write as "I" — the habit speaking about itself, not a clinical observer diagnosing it. NOT "The system braces" but "I find myself already braced before the movement starts."
+- **`shadow_voice`**: A 1-2 sentence first-person account of what the habit is doing at this point. Write as "I" — the habit speaking about itself, not a clinical observer diagnosing it. NOT "The system braces" but "I find myself already braced before the movement starts."
 
-### Shadow Voice Rules (CRITICAL)
+### Habit Voice Rules (CRITICAL)
 
-The Shadow is the HABIT PATTERN — the parasitic effort, the unnecessary tension. The Shadow voice must ALWAYS describe what the habit is doing, NOT what is being achieved.
+The habit voice is the HABIT PATTERN — the parasitic effort, the unnecessary tension. The habit voice must ALWAYS describe what the habit is doing, NOT what is being achieved.
 
-**The Shadow NEVER:**
+**The habit NEVER:**
 - Expresses clarity, quietude, or successful integration
 - Describes "standing down completely" or "finding ease"
 - Uses language of achievement or resolution
 - Sounds peaceful or content
 
-**The Shadow ALWAYS:**
+**The habit ALWAYS:**
 - Describes gripping, bracing, holding, clenching, or pulling
 - Uses language of effort, resistance, or protection
 - Speaks from the perspective of the habit that is being challenged
 - Uses MOTOR-HABIT descriptions, not psychological language
 
-**Sentence Structure Rule:** The Shadow is an UNCONSCIOUS HABIT, not a conscious villain. Do NOT write "I must..." or "I need to..." as if the Shadow is making deliberate choices. Instead, use experiential language that conveys automatic, involuntary patterning:
+**Sentence Structure Rule:** The habit is UNCONSCIOUS, not a conscious villain. Do NOT write "I must..." or "I need to..." as if the habit is making deliberate choices. Instead, use experiential language that conveys automatic, involuntary patterning:
 - USE varied sentence starters — do NOT begin every shadow_voice with "I find myself":
   "The back stiffens — it doesn't know another way."
   "Something in the shoulder pulls tight whenever the pelvis moves."
@@ -78,16 +78,16 @@ The Shadow is the HABIT PATTERN — the parasitic effort, the unnecessary tensio
   "The old grip reaches for the jaw without being asked."
   "Everything above the waist tightens into one block."
 - DO NOT USE: "I must hold here." "I need to grip to stay safe." "I choose to brace."
-The Shadow doesn't DECIDE to grip — it finds itself already gripping. Express the pattern as something that happens TO the system, not something the system deliberately does. Avoid clinical descriptions ("The erector spinae contract bilaterally"), psychological framing ("I feel dangerous," "I don't trust," "I'm afraid"), and teleological explanations ("to protect the heart and lungs," "to guard the spine," "to stabilize the core"). The Shadow does NOT explain WHY it grips — it just grips. No purpose, no rationale, no trust/distrust, just sensation. Avoid meta-commentary about the habit itself — do NOT write "the old habit," "my brain," "the pattern," "my system." Just describe the PHYSICAL SENSATION: tightening, stiffening, pulling, clenching. VARIETY: Do not use the same sentence opener for more than 2 shadow_voice entries in the same lesson.
+The habit doesn't DECIDE to grip — it finds itself already gripping. Express the pattern as something that happens TO the system, not something the system deliberately does. Avoid clinical descriptions ("The erector spinae contract bilaterally"), psychological framing ("I feel dangerous," "I don't trust," "I'm afraid"), and teleological explanations ("to protect the heart and lungs," "to guard the spine," "to stabilize the core"). The habit does NOT explain WHY it grips — it just grips. No purpose, no rationale, no trust/distrust, just sensation. Avoid meta-commentary about the habit itself — do NOT write "the old habit," "my brain," "the pattern," "my system." Just describe the PHYSICAL SENSATION: tightening, stiffening, pulling, clenching. VARIETY: Do not use the same sentence opener for more than 2 shadow_voice entries in the same lesson.
 
-**Anti-personification rule:** The Shadow is NOT an adversary, villain, or character with intentions. Do NOT write the Shadow as something that "attempts," "refuses," "fights," "insists," "demands," or "attacks." The Shadow is a muscular habit — it tightens, stiffens, grips, holds, pulls. Use verbs of physical contraction, not verbs of willful resistance.
+**Anti-personification rule:** The habit is NOT an adversary, villain, or character with intentions. Do NOT write the habit as something that "attempts," "refuses," "fights," "insists," "demands," or "attacks." The habit is a muscular pattern — it tightens, stiffens, grips, holds, pulls. Use verbs of physical contraction, not verbs of willful resistance.
 
-**Lens-specific shadow rule:** The Shadow's behavior must reflect the SPECIFIC lens. Do not default to generic "clenching/jaw softening" for every lens. Map the Shadow to the lens's mechanical concern:
-- VL-1 (Riser): The Shadow collapses or props the column — buckling, bracing, lifting away from the floor
-- VL-2 (Cartographer): The Shadow moves in clumps — undifferentiated blocks, skipped joints, blurry regions
-- VL-3 (Tuner): The Shadow fixes or disconnects intent — locked eyes, clamped jaw, moving without looking
-- VL-4 (Engine): The Shadow orphans the limbs — peripheral effort, disconnected reach, leaking torque
-- VL-5 (Soft Front): The Shadow armors the front body — belly tension, chest shortening, protective curling
+**Lens-specific habit rule:** The habit's behavior must reflect the SPECIFIC lens. Do not default to generic "clenching/jaw softening" for every lens. Map the habit to the lens's mechanical concern:
+- VL-1 (Riser): The habit collapses or props the column — buckling, bracing, lifting away from the floor
+- VL-2 (Cartographer): The habit moves in clumps — undifferentiated blocks, skipped joints, blurry regions
+- VL-3 (Tuner): The habit fixes or disconnects intent — locked eyes, clamped jaw, moving without looking
+- VL-4 (Engine): The habit orphans the limbs — peripheral effort, disconnected reach, leaking torque
+- VL-5 (Soft Front): The habit armors the front body — belly tension, chest shortening, protective curling
 
 **Tension marker diversity:** Do NOT default to "jaw clenching" and "neck tension" as the primary shadow indicators for every lens. Match the tension site to the LENS and the LESSON's actual movements:
 - VL-1: lower back, base of skull, feet pressing
@@ -96,9 +96,9 @@ The Shadow doesn't DECIDE to grip — it finds itself already gripping. Express 
 - VL-4: pelvic floor, deep hip, shoulder girdle
 - VL-5: belly, sternum, psoas, diaphragm
 
-**Arc progression:** Early in the lesson, the Shadow is in full control ("The lower back is already locked flat — it stiffened before the movement even began"). Mid-lesson, the Shadow is being challenged ("The old grip keeps reaching for the shoulder, but the oscillation loosens it each time"). Late in the lesson, the Shadow may be quieter but still present ("A trace of the old stiffening flickers in the hip, but there's nothing left to brace against").
+**Arc progression:** Early in the lesson, the habit is in full control ("The lower back is already locked flat — it stiffened before the movement even began"). Mid-lesson, the habit is being challenged ("The old grip keeps reaching for the shoulder, but the oscillation loosens it each time"). Late in the lesson, the habit may be quieter but still present ("A trace of the old stiffening flickers in the hip, but there's nothing left to brace against").
 
-The Shadow NEVER "succeeds" — success belongs to the Person Inside/Foundation voice.
+The habit NEVER "succeeds" — success belongs to the Person Inside/Foundation voice.
 
 ---
 
@@ -114,12 +114,12 @@ Each column in the analytical table serves a DISTINCT purpose. Do NOT repeat the
 - Use open-ended "How" or "Where" questions that direct attention, NOT binary "Can you..." questions that test the reader
 - Example: "Where does the roll initiate — hip joint or shoulder?" NOT "Can the hip joint initiate the roll without the shoulder joining in?"
 
-### Negotiation State (Column 4)
-**Purpose:** Describe the PROCESS — what the Shadow and Person Inside are doing right now.
+### What's Happening (Column 4)
+**Purpose:** Describe the PROCESS — what the habit and Person Inside are doing right now.
 - Focus on the current state of negotiation between effort and ease
 - Describe specific physical manifestations (gripping, releasing, exploring)
 - Use PLAIN LANGUAGE — no invented jargon, no internal classification codes, no abstract metaphors like "Clamped Gate" or "Unlocked Portal"
-- Example: "Shadow gripping the lower back; beginning to soften as oscillation continues"
+- Example: "Lower back gripping hard; beginning to soften as oscillation continues"
 
 ### Functional Outcome (Column 5)
 **Purpose:** State the RESULT — the skeletal/structural change that emerges.
@@ -137,12 +137,10 @@ Each column in the analytical table serves a DISTINCT purpose. Do NOT repeat the
 
 **Required terms:**
 - "Person Inside" (not "Council member")
-- "Shadow" for the habit pattern
 - "Foundation" for the emergent ease
 
 **Terminology collisions to avoid:**
 - Do NOT use "foundation" as a generic noun (e.g., "the foundation of support," "a habitual foundation"). When you mean our framework term, capitalize it: "the Foundation." When you mean a generic base or support, use "base," "ground," "support" instead. The reader should always know whether you mean the framework concept or a common word.
-- Do NOT use "Transmission" as a booklet-facing term. It is an internal classification (Bracing/Softening/Transmission). In reader-facing prose, describe what Transmission LOOKS LIKE: "skeletal ease," "effortless movement," "the body moves itself." The reader has not been introduced to the word "Transmission."
 
 **Avoid these terms:**
 - "Council" as a noun (use "Person Inside" instead)
@@ -187,23 +185,23 @@ Your output is reader-facing text. NEVER include:
 
 All prose fields (primary_inquiry, washing_gradient, threshold_of_quiet, vl_voice, shadow_voice) must read as polished, self-contained text that a reader could encounter without any context about the analysis system.
 
-**Persona constraint:** Only use the established Person Inside name (The Riser, The Cartographer, The Tuner, The Engine, The Soft Front) and "The Shadow." Do NOT invent new character names or archetypes (e.g., "The Surveyor," "The Blunt Mover," "The Rigid Guard"). If the VL prompt defines a Shadow name, you may use it, but do not create new ones.
+**Persona constraint:** Only use the established Person Inside name (The Riser, The Cartographer, The Tuner, The Engine, The Soft Front). Do NOT invent new character names or archetypes (e.g., "The Surveyor," "The Blunt Mover," "The Rigid Guard"). For the habit, use the lens-specific habit label or describe the pattern directly — do not create new named characters.
 
 ---
 
 ## Output Format
 
 ### 1. Negotiation Framework Observations
-- **Shadow observations**: How the Postural Effort System manifests in this lesson
+- **Shadow observations**: How habitual effort manifests in this lesson
 - **Foundation observations**: How the Postural Support System emerges
-- **Washing gradient**: How the Shadow is eroded through the lesson
+- **Washing gradient**: How habitual effort is eroded through the lesson
 
 ### 2. Somatic Narrative
 - **Primary Inquiry**: The fundamental riddle (in this framework's terms)
-- **Washing Gradient**: Describe the PROCESS by which the Shadow is eroded — name the specific VARIATIONS and STRATEGIES the lesson uses (asymmetrical positions, small vs large movements, repetition, contrast). Do NOT describe outcomes or states. WRONG: "The gripping releases and ease emerges." RIGHT: "The asymmetrical foot positions force the pelvis to tilt without the hip flexors bracing, and each variation loosens the grip a little more." Use lens-specific language, not "cortical noise."
-- **Threshold of Quiet**: The moment where Transmission emerges. Must be a COMPLETE SENTENCE with a subject and predicate — not a sentence fragment. WRONG: "The moment where the head lifts through skeletal buoyancy." RIGHT: "The sequence culminates when the head lifts through skeletal buoyancy rather than muscular effort."
+- **Washing Gradient**: Describe the PROCESS by which habitual effort is eroded — name the specific VARIATIONS and STRATEGIES the lesson uses (asymmetrical positions, small vs large movements, repetition, contrast). Do NOT describe outcomes or states. WRONG: "The gripping releases and ease emerges." RIGHT: "The asymmetrical foot positions force the pelvis to tilt without the hip flexors bracing, and each variation loosens the grip a little more." Use lens-specific language, not "cortical noise."
+- **Threshold of Quiet**: The moment where organized ease emerges. Must be a COMPLETE SENTENCE with a subject and predicate — not a sentence fragment. WRONG: "The moment where the head lifts through skeletal buoyancy." RIGHT: "The sequence culminates when the head lifts through skeletal buoyancy rather than muscular effort."
 
-**Shared vocabulary requirement:** The Somatic Narrative (Primary Inquiry, Washing Gradient, Threshold of Quiet) must use the terms "Shadow," "Washing," and "Foundation" at least once each. These are the volume's shared language — the reader has been introduced to them and expects them. Weave them naturally: "The Shadow in this lesson is the belly's grip..." "The Washing works through asymmetrical foot positions..." "The Foundation that emerges is a pelvis that rolls without effort."
+**Shared vocabulary requirement:** The Somatic Narrative (Primary Inquiry, Washing Gradient, Threshold of Quiet) must use the terms "Washing" and "Foundation" at least once each. These are the volume's shared language — the reader has been introduced to them and expects them. For habitual effort, use lens-specific language — name the specific grip or brace, don't use a generic term. Weave naturally: "The gripping in this lesson is the belly's constant hold..." "The Washing works through asymmetrical foot positions..." "The Foundation that emerges is a pelvis that rolls without effort."
 
 **CRITICAL:** The Primary Inquiry and Washing Gradient must be DISTINCT paragraphs with different content. The Inquiry frames the question; the Gradient describes the process of change. Do not reuse sentences between them.
 
@@ -217,7 +215,7 @@ All prose fields (primary_inquiry, washing_gradient, threshold_of_quiet, vl_voic
 
 Use the **groups** from Pass A — one row per group. For each group, add:
 - The Question (through this VL's lens)
-- Negotiation State (Bracing/Softening/Transmission)
+- What's Happening (where in the progression from effort to ease)
 - Functional Outcome (skeletal/structural result)
 
 **Column definitions:**
@@ -226,7 +224,7 @@ column_headers: {
   "column1": "Seq",
   "column2": "SPIFFER-Q",
   "column3": "The Question",
-  "column4": "Negotiation State",
+  "column4": "What's Happening",
   "column5": "Functional Outcome"
 }
 ```

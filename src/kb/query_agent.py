@@ -344,15 +344,11 @@ class QueryAgent:
                 prompt = html_mod.escape(block.prompt)
                 replacements[i] = (
                     f'<div class="llm-filled-group" data-query-type="{qtype}" data-block-id="{bid}">'
-                    f'<div class="llm-tab-bar">'
-                    f'<button class="llm-tab active" data-show="response">Response</button>'
-                    f'<button class="llm-tab" data-show="prompt">Prompt</button>'
-                    f'</div>'
-                    f'<div class="llm-filled llm-tab-content active" data-panel="response">'
+                    f'<div class="llm-filled">'
                     f"<p>{text}</p>"
-                    f"</div>"
-                    f'<div class="llm-query llm-tab-content" data-panel="prompt" style="display:none;">'
-                    f'<p class="query-prompt">{prompt}</p>'
+                    f'<span class="prompt-link" onclick="this.nextElementSibling.showModal()">(prompt)</span>'
+                    f'<dialog class="prompt-dialog"><p class="query-prompt">{prompt}</p>'
+                    f'<button onclick="this.closest(\'dialog\').close()">Close</button></dialog>'
                     f"</div>"
                     f"</div>"
                 )

@@ -4,9 +4,9 @@
 
 How does the clarity of your intent affect the quality of your movement? We investigate the master switches of the nervous system—the eyes, jaw, and neck—to ensure the "motor plan" created in the mind can be successfully actuated in the body.
 
-## The Shadow: Fixing (Obscured Intent)
+## The Habit: Fixing (Obscured Intent)
 
-This is a breakdown in the **planning process**. Because the system cannot find its orientation, it defaults to a "locked" state, creating a false stability that prevents the movement plan from being carried out.
+This is a breakdown in the **planning process**. When orientation is lost, the default is a "locked" state — a false stability that prevents the movement plan from being carried out.
 
 * **Hard Eyes:** A fixed gaze that "grabs" at the world, freezing the neck and halting the flow of intent.
 * **The Clamped Gate:** A locked jaw that signals a "stop" command to the rest of the spine.

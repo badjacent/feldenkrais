@@ -11,7 +11,7 @@
     },
     "negotiation_framework": {
       "type": "object",
-      "description": "Observations about the Shadow/Foundation negotiation",
+      "description": "Observations about the habit pattern/Foundation negotiation",
       "properties": {
         "shadow_observations": {
           "type": "array",
@@ -25,7 +25,7 @@
         },
         "washing_gradient": {
           "type": "string",
-          "description": "How the Shadow is eroded through the lesson"
+          "description": "How habitual effort is eroded through the lesson"
         }
       },
       "required": ["shadow_observations", "foundation_observations", "washing_gradient"]
@@ -40,11 +40,11 @@
         },
         "washing_gradient": {
           "type": "string",
-          "description": "How cortical noise is reduced"
+          "description": "How habitual effort is reduced through the lesson's variations"
         },
         "threshold_of_quiet": {
           "type": "string",
-          "description": "The moment where Transmission emerges"
+          "description": "The moment where organized ease emerges"
         }
       },
       "required": ["primary_inquiry", "washing_gradient", "threshold_of_quiet"]
@@ -79,7 +79,7 @@
               },
               "shadow_voice": {
                 "type": "string",
-                "description": "What the Shadow shadow is doing or experiencing at this point"
+                "description": "What the habit pattern is doing or experiencing at this point"
               }
             },
             "required": ["column1", "column2", "column3", "column4", "column5", "vl_voice", "shadow_voice"]

@@ -388,7 +388,7 @@ For each section of the chapter, report ONLY problems:
   disconnected from the actual movements in this lesson? Does it read like a
   template that could apply to any lesson? Is it too short or too long?
 - **Journey (each part)**: Are pedagogical glosses generic rather than specific to
-  the actual movements described? Do the Person Inside / Shadow dialogue voices
+  the actual movements described? Do the Person Inside / habit dialogue voices
   sound fake, repetitive, or disconnected from what the teacher is actually asking?
 - **How Feldenkrais Lessons Work**: Does this section contextualize the key concepts
   for THIS lesson, or is it generic boilerplate?
@@ -402,7 +402,7 @@ For each problem found:
 4. Identify the fix target — where in the system to make the change:
    - "prompt:pedagogical-gloss" — the LLM prompt that generated pedagogical glosses
    - "prompt:person-inside" — the Person Inside voice prompt
-   - "prompt:shadow-voice" — the Shadow voice prompt
+   - "prompt:shadow-voice" — the habit voice prompt
    - "prompt:lens-synthesis" — the Person Inside narrative prompt
    - "prompt:lesson-concepts" — the How Feldenkrais Lessons Work prompt
    - "prompt:volume-intro" — the volume intro prompt

@@ -235,7 +235,8 @@ def get_vl_booklet_intros(framework_version: str | None = None) -> dict[str, dic
                 "lens": f.get("lens", ""),
                 "person_inside": f.get("person_inside", ""),
                 "person_description": f.get("person_description", ""),
-                "shadow_description": f.get("shadow_description", ""),
+                "habit_description": f.get("habit_description", ""),
+                "habit_label": f.get("habit_label", ""),
             }
         _vl_booklet_intros_cache[v] = intros
     return _vl_booklet_intros_cache[v]
@@ -1457,7 +1458,7 @@ def render_pass_b_analysis(data: dict, pass_a_result: dict = None) -> str:
         html.append("<h3>Negotiation Framework</h3>")
 
         if neg.get("shadow_observations"):
-            html.append("<h4>The Shadow (Effort System)</h4><ul>")
+            html.append("<h4>Habitual Effort</h4><ul>")
             for obs in neg["shadow_observations"]:
                 html.append(f"<li>{obs}</li>")
             html.append("</ul>")
@@ -1566,7 +1567,7 @@ def render_pass_b_analysis(data: dict, pass_a_result: dict = None) -> str:
                     if vl_voice:
                         html.append(f'<div style="margin-bottom: 6px;"><span style="color: #007bff; font-weight: bold;">Person Inside:</span> <em>{vl_voice}</em></div>')
                     if shadow_voice:
-                        html.append(f'<div><span style="color: #dc3545; font-weight: bold;">Shadow:</span> <em>{shadow_voice}</em></div>')
+                        html.append(f'<div><span style="color: #dc3545; font-weight: bold;">Habit:</span> <em>{shadow_voice}</em></div>')
                     html.append('</td></tr>')
 
             html.append("</tbody></table></div>")
@@ -1609,10 +1610,10 @@ def render_pass_b_analysis(data: dict, pass_a_result: dict = None) -> str:
                         card_time_str = f"{format_timestamp(min(_ts))} \u2013 {format_timestamp(max(_te))}"
 
                 neg_state = ""
-                # Find the negotiation state column (typically column4)
+                # Find the negotiation state / what's happening column (typically column4)
                 for col in columns:
                     header = display_names.get(col, "").lower()
-                    if "negotiation" in header or "state" in header:
+                    if "negotiation" in header or "state" in header or "happening" in header:
                         neg_state = row.get(col, "")
                         break
 
@@ -1643,7 +1644,7 @@ def render_pass_b_analysis(data: dict, pass_a_result: dict = None) -> str:
                     if not val or col == "column1":
                         continue
                     header_lower = header.lower()
-                    if "negotiation" in header_lower or "state" in header_lower:
+                    if "negotiation" in header_lower or "state" in header_lower or "happening" in header_lower:
                         continue  # already shown as badge
                     html.append(f'''
                         <div style="margin-bottom: 12px;">
@@ -1667,7 +1668,7 @@ def render_pass_b_analysis(data: dict, pass_a_result: dict = None) -> str:
                     if shadow_voice:
                         html.append(f'''
                             <div style="margin-bottom: 12px; padding: 12px 16px; background: #fff5f5; border-radius: 6px; border-left: 3px solid #dc3545;">
-                                <div style="font-size: 0.75em; font-weight: bold; color: #dc3545; text-transform: uppercase; margin-bottom: 4px;">The Shadow</div>
+                                <div style="font-size: 0.75em; font-weight: bold; color: #dc3545; text-transform: uppercase; margin-bottom: 4px;">The Habit</div>
                                 <div style="font-style: italic; color: #555; line-height: 1.5;">{shadow_voice}</div>
                             </div>
                         ''')
@@ -1771,7 +1772,7 @@ def render_analysis(data: dict, schema: dict, pass_a_result: dict = None) -> str
         # Shadow observations (fallback: old "striver" key for cached data)
         shadow_key = next((k for k in phase2.keys() if "shadow" in k.lower() or "striver" in k.lower() or "effort" in k.lower()), None)
         if shadow_key and phase2.get(shadow_key):
-            html.append("<h3>The Shadow (Effort System)</h3>")
+            html.append("<h3>Habitual Effort</h3>")
             html.append("<ul>")
             for obs in phase2[shadow_key]:
                 html.append(f"<li>{obs}</li>")
@@ -4525,7 +4526,7 @@ BOOKLET_QUERY_TYPES = {
             "wants to understand what happened on the floor.\n\n"
             "IMPORTANT: A separate section called 'The Council of Five' follows immediately after "
             "your text. That section explains the conceptual framework in depth "
-            "(Shadow, Person Inside, Bracing→Softening→Transmission). Do NOT duplicate that "
+            "(Person Inside, Washing, Foundation). Do NOT duplicate that "
             "theoretical material. However, you SHOULD briefly preview the five lenses to orient "
             "the reader before they encounter the full framework.\n\n"
             "The volume contains five booklets, one per analytical lens:\n{lens_summaries}\n\n"
@@ -4549,17 +4550,19 @@ BOOKLET_QUERY_TYPES = {
             "booklets, you'll notice some ideas repeat. This is intentional. Just as a lesson "
             "uses repetition to guide you through an experience, each booklet carries you through "
             "its own reading journey with the framing it needs.\n\n"
-            "Do NOT explain the Shadow/Foundation framework in detail — the Council section "
+            "Do NOT explain the framework in detail — the Council section "
             "handles that. Keep the tone personal and practical. "
             "Banned words: illuminate, illumination, decode, unlock, journey, vessel.\n\n"
-            "BRIDGE NOTE: Each booklet uses three ideas applied through a different lens. "
-            "Briefly introduce these so the reader recognizes them when they appear:\n"
-            "- The SHADOW: the habitual effort underneath every movement — the gripping or "
-            "bracing that the lesson gradually loosens.\n"
-            "- The WASHING: how the lesson erodes the Shadow — through repetition, variation, "
-            "and gentle oscillation.\n"
-            "- The FOUNDATION: what you feel when the Shadow quiets — ease that was always "
+            "BRIDGE NOTE: Each booklet uses two shared ideas plus lens-specific habit "
+            "language. Briefly introduce the shared ideas so the reader recognizes them "
+            "when they appear:\n"
+            "- The WASHING: how the lesson erodes habitual effort — through repetition, "
+            "variation, and gentle oscillation.\n"
+            "- The FOUNDATION: what you feel when the habit quiets — ease that was always "
             "there but hidden under effort.\n"
+            "Each lens also names the habitual effort differently — the propping, the blur, "
+            "the fixing, the disconnect, the armor — because each lens sees a different "
+            "aspect of the same gripping.\n"
             "Keep these brief (one sentence each). These terms appear naturally throughout "
             "each booklet — they are not section headers or a formal framework, just shared "
             "language for describing what happens on the floor. The five lenses are five "
@@ -4750,7 +4753,7 @@ BOOKLET_QUERY_TYPES = {
     },
     "lens-synthesis": {
         "name": "Lens Narrative",
-        "location": "The Lens section, after Person Inside and Shadow descriptions",
+        "location": "The Lens section, after Person Inside and habit descriptions",
         "purpose": "Retell the lesson as a condensed first-person narrative from the Person Inside's "
                    "perspective, weaving the per-step vl_voice entries into a coherent arc.",
         "voice": "First-person, present tense, from the Person Inside. Sensory and grounded — "
@@ -4762,7 +4765,7 @@ BOOKLET_QUERY_TYPES = {
             "Below are your moment-by-moment observations as the lesson unfolded. "
             "Each entry is what you noticed at one stage of the lesson:\n\n"
             "{vl_voices}\n\n"
-            "And here is what the Shadow — the habit pattern — was doing at each stage:\n\n"
+            "And here is what the habit — the lens-specific effort pattern — was doing at each stage:\n\n"
             "{shadow_voices}\n\n"
             "Now write a CONDENSED NARRATIVE (2-4 paragraphs) that retells this lesson's "
             "arc from your perspective as {person_inside}. Weave the step-by-step observations "
@@ -4773,10 +4776,10 @@ BOOKLET_QUERY_TYPES = {
             "- Reference SPECIFIC body parts and movements from the observations above\n"
             "- Show the arc: early bracing → exploration/softening → emergence\n"
             "- Do NOT list the observations one by one — synthesize them into prose\n"
-            "- Do NOT redefine who you are or what the Shadow is — the reader already knows\n"
-            "- Do NOT use 'Shadow' as a proper noun in your narrative. You are the Person "
+            "- Do NOT redefine who you are or explain the habit concept — the reader already knows\n"
+            "- Do NOT use 'Shadow' as a word at all. You are the Person "
             "Inside experiencing the lesson — you feel tension, gripping, holding, bracing. "
-            "You do not think 'the Shadow grips'; you feel 'something grips.' Write the "
+            "You feel 'something grips,' not 'the Shadow grips.' Write the "
             "EXPERIENCE of the habit, not clinical commentary about it.\n"
             "- Do NOT copy phrases verbatim from the per-step observations. The Journey "
             "section already presents the raw observations word-for-word. Your job is to "
@@ -4794,7 +4797,7 @@ BOOKLET_QUERY_TYPES = {
             "'The same movement that began as effort arrives as information.'\n"
             "- Do NOT invent new archetypes or named characters (e.g., 'The Blunt Mover', "
             "'The Rigid Guard'). Use only established terms: the Person Inside name "
-            "({person_inside}), the Shadow, the Foundation.\n"
+            "({person_inside}) and the Foundation.\n"
             "- Use grounded, physical language — weight, pressure, length, contact area\n"
             "- LENS CONNECTION: Your narrative must show how the lesson's movements "
             "connect to {framework_name}'s specific concern. Don't just describe what "
@@ -4850,7 +4853,7 @@ BOOKLET_QUERY_TYPES = {
     "lesson-concepts": {
         "name": "Lesson Concepts",
         "location": "How Feldenkrais Lessons Work section",
-        "purpose": "Explain Shadow, Foundation, and Washing in the context of THIS specific lesson.",
+        "purpose": "Explain the habitual effort, Foundation, and Washing in the context of THIS specific lesson.",
         "voice": "Clear, direct, grounded. Write for someone who just finished the lesson.",
         "length": "3-4 sentences",
         "prompt": (
@@ -4858,19 +4861,21 @@ BOOKLET_QUERY_TYPES = {
             "\"{primary_inquiry}\"\n\n"
             "The lesson was explored through the lens of {framework_name}.\n\n"
             "The lesson moved through these sections: {group_summary}\n\n"
-            "Write a short paragraph (3-4 sentences) explaining three ideas that run through "
+            "Write a short paragraph (3-4 sentences) explaining the ideas that run through "
             "this booklet, customized for THIS lesson:\n"
-            "1. The SHADOW — the habitual effort pattern this lesson challenges. Name the "
-            "specific kind of gripping or bracing this lesson targets, using the vocabulary "
-            "of {framework_name} (not generic anatomy).\n"
-            "2. The FOUNDATION — what's underneath once the Shadow softens. Name the specific "
+            "1. The habitual effort — the specific grip or brace this lesson challenges. "
+            "Use lens-specific language from {framework_name} — name the specific pattern "
+            "(the propping, the blur, the fixing, the disconnect, the armor), don't use "
+            "a generic term like 'the Shadow'.\n"
+            "2. The FOUNDATION — what's underneath once the habit softens. Name the specific "
             "skeletal or reflexive support this lesson reveals, in {framework_name}'s terms.\n"
             "3. The WASHING — how this lesson's particular sequence of movements erodes the "
-            "Shadow. Name the specific strategy (repetition, variation, contrast, etc.).\n\n"
-            "IMPORTANT: Use the EXACT terms 'the Shadow', 'the Foundation', and 'the Washing' "
+            "habitual effort. Name the specific strategy (repetition, variation, contrast, etc.).\n\n"
+            "IMPORTANT: Use the EXACT terms 'the Foundation' and 'the Washing' "
             "at least once each in your paragraph. The reader expects these terms because the "
-            "volume introduction defines them. But DO NOT use the same 'The Shadow is... The "
-            "Washing is... The Foundation is...' template for every booklet. Weave the terms "
+            "volume introduction defines them. For the habitual effort, use lens-specific "
+            "language — name the specific grip or brace, don't use 'the Shadow.' "
+            "DO NOT use the same template for every booklet. Weave the terms "
             "naturally into varied prose — sometimes lead with the movement, sometimes with "
             "the concept, sometimes with the sensation.\n\n"
             "Do NOT define these as abstract concepts. Tie each one to THIS lesson's movements. "
@@ -4883,8 +4888,8 @@ BOOKLET_QUERY_TYPES = {
             "What must stay distinct is the QUESTION each lens asks: The Riser asks about "
             "vertical support, The Cartographer asks about what became distinct, The Tuner "
             "asks about intent-to-action clarity, The Engine asks about power delivery, "
-            "The Soft Front asks about front-body availability. Frame the Shadow, Washing, "
-            "and Foundation through {framework_name}'s specific question.\n\n"
+            "The Soft Front asks about front-body availability. Frame the habitual effort, "
+            "Washing, and Foundation through {framework_name}'s specific question.\n\n"
             "Write pure prose — no bullets, no headers, no formatting. "
             "No internal codes (VL-1, etc.). "
             "Banned verbs: seeks, utilizes, identifies, inviting, explores, reveals, "
@@ -5000,9 +5005,9 @@ def map_groups_to_table_rows(groups: list, table: dict, pass_a_steps: dict) -> d
 
 
 def _get_negotiation_state(row: dict, column_headers: dict) -> str:
-    """Extract the negotiation state from a table row."""
+    """Extract the negotiation state / what's happening from a table row."""
     for col, header in column_headers.items():
-        if header and ("negotiation" in header.lower() or "state" in header.lower()):
+        if header and ("negotiation" in header.lower() or "state" in header.lower() or "happening" in header.lower()):
             return row.get(col, "")
     return ""
 
@@ -5268,7 +5273,8 @@ def render_booklet_journey(groups: list, steps: list, vl_analysis: dict, pass_a_
                     html.append(f'<p><strong>{person_inside_name}:</strong> <em>{vl_voice}</em></p>')
 
                 if shadow_voice:
-                    html.append(f'<p><strong>The Shadow:</strong> <em>{shadow_voice}</em></p>')
+                    habit_label = intro.get("habit_label", "The habit")
+                    html.append(f'<p><strong>{habit_label}:</strong> <em>{shadow_voice}</em></p>')
 
         html.append("</div>")  # end journey-group
 
@@ -5285,7 +5291,7 @@ def render_booklet_arc(somatic_narrative: dict, negotiation: dict, groups: list,
     # Washing gradient
     washing = somatic_narrative.get("washing_gradient", "")
     if washing:
-        html.append('<h3>How the Lesson Washed Away Effort</h3>')
+        html.append('<h3>What Changed</h3>')
         html.append(f"<p>{washing}</p>")
 
     # Threshold of quiet
@@ -5300,7 +5306,7 @@ def render_booklet_arc(somatic_narrative: dict, negotiation: dict, groups: list,
         foundation_obs = negotiation.get("foundation_observations", [])
 
         if shadow_obs:
-            html.append('<h3>What the Shadow Was Doing</h3>')
+            html.append('<h3>Habitual Effort Patterns</h3>')
             html.append("<ul>")
             for obs in shadow_obs:
                 html.append(f"<li>{obs}</li>")
@@ -5330,9 +5336,10 @@ def render_booklet_lens(framework_id: str, vl_analysis: dict, somatic_narrative:
     html.append(f'<h3>{intro["person_inside"]}</h3>')
     html.append(f'<p>{intro["person_description"]}</p>')
 
-    # The Shadow — static description
-    html.append('<h3>The Shadow</h3>')
-    html.append(f'<p>{intro["shadow_description"]}</p>')
+    # The habit — static description
+    habit_label = intro.get("habit_label", "The habit")
+    html.append(f'<h3>{habit_label.title()}</h3>')
+    html.append(f'<p>{intro["habit_description"]}</p>')
 
     # Collect vl_voice and shadow_voice entries from analytical table rows
     result = vl_analysis.get("result", {})
@@ -5367,7 +5374,7 @@ def render_booklet_lens(framework_id: str, vl_analysis: dict, somatic_narrative:
 
 
 def render_booklet_washing(somatic_narrative: dict) -> str:
-    """Render 'How the Lesson Washed Away Effort' — washing gradient + threshold of quiet."""
+    """Render 'What Changed' — washing gradient + threshold of quiet."""
     washing = somatic_narrative.get("washing_gradient", "")
     threshold = somatic_narrative.get("threshold_of_quiet", "")
 
@@ -5375,7 +5382,7 @@ def render_booklet_washing(somatic_narrative: dict) -> str:
         return ""
 
     html = ['<section class="booklet-section">']
-    html.append("<h2>How the Lesson Washed Away Effort</h2>")
+    html.append("<h2>What Changed</h2>")
     if washing:
         html.append(f"<p>{washing}</p>")
     if threshold:
@@ -5730,39 +5737,51 @@ def build_booklet_html(
         }}
         .llm-filled {{
             margin: 12px 0;
-            padding: 12px 16px;
-            background: #eafaf1;
-            border-left: 3px solid #27ae60;
-            border-radius: 4px;
-            font-size: 0.95em;
-            color: #2c3e50;
         }}
         .llm-filled p {{
-            margin: 0;
+            margin: 0 0 12px;
         }}
         .llm-filled-group {{
             margin: 12px 0;
         }}
-        .llm-tab-bar {{
-            display: flex;
-            gap: 0;
-            margin-bottom: -1px;
-        }}
-        .llm-tab {{
-            padding: 3px 12px;
-            border: 1px solid #ddd;
-            border-bottom: none;
-            background: #f5f5f5;
-            color: #888;
-            font-size: 0.78em;
+        .prompt-link {{
+            font-size: 0.75em;
+            color: #aaa;
             cursor: pointer;
-            border-radius: 4px 4px 0 0;
+            font-family: 'Inter', sans-serif;
         }}
-        .llm-tab.active {{
-            background: #eafaf1;
-            color: #2c3e50;
-            border-color: #27ae60 #ddd transparent #ddd;
-            border-left-color: #27ae60;
+        .prompt-link:hover {{
+            color: #888;
+            text-decoration: underline;
+        }}
+        .prompt-dialog {{
+            max-width: 640px;
+            width: 90vw;
+            max-height: 80vh;
+            padding: 24px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.82em;
+            line-height: 1.6;
+            color: #856404;
+            background: #fef9e7;
+            overflow-y: auto;
+        }}
+        .prompt-dialog::backdrop {{
+            background: rgba(0,0,0,0.3);
+        }}
+        .prompt-dialog button {{
+            margin-top: 16px;
+            padding: 6px 20px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: white;
+            cursor: pointer;
+            font-size: 0.95em;
+        }}
+        .prompt-dialog button:hover {{
+            background: #f5f5f5;
         }}
 
         /* Negotiation badge */
@@ -5917,18 +5936,7 @@ def build_booklet_html(
 <body>
     <a href="/book" class="back-link">&larr; All Booklets</a>
     {body}
-    <script>
-        document.querySelectorAll('.llm-tab').forEach(function(tab) {{
-            tab.addEventListener('click', function() {{
-                var group = tab.closest('.llm-filled-group');
-                group.querySelectorAll('.llm-tab').forEach(function(t) {{ t.classList.remove('active'); }});
-                group.querySelectorAll('.llm-tab-content').forEach(function(c) {{ c.style.display = 'none'; c.classList.remove('active'); }});
-                tab.classList.add('active');
-                var panel = group.querySelector('[data-panel="' + tab.dataset.show + '"]');
-                if (panel) {{ panel.style.display = ''; panel.classList.add('active'); }}
-            }});
-        }});
-    </script>
+
 </body>
 </html>"""
 
@@ -5945,7 +5953,7 @@ async def booklet_page(category: str = "", lesson: str = "", fill: str = "", fra
         for vl_id, entry in BOOK_LESSONS.items():
             if entry and entry.get("lesson_id") == lesson and vl_id == framework:
                 # Try to load pre-filled content from pipeline
-                filled_data = _db.get_cache(f"pipeline:fill_queries:{vl_id}")
+                filled_data = _db.get_cache(f"pipeline:booklet:{vl_id}")
                 if filled_data and filled_data.get("html"):
                     return filled_data["html"]
                 break
@@ -6203,25 +6211,42 @@ async def book_page(fill: str = ""):
         .llm-filled-group {{
             margin: 20px 0;
         }}
-        .llm-tab-bar {{
-            display: flex;
-            gap: 0;
-            margin-bottom: -1px;
-        }}
-        .llm-tab {{
-            padding: 3px 12px;
-            border: 1px solid #ddd;
-            border-bottom: none;
-            background: #f5f5f5;
-            color: #888;
-            font-size: 0.78em;
+        .prompt-link {{
+            font-size: 0.75em;
+            color: #aaa;
             cursor: pointer;
-            border-radius: 4px 4px 0 0;
         }}
-        .llm-tab.active {{
-            background: #fff;
-            color: #2c3e50;
-            border-color: #ccc;
+        .prompt-link:hover {{
+            color: #888;
+            text-decoration: underline;
+        }}
+        .prompt-dialog {{
+            max-width: 640px;
+            width: 90vw;
+            max-height: 80vh;
+            padding: 24px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.82em;
+            line-height: 1.6;
+            color: #856404;
+            background: #fef9e7;
+            overflow-y: auto;
+        }}
+        .prompt-dialog::backdrop {{
+            background: rgba(0,0,0,0.3);
+        }}
+        .prompt-dialog button {{
+            margin-top: 16px;
+            padding: 6px 20px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: white;
+            cursor: pointer;
+        }}
+        .prompt-dialog button:hover {{
+            background: #f5f5f5;
         }}
         .booklet-section {{
             margin: 32px 0;
@@ -6282,18 +6307,7 @@ async def book_page(fill: str = ""):
     {links_html}
     <h2>Alternates</h2>
     {alts_html}
-    <script>
-        document.querySelectorAll('.llm-tab').forEach(function(tab) {{
-            tab.addEventListener('click', function() {{
-                var group = tab.closest('.llm-filled-group');
-                group.querySelectorAll('.llm-tab').forEach(function(t) {{ t.classList.remove('active'); }});
-                group.querySelectorAll('.llm-tab-content').forEach(function(c) {{ c.style.display = 'none'; c.classList.remove('active'); }});
-                tab.classList.add('active');
-                var panel = group.querySelector('[data-panel="' + tab.dataset.show + '"]');
-                if (panel) {{ panel.style.display = ''; panel.classList.add('active'); }}
-            }});
-        }});
-    </script>
+
 </body>
 </html>"""
 

@@ -302,87 +302,100 @@ def _make_book_assembly_transform(db):
     return transform
 
 
-def _make_review_transform(db):
-    """Run book review using ReviewAgent on the assembled book content.
+def _collect_chapter_data(db):
+    """Collect chapter HTML and intro text from pipeline cache.
 
-    The ReviewAgent normally fetches via HTTP. For the pipeline, we feed it
-    each chapter's HTML directly via review_chapter(html=...) and run
-    a gross review from chapter summaries.
+    Shared by both critic transforms and review_summary.
+    Skips VL-4 (being reworked).
     """
+    w = _web()
+    try:
+        from critics import _html_to_text
+    except ImportError:
+        from .critics import _html_to_text
+
+    intro_data = db.get_cache("pipeline:volume_intro")
+    intro_text = ""
+    if intro_data and "html" in intro_data:
+        intro_text = _html_to_text(intro_data["html"])
+
+    skip_vl_ids = {"VL-4"}
+
+    chapters = []
+    for vl_id in sorted(w.BOOK_LESSONS.keys()):
+        if vl_id in skip_vl_ids:
+            continue
+        data = db.get_cache(f"pipeline:booklet:{vl_id}")
+        if data and "html" in data:
+            info = w.VL_BOOKLET_INTROS[vl_id]
+            entry = w.BOOK_LESSONS[vl_id]
+            chapters.append({
+                "title": entry["title"],
+                "lens": info["name"],
+                "html": data["html"],
+            })
+
+    return chapters, intro_text
+
+
+def _make_student_critic_transform(db):
+    """Run student persona critic on the assembled book chapters."""
     def transform(**_kwargs) -> str:
         w = _web()
         try:
-            from review_agent import ReviewAgent, BookReview, format_report
+            from critics import StudentCritic
         except ImportError:
-            from src.kb.review_agent import ReviewAgent, BookReview, format_report
+            from .critics import StudentCritic
 
         llm = w.get_llm("gemini-review")
-        agent = ReviewAgent(llm=llm)
+        critic = StudentCritic(llm=llm)
 
-        # Collect chapter data from pipeline cache
-        intro_data = db.get_cache("pipeline:volume_intro")
-        intro_text = ""
-        if intro_data and "html" in intro_data:
-            intro_text = agent._html_to_text(intro_data["html"])
+        chapters, intro_text = _collect_chapter_data(db)
+        result = critic.review(chapters, intro_text)
 
-        # Skip VL-4 — the chapter is being reworked and its review
-        # feedback currently pulls the overall review off-track.
-        skip_vl_ids = {"VL-4"}
+        _save_with_history(db, "pipeline:critic_student", result)
+        return json.dumps(result, indent=2)
 
-        chapters_data = []
-        for vl_id in sorted(w.BOOK_LESSONS.keys()):
-            if vl_id in skip_vl_ids:
-                continue
-            data = db.get_cache(f"pipeline:booklet:{vl_id}")
-            if data and "html" in data:
-                html = data["html"]
-                text = agent._html_to_text(agent._strip_style(html))
-                summary = text[:2000]
-                if len(text) > 2000:
-                    summary += "\n[... truncated for summary ...]"
-                info = w.VL_BOOKLET_INTROS[vl_id]
-                entry = w.BOOK_LESSONS[vl_id]
-                chapters_data.append({
-                    "title": entry["title"],
-                    "lens": info["name"],
-                    "lens_description": info["lens"],
-                    "html": html,
-                    "text": text,
-                    "summary": summary,
-                })
+    return transform
 
-        # Gross review
-        gross = agent._gross_review(intro_text, chapters_data)
-        review = BookReview(provider=llm.provider, gross=gross)
 
-        # Per-chapter fine review
-        for ch in chapters_data:
-            chapter_review = agent.review_chapter(
-                html=ch["html"], title=ch["title"], lens=ch["lens"]
-            )
-            review.chapters.append(chapter_review)
+def _make_specificity_critic_transform(db):
+    """Run specificity critic on the assembled book chapters."""
+    def transform(**_kwargs) -> str:
+        w = _web()
+        try:
+            from critics import SpecificityCritic
+        except ImportError:
+            from .critics import SpecificityCritic
 
-        report = format_report(review)
-        _save_with_history(db, "pipeline:review", {"report": report})
-        return report
+        llm = w.get_llm("gemini-review")
+        critic = SpecificityCritic(llm=llm)
+
+        chapters, intro_text = _collect_chapter_data(db)
+        result = critic.review(chapters, intro_text)
+
+        _save_with_history(db, "pipeline:critic_specificity", result)
+        return json.dumps(result, indent=2)
 
     return transform
 
 
 def _make_review_summary_transform(db):
-    """Summarize review into ranked actionable issues.
+    """Summarize critic outputs into ranked actionable issues.
 
-    Takes the review report and produces a ranked list of the top 10 issues
-    that could improve the book, with context about what's changeable.
+    Aggregates findings from both critic_student and critic_specificity
+    into a ranked list of the top 10 issues, with critic attribution.
     """
     def transform(**_kwargs) -> str:
         w = _web()
 
-        review_data = db.get_cache("pipeline:review")
-        if not review_data or "report" not in review_data:
-            raise ValueError("Review report not found")
+        student_data = db.get_cache("pipeline:critic_student")
+        specificity_data = db.get_cache("pipeline:critic_specificity")
 
-        report = review_data["report"]
+        if not student_data:
+            raise ValueError("Student critic results not found")
+        if not specificity_data:
+            raise ValueError("Specificity critic results not found")
 
         # Build context about book composition
         lens_info = []
@@ -417,32 +430,47 @@ EACH BOOKLET CONTAINS:
 - Next Time section (LLM-filled, uses 'booklet-reflection' query type)
 """
 
-        prompt = f"""You are analyzing a book review to identify actionable improvements.
+        student_json = json.dumps(student_data, indent=2)
+        specificity_json = json.dumps(specificity_data, indent=2)
+
+        prompt = f"""You are analyzing structured critic feedback to identify actionable improvements for a book.
 
 {composition_context}
 
-REVIEW REPORT:
-{report}
+Two independent critics have reviewed the book:
 
-Based on this review, identify the TOP 10 issues that, if addressed, would most improve the book.
+## STUDENT CRITIC
+Reads as a first-time student with no Feldenkrais background. Scores each section on
+recognition (does the text match lived experience?), insight (does it add understanding?),
+invitation (does it invite exploration vs. lecturing?), accessibility (clear language?),
+and engagement (would the reader keep reading?). Scores 1-5, with callouts for low scores.
+
+{student_json}
+
+## SPECIFICITY CRITIC
+Checks whether sections are grounded in THIS lesson's specific movements, or contain
+generic text that could appear in any booklet. Counts concrete movement references,
+lists generic sentences, and scores specificity 1-5.
+
+{specificity_json}
+
+Based on BOTH critics' findings, identify the TOP 10 issues that, if addressed, would
+most improve the book.
 
 IMPORTANT CONTEXT on lens vocabulary: The five analytical lenses are VIEWPOINTS, not
 vocabulary partitions. Shared descriptive words (release, soften, weight, effort, ease)
 appearing across chapters is NORMAL and EXPECTED. Do NOT rank "vocabulary bleed" or
-"shared words across lenses" as a high-impact issue. The test for problematic lens bleed
-is whether two chapters ask the SAME INTERPRETIVE QUESTION (both asking about vertical
-support, or both asking about differentiation), not whether they share common English words.
-If the review flags vocabulary overlap, downgrade it unless the chapters are genuinely
-asking the same question.
+"shared words across lenses" as a high-impact issue.
 
 For each issue, provide:
 1. **Issue**: Clear description of the problem
-2. **Component**: Which part of the system it relates to (e.g., "booklet-reflection prompt", "VL-3 analysis", "volume-intro", "council section")
-3. **Impact**: High / Medium / Low - how much would fixing this improve the reader experience?
-4. **Actionable**: Yes / No - can this be fixed by changing prompts, config, or templates?
-5. **Fix sketch**: If actionable, a brief description of what change might help
+2. **Critic**: Which critic flagged it — "student", "specificity", or "both"
+3. **Component**: Which part of the system it relates to (e.g., "booklet-reflection prompt", "VL-3 analysis", "volume-intro")
+4. **Impact**: High / Medium / Low
+5. **Actionable**: Yes / No - can this be fixed by changing prompts, config, or templates?
+6. **Fix sketch**: If actionable, a brief description of what change might help
 
-Rank by impact (highest first). Focus on issues that are ACTIONABLE through the configurable components listed above.
+Rank by impact (highest first). Focus on issues that are ACTIONABLE.
 
 Return as a JSON object with this structure:
 {{
@@ -450,6 +478,7 @@ Return as a JSON object with this structure:
     {{
       "rank": 1,
       "issue": "...",
+      "critic": "student|specificity|both",
       "component": "...",
       "impact": "high|medium|low",
       "actionable": true|false,
@@ -472,12 +501,13 @@ Return as a JSON object with this structure:
                         "properties": {
                             "rank": {"type": "integer"},
                             "issue": {"type": "string"},
+                            "critic": {"type": "string"},
                             "component": {"type": "string"},
                             "impact": {"type": "string"},
                             "actionable": {"type": "boolean"},
                             "fix_sketch": {"type": "string"},
                         },
-                        "required": ["rank", "issue", "component", "impact", "actionable"],
+                        "required": ["rank", "issue", "critic", "component", "impact", "actionable"],
                     },
                 },
                 "summary": {"type": "string"},
@@ -553,9 +583,9 @@ def build_book_pipeline(db, framework_version: Optional[str] = None) -> Pipeline
         description="Council of Five intro section",
     )
     graph.add_source(
-        "src:review_agent",
-        file_hasher(Path(__file__).parent / "review_agent.py"),
-        description="Review agent prompts",
+        "src:critics",
+        file_hasher(Path(__file__).parent / "critics.py"),
+        description="Critic prompts (student + specificity)",
     )
 
     # ── Per-lesson source + transform nodes ──
@@ -661,16 +691,24 @@ def build_book_pipeline(db, framework_version: Optional[str] = None) -> Pipeline
     )
 
     graph.add_transform(
-        "review",
-        input_names=["book", "src:review_agent"],
-        transform=_make_review_transform(db),
-        description="Book review",
+        "critic_student",
+        input_names=["book", "src:critics"],
+        transform=_make_student_critic_transform(db),
+        description="Student persona critic",
+        tags={"type": "llm"},
+    )
+
+    graph.add_transform(
+        "critic_specificity",
+        input_names=["book", "src:critics"],
+        transform=_make_specificity_critic_transform(db),
+        description="Specificity critic",
         tags={"type": "llm"},
     )
 
     graph.add_transform(
         "review_summary",
-        input_names=["review"],
+        input_names=["critic_student", "critic_specificity"],
         transform=_make_review_summary_transform(db),
         description="Review summary (ranked issues)",
         tags={"type": "llm"},

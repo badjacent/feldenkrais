@@ -4,9 +4,9 @@
 
 The architecture of buoyancy. How do you partner with gravity to find height? We explore the longitudinal pressure wave that travels from the floor to the crown of the head.
 
-## The Shadow: Propping
+## The Habit: Propping
 
-This is the habit of **distrusting the ground**. Because you don't feel supported from below, you try to "prop" yourself up from above using muscular tension.
+This is the habit of **distrusting the ground**. Without feeling supported from below, the default is to "prop" yourself up from above using muscular tension.
 
 * **Shoulder-Lifting:** Pulling the torso upward with the neck and traps, as if trying to fly away from the floor.
 * **The Crunched Axis:** Collapsing at the waist or chest, then "bracing" the low back to stop the fall.

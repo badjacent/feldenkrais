@@ -4,9 +4,9 @@
 
 The balance of protection and expansion. Can you fold and unfurl with equal ease? We explore the "Red Light" reflex—the habit of shortening the front body—to find a neutral spine that is free to move in any direction.
 
-## The Shadow: Bracing
+## The Habit: Armoring
 
-This is the habit of **preemptive protection**. Even in total safety, the Shadow keeps the "armor" on, treating the front of the body as a vulnerable zone that must be shielded.
+This is the habit of **preemptive protection**. Even in total safety, the armor stays on — the front of the body is treated as a vulnerable zone that must be shielded.
 
 * **The Abdominal Knot:** Constant, low-level tension in the belly that prevents full breathing and spinal freedom.
 * **Reflexive Crunching:** A tendency to "harden" the front body at the slightest hint of effort or challenge.
