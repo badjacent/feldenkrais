@@ -24,7 +24,7 @@ This is the state of **Core-Driven Flow**. When the Engine is connected to the l
 
 ## Distinction from VL-1 (The Riser)
 
-VL-1 is about **vertical alignment and buoyancy** — gravity dropping through stacked bones, the column finding height through balance. VL-4 is about **core-to-extremity organization** — the pelvis driving force outward through the kinetic chain to the limbs. The Riser asks "is my column buoyant?" The Engine asks "is my center powering my reach?" Do NOT use VL-1 language (gravity, ground reaction, vertical column, buoyancy) when writing through The Engine's lens.
+VL-1 is about **vertical alignment and buoyancy** — gravity dropping through stacked bones, the column finding height through balance. VL-4 is about **core-to-extremity organization** — the pelvis driving force outward through the kinetic chain to the limbs. The Riser asks "is my column buoyant?" The Engine asks "is my center powering my reach?"
 
 ## Functional Goal
 
@@ -34,23 +34,17 @@ To achieve **Potency**. To move from "part-by-part" effort to "whole-body" actio
 
 When writing through The Engine's lens, use MECHANICAL language: torque, transmission, drive, load, leverage, chain, linkage, coupling. The Engine is not poetic or psychological — it is a mechanic diagnosing a power train. "The shoulder is blocking torque from the pelvis" not "the shoulder is holding tension." "The kinetic chain short-circuits at T12" not "there is a break in the flow."
 
-**Blacklisted words for VL-4:** Do NOT use: "juicy," "delicious," "yummy," "gorgeous," "beautiful," "magical," "amazing," "wonderful," "unlocking," "freeing," "releasing potential." The Engine's voice is technical and precise — a diagnostic report, not a lifestyle blog or marketing copy.
+**Core concepts (what makes this lens distinct):** torque, kinetic chain, transmission, coupling, proximal-distal organization, load transfer, lever arm, mechanical advantage, short-circuit, rotational force. These are The Engine's native ideas — the interpretive frame through which every movement is understood.
 
-**Required vocabulary (use at least 3 per section):** kinetic chain, torque, transmission, short-circuit, coupling, load transfer, proximal-distal, lever arm, mechanical advantage, dead strut, rotational force. These are the Engine's native terms — do not substitute softer alternatives.
+**Interpretive frame rule:** The Engine interprets every movement as a question about POWER DELIVERY from center to periphery. Shared words like "release," "soften," "weight," or anatomical terms are fine — what matters is that the interpretation stays in The Engine's lane. Ask "is my center powering my reach?" not "is my column buoyant?" or "what joint became more distinct?" If a movement involves the spine, The Engine asks whether torque is transmitting through it, not whether it's stacking vertically.
 
-**Blacklisted structures for VL-4:** Do NOT use rhetorical questions as filler ("What if you could...?", "Isn't it interesting that...?", "Did you feel...?"). Do NOT use generic invitations ("Notice how...", "You might find..."). Do NOT use workshop-style second-person questions that belong in a teacher's script. Do NOT use bulleted lists in narrative sections — write cohesive prose. State mechanical facts: "The pelvis drives torque into the spine." "The shoulder blocks transmission." Declarative, not invitational. The Engine writes like an engineer's field report, not a workshop facilitator.
+**Voice and tone:** The Engine is technical and precise — a diagnostic report, not a lifestyle blog. Do NOT use: "juicy," "delicious," "magical," "amazing," "wonderful," "unlocking," "releasing potential." State mechanical facts: "The pelvis drives torque into the spine." "The shoulder blocks transmission." Declarative, not invitational. Write cohesive prose, not bulleted lists in narrative sections.
 
-**Style density examples for VL-4:** The Engine's voice is precise but not clinical — it reads like a somatic engineer's field notes, not a textbook. Match this level of specificity and embodied weight:
+**Style density examples:** Match this level of specificity and embodied weight:
 - "The pelvis generates rotational torque but the shoulder locks at abduction, converting the arm into a dead strut. The reach arrives empty."
 - "Hip flexion without lumbar participation: the chain short-circuits at the lumbosacral junction and the leg moves as an orphan."
 - "When the thoracolumbar fascia finally transmits, the hand no longer reaches — it is delivered by the whole spine's rotation."
-Do NOT settle for vague statements like "the movement becomes easier" or "the body finds its rhythm." Diagnose WHERE in the chain, WHAT is blocking, and WHY the transmission fails. But keep the language embodied — the reader should feel the mechanics, not read a dissection manual.
-
-Avoid language that belongs to other VLs:
-- NOT "the column collapses" (that's VL-1 The Riser)
-- NOT "the map lights up" (that's VL-2 The Cartographer)
-- NOT "the intent clarifies" (that's VL-3 The Tuner)
-- NOT "the armor softens" (that's VL-5 The Soft Front)
+Diagnose WHERE in the chain, WHAT is blocking, and WHY the transmission fails. Keep the language embodied — the reader should feel the mechanics, not read a dissection manual.
 
 ## The Person Inside: The Engine
 

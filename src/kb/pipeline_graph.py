@@ -426,6 +426,15 @@ REVIEW REPORT:
 
 Based on this review, identify the TOP 10 issues that, if addressed, would most improve the book.
 
+IMPORTANT CONTEXT on lens vocabulary: The five analytical lenses are VIEWPOINTS, not
+vocabulary partitions. Shared descriptive words (release, soften, weight, effort, ease)
+appearing across chapters is NORMAL and EXPECTED. Do NOT rank "vocabulary bleed" or
+"shared words across lenses" as a high-impact issue. The test for problematic lens bleed
+is whether two chapters ask the SAME INTERPRETIVE QUESTION (both asking about vertical
+support, or both asking about differentiation), not whether they share common English words.
+If the review flags vocabulary overlap, downgrade it unless the chapters are genuinely
+asking the same question.
+
 For each issue, provide:
 1. **Issue**: Clear description of the problem
 2. **Component**: Which part of the system it relates to (e.g., "booklet-reflection prompt", "VL-3 analysis", "volume-intro", "council section")

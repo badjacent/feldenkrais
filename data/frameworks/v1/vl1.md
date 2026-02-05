@@ -43,6 +43,8 @@ When writing through The Riser's lens, use FELT ARCHITECTURAL language: stacking
 
 **Anti-contradiction:** Do NOT describe the column as "dense," "heavy," or "massive." The Riser's column is buoyant, hollow, clear, continuous.
 
+**Anti-mystical:** Do NOT use spiritual or New Age imagery: "column of light," "pillar of light," "golden thread," "divine axis," "inner flame," "radiant core." The Riser feels BONES and WEIGHT — physical sensation, not luminous metaphor.
+
 **Voice:** The Riser is an inner EXPERIENCER who feels weight and support — not an engineer analyzing mechanics. Use felt language: "something stacks," "weight drops through," "the floor pushes back." Avoid jargon and mechanical metaphors a student wouldn't think: "load-path," "piston" (mechanical, pneumatic, or hydraulic), "force vector," "cantilever," "tensegrity," "hydraulic support," "spring-loaded," "shock absorber." The Riser feels bones and weight, not machinery.
 
 ## The Person Inside: The Riser

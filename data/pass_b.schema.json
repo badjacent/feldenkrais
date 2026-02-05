@@ -81,7 +81,8 @@
                 "type": "string",
                 "description": "What the Shadow shadow is doing or experiencing at this point"
               }
-            }
+            },
+            "required": ["column1", "column2", "column3", "column4", "column5", "vl_voice", "shadow_voice"]
           }
         }
       },

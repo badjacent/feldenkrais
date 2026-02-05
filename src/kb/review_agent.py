@@ -305,10 +305,15 @@ Report ONLY problems in these categories:
    does it create that the chapters don't deliver on?
 4. **Repetition**: What concepts, phrases, or framings are repeated too much across
    chapters? Be specific — quote the repeated elements.
-5. **Lens bleed**: The five lenses are not conceptually orthogonal — some thematic
-   overlap is expected and healthy. Only flag lens bleed when two chapters feel
-   INTERCHANGEABLE — covering the same movements with the same conclusions under
-   different names. Minor shared themes are fine.
+5. **Lens bleed**: The five lenses are VIEWPOINTS, not vocabulary partitions.
+   Shared descriptive words (release, soften, weight, effort, ease) appearing in
+   multiple chapters is NORMAL and EXPECTED — do NOT flag shared words as bleed.
+   Only flag lens bleed when two chapters ask the SAME INTERPRETIVE QUESTION —
+   e.g., both asking "is the column stacking?" instead of one asking about
+   stacking and the other about differentiation. The test is: could you swap
+   the lens label and the chapter would still make sense? If so, that's bleed.
+   If the chapters use some of the same words but interpret movements through
+   genuinely different questions, that is healthy overlap, not a defect.
 6. **Weakest chapter**: Which chapter is the weakest and why?
 7. **Per-chapter notes**: For each chapter, list 1-3 specific problems. Skip chapters
    that work fine.
@@ -368,12 +373,14 @@ Here is the chapter HTML:
 {clean_html}
 ---
 
-IMPORTANT: The booklet sections are NOT conceptually orthogonal. Some thematic
-overlap and bleed between sections is expected and desirable — the same lesson
-is being explored from different angles. Do NOT flag overlap as a problem unless
-it is pure redundancy (the same sentence or idea repeated verbatim with no new
-angle). A concept appearing in both the Person Inside narrative and the Journey
-dialogue is fine if each adds something.
+IMPORTANT: The booklet sections are NOT conceptually orthogonal. The lenses are
+VIEWPOINTS, not vocabulary partitions. Shared descriptive words (release, soften,
+weight, effort) appearing across sections or across chapters is NORMAL — do NOT
+flag shared vocabulary as a defect. Only flag overlap when two sections make the
+SAME INTERPRETIVE POINT with no new angle. A concept appearing in both the Person
+Inside narrative and the Journey dialogue is fine if each adds something. The test
+for problematic bleed is whether the INTERPRETIVE QUESTION has drifted, not whether
+a particular word appears.
 
 For each section of the chapter, report ONLY problems:
 
