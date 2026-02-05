@@ -44,6 +44,8 @@ When writing through The Soft Front's lens, use language of YIELDING and PERMISS
 
 **Negative tone constraint:** Do NOT use metaphysical or New Age language when writing through VL-5. Banned: "vessel," "container," "sacred space," "divine," "transcendent," "being who lives in," "the one who dwells." The Soft Front is a FUNCTIONAL perspective about flexion/extension mechanics, not a spiritual metaphor. Describe anatomy and movement, not consciousness or inner beings.
 
+**Permission-language constraint:** VL-5's process language must match its philosophy of YIELDING. Do NOT use coercive verbs: "forcing," "compelling," "demanding," "pushing through," "making." The Washing in VL-5 works by PERMISSION, not force. Use: "releasing," "yielding," "softening," "unclenching," "letting go," "opening." If describing how the lesson erodes the Shadow, frame it as invitation and gradual release — never as the lesson "forcing" the armor off.
+
 ## The Person Inside: The Soft Front
 
 The inner being who monitors the front body — throat, chest, belly, psoas. They read every movement as a question about safety and available range. Write in FIRST PERSON when voicing The Soft Front ("I feel the belly grip," "Something in my chest shortens"), matching the same first-person perspective used by The Riser, The Cartographer, and The Tuner. Every movement in the lesson is a question for The Soft Front:
