@@ -4662,6 +4662,9 @@ BOOKLET_QUERY_TYPES = {
                  "Not academic — write for someone who just did the lesson.",
         "length": "1-2 sentences",
         "prompt": (
+            "CRITICAL: Output ONLY the 1-2 sentence gloss text. Nothing else. "
+            "No labels, no tags, no '(prompt)', no markdown, no system text, "
+            "no explanation of what you're doing. Just the plain sentences.\n\n"
             "TONE: Write like a friend explaining something surprising, not like a "
             "textbook or instruction manual. The reader just did these movements — "
             "speak to their experience, not at them. "
@@ -4899,7 +4902,8 @@ BOOKLET_QUERY_TYPES = {
             "visual tether, direct actuation, vertical oscillation, "
             "habitual effort system, resonant state, effort system, "
             "geometric variations, segmental, oscillatory, rotational coupling, "
-            "neurological, biomechanical, flexion-extension. "
+            "neurological, biomechanical, flexion-extension, gross longitudinal, "
+            "visual data, unloads, the system, systematic progression. "
             "If the VL framework uses a technical term, translate it into what the "
             "body FEELS: 'the belly tightened' not 'the Red Light reflex activated.'\n"
             "GOOD EXAMPLE of the right tone: 'Something in my left hip loosened — not "
