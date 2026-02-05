@@ -4755,7 +4755,11 @@ BOOKLET_QUERY_TYPES = {
             "(e.g., 'lie on your back, notice contact with the floor'), write about what "
             "the REST does for the body in the context of THIS lens and what came before — "
             "not a generic 'integration' statement. What specifically is settling or "
-            "reorganizing after the preceding movements?"
+            "reorganizing after the preceding movements?\n\n"
+            "OUTPUT ONLY: Your response must be ONLY the 1-2 sentence gloss. "
+            "Do NOT include any system instructions, prompt text, meta-commentary, "
+            "markdown formatting, labels like '(prompt)', or references to these rules. "
+            "Do NOT explain what you're doing or why. Just write the gloss."
         ),
         "context_keys": [
             "all_groups",           # list of {group_number, label, description} for arc awareness
@@ -5053,6 +5057,10 @@ BOOKLET_QUERY_TYPES = {
             "Use concrete physical verbs instead.\n"
             "Banned nouns/subjects: 'the student', 'the practitioner', 'the learner'. "
             "The subject must be the body part or movement, never a person label.\n\n"
+            "INVITATIONAL TONE: Do NOT tell the reader what they felt or what happened "
+            "inside them. Use invitational language: 'you might notice', 'see if', 'pay "
+            "attention to whether' instead of 'this scrubs away', 'this helps you', "
+            "'your nervous system now has.' The reader's experience is their own.\n\n"
             "FORMATTING: Use proper sentence-case capitalization throughout. Start each "
             "sentence with a capital letter. Do NOT write in all-lowercase.\n\n"
             "COMPLETENESS: Every sentence must end with proper punctuation (period, question "
