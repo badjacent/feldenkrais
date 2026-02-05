@@ -262,3 +262,93 @@ No regressions detected. No rollbacks needed.
 - Textbook tone still creeps into "What Changed" sections via lens-synthesis
 - VL-3 (Tuner) specificity remains challenging — signal metaphors need more grounding
 - Generic rest/scanning instructions still appear in Journey despite rules
+
+---
+
+## Iterations 21-30 — 2026-02-05
+
+*Automated batch of 10 iterations targeting clinical drift, jargon elimination, and Voice/VL-specific improvements.*
+
+### Iteration 21
+- **Issues:** #1/#3 lens-synthesis clinical analysis tone, #2 lesson-concepts generic, #4 VL-3 vague
+- **Changes:** Added "STAY INSIDE THE BODY" constraint at TOP of lens-synthesis, specificity requirement (2+ movement refs) to lesson-concepts, VL-3 eye/head/jaw specificity rule
+- **Files:** `src/kb/web.py`, `data/frameworks/v1/vl3.md`
+- **Commit:** `6c70771`
+
+### Iteration 22
+- **Issues:** #1 Journey truncation, #2 Cartographer Journey procedural, #3 academic terms
+- **Changes:** Added "WHY NOT WHAT" constraint and brevity (30-word max per sentence) to pedagogical-gloss, banned more terms in lens-synthesis (actuation, visual intent, etc.)
+- **Commit:** `522b506`
+
+### Iteration 23
+- **Issues:** #1/#4 Journey technical/manual tone, #2 "visual tether" etc., #3 generic Foundation
+- **Changes:** Restructured pedagogical-gloss prompt to lead with TONE constraint (primacy), banned visual tether/direct actuation/vertical oscillation, Foundation specificity requirement
+- **Commit:** `249dff9`
+
+### Iteration 24
+- **Issues:** #1 booklet-reflection jargon, #2 Journey anatomy jargon, #5 lens-synthesis clinical metaphors
+- **Changes:** Added coffee-chat voice model to booklet-reflection, banned cervical/lumbar/thoracic/lateral in pedagogical-gloss, added positive tone example to lens-synthesis
+- **Commit:** `64254b3`
+
+### Iteration 25
+- **Issues:** #1/#3 reflection clinical tone + analytic distance, #2 Journey mimicking instructions, #5 VL-2 metaphor inconsistency
+- **Changes:** Added "STAY INSIDE THE BODY" to reflection (top), banned mechanical phrases (longitudinal rocking, vertical oscillation, etc.), shifted gloss from "hidden trick" to "mechanical logic", added VL-2 plain-language translations + anti-medical + anti-geometric rules
+- **Files:** `src/kb/web.py`, `data/frameworks/v1/vl2.md`
+- **Commit:** `ec4d591`
+
+### Iteration 26
+- **Issues:** #1 lens-synthesis "direct actuation"/"habitual effort system", #2 Journey manual tone, #8 VL-2 geometric imagery
+- **Changes:** Expanded lens-synthesis banned terms (habitual effort system, resonant state, geometric variations, segmental, etc.), added banned sentence starters to pedagogical-gloss (no "This part...", "This section..."), VL-2 anti-geometric rule
+- **Files:** `src/kb/web.py`, `data/frameworks/v1/vl2.md`
+- **Commit:** `1b7b7b4`
+
+### Iteration 27
+- **Issues:** #1 text truncation in lesson-concepts, #2 anatomy terms (sacrum, lumbar arches), #3 reflection jargon
+- **Changes:** Added COMPLETENESS guard to lesson-concepts, added compound anatomy bans (lumbar arch → "curve of the lower back", cervical arch → "curve of the neck"), expanded reflection banned terms (direct actuation, habitual effort system, neutral pivot, arm triangle)
+- **Commit:** `c6a09ca`
+- **Impact:** Truncation fully resolved.
+
+### Iteration 28
+- **Issues:** #1 reflection clinical language, #2 anatomical terms in lesson-concepts, #7 booklet-intro lacking movement reference
+- **Changes:** Added 12-year-old SELF-CHECK to reflection, added sacrum/lumbar/oscillation/actuation translations to lesson-concepts ban, added MOVEMENT GROUNDING requirement to booklet-intro
+- **Commit:** `c2373fc`
+
+### Iteration 29
+- **Issues:** #1/#2 reflection physics/engineering metaphors, #4 poetic-but-confusing gloss imagery, #7 scary/aggressive verbs
+- **Changes:** Banned engineering metaphors (crane, piston, lever arm, fulcrum), scary verbs (buckles, collapses, snaps, locks) with gentle alternatives (folds, bends, softens), banned poetic abstractions in gloss (islands of pressure, intent hitting the floor, space opens)
+- **Commit:** `b90f900`
+
+### Iteration 30
+- **Issues:** #1 prompt leak in gloss, #2 reflection clinical language, #4 lesson-concepts prescriptive tone
+- **Changes:** Added OUTPUT ONLY guard to pedagogical-gloss (anti-prompt-leak), added INVITATIONAL TONE rule to lesson-concepts (no "this scrubs away"), expanded banned imagery
+- **Commit:** `b57d9ed`
+- **Impact:** Prompt leak fully resolved.
+
+### Performance (all iterations)
+Booklet generation times remained stable throughout:
+- booklet:VL-1: ~16s
+- booklet:VL-2: ~15s
+- booklet:VL-3: ~14s
+- booklet:VL-4: ~14s
+- booklet:VL-5: ~15s
+
+No regressions detected. No rollbacks needed.
+
+### Summary of progress (iterations 21-30)
+**Resolved issues:**
+- Text truncation in lesson-concepts (completeness guard, iter 27)
+- Prompt instructions leaking into gloss output (OUTPUT ONLY guard, iter 30)
+- VL-2 geometric/medical terminology (anti-geometric + anti-medical rules, iter 25-26)
+
+**Significantly improved:**
+- Clinical/engineering metaphors in reflection (extensive ban lists + STAY INSIDE THE BODY + SELF-CHECK)
+- Journey manual tone (WHY NOT WHAT, banned sentence starters, mechanical logic framing)
+- VL-2 Cartographer accessibility (plain-language translations, mapping-first vocabulary)
+- Poetic-but-meaningless imagery in gloss (banned specific phrases)
+- Lesson-concepts prescriptive tone (invitational language rule)
+
+**Persistent issues (diminishing returns):**
+- Clinical drift in "What Changed" persists at reduced severity — the same category of issue keeps surfacing but with different specific terms
+- Generic rest/scanning instructions still appear in Journey
+- Textbook-style definitions of framework terms in lesson-concepts
+- Individual VL-specific specificity gaps (VL-1 generic openings, VL-5 generic front-body descriptions)
