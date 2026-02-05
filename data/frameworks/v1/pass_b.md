@@ -89,6 +89,13 @@ The Shadow doesn't DECIDE to grip — it finds itself already gripping. Express 
 - VL-4 (Engine): The Shadow orphans the limbs — peripheral effort, disconnected reach, leaking torque
 - VL-5 (Soft Front): The Shadow armors the front body — belly tension, chest shortening, protective curling
 
+**Tension marker diversity:** Do NOT default to "jaw clenching" and "neck tension" as the primary shadow indicators for every lens. Match the tension site to the LENS and the LESSON's actual movements:
+- VL-1: lower back, base of skull, feet pressing
+- VL-2: hip joint, knee, ankle — wherever differentiation is needed
+- VL-3: eyes, temples, throat
+- VL-4: pelvic floor, deep hip, shoulder girdle
+- VL-5: belly, sternum, psoas, diaphragm
+
 **Arc progression:** Early in the lesson, the Shadow is in full control ("The lower back is already locked flat — it stiffened before the movement even began"). Mid-lesson, the Shadow is being challenged ("The old grip keeps reaching for the shoulder, but the oscillation loosens it each time"). Late in the lesson, the Shadow may be quieter but still present ("A trace of the old stiffening flickers in the hip, but there's nothing left to brace against").
 
 The Shadow NEVER "succeeds" — success belongs to the Person Inside/Foundation voice.
@@ -189,7 +196,7 @@ All prose fields (primary_inquiry, washing_gradient, threshold_of_quiet, vl_voic
 
 ### 2. Somatic Narrative
 - **Primary Inquiry**: The fundamental riddle (in this framework's terms)
-- **Washing Gradient**: How the Shadow is eroded (use lens-specific language, not "cortical noise")
+- **Washing Gradient**: Describe the PROCESS by which the Shadow is eroded — name the specific VARIATIONS and STRATEGIES the lesson uses (asymmetrical positions, small vs large movements, repetition, contrast). Do NOT describe outcomes or states. WRONG: "The gripping releases and ease emerges." RIGHT: "The asymmetrical foot positions force the pelvis to tilt without the hip flexors bracing, and each variation loosens the grip a little more." Use lens-specific language, not "cortical noise."
 - **Threshold of Quiet**: The moment where Transmission emerges. Must be a COMPLETE SENTENCE with a subject and predicate — not a sentence fragment. WRONG: "The moment where the head lifts through skeletal buoyancy." RIGHT: "The sequence culminates when the head lifts through skeletal buoyancy rather than muscular effort."
 
 **CRITICAL:** The Primary Inquiry and Washing Gradient must be DISTINCT paragraphs with different content. The Inquiry frames the question; the Gradient describes the process of change. Do not reuse sentences between them.
