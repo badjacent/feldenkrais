@@ -4550,7 +4550,8 @@ BOOKLET_QUERY_TYPES = {
             "uses repetition to guide you through an experience, each booklet carries you through "
             "its own reading journey with the framing it needs.\n\n"
             "Do NOT explain the Shadow/Foundation framework in detail — the Council section "
-            "handles that. Keep the tone personal and practical.\n\n"
+            "handles that. Keep the tone personal and practical. "
+            "Banned words: illuminate, illumination, decode, unlock, journey, vessel.\n\n"
             "BRIDGE NOTE: Each booklet uses three ideas applied through a different lens. "
             "Briefly introduce these so the reader recognizes them when they appear:\n"
             "- The SHADOW: the habitual effort underneath every movement — the gripping or "
@@ -4819,7 +4820,15 @@ BOOKLET_QUERY_TYPES = {
             "above. Do NOT invent, infer, or hallucinate movements that are not explicitly "
             "mentioned (e.g., do not add 'crossing the midline' unless the observations "
             "describe it). If you are unsure whether a movement occurred, leave it out. "
-            "The reader did this lesson — they will notice fabricated details."
+            "The reader did this lesson — they will notice fabricated details.\n"
+            "- ENDING: Do NOT end with a generic 'standing up and feeling different' "
+            "paragraph. If the lesson ends with standing, describe what THIS lens notices "
+            "about standing — not a universal 'I feel taller/lighter/more connected.' "
+            "Each lens should notice something specific: the Riser notices weight dropping "
+            "through bones, the Cartographer notices joints that weren't there before, "
+            "the Tuner notices eyes leading the first step, the Engine notices the pelvis "
+            "driving the walk, the Soft Front notices the chest staying open. If the lesson "
+            "does NOT end with standing, do not add standing."
         ),
         "context_keys": [
             "framework_name",
