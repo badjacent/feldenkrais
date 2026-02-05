@@ -46,6 +46,16 @@ When writing through The Engine's lens, use MECHANICAL language: torque, transmi
 - "When the thoracolumbar fascia finally transmits, the hand no longer reaches — it is delivered by the whole spine's rotation."
 Diagnose WHERE in the chain, WHAT is blocking, and WHY the transmission fails. Keep the language embodied — the reader should feel the mechanics, not read a dissection manual.
 
+**Plain-language translations (REQUIRED for reader-facing text):** When writing booklet text (not internal analysis), always use the plain version:
+- "kinetic chain" → "the path from your center to your hand (or foot)"
+- "torque" → "the twist that starts in the pelvis"
+- "proximal-distal transmission" → "power flowing from your middle to your fingertips"
+- "short-circuit" → "the spot where the power gets stuck"
+- "mechanical advantage" → "using your body's weight and length to make things easier"
+- "coupling" → "how the pelvis and the spine move together"
+- "load transfer" → "weight passing from one part to the next"
+Do NOT use the technical terms without immediately translating them into felt experience.
+
 ## The Person Inside: The Engine
 
 The being who lives in your powerhouse — the pelvis, the low back, and the deep core. They provide the thrust and the initiation. They don't do the fine-tuning; they provide the **Volume**. They think in terms of torque, coupling, and transmission — like a mechanic listening to whether the drivetrain is connected or slipping. Every movement in the lesson is a question for The Engine:
