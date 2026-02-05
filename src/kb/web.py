@@ -4620,7 +4620,15 @@ BOOKLET_QUERY_TYPES = {
             "The Riser asks about vertical support, The Cartographer about what became "
             "distinct, The Tuner about intent-to-action clarity, The Engine about power "
             "delivery, The Soft Front about front-body availability. Common movement words "
-            "are shared — what matters is that the interpretation matches the lens."
+            "are shared — what matters is that the interpretation matches the lens.\n\n"
+            "ANTI-BOILERPLATE: Your opening sentence MUST name a specific body part or "
+            "movement from THIS lesson. Do NOT open with a generic statement about "
+            "Feldenkrais, awareness, or movement in general. "
+            "WRONG: 'Every Feldenkrais lesson begins with a question your body already knows.' "
+            "WRONG: 'Awareness Through Movement lessons work by...' "
+            "RIGHT: 'Your left foot was pressing into the floor while your right knee "
+            "floated — and somewhere in between, the pelvis started to roll on its own.' "
+            "The first sentence is a litmus test: if it could open ANY booklet, rewrite it."
         ),
         "context_keys": [
             "lesson_title",
@@ -4738,7 +4746,10 @@ BOOKLET_QUERY_TYPES = {
             "Banned structures: 'Whenever you...' (too generic), 'Whether X or Y' (too abstract), "
             "'Notice how...' (too passive). Each suggestion must be a SPECIFIC INSTRUCTION "
             "tied to a specific moment in this lesson. "
-            "No platitudes or fortune-cookie wisdom — give actionable movement cues."
+            "No platitudes or fortune-cookie wisdom — give actionable movement cues.\n\n"
+            "COMPLETENESS: Every sentence must end with proper punctuation (period, question "
+            "mark, or exclamation mark). Do NOT leave any sentence fragment or cut-off text. "
+            "If you are running long, write fewer suggestions — never truncate mid-sentence."
         ),
         "context_keys": [
             "lesson_title",
@@ -4839,7 +4850,10 @@ BOOKLET_QUERY_TYPES = {
             "through bones, the Cartographer notices joints that weren't there before, "
             "the Tuner notices eyes leading the first step, the Engine notices the pelvis "
             "driving the walk, the Soft Front notices the chest staying open. If the lesson "
-            "does NOT end with standing, do not add standing."
+            "does NOT end with standing, do not add standing.\n"
+            "- COMPLETENESS: Every sentence must end with proper punctuation. Do NOT "
+            "leave any sentence fragment or cut-off text. If you are running long, write "
+            "fewer paragraphs — never truncate mid-sentence or mid-word."
         ),
         "context_keys": [
             "framework_name",
@@ -4901,7 +4915,17 @@ BOOKLET_QUERY_TYPES = {
             "sentence with a capital letter. Do NOT write in all-lowercase.\n\n"
             "ACCURACY: Do not invent numbers, counts, or geometric specifications not "
             "present in the lesson text. If the lesson uses a clock face, there are 12 "
-            "positions, not 36. Stay grounded in what the lesson actually describes."
+            "positions, not 36. Stay grounded in what the lesson actually describes.\n\n"
+            "JARGON BAN: Write for someone with NO anatomy or movement-science background. "
+            "Banned terms: contralateral, ipsilateral, differentiation (use 'separating' "
+            "or 'telling apart'), asymmetrical variations (use 'one-sided movements' or "
+            "'lopsided positions'), proximal, distal, flexion, extension, lateral flexion, "
+            "motor cortex, proprioceptive, afferent, efferent, kinetic chain, force vector, "
+            "load path, parasitic effort. Replace clinical terms with everyday language: "
+            "'head-pelvis coordination' → 'how your head and pelvis move together', "
+            "'skeletal support' → 'your bones holding you up', "
+            "'postural tone' → 'background muscle tension'. "
+            "The reader just got off the floor — talk to them like a friend, not a textbook."
         ),
         "context_keys": [
             "lesson_title",
