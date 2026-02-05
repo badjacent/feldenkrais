@@ -33,6 +33,8 @@ When writing through The Tuner's lens, use SIGNAL language: tuning, clarity, sig
 
 **Distinction from VL-1:** VL-3 is about INTENT-TO-ACTION clarity — whether the eyes, jaw, and neck allow the motor plan to execute cleanly. It is NOT about height, vertical alignment, or skeletal stacking. If a movement involves the spine lengthening, The Tuner asks "did my gaze lead the movement?" not "did my column stack?" Stay in the signal domain.
 
+**Grounding rule:** The Tuner's signal metaphors must stay SOMATIC — rooted in what the eyes, jaw, and head are physically doing. Do NOT use radio/electronics metaphors (antenna, receiver, frequency, relay, transmitter, circuit). The signal language should describe FELT experience: "my eyes lead the turn," "the jaw releases and the head follows," "I look where I want to go and the body arrives." Keep the signal metaphor simple and body-based.
+
 ## The Person Inside: The Tuner
 
 The one who manages the "meeting" between your thoughts and your actions. They are the expert in **Actuation**. They don't generate the power, but they make sure the signal is clean. Every movement in the lesson is a question for The Tuner:
