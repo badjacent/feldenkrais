@@ -4754,7 +4754,13 @@ BOOKLET_QUERY_TYPES = {
             "high-resolution, skeletal buoyancy, ground reaction force, cortical, kinetic chain, "
             "proprioceptive, differentiation. Write as a friend who did the lesson with you: "
             "'notice whether your lower back touches the floor earlier' not 'track the "
-            "proprioceptive shift in lumbar contact.'"
+            "proprioceptive shift in lumbar contact.'\n\n"
+            "NO ABSTRACT METAPHORS: Banned imagery: muscular armor, sensory rinse, washing "
+            "away effort, dissolving tension, peeling layers, neurological rewiring. "
+            "Describe CONCRETE PHYSICAL CHANGES the reader can verify: 'the floor feels "
+            "flatter under your back', 'your head turns farther to the left', 'the hip "
+            "rolls without your belly tightening.' The reader should be able to check each "
+            "suggestion against their own body."
         ),
         "context_keys": [
             "lesson_title",
@@ -4903,8 +4909,11 @@ BOOKLET_QUERY_TYPES = {
             "3. The WASHING — how this lesson's particular sequence of movements erodes the "
             "habitual effort. Name the specific strategy (repetition, variation, contrast, etc.).\n\n"
             "IMPORTANT: Use the EXACT terms 'the Foundation' and 'the Washing' "
-            "at least once each in your paragraph. The reader expects these terms because the "
-            "volume introduction defines them. For the habitual effort, use lens-specific "
+            "at least once each in your paragraph. When you first use each term, give a brief "
+            "inline definition so the reader doesn't need to remember the volume introduction: "
+            "e.g., 'the Washing — the way the lesson's repetitions gradually loosen the habit' "
+            "or 'the Foundation — the ease that was there all along under the effort.' "
+            "For the habitual effort, use lens-specific "
             "language — name the specific grip or brace, don't use 'the Shadow.' "
             "DO NOT use the same template for every booklet. Weave the terms "
             "naturally into varied prose — sometimes lead with the movement, sometimes with "
@@ -5140,7 +5149,6 @@ def render_booklet_inquiry(somatic_narrative: dict) -> str:
 
     html = ['<section class="booklet-section">']
     html.append("<h2>The Question This Lesson Asks</h2>")
-    html.append("<p>Every Feldenkrais lesson poses a question to your nervous system. Not a question you answer with words — a question you answer with movement, sensation, and gradually shifting organization.</p>")
 
     if primary:
         html.append(f'<blockquote class="primary-inquiry">{primary}</blockquote>')
