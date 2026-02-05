@@ -12,6 +12,7 @@ Usage (local):
 """
 
 import asyncio
+from datetime import datetime, timezone
 import hashlib
 import json
 import os
@@ -4653,10 +4654,11 @@ BOOKLET_QUERY_TYPES = {
             "This section covers Part {group_number}: {group_label}. "
             "The steps in this part are: {steps_text}. "
             "The prominent pedagogical qualities are: {tag_labels}. "
-            "Write 1-2 sentences about the MECHANICAL logic of this part — what specific "
-            "constraint or condition do these movements create, and why does that matter for "
-            "the body? Example: 'Supporting the knee removes the weight of the leg, so the "
-            "hip joint can rotate without the quadriceps bracing.' "
+            "Write 1-2 sentences about what this part CHANGES for the person on the floor — "
+            "not what they did, but what shifted or became possible. Focus on the FELT "
+            "CONSEQUENCE of the movement arrangement. "
+            "Example: 'With the knee supported, the leg becomes dead weight — so the hip "
+            "can roll without the thigh muscles grabbing.' "
             "Do NOT use teacher-speak. WRONG: 'This section challenges the nervous system "
             "to sense asymmetries.' RIGHT: 'Bending the knees unloads the hip flexors, so "
             "the pelvis can tilt without muscular interference.' "
@@ -4670,7 +4672,9 @@ BOOKLET_QUERY_TYPES = {
             "Replace with mechanical verbs: shorten, lengthen, load, unload, rotate, tilt, "
             "shift, lift, drop, separate, widen, narrow, anchor, free, clear. "
             "Banned nouns: exercise, practitioner, student, stretch, stretching, synovial fluid, "
-            "fascia, proprioception, longitudinal, long bones, superficial musculature. "
+            "fascia, proprioception, longitudinal, long bones, superficial musculature, "
+            "motor plan, motor cortex, kinetic chain, force vector, pelvis-and-femur unit, "
+            "load path, contralateral, ipsilateral. "
             "No pseudo-medical or anatomical terminology — describe what MOVES, not "
             "biological structures or processes. "
             "No references to 'the teacher' or 'the nervous system' as subject. "
@@ -5985,6 +5989,9 @@ def build_booklet_html(
 <body>
     <a href="/book" class="back-link">&larr; All Booklets</a>
     {body}
+    <footer style="margin-top:48px;padding-top:12px;border-top:1px solid #e8e2d9;font-family:'Inter',sans-serif;font-size:0.75em;color:#bbb;">
+        Generated {datetime.now(timezone.utc).strftime("%b %d, %Y at %I:%M %p")} UTC
+    </footer>
 
 </body>
 </html>"""
@@ -6356,6 +6363,9 @@ async def book_page(fill: str = ""):
     {links_html}
     <h2>Alternates</h2>
     {alts_html}
+    <footer style="margin-top:48px;padding-top:12px;border-top:1px solid #e8e2d9;font-size:0.75em;color:#bbb;">
+        Generated {datetime.now(timezone.utc).strftime("%b %d, %Y at %I:%M %p")} UTC
+    </footer>
 
 </body>
 </html>"""
