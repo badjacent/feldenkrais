@@ -352,3 +352,74 @@ No regressions detected. No rollbacks needed.
 - Generic rest/scanning instructions still appear in Journey
 - Textbook-style definitions of framework terms in lesson-concepts
 - Individual VL-specific specificity gaps (VL-1 generic openings, VL-5 generic front-body descriptions)
+
+---
+
+## Iterations 31-38 — 2026-02-05
+
+*Automated batch targeting strategy shifts (positive examples over bans), structural fixes, and jargon translation expansion.*
+
+### Iteration 31
+- **Issues:** Shifted strategy from ban lists (diminishing returns) to gold-standard positive examples
+- **Changes:** Added gold-standard example to booklet-reflection and lesson-concepts showing ideal output tone. Added VL-4 plain-language translation table (the last VL without one).
+- **Files:** `src/kb/web.py`, `data/frameworks/v1/vl4.md`
+- **Commit:** `ecd41ca`
+
+### Iteration 32
+- **Issues:** #1 Journey instruction-echoing, #2 Riser truncation, #6 "direct actuation" in lens-synthesis
+- **Changes:** Trimmed lesson-concepts prompt significantly (~7857 chars → much shorter by consolidating jargon ban), banned movement-verb starts in gloss, VL-3 "direct actuation" ban
+- **Files:** `src/kb/web.py`, `data/frameworks/v1/vl3.md`
+- **Commit:** `bbe6d76`
+
+### Iteration 33
+- **Issues:** #1 anatomy in concepts, #2 abstract metaphors in synthesis, #3 filler in intro
+- **Changes:** Added source-translation rule to lesson-concepts ("source text may contain technical terms — you MUST translate"), added 3-body-reference rule to lens-synthesis
+- **Commit:** `12999b1`
+
+### Iteration 34
+- **Issues:** #2 abstract metaphors in synthesis, #3 filler in intro
+- **Changes:** Added "EVERY METAPHOR NEEDS A BODY" rule in lens-synthesis, added NO FILLER rule in booklet-intro
+- **Commit:** `1b8e3df`
+
+### Iteration 35
+- **Issues:** #1 prompt leak (recurrence), #2 truncation
+- **Changes:** Added anti-prompt-leak guard at TOP of pedagogical-gloss (primacy effect), expanded lens-synthesis banned terms (gross longitudinal, visual data, unloads, the system, systematic progression)
+- **Commit:** `64560b3`
+
+### Iteration 36 — Root cause fix
+- **Issues:** #1 prompt leak, #2 truncation — both turned out to be false positives from critics reading `<dialog>` prompt elements
+- **Changes:** **`critics.py`:** Added `_strip_prompt_elements()` to strip `<dialog class="prompt-dialog">` and `<span class="prompt-link">` from critic input before evaluation. This was the root cause — critics were scoring prompt text, not reader-facing content. Also added missing banned terms (sacrum, lumbar, cervical, thoracic, signal static, scary verbs) to lens-synthesis. Added INVITATION rule for open-ended endings.
+- **Files:** `src/kb/critics.py`, `src/kb/web.py`
+- **Commit:** `1209e2a`
+- **Impact:** Prompt leak and truncation issues **permanently eliminated** from reviews.
+
+### Iteration 37
+- **Issues:** #1 generic text in "How Lessons Work", #2 jargon in Journey, #3 Journey dry manual tone
+- **Changes:** Expanded jargon translations in lesson-concepts (buoyant, musculature, oscillation, diagonal pumping, skeletal buoyancy, vertical column). Added flexors/extensors and musculature translations to pedagogical-gloss.
+- **Commit:** `bf05c1d`
+
+### Iteration 38 — Structural fix for inquiry jargon
+- **Issues:** #1 jargon in lens-synthesis, #2 "Question This Lesson Asks" raw analysis jargon, #3 abstract metaphors
+- **Changes:** **Converted `render_booklet_inquiry` from raw text to LLM-processed query.** Added `booklet-inquiry` query type with jargon translation table (buoyant column → "feeling tall and light", etc.). This structural fix ensures all 5 inquiry questions are rewritten in plain language. Also banned buoyant column, neutral pivot, fused pelvic image, articulated resonance in lens-synthesis.
+- **Commit:** `34bd8d3`
+- **Impact:** Inquiry questions went from jargon-heavy ("How can the skeleton organize as a buoyant column...") to plain language ("What happens when the floor pushes up through your feet and your spine gets taller without trying?").
+
+### Performance (all iterations)
+Booklet generation times remained stable. The new booklet-inquiry LLM call adds ~2-3s per booklet (5 calls total) — negligible given parallel execution. No regressions detected.
+
+### Summary of progress (iterations 31-38)
+**Resolved issues:**
+- Prompt leak false positives — root cause fixed in critics.py (iter 36)
+- Truncation false positives — same root cause (iter 36)
+- "Question This Lesson Asks" jargon — structural fix, now LLM-translated (iter 38)
+- VL-4 missing plain-language translations (iter 31)
+
+**Strategy shift:**
+- Moved from pure ban lists (diminishing returns after ~20 iterations) to gold-standard positive examples (iter 31) and structural fixes (iters 36, 38)
+- Gold-standard examples show the LLM what good output looks like rather than only defining what to avoid
+
+**Persistent issues:**
+- Clinical drift in "What Changed" persists — terms get banned but new ones appear
+- Journey section still sometimes reads as procedural recap rather than insight
+- VL-specific framework terms still leak through in places
+- Generic rest/scanning instructions in Journey
