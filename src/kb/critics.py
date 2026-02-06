@@ -21,9 +21,19 @@ except ImportError:
     from .llm import LLM
 
 
+def _strip_prompt_elements(soup: BeautifulSoup) -> BeautifulSoup:
+    """Remove prompt dialogs and prompt-link spans so critics only see reader-facing text."""
+    for el in soup.find_all("dialog", class_="prompt-dialog"):
+        el.decompose()
+    for el in soup.find_all("span", class_="prompt-link"):
+        el.decompose()
+    return soup
+
+
 def _html_to_text(html: str) -> str:
     """Convert HTML to plain text, collapsing whitespace."""
     soup = BeautifulSoup(html, "html.parser")
+    _strip_prompt_elements(soup)
     return soup.get_text(separator="\n", strip=True)
 
 
@@ -35,6 +45,7 @@ def _strip_style(html: str) -> str:
 def _extract_sections(chapter_html: str) -> list[dict]:
     """Parse a booklet chapter into named sections with their text content."""
     soup = BeautifulSoup(chapter_html, "html.parser")
+    _strip_prompt_elements(soup)
     sections = []
 
     # The booklet cover
@@ -79,23 +90,14 @@ STUDENT_CHAPTER_SCHEMA = {
                             "type": "object",
                             "properties": {
                                 "section_name": {"type": "string"},
-                                "scores": {
-                                    "type": "object",
-                                    "properties": {
-                                        "recognition": {"type": "integer"},
-                                        "insight": {"type": "integer"},
-                                        "invitation": {"type": "integer"},
-                                        "accessibility": {"type": "integer"},
-                                        "engagement": {"type": "integer"},
-                                    },
-                                    "required": ["recognition", "insight", "invitation", "accessibility", "engagement"],
-                                },
-                                "callouts": {
-                                    "type": "array",
-                                    "items": {"type": "string"},
-                                },
+                                "recognition": {"type": "integer"},
+                                "insight": {"type": "integer"},
+                                "invitation": {"type": "integer"},
+                                "accessibility": {"type": "integer"},
+                                "engagement": {"type": "integer"},
+                                "callouts": {"type": "string"},
                             },
-                            "required": ["section_name", "scores", "callouts"],
+                            "required": ["section_name", "recognition", "insight", "invitation", "accessibility", "engagement", "callouts"],
                         },
                     },
                     "overall_engagement": {"type": "integer"},
@@ -124,10 +126,7 @@ SPECIFICITY_CHAPTER_SCHEMA = {
                             "properties": {
                                 "section_name": {"type": "string"},
                                 "concrete_references": {"type": "integer"},
-                                "generic_sentences": {
-                                    "type": "array",
-                                    "items": {"type": "string"},
-                                },
+                                "generic_sentences": {"type": "string"},
                                 "specificity_score": {"type": "integer"},
                             },
                             "required": ["section_name", "concrete_references", "generic_sentences", "specificity_score"],
@@ -197,7 +196,8 @@ For EACH section of EACH chapter, score on a 1-5 scale:
   1 = tedious/boring, 5 = genuinely interesting
 
 For sections scoring 3 or below on any dimension, provide specific callouts explaining
-what went wrong. Quote specific text that lost you.
+what went wrong. Quote specific text that lost you. Put all callouts in a single string,
+separated by newlines.
 
 Also provide an overall_engagement score (1-5) for each chapter as a whole.
 
@@ -256,8 +256,8 @@ For EACH section of EACH chapter:
 
    Do NOT count vague references like "the movements" or "your body" or "this exploration."
 
-2. **generic_sentences** (array of strings): List sentences that could appear in ANY
-   Feldenkrais lesson booklet with no modification. These are the sentences that have
+2. **generic_sentences** (string): List sentences that could appear in ANY
+   Feldenkrais lesson booklet with no modification, separated by newlines. These are the sentences that have
    no connection to the specific lesson content. Examples:
    - "The body gradually integrates these new patterns."
    - "Movement becomes more fluid and effortless."
