@@ -4908,7 +4908,8 @@ BOOKLET_QUERY_TYPES = {
             "visual data, unloads, the system, systematic progression, "
             "sacrum (use 'tailbone'), lumbar (use 'lower back'), cervical "
             "(use 'neck'), thoracic (use 'upper back'), signal static, "
-            "buckles, collapses, snaps, fractures. "
+            "buckles, collapses, snaps, fractures, buoyant column, "
+            "neutral pivot, fused pelvic image, articulated resonance. "
             "If the VL framework uses a technical term, translate it into what the "
             "body FEELS: 'the belly tightened' not 'the Red Light reflex activated.'\n"
             "GOOD EXAMPLE of the right tone: 'Something in my left hip loosened — not "
@@ -5120,6 +5121,39 @@ BOOKLET_QUERY_TYPES = {
             "group_summary",
         ],
     },
+    "booklet-inquiry": {
+        "name": "Central Question",
+        "location": "The Question This Lesson Asks section",
+        "purpose": "Translate the raw analytical inquiry into a plain-language question "
+                   "that a first-time student can understand and relate to their experience.",
+        "voice": "Second person, conversational, grounded in physical sensation.",
+        "length": "1 sentence (the question)",
+        "prompt": (
+            "The analysis produced this central question for the lesson:\n"
+            "\"{primary_inquiry}\"\n\n"
+            "Rewrite this as a single, clear question that a first-time student would "
+            "understand after doing the lesson. Requirements:\n"
+            "- Keep it as a question (ending with ?)\n"
+            "- Use plain language — no jargon, no clinical terms\n"
+            "- Reference at least one SPECIFIC body part or movement from the lesson\n"
+            "- The question should make the reader think 'yes, that IS what we were "
+            "exploring'\n\n"
+            "TRANSLATIONS: buoyant column → 'feeling tall and light', musculature → "
+            "'muscles', sacrum → 'tailbone', cervical → 'neck', lumbar → 'lower back', "
+            "thoracic → 'upper back', differentiate → 'tell apart', proprioceptive → "
+            "'felt sense', kinetic chain → 'the path from center to hand', "
+            "visual orientation → 'where your eyes point', flexors → 'front muscles', "
+            "extensors → 'back muscles', neutral pivot → 'easy turning point'.\n\n"
+            "WRONG: 'How can the skeleton organize as a buoyant column that receives "
+            "support from the floor?'\n"
+            "RIGHT: 'What happens when the floor pushes up through your feet and your "
+            "spine gets taller without trying?'\n\n"
+            "Output ONLY the rewritten question — nothing else."
+        ),
+        "context_keys": [
+            "primary_inquiry",
+        ],
+    },
 }
 
 
@@ -5312,14 +5346,17 @@ def render_booklet_home(home_position: str) -> str:
 
 
 def render_booklet_inquiry(somatic_narrative: dict) -> str:
-    """Render 'The Question This Lesson Asks' section."""
+    """Render 'The Question This Lesson Asks' section with LLM-translated inquiry."""
     primary = somatic_narrative.get("primary_inquiry", "")
 
     html = ['<section class="booklet-section">']
     html.append("<h2>The Question This Lesson Asks</h2>")
 
     if primary:
-        html.append(f'<blockquote class="primary-inquiry">{primary}</blockquote>')
+        query_block = booklet_query_block("booklet-inquiry", {
+            "primary_inquiry": primary,
+        })
+        html.append(f'<blockquote class="primary-inquiry">{query_block}</blockquote>')
 
     html.append("</section>")
     return "\n".join(html)
