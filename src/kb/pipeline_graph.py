@@ -423,11 +423,11 @@ CONFIGURABLE COMPONENTS (can be changed via prompts/config):
 
 EACH BOOKLET CONTAINS:
 - Cover with title and lens info
-- "How Feldenkrais Lessons Work" section (static)
-- Journey section (LLM-filled, uses 'booklet-journey' query type)
-- Arc section with analytical table (LLM-filled, uses 'booklet-arc' query type)
-- The Lens section (describes the VL perspective)
-- Next Time section (LLM-filled, uses 'booklet-reflection' query type)
+- Person Inside narrative (LLM-filled via 'lens-synthesis' query type)
+- Central Inquiry section
+- Core Concepts section (LLM-filled via 'lesson-concepts' query type)
+- Journey section with per-section glosses (LLM-filled via 'pedagogical-gloss' query type)
+- What Changed section (washing summary)
 """
 
         student_json = json.dumps(student_data, indent=2)
