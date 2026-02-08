@@ -649,23 +649,23 @@ data "archive_file" "web_lambda" {
     filename = "data/frameworks/v1/pass_b.md"
   }
   source {
-    content  = file("${path.module}/../data/frameworks/v1/vl1.md")
+    content  = file("${path.module}/../data/archive/prompt_files_from_v1/vl1.md")
     filename = "data/frameworks/v1/vl1.md"
   }
   source {
-    content  = file("${path.module}/../data/frameworks/v1/vl2.md")
+    content  = file("${path.module}/../data/archive/prompt_files_from_v1/vl2.md")
     filename = "data/frameworks/v1/vl2.md"
   }
   source {
-    content  = file("${path.module}/../data/frameworks/v1/vl3.md")
+    content  = file("${path.module}/../data/archive/prompt_files_from_v1/vl3.md")
     filename = "data/frameworks/v1/vl3.md"
   }
   source {
-    content  = file("${path.module}/../data/frameworks/v1/vl4.md")
+    content  = file("${path.module}/../data/archive/prompt_files_from_v1/vl4.md")
     filename = "data/frameworks/v1/vl4.md"
   }
   source {
-    content  = file("${path.module}/../data/frameworks/v1/vl5.md")
+    content  = file("${path.module}/../data/archive/prompt_files_from_v1/vl5.md")
     filename = "data/frameworks/v1/vl5.md"
   }
   # Database module

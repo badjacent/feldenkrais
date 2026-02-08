@@ -201,21 +201,138 @@ def load_frameworks(framework_version: str | None = None) -> list[dict]:
         prompts_dir, _ = _resolve_prompts_dir(v)
         path = prompts_dir / "frameworks.json"
         registry = json.loads(path.read_text())
-        ver_key = registry.get("current_version", list(registry.get("versions", {}).keys())[0])
-        _frameworks_cache[v] = registry["versions"][ver_key]["frameworks"]
+        # New flat character-definitions schema
+        if "characters" in registry:
+            _frameworks_cache[v] = registry["characters"]
+        else:
+            # Legacy nested schema
+            ver_key = registry.get("current_version", list(registry.get("versions", {}).keys())[0])
+            _frameworks_cache[v] = registry["versions"][ver_key]["frameworks"]
     return _frameworks_cache[v]
 
 
 def get_active_frameworks_config(framework_version: str | None = None) -> list[dict]:
-    """Return only active frameworks from a given version."""
-    return [f for f in load_frameworks(framework_version) if f.get("active", True)]
+    """Return only active (primary) frameworks from a given version."""
+    frameworks = load_frameworks(framework_version)
+    # New schema uses role="primary"; legacy uses active=True
+    if frameworks and "role" in frameworks[0]:
+        return [f for f in frameworks if f.get("role") == "primary"]
+    return [f for f in frameworks if f.get("active", True)]
+
+
+def _derive_key(char: dict) -> str:
+    """Derive Pass A classification key from character id + name.
+
+    VL-1 + The Riser → vl1_riser
+    """
+    if "key" in char:
+        return char["key"]
+    base = char["id"].lower().replace("-", "")
+    name_part = char["name"].lower().replace("the ", "").replace(" ", "_")
+    return f"{base}_{name_part}"
+
+
+_CORE_VERB_TO_SUBTITLE = {
+    "settle": "The Lens of Settling",
+    "discover": "The Lens of Discovery",
+    "clear": "The Lens of Clarity",
+    "transmit": "The Lens of Transmission",
+    "permit": "The Lens of Permission",
+}
+
+
+def _derive_subtitle(essence: dict) -> str:
+    """Derive subtitle from essence.core_verb."""
+    verb = essence.get("core_verb", "")
+    return _CORE_VERB_TO_SUBTITLE.get(verb, f"The Lens of {verb.title()}" if verb else "")
+
+
+def _derive_person_description(essence: dict) -> str:
+    """Build person_description from essence.sees (first 1-2 sentences) + changes_when (first sentence)."""
+    sees = essence.get("sees", "")
+    changes = essence.get("changes_when", "")
+    # Take first two sentences from sees
+    sees_sentences = [s.strip() for s in sees.split(".") if s.strip()]
+    sees_part = ". ".join(sees_sentences[:2]) + "." if sees_sentences else ""
+    # Take first sentence from changes_when
+    changes_sentences = [s.strip() for s in changes.split(".") if s.strip()]
+    changes_part = changes_sentences[0] + "." if changes_sentences else ""
+    parts = [p for p in [sees_part, changes_part] if p]
+    return " ".join(parts)
+
+
+def _derive_focus(char: dict) -> str:
+    """Derive focus from core_verb + key phrases from essence.regulates."""
+    if "focus" in char:
+        return char["focus"]
+    essence = char.get("essence", {})
+    verb = essence.get("core_verb", "")
+    regulates = essence.get("regulates", "")
+    # Take first sentence of regulates
+    reg_sentences = [s.strip() for s in regulates.split(".") if s.strip()]
+    reg_part = reg_sentences[0] if reg_sentences else ""
+    return f"{verb.title()}: {reg_part}" if verb else reg_part
+
+
+def _derive_indicators(char: dict) -> str:
+    """Derive indicators from first 4-5 vocabulary_seeds."""
+    if "indicators" in char:
+        return char["indicators"]
+    voice = char.get("voice", {})
+    seeds = voice.get("vocabulary_seeds", [])
+    return ", ".join(seeds[:5])
+
+
+def _format_character_as_prompt(char: dict) -> str:
+    """Format a character definition (essence + voice) as a structured markdown prompt.
+
+    Used by load_pass_b() to replace the old vl{N}.md files.
+    """
+    name = char.get("name", "")
+    essence = char.get("essence", {})
+    voice = char.get("voice", {})
+
+    lines = [f"# {name}\n"]
+
+    lines.append("## What This Lens Sees\n")
+    lines.append(essence.get("sees", ""))
+    lines.append("")
+
+    lines.append("## What It Regulates\n")
+    lines.append(essence.get("regulates", ""))
+    lines.append("")
+
+    lines.append("## When It Changes\n")
+    lines.append(essence.get("changes_when", ""))
+    lines.append("")
+
+    core_verb = essence.get("core_verb", "")
+    core_dist = essence.get("core_distinction", "")
+    if core_verb or core_dist:
+        lines.append(f"## Core Verb: {core_verb}\n")
+        lines.append(core_dist)
+        lines.append("")
+
+    lines.append("## Voice\n")
+    lines.append(f"**Register:** {voice.get('private_register', '')}\n")
+    lines.append(f"**Sentence quality:** {voice.get('sentence_quality', '')}\n")
+    lines.append(f"**Emotional range:** {voice.get('emotional_range', '')}\n")
+    lines.append(f"**Metaphor family:** {voice.get('metaphor_family', '')}\n")
+
+    seeds = voice.get("vocabulary_seeds", [])
+    if seeds:
+        lines.append(f"**Vocabulary seeds:** {', '.join(seeds)}\n")
+
+    return "\n".join(lines)
 
 
 def build_classification_table(framework_version: str | None = None) -> str:
     """Build the VL classification markdown table from the framework registry."""
     rows = []
     for f in get_active_frameworks_config(framework_version):
-        rows.append(f"| **{f['id']}** {f['name']} | {f['focus']} | {f['indicators']} |")
+        focus = f.get("focus") or _derive_focus(f)
+        indicators = f.get("indicators") or _derive_indicators(f)
+        rows.append(f"| **{f['id']}** {f['name']} | {focus} | {indicators} |")
     header = "| Framework | Focus | Key Indicators |\n|-----------|-------|----------------|\n"
     return header + "\n".join(rows)
 
@@ -225,20 +342,45 @@ _vl_booklet_intros_cache: dict[str, dict] = {}
 
 
 def get_vl_booklet_intros(framework_version: str | None = None) -> dict[str, dict]:
-    """Build VL_BOOKLET_INTROS dict from frameworks.json (cached)."""
+    """Build VL_BOOKLET_INTROS dict from frameworks.json (cached).
+
+    For the new character-definitions schema, backward-compatible fields
+    are derived from essence/voice data with a _derived suffix.
+    """
     v = framework_version or FRAMEWORK_VERSION
     if v not in _vl_booklet_intros_cache:
+        chars = load_frameworks(v)
         intros = {}
-        for f in load_frameworks(v):
-            intros[f["id"]] = {
-                "name": f.get("name", ""),
-                "subtitle": f.get("subtitle", ""),
-                "lens": f.get("lens", ""),
-                "person_inside": f.get("person_inside", ""),
-                "person_description": f.get("person_description", ""),
-                "habit_description": f.get("habit_description", ""),
-                "habit_label": f.get("habit_label", ""),
-            }
+
+        # Detect new schema by checking for 'role' field
+        is_new_schema = chars and "role" in chars[0]
+
+        if is_new_schema:
+            blob = next((c for c in chars if c.get("role") == "shadow"), {})
+            for f in chars:
+                if f.get("role") == "shadow":
+                    continue
+                essence = f.get("essence", {})
+                intros[f["id"]] = {
+                    "name": f["name"],
+                    "subtitle_derived": _derive_subtitle(essence),
+                    "lens_derived": essence.get("sees", "").split(".")[0] + "." if essence.get("sees") else "",
+                    "person_inside": f["name"],
+                    "person_description_derived": _derive_person_description(essence),
+                    "habit_label_derived": blob.get("name", "The Blob"),
+                    "habit_description_derived": blob.get("essence", {}).get("sees", ""),
+                }
+        else:
+            for f in chars:
+                intros[f["id"]] = {
+                    "name": f.get("name", ""),
+                    "subtitle_derived": f.get("subtitle", ""),
+                    "lens_derived": f.get("lens", ""),
+                    "person_inside": f.get("person_inside", ""),
+                    "person_description_derived": f.get("person_description", ""),
+                    "habit_description_derived": f.get("habit_description", ""),
+                    "habit_label_derived": f.get("habit_label", ""),
+                }
         _vl_booklet_intros_cache[v] = intros
     return _vl_booklet_intros_cache[v]
 
@@ -250,8 +392,9 @@ def build_pass_a_schema(framework_version: str | None = None) -> dict:
     cls_props = {}
     cls_required = []
     for f in active:
-        cls_props[f["key"]] = {"type": "number", "minimum": 0, "maximum": 1}
-        cls_required.append(f["key"])
+        key = _derive_key(f)
+        cls_props[key] = {"type": "number", "minimum": 0, "maximum": 1}
+        cls_required.append(key)
     schema["properties"]["classifications"]["properties"] = cls_props
     schema["properties"]["classifications"]["required"] = cls_required
     schema["properties"]["primary_framework"]["enum"] = [f["id"] for f in active]
@@ -332,6 +475,8 @@ def load_pass_b(framework: str, framework_version: str | None = None) -> tuple[s
     """Load Pass B prompt and schema for a specific VL framework.
 
     Pass B receives Pass A output and applies the VL-specific lens.
+    For the new character-definitions schema, the VL-specific module is
+    generated from the character's essence + voice data in frameworks.json.
     Prompts come from versioned PROMPTS_DIR, schema from shared DATA_DIR.
     """
     fv = framework_version or FRAMEWORK_VERSION
@@ -340,11 +485,19 @@ def load_pass_b(framework: str, framework_version: str | None = None) -> tuple[s
     base_path = prompts_dir / "pass_b.md"
     base_protocol = base_path.read_text() if base_path.exists() else ""
 
-    # Load VL-specific module
-    vl_map = {f["id"]: f["prompt_file"] for f in load_frameworks(fv)}
-    vl_file = vl_map.get(framework, "vl1.md")
-    vl_path = prompts_dir / vl_file
-    vl_module = vl_path.read_text() if vl_path.exists() else ""
+    # Find character definition and generate VL-specific module
+    chars = load_frameworks(fv)
+    char = next((c for c in chars if c["id"] == framework), None)
+
+    if char and "essence" in char:
+        # New schema: format character definition as prompt
+        vl_module = _format_character_as_prompt(char)
+    elif char and "prompt_file" in char:
+        # Legacy schema: load from prompt file
+        vl_path = prompts_dir / char["prompt_file"]
+        vl_module = vl_path.read_text() if vl_path.exists() else ""
+    else:
+        vl_module = ""
 
     # Combine: Pass B base + VL-specific framework
     protocol = base_protocol + "\n\n---\n\n## Framework: " + framework + "\n\n" + vl_module
@@ -712,6 +865,15 @@ def get_llm(provider_key: str | None = None) -> LLM:
     Args:
         provider_key: One of 'gemini', 'openai', 'anthropic'. Defaults to DEFAULT_LLM.
     """
+    if not _db:
+        raise RuntimeError(
+            "LLM calls are disabled (no database connection to check kill switch)."
+        )
+    settings = _db.get_cache("settings:llm_enabled")
+    if not settings or not settings.get("enabled", False):
+        raise RuntimeError(
+            "LLM calls are disabled. Run /enable-llm to enable."
+        )
     key = provider_key or DEFAULT_LLM
     config = LLM_CONFIGS.get(key)
     if not config:
@@ -777,8 +939,9 @@ def get_available_lessons() -> tuple[dict[str, list[tuple[str, str]]], dict[str,
                     cat_key = f"db:{src['source_id']}"
                     categories[cat_key] = source_bucket
                     display_names[cat_key] = source_display
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error("get_available_lessons DB error: %s", e)
 
     # Skip empty sources (e.g. OTHER with no documents)
     categories = {k: v for k, v in categories.items() if v}
@@ -916,7 +1079,7 @@ def run_pass_a(lesson_text: str, provider_key: str | None = None, debug_log: lis
     if not pass_a_prompt or not pass_a_schema:
         # Return default if Pass A not configured
         active = get_active_frameworks_config(fv)
-        default_cls = {f["key"]: (1.0 if i == 0 else 0.0) for i, f in enumerate(active)}
+        default_cls = {_derive_key(f): (1.0 if i == 0 else 0.0) for i, f in enumerate(active)}
         return {
             "classifications": default_cls,
             "primary_framework": active[0]["id"] if active else "VL-1",
@@ -964,7 +1127,7 @@ def get_active_frameworks(pass_a_result: dict, threshold: float = VL_ANALYSIS_TH
     classifications = pass_a_result.get("classifications", {})
 
     # Map classification keys to framework names from registry
-    key_to_framework = {f["key"]: f["id"] for f in get_active_frameworks_config()}
+    key_to_framework = {_derive_key(f): f["id"] for f in get_active_frameworks_config()}
 
     active = []
     for key, framework in key_to_framework.items():
@@ -1190,7 +1353,7 @@ def render_router_result(router_result: dict) -> str:
     classifications = router_result.get("classifications", {})
     if classifications:
         html.append('<div style="margin: 15px 0;">')
-        framework_names = {f["key"]: f["display_name"] for f in load_frameworks()}
+        framework_names = {_derive_key(f): f.get("display_name", f"{f['id']} {f['name']}") for f in get_active_frameworks_config()}
         for key, name in framework_names.items():
             score = classifications.get(key, 0)
             pct = int(score * 100)
@@ -5276,7 +5439,7 @@ def render_booklet_cover(title: str, framework_id: str, source_url: str = "") ->
     """Render the booklet cover page."""
     intro = VL_BOOKLET_INTROS.get(framework_id, {})
     framework_name = intro.get("name", framework_id)
-    subtitle = intro.get("subtitle", "")
+    subtitle = intro.get("subtitle_derived", "")
 
     source_link = ""
     if source_url:
@@ -5389,7 +5552,7 @@ def render_booklet_person_inside_narrative(framework_id: str, vl_analysis: dict,
     context = {
         "framework_name": intro.get("name", ""),
         "person_inside": intro.get("person_inside", ""),
-        "person_description": intro.get("person_description", ""),
+        "person_description": intro.get("person_description_derived", ""),
         "primary_inquiry": primary_inquiry,
         "vl_voices": "\n".join(vl_voice_parts),
         "shadow_voices": "\n".join(shadow_voice_parts) if shadow_voice_parts else "(no shadow observations)",
@@ -5527,7 +5690,7 @@ def render_booklet_journey(groups: list, steps: list, vl_analysis: dict, pass_a_
                     html.append(f'<p><strong>{person_inside_name}:</strong> <em>{vl_voice}</em></p>')
 
                 if shadow_voice:
-                    habit_label = intro.get("habit_label", "The habit")
+                    habit_label = intro.get("habit_label_derived", "The Blob")
                     html.append(f'<p><strong>{habit_label}:</strong> <em>{shadow_voice}</em></p>')
 
         html.append("</div>")  # end journey-group
@@ -5588,12 +5751,12 @@ def render_booklet_lens(framework_id: str, vl_analysis: dict, somatic_narrative:
 
     # The Person Inside — static description
     html.append(f'<h3>{intro["person_inside"]}</h3>')
-    html.append(f'<p>{intro["person_description"]}</p>')
+    html.append(f'<p>{intro.get("person_description_derived", "")}</p>')
 
     # The habit — static description
-    habit_label = intro.get("habit_label", "The habit")
+    habit_label = intro.get("habit_label_derived", "The Blob")
     html.append(f'<h3>{habit_label.title()}</h3>')
-    html.append(f'<p>{intro["habit_description"]}</p>')
+    html.append(f'<p>{intro.get("habit_description_derived", "")}</p>')
 
     # Collect vl_voice and shadow_voice entries from analytical table rows
     result = vl_analysis.get("result", {})
@@ -5615,7 +5778,7 @@ def render_booklet_lens(framework_id: str, vl_analysis: dict, somatic_narrative:
         context = {
             "framework_name": intro.get("name", ""),
             "person_inside": intro.get("person_inside", ""),
-            "person_description": intro.get("person_description", ""),
+            "person_description": intro.get("person_description_derived", ""),
             "primary_inquiry": primary_inquiry,
             "vl_voices": "\n".join(vl_voice_parts),
             "shadow_voices": "\n".join(shadow_voice_parts) if shadow_voice_parts else "(no shadow observations)",
@@ -5687,7 +5850,7 @@ def render_booklet_reflection(
         "lesson_title": lesson_title,
         "framework_name": intro.get("name", framework_id),
         "person_inside": intro.get("person_inside", "Council member"),
-        "lens_description": intro.get("lens", ""),
+        "lens_description": intro.get("lens_derived", ""),
         "primary_inquiry": somatic_narrative.get("primary_inquiry", ""),
         "journey_summary": journey_summary,
         "tag_summary": tag_summary,
@@ -6205,15 +6368,14 @@ async def booklet_page(category: str = "", lesson: str = "", fill: str = "", fra
         # Show a simple lesson picker
         return _booklet_picker_html()
 
-    # Check if this is a BOOK_LESSONS entry with pre-filled content in the pipeline
+    # Check if this lesson matches the pipeline lesson; serve from pipeline cache
     if _db and framework:
-        for vl_id, entry in BOOK_LESSONS.items():
-            if entry and entry.get("lesson_id") == lesson and vl_id == framework:
-                # Try to load pre-filled content from pipeline
-                filled_data = _db.get_cache(f"pipeline:booklet:{vl_id}")
-                if filled_data and filled_data.get("html"):
-                    return filled_data["html"]
-                break
+        filled_data = _db.get_cache("pipeline:booklet")
+        if filled_data and filled_data.get("html"):
+            # Verify this is actually the pipeline lesson
+            pipeline_lesson_id = "abfddaf1-e837-4ed5-9d59-6e53056eb759"
+            if lesson == pipeline_lesson_id:
+                return filled_data["html"]
 
     text = load_lesson(category, lesson).strip()
     if not text:
@@ -6267,7 +6429,7 @@ async def booklet_page(category: str = "", lesson: str = "", fill: str = "", fra
 
 
 # --- Book (curated volume) ---
-# Five lessons, one per VL lens.
+# Single lesson analysed through all 5 VL lenses.
 BOOK_LESSONS = {
     "VL-1": {
         "lesson_id": "abfddaf1-e837-4ed5-9d59-6e53056eb759",
@@ -6275,142 +6437,67 @@ BOOK_LESSONS = {
         "title": "The Anti-Gravity Lesson",
     },
     "VL-2": {
-        "lesson_id": "d7f7695d-a572-4888-929a-8d572778dbe5",
+        "lesson_id": "abfddaf1-e837-4ed5-9d59-6e53056eb759",
         "category": "db:4",
-        "title": "Differentiation of Pelvic Movements by Means of an Imaginary Clock",
+        "title": "The Anti-Gravity Lesson",
     },
     "VL-3": {
-        "lesson_id": "90e72ae1-98bc-4b35-816c-4542e23bd928",
-        "category": "db:4:Feldenkrais Project ATM Book",
-        "title": "The Movement of the Eyes Organizes the Movement of the Body",
+        "lesson_id": "abfddaf1-e837-4ed5-9d59-6e53056eb759",
+        "category": "db:4",
+        "title": "The Anti-Gravity Lesson",
     },
     "VL-4": {
-        "lesson_id": "bbbf731f-bc74-462f-b7eb-fdfac69dc61b",
+        "lesson_id": "abfddaf1-e837-4ed5-9d59-6e53056eb759",
         "category": "db:4",
-        "title": "The Hip Joints: Moving Proximal Around Distal",
+        "title": "The Anti-Gravity Lesson",
     },
     "VL-5": {
-        "lesson_id": "7bef0dd0-5e16-47a7-bd98-fcc880a65c9a",
-        "category": "db:4:Feldenkrais Project ATM Book",
-        "title": "Coordination of the Flexor Muscles and of the Extensors",
-    },
-}
-
-BOOK_ALTERNATES = {
-    "VL-1": None,  # decided — no alternate
-    "VL-2": None,  # decided — no alternate
-    "VL-3": {
-        "lesson_id": "c2029d32-8c74-4bec-90cb-472d677051ae",
+        "lesson_id": "abfddaf1-e837-4ed5-9d59-6e53056eb759",
         "category": "db:4",
-        "title": "Arms Like a Skeleton, Integrating the Neck, Jaw, and Eyes",
-    },
-    "VL-4": {
-        "lesson_id": "c0d50725-fc4a-4e7e-ab31-42a30ac70e07",
-        "category": "db:4",
-        "title": "Legs as Free as a Baby's",
-    },
-    "VL-5": {
-        "lesson_id": "4e4d98d7-7af4-47a9-9a75-76997968100e",
-        "category": "db:4",
-        "title": "More Precise Hips and Spine",
+        "title": "The Anti-Gravity Lesson",
     },
 }
 
 
 @app.get("/book", response_class=HTMLResponse)
-async def book_page(fill: str = ""):
-    """Render the curated volume: intro + five booklet links."""
-    # Try to load pre-filled volume intro from pipeline cache
-    volume_query = None
+async def book_page():
+    """Render the single-lesson book: one lesson analysed through all 5 VL lenses."""
+    lesson_id = "abfddaf1-e837-4ed5-9d59-6e53056eb759"
+    title = "The Anti-Gravity Lesson"
+    category = "db:4"
+
+    # Try to load pre-filled booklet from pipeline cache
+    booklet_html = None
     if _db:
-        cached = _db.get_cache("pipeline:volume_intro")
-        if cached and "html" in cached:
-            volume_query = cached["html"]
+        data = _db.get_cache("pipeline:booklet")
+        if data and data.get("html"):
+            booklet_html = data["html"]
 
-    # Fall back to generating (and optionally filling) inline
-    if not volume_query:
-        # Build lens info for the volume-intro query block
-        lenses = []
-        for vl_id in sorted(VL_BOOKLET_INTROS.keys()):
-            info = VL_BOOKLET_INTROS[vl_id]
-            lenses.append({
-                "id": vl_id,
-                "name": info["name"],
-                "subtitle": info["subtitle"],
-                "lens_description": info["lens"],
-            })
-
-        lesson_entries = []
-        for vl_id in sorted(BOOK_LESSONS.keys()):
-            entry = BOOK_LESSONS[vl_id]
-            if entry:
-                lesson_entries.append({
-                    "title": entry["title"],
-                    "framework_id": vl_id,
-                    "framework_name": VL_BOOKLET_INTROS[vl_id]["name"],
-                })
-
-        volume_context = {"lenses": lenses, "lessons": lesson_entries}
-        volume_query = booklet_query_block("volume-intro", volume_context)
-
-        # Optionally fill the intro query block
-        if fill.lower() in ("true", "1", "yes"):
-            try:
-                from query_agent import QueryAgent
-            except ImportError:
-                from .query_agent import QueryAgent
-            agent = QueryAgent(
-                llm=get_llm(DEFAULT_LLM),
-                max_review_cycles=0,
-            )
-            volume_query = await asyncio.to_thread(agent.fill, volume_query)
-
-    # Render council section
-    council_section = render_council_section()
-
-    # Build booklet links
-    booklet_links = []
-    for vl_id in sorted(BOOK_LESSONS.keys()):
+    # Build VL lens list for context
+    lens_items = []
+    for vl_id in sorted(VL_BOOKLET_INTROS.keys()):
         info = VL_BOOKLET_INTROS[vl_id]
-        entry = BOOK_LESSONS[vl_id]
-        link = (
-            f'<li>'
-            f'<a href="/booklet?category={entry["category"]}&lesson={entry["lesson_id"]}&framework={vl_id}">'
-            f'{entry["title"]}</a>'
-            f'<span class="lens">{info["name"]} &mdash; {info["subtitle"]}</span>'
-            f'</li>'
+        lens_items.append(
+            f'<li><strong>{vl_id}</strong>: {info["name"]}'
+            f' &mdash; {info.get("subtitle_derived", "")}</li>'
         )
-        booklet_links.append(link)
+    lens_list = "<ul>" + "\n".join(lens_items) + "</ul>"
 
-    links_html = "<ol>" + "\n".join(booklet_links) + "</ol>"
-
-    # Build alternate links
-    alt_links = []
-    for vl_id in sorted(BOOK_ALTERNATES.keys()):
-        info = VL_BOOKLET_INTROS[vl_id]
-        entry = BOOK_ALTERNATES[vl_id]
-        if entry:
-            link = (
-                f'<li>'
-                f'<a href="/booklet?category={entry["category"]}&lesson={entry["lesson_id"]}&framework={vl_id}">'
-                f'{entry["title"]}</a>'
-                f'<span class="lens">{info["name"]} &mdash; {info["subtitle"]}</span>'
-                f'</li>'
-            )
-        else:
-            link = (
-                f'<li class="decided">'
-                f'<span class="lens">{info["name"]} &mdash; decided</span>'
-                f'</li>'
-            )
-        alt_links.append(link)
-
-    alts_html = "<ol>" + "\n".join(alt_links) + "</ol>"
+    # Booklet link or inline content
+    if booklet_html:
+        booklet_section = (
+            f'<div class="booklet-chapter">\n{booklet_html}\n</div>'
+        )
+    else:
+        booklet_section = (
+            f'<p><a href="/booklet?category={category}&lesson={lesson_id}&framework=VL-1">'
+            f'View booklet for {title}</a> (pipeline has not run yet)</p>'
+        )
 
     return f"""<!DOCTYPE html>
 <html>
 <head>
-    <title>Companion Booklets</title>
+    <title>{title} &mdash; Five-Lens Analysis</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Inter:wght@400;500;600&display=swap');
         body {{
@@ -6425,149 +6512,21 @@ async def book_page(fill: str = ""):
         h1 {{ font-size: 1.8em; margin-bottom: 8px; }}
         h2 {{ font-size: 1.3em; margin: 32px 0 12px; color: #4a6741; }}
         p {{ color: #555; margin-bottom: 16px; }}
-        ol {{ list-style: none; padding: 0; counter-reset: booklet; }}
-        li {{
-            padding: 16px;
-            border-bottom: 1px solid #e8e2d9;
-            counter-increment: booklet;
-        }}
-        li:first-child {{ border-top: 1px solid #e8e2d9; }}
-        li a {{
-            display: block;
-            color: #4a6741;
-            text-decoration: none;
-            font-weight: 600;
-            font-size: 1.05em;
-        }}
-        li a:hover {{ text-decoration: underline; }}
-        .lens {{
-            display: block;
-            font-size: 0.85em;
-            color: #888;
-            margin-top: 2px;
-        }}
-        .decided {{ color: #ccc; font-style: italic; }}
+        ul {{ padding-left: 20px; }}
+        li {{ margin-bottom: 6px; }}
         .back {{ font-size: 0.85em; color: #999; margin-bottom: 20px; display: block; }}
-        .llm-query {{
-            margin: 20px 0;
-            padding: 12px 16px;
-            background: #fef9e7;
-            border: 1px dashed #d4ac0d;
-            border-radius: 6px;
-            font-size: 0.85em;
-            color: #856404;
-            font-family: monospace;
-        }}
-        .llm-query .query-prompt {{ margin: 0; }}
-        .llm-filled {{
-            margin: 20px 0;
-        }}
-        .llm-filled p {{
-            margin: 0 0 12px;
-        }}
-        .llm-filled-group {{
-            margin: 20px 0;
-        }}
-        .prompt-link {{
-            font-size: 0.75em;
-            color: #aaa;
-            cursor: pointer;
-        }}
-        .prompt-link:hover {{
-            color: #888;
-            text-decoration: underline;
-        }}
-        .prompt-dialog {{
-            max-width: 640px;
-            width: 90vw;
-            max-height: 80vh;
-            padding: 24px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            font-family: monospace;
-            font-size: 0.82em;
-            line-height: 1.6;
-            color: #856404;
-            background: #fef9e7;
-            overflow-y: auto;
-        }}
-        .prompt-dialog::backdrop {{
-            background: rgba(0,0,0,0.3);
-        }}
-        .prompt-dialog button {{
-            margin-top: 16px;
-            padding: 6px 20px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            background: white;
-            cursor: pointer;
-        }}
-        .prompt-dialog button:hover {{
-            background: #f5f5f5;
-        }}
-        .booklet-section {{
-            margin: 32px 0;
-            padding: 24px 0;
-            border-top: 1px solid #e8e2d9;
-        }}
-        .booklet-section h2 {{
-            margin-top: 0;
-        }}
-        .booklet-section h3 {{
-            font-size: 1.1em;
-            margin: 20px 0 8px;
-            color: #4a6741;
-        }}
-        .council-member {{
-            background: #faf9f7;
-        }}
-        .three-states {{
-            margin: 20px 0;
-        }}
-        .state {{
-            display: flex;
-            align-items: flex-start;
-            gap: 12px;
-            padding: 14px 18px;
-            margin: 8px 0;
-            border-radius: 6px;
-            font-size: 0.95em;
-        }}
-        .state strong {{
-            font-family: 'Inter', sans-serif;
-            white-space: nowrap;
-            min-width: 110px;
-        }}
-        .state span {{
-            color: #555;
-        }}
-        .state-bracing {{
-            background: #fdf2f2;
-            border-left: 4px solid #c0392b;
-        }}
-        .state-softening {{
-            background: #fef9f0;
-            border-left: 4px solid #e67e22;
-        }}
-        .state-transmission {{
-            background: #f0f9f0;
-            border-left: 4px solid #27ae60;
-        }}
     </style>
 </head>
 <body>
     <a href="/" class="back">&larr; Back to Analyzer</a>
-    <h1>Companion Booklets for Awareness Through Movement</h1>
-    {volume_query}
-    {council_section}
-    <h2>The Booklets</h2>
-    {links_html}
-    <h2>Alternates</h2>
-    {alts_html}
+    <h1>{title}</h1>
+    <p>Single lesson analysed through all five Viewpoint Lenses:</p>
+    {lens_list}
+    <h2>Booklet</h2>
+    {booklet_section}
     <footer style="margin-top:48px;padding-top:12px;border-top:1px solid #e8e2d9;font-size:0.75em;color:#bbb;">
         Generated {datetime.now(timezone.utc).strftime("%b %d, %Y at %I:%M %p")} UTC
     </footer>
-
 </body>
 </html>"""
 
