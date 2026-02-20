@@ -6,7 +6,7 @@ questions of other VLs, then produce an enriched analysis incorporating
 the responses.
 
 Pipeline shape:
-    analysis_b:{VL-1..5} → cross_query:{VL-1..5} → vl_synthesis
+    analysis_b:{VL-1..5} → cross_query:{VL-1..5} → analysis_merge
 
 Each cross_query node depends on ALL 5 analysis_b nodes.  The 5
 cross_query nodes run in parallel (they read from cache, not from

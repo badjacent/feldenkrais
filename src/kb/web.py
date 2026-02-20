@@ -6376,11 +6376,10 @@ def build_booklet_html(
 async def booklet_page(category: str = "", lesson: str = "", fill: str = "", framework: str = ""):
     """Render a lesson booklet from cached analysis."""
     if not category or not lesson:
-        # Show a simple lesson picker
-        return _booklet_picker_html()
+        return RedirectResponse(url="/book", status_code=303)
 
     # Check if a filled booklet exists in the pipeline cache for this lesson
-    pipeline_lesson_id = "abfddaf1-e837-4ed5-9d59-6e53056eb759"
+    pipeline_lesson_id = "e48ad223-c642-4672-a779-b58727725cab"
     if _db and lesson == pipeline_lesson_id:
         cache_key_suffix = f":{framework}" if framework else ""
         filled_data = _db.get_cache(f"pipeline:booklet{cache_key_suffix}")
@@ -6451,66 +6450,246 @@ async def booklet_page(category: str = "", lesson: str = "", fill: str = "", fra
 # Single lesson analysed through all 5 VL lenses.
 BOOK_LESSONS = {
     "VL-1": {
-        "lesson_id": "abfddaf1-e837-4ed5-9d59-6e53056eb759",
+        "lesson_id": "e48ad223-c642-4672-a779-b58727725cab",
         "category": "db:4",
         "title": "The Anti-Gravity Lesson",
     },
     "VL-2": {
-        "lesson_id": "abfddaf1-e837-4ed5-9d59-6e53056eb759",
+        "lesson_id": "e48ad223-c642-4672-a779-b58727725cab",
         "category": "db:4",
         "title": "The Anti-Gravity Lesson",
     },
     "VL-3": {
-        "lesson_id": "abfddaf1-e837-4ed5-9d59-6e53056eb759",
+        "lesson_id": "e48ad223-c642-4672-a779-b58727725cab",
         "category": "db:4",
         "title": "The Anti-Gravity Lesson",
     },
     "VL-4": {
-        "lesson_id": "abfddaf1-e837-4ed5-9d59-6e53056eb759",
+        "lesson_id": "e48ad223-c642-4672-a779-b58727725cab",
         "category": "db:4",
         "title": "The Anti-Gravity Lesson",
     },
     "VL-5": {
-        "lesson_id": "abfddaf1-e837-4ed5-9d59-6e53056eb759",
+        "lesson_id": "e48ad223-c642-4672-a779-b58727725cab",
         "category": "db:4",
         "title": "The Anti-Gravity Lesson",
     },
 }
 
 
+def _extract_booklet_sections(booklet_html: str) -> dict[str, str]:
+    """Extract named sections from a filled booklet HTML.
+
+    Returns dict with keys like 'person_inside', 'journey', etc.
+    Values are inner HTML content (without the <section> wrapper).
+    """
+    import re
+    body_match = re.search(r'<body[^>]*>(.*)</body>', booklet_html, re.DOTALL)
+    if not body_match:
+        return {}
+    body = body_match.group(1)
+    sections = re.findall(r'<section\b[^>]*class="([^"]*)"[^>]*>(.*?)</section>', body, re.DOTALL)
+    result = {}
+    for cls, content in sections:
+        if "booklet-cover" in cls:
+            continue
+        if "booklet-journey" in cls:
+            result["journey"] = content
+        elif "booklet-concepts" in cls:
+            result["concepts"] = content
+        else:
+            h2 = re.search(r'<h2>(.*?)</h2>', content)
+            if h2:
+                heading = h2.group(1)
+                if "Question" in heading:
+                    result["inquiry"] = content
+                elif "Changed" in heading:
+                    result["washing"] = content
+                elif "person_inside" not in result:
+                    # First unclassified section is person_inside
+                    result["person_inside"] = content
+    return result
+
+
 @app.get("/book", response_class=HTMLResponse)
 async def book_page():
     """Render the single-lesson book: one lesson analysed through all 5 VL lenses."""
-    lesson_id = "abfddaf1-e837-4ed5-9d59-6e53056eb759"
     title = "The Anti-Gravity Lesson"
-    category = "db:4"
 
-    # Try to load pre-filled booklet from pipeline cache
-    booklet_html = None
+    # Load all 5 VL booklets from pipeline cache
+    vl_ids = sorted(VL_BOOKLET_INTROS.keys())  # VL-1 .. VL-5
+    booklets: dict[str, str | None] = {}
     if _db:
-        data = _db.get_cache("pipeline:booklet")
-        if data and data.get("html"):
-            booklet_html = data["html"]
-
-    # Build VL lens list for context
-    lens_items = []
-    for vl_id in sorted(VL_BOOKLET_INTROS.keys()):
-        info = VL_BOOKLET_INTROS[vl_id]
-        lens_items.append(
-            f'<li><strong>{vl_id}</strong>: {info["name"]}'
-            f' &mdash; {info.get("subtitle_derived", "")}</li>'
-        )
-    lens_list = "<ul>" + "\n".join(lens_items) + "</ul>"
-
-    # Booklet link or inline content
-    if booklet_html:
-        booklet_section = (
-            f'<div class="booklet-chapter">\n{booklet_html}\n</div>'
-        )
+        for vl_id in vl_ids:
+            data = _db.get_cache(f"pipeline:booklet:{vl_id}")
+            booklets[vl_id] = data.get("html") if data else None
     else:
-        booklet_section = (
-            f'<p><a href="/booklet?category={category}&lesson={lesson_id}&framework=VL-1">'
-            f'View booklet for {title}</a> (pipeline has not run yet)</p>'
+        booklets = {vl_id: None for vl_id in vl_ids}
+
+    # Determine default tab: primary_framework from pass_a, or VL-1
+    default_tab = "all-voices"
+    if _db:
+        pass_a = _db.get_cache("pipeline:analysis_a")
+
+    # --- Extract sections from each booklet ---
+    all_sections: dict[str, dict[str, str]] = {}  # vl_id -> {section_name: html}
+    for vl_id in vl_ids:
+        html = booklets.get(vl_id)
+        if html:
+            all_sections[vl_id] = _extract_booklet_sections(html)
+
+    # --- "All Voices" combined panel ---
+    # Part 1: Person inside narratives, labeled by character name
+    narrative_parts = []
+    for vl_id in vl_ids:
+        secs = all_sections.get(vl_id, {})
+        person_html = secs.get("person_inside", "")
+        if not person_html:
+            continue
+        info = VL_BOOKLET_INTROS.get(vl_id, {})
+        name = info.get("name", vl_id)
+        # Strip the h2 (character name) since we add our own label
+        import re as _re
+        person_html = _re.sub(r'<h2>.*?</h2>', '', person_html, count=1, flags=_re.DOTALL).strip()
+        narrative_parts.append(
+            f'<div class="voice-entry">'
+            f'<h3>{name}</h3>'
+            f'{person_html}'
+            f'</div>'
+        )
+
+    # Part 2: Journey sections, interleaved by group/part
+    # Each VL's journey has the same h3 parts (Part 1, Part 2, etc.)
+    # Combine them so each part shows all 5 VL perspectives
+    journey_by_vl = {}
+    for vl_id in vl_ids:
+        secs = all_sections.get(vl_id, {})
+        journey_html = secs.get("journey", "")
+        if journey_html:
+            journey_by_vl[vl_id] = journey_html
+
+    journey_parts = []
+    if journey_by_vl:
+        # Extract part headings and content from each VL's journey
+        # Split on h3 headings to get per-part content
+        part_pattern = r'<h3>(.*?)</h3>(.*?)(?=<h3|$)'
+        # Get the part names from the first VL that has journey content
+        first_vl = next(iter(journey_by_vl.values()))
+        part_names = _re.findall(r'<h3>(.*?)</h3>', first_vl)
+
+        for part_name in part_names:
+            voice_entries = []
+            for vl_id in vl_ids:
+                jhtml = journey_by_vl.get(vl_id, "")
+                if not jhtml:
+                    continue
+                # Extract this part's content for this VL
+                part_match = _re.search(
+                    r'<h3>' + _re.escape(part_name) + r'</h3>(.*?)(?=<h3|$)',
+                    jhtml, _re.DOTALL
+                )
+                if part_match:
+                    info = VL_BOOKLET_INTROS.get(vl_id, {})
+                    name = info.get("name", vl_id)
+                    voice_entries.append(
+                        f'<div class="voice-entry">'
+                        f'<h4>{name}</h4>'
+                        f'{part_match.group(1).strip()}'
+                        f'</div>'
+                    )
+            if voice_entries:
+                journey_parts.append(
+                    f'<h3>{part_name}</h3>'
+                    + "\n".join(voice_entries)
+                )
+
+    # Assemble All Voices content
+    all_voices_sections = []
+    if narrative_parts:
+        all_voices_sections.append(
+            '<h2>The Narratives</h2>'
+            + "\n".join(narrative_parts)
+        )
+    if journey_parts:
+        all_voices_sections.append(
+            '<h2>The Journey</h2>'
+            + "\n".join(journey_parts)
+        )
+    if all_voices_sections:
+        all_voices_content = "\n".join(all_voices_sections)
+    else:
+        all_voices_content = (
+            '<p style="color:#999;font-style:italic;padding:40px 0;">'
+            'No booklets generated yet. Run the pipeline first.</p>'
+        )
+
+    # --- "The Blob" panel ---
+    # Extract shadow_voice entries from analysis data (raw first-person Blob observations)
+    blob_name = VL_BOOKLET_INTROS.get("VL-1", {}).get("habit_label_derived", "The Blob")
+    blob_parts = []
+    if _db:
+        # Try new cache key first, fall back to old
+        analysis_data = _db.get_cache("pipeline:analysis_merge") or _db.get_cache("pipeline:vl_synthesis")
+        if analysis_data:
+            for vl_id in vl_ids:
+                vl = analysis_data.get("vl_analyses", {}).get(vl_id, {})
+                result = vl.get("result", {})
+                rows = result.get("analytical_table", {}).get("rows", [])
+                shadow_voices = []
+                for row in rows:
+                    sv = row.get("shadow_voice", "") or row.get("striver_shadow", "")
+                    if sv:
+                        shadow_voices.append(f"<p>{sv}</p>")
+                if shadow_voices:
+                    info = VL_BOOKLET_INTROS.get(vl_id, {})
+                    name = info.get("name", vl_id)
+                    blob_parts.append(
+                        f'<div class="voice-entry">'
+                        f'<h3>Through the eyes of {name}</h3>'
+                        + "\n".join(shadow_voices)
+                        + '</div>'
+                    )
+    if blob_parts:
+        blob_content = "\n".join(blob_parts)
+    else:
+        blob_content = (
+            '<p style="color:#999;font-style:italic;padding:40px 0;">'
+            'No shadow voice data available. Run the pipeline first.</p>'
+        )
+
+    # Build tab buttons: All Voices, The Blob, then VL-1..5
+    tab_buttons = []
+    tab_buttons.append(
+        '<button onclick="showBookTab(\'all-voices\')" id="book-tab-all-voices" '
+        'class="book-tab">All Voices</button>'
+    )
+    tab_buttons.append(
+        f'<button onclick="showBookTab(\'blob\')" id="book-tab-blob" '
+        f'class="book-tab">{blob_name}</button>'
+    )
+    for vl_id in vl_ids:
+        info = VL_BOOKLET_INTROS.get(vl_id, {})
+        label = f'{vl_id}: {info.get("name", "")}'
+        tab_buttons.append(
+            f'<button onclick="showBookTab(\'{vl_id}\')" id="book-tab-{vl_id}" '
+            f'class="book-tab">{label}</button>'
+        )
+
+    # Build tab content panels
+    tab_panels = []
+    tab_panels.append(f'<div id="book-content-all-voices" class="book-panel">{all_voices_content}</div>')
+    tab_panels.append(f'<div id="book-content-blob" class="book-panel">{blob_content}</div>')
+    for vl_id in vl_ids:
+        html = booklets.get(vl_id)
+        if html:
+            content = html
+        else:
+            content = (
+                '<p style="color:#999;font-style:italic;padding:40px 0;">'
+                'Booklet not yet generated for this lens. Run the pipeline to generate it.</p>'
+            )
+        tab_panels.append(
+            f'<div id="book-content-{vl_id}" class="book-panel">{content}</div>'
         )
 
     return f"""<!DOCTYPE html>
@@ -6531,21 +6710,92 @@ async def book_page():
         h1 {{ font-size: 1.8em; margin-bottom: 8px; }}
         h2 {{ font-size: 1.3em; margin: 32px 0 12px; color: #4a6741; }}
         p {{ color: #555; margin-bottom: 16px; }}
-        ul {{ padding-left: 20px; }}
-        li {{ margin-bottom: 6px; }}
         .back {{ font-size: 0.85em; color: #999; margin-bottom: 20px; display: block; }}
+        .book-tabs {{
+            display: flex;
+            gap: 4px;
+            margin-bottom: 0;
+            flex-wrap: wrap;
+        }}
+        .book-tab {{
+            padding: 10px 16px;
+            border: 1px solid #d4cfc7;
+            border-bottom: none;
+            cursor: pointer;
+            background: #eee8df;
+            color: #666;
+            border-radius: 6px 6px 0 0;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.85em;
+            font-weight: 500;
+            transition: background 0.15s, color 0.15s;
+        }}
+        .book-tab:hover {{
+            background: #e2dacf;
+        }}
+        .book-tab.active {{
+            background: #fff;
+            color: #4a6741;
+            font-weight: 600;
+            border-color: #c4bfb5;
+        }}
+        .book-panel {{
+            display: none;
+            border: 1px solid #c4bfb5;
+            border-radius: 0 0 6px 6px;
+            padding: 24px;
+            background: #fff;
+        }}
+        .book-panel.active {{
+            display: block;
+        }}
+        .voice-entry {{
+            margin-bottom: 32px;
+            padding-bottom: 24px;
+            border-bottom: 1px solid #e8e2d9;
+        }}
+        .voice-entry:last-child {{
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }}
+        .voice-entry h3 {{
+            font-family: 'Inter', sans-serif;
+            font-size: 1.05em;
+            font-weight: 600;
+            color: #4a6741;
+            margin-bottom: 12px;
+        }}
+        .voice-entry h4 {{
+            font-family: 'Inter', sans-serif;
+            font-size: 0.9em;
+            font-weight: 600;
+            color: #4a6741;
+            margin-bottom: 8px;
+            margin-top: 0;
+        }}
     </style>
 </head>
 <body>
     <a href="/" class="back">&larr; Back to Analyzer</a>
     <h1>{title}</h1>
-    <p>Single lesson analysed through all five Viewpoint Lenses:</p>
-    {lens_list}
-    <h2>Booklet</h2>
-    {booklet_section}
+    <p>Single lesson analysed through all five Viewpoint Lenses.</p>
+    <div class="book-tabs">
+        {"".join(tab_buttons)}
+    </div>
+    {"".join(tab_panels)}
     <footer style="margin-top:48px;padding-top:12px;border-top:1px solid #e8e2d9;font-size:0.75em;color:#bbb;">
         Generated {datetime.now(timezone.utc).strftime("%b %d, %Y at %I:%M %p")} UTC
     </footer>
+    <script>
+    function showBookTab(vlId) {{
+        document.querySelectorAll('.book-tab').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.book-panel').forEach(p => p.classList.remove('active'));
+        document.getElementById('book-tab-' + vlId).classList.add('active');
+        document.getElementById('book-content-' + vlId).classList.add('active');
+    }}
+    showBookTab('{default_tab}');
+    </script>
 </body>
 </html>"""
 

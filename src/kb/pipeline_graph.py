@@ -2,11 +2,11 @@
 
 Single-lesson pipeline: one lesson analysed through all 5 VL agents,
 enriched via cross-VL queries, merged via a VL-synthesis node, then
-rendered as a single booklet.
+rendered as five per-VL booklets and synthesized into a book.
 
 Pipeline shape:
     src:lesson → analysis_a → analysis_b:{VL-1..5} → cross_query:{VL-1..5}
-                                                        → vl_synthesis → booklet_template → booklet → book
+        → analysis_merge → booklet_template:{VL-1..5} → booklet:{VL-1..5} → book
 
 Each transform is a factory closure that does its actual work by reading
 from DB/files/pipeline cache, and writes results to both pipeline
@@ -193,7 +193,7 @@ def _make_cross_query_transform(db, lesson_id: str, vl_id: str, fv: Optional[str
     return transform
 
 
-def _make_vl_synthesis_transform(db, vl_ids: list[str]):
+def _make_analysis_merge_transform(db, vl_ids: list[str]):
     """Merge all 5 VL analysis_b results into a single synthesis object.
 
     Placeholder logic: packages the results into a combined dict.
@@ -210,28 +210,23 @@ def _make_vl_synthesis_transform(db, vl_ids: list[str]):
                 vl_analyses[vl_id] = {"status": "complete", "result": result}
 
         combined = {"pass_a_result": pass_a, "vl_analyses": vl_analyses}
-        db.set_cache("pipeline:vl_synthesis", combined)
+        db.set_cache("pipeline:analysis_merge", combined)
         return json.dumps(combined, sort_keys=True)
 
     return transform
 
 
-def _make_booklet_template_transform(db, title: str, lesson_id: str):
-    """Render booklet HTML template from VL synthesis data (non-LLM).
+def _make_booklet_template_transform(db, title: str, lesson_id: str, vl_id: str):
+    """Render booklet HTML template for a specific VL from synthesis data (non-LLM).
 
-    Reads the synthesis output and uses the primary framework from pass_a
-    to render a single-lens booklet. Produces HTML with unfilled query blocks.
+    Produces HTML with unfilled query blocks for the given VL lens.
     """
     def transform(**_kwargs) -> str:
         w = _web()
 
-        synthesis = db.get_cache("pipeline:vl_synthesis")
+        synthesis = db.get_cache("pipeline:analysis_merge")
         if not synthesis:
             raise ValueError("VL synthesis data not found")
-
-        # Use primary framework from pass_a to pick the VL for rendering
-        pass_a = synthesis.get("pass_a_result", {})
-        primary_vl = pass_a.get("primary_framework", "VL-1")
 
         # Get source_url from document metadata
         source_url = ""
@@ -242,21 +237,21 @@ def _make_booklet_template_transform(db, title: str, lesson_id: str):
         html = w.build_booklet_html(
             synthesis,
             lesson_title=title,
-            framework=primary_vl,
+            framework=vl_id,
             source_url=source_url,
             original_title=title,
         )
 
-        db.set_cache("pipeline:booklet_template", {"html": html})
+        db.set_cache(f"pipeline:booklet_template:{vl_id}", {"html": html})
         return html
 
     return transform
 
 
-def _make_booklet_transform(db):
-    """Fill LLM query blocks in the single booklet template via QueryAgent.
+def _make_booklet_transform(db, vl_id: str):
+    """Fill LLM query blocks in a per-VL booklet template via QueryAgent.
 
-    This is the final booklet node — produces the complete, filled booklet.
+    Produces the complete, filled booklet for the given VL lens.
     """
     def transform(**_kwargs) -> str:
         w = _web()
@@ -265,39 +260,47 @@ def _make_booklet_transform(db):
         except ImportError:
             from src.kb.query_agent import QueryAgent
 
-        template_data = db.get_cache("pipeline:booklet_template")
+        template_data = db.get_cache(f"pipeline:booklet_template:{vl_id}")
         if not template_data or "html" not in template_data:
-            raise ValueError("Booklet template not found")
+            raise ValueError(f"Booklet template not found for {vl_id}")
 
         html = template_data["html"]
         # Check node metadata for model override
         llm_key = w.DEFAULT_LLM
-        meta = db.get_cache("pipeline_meta:booklet")
+        meta = db.get_cache(f"pipeline_meta:booklet:{vl_id}")
         if meta and meta.get("llm"):
             llm_key = meta["llm"]
-            print(f"[booklet] Using model override: {llm_key}", flush=True)
+            print(f"[booklet:{vl_id}] Using model override: {llm_key}", flush=True)
         agent = QueryAgent(
             llm=w.get_llm(llm_key),
             max_review_cycles=0,
         )
         filled = agent.fill(html)
 
-        db.set_cache("pipeline:booklet", {"html": filled})
+        db.set_cache(f"pipeline:booklet:{vl_id}", {"html": filled})
         return filled
 
     return transform
 
 
-def _make_book_assembly_transform(db):
-    """Assemble the book from the single filled booklet."""
-    def transform(**_kwargs) -> str:
-        data = db.get_cache("pipeline:booklet")
-        if not data or "html" not in data:
-            raise ValueError("Booklet not found in pipeline cache")
+def _make_book_synthesis_transform(db, vl_ids: list[str]):
+    """Synthesize all 5 VL booklets into a combined book.
 
-        book_html = data["html"]
-        db.set_cache("pipeline:book", {"html": book_html})
-        return book_html
+    Placeholder: stores individual booklet references for later synthesis.
+    """
+    def transform(**_kwargs) -> str:
+        booklets = {}
+        for vl_id in vl_ids:
+            data = db.get_cache(f"pipeline:booklet:{vl_id}")
+            if data and data.get("html"):
+                booklets[vl_id] = data["html"]
+
+        if not booklets:
+            raise ValueError("No filled booklets found in pipeline cache")
+
+        # Placeholder: store booklet map for future synthesis logic
+        db.set_cache("pipeline:book", {"booklets": booklets, "vl_ids": vl_ids})
+        return json.dumps({"vl_ids": list(booklets.keys())})
 
     return transform
 
@@ -310,7 +313,7 @@ def build_book_pipeline(db, framework_version: Optional[str] = None) -> Pipeline
 
     Pipeline shape:
         src:lesson → analysis_a → analysis_b:{VL-1..5} → cross_query:{VL-1..5}
-                                                            → vl_synthesis → booklet_template → booklet → book
+            → analysis_merge → booklet_template:{VL-1..5} → booklet:{VL-1..5} → book
 
     Args:
         db: Database instance
@@ -320,11 +323,11 @@ def build_book_pipeline(db, framework_version: Optional[str] = None) -> Pipeline
     fv = framework_version
     prompts_dir, resolved_fv = w._resolve_prompts_dir(fv)
 
-    # Single lesson definition (The Anti-Gravity Lesson, formerly VL-1's lesson)
+    # Single lesson definition (question-stripped version from local source)
     PIPELINE_LESSON = {
-        "lesson_id": "abfddaf1-e837-4ed5-9d59-6e53056eb759",
+        "lesson_id": "e48ad223-c642-4672-a779-b58727725cab",
         "title": "The Anti-Gravity Lesson",
-        "category": "db:4",
+        "category": "db:8",
     }
     lesson_id = PIPELINE_LESSON["lesson_id"]
     title = PIPELINE_LESSON["title"]
@@ -428,43 +431,44 @@ def build_book_pipeline(db, framework_version: Optional[str] = None) -> Pipeline
     # ── VL Synthesis (merge all enriched analysis_b results) ──
 
     graph.add_transform(
-        "vl_synthesis",
+        "analysis_merge",
         input_names=[f"cross_query:{vl_id}" for vl_id in vl_ids],
-        transform=_make_vl_synthesis_transform(db, vl_ids),
+        transform=_make_analysis_merge_transform(db, vl_ids),
         description="VL synthesis (merge all analyses)",
     )
 
-    # ── Single booklet template + booklet ──
+    # ── Five parallel booklet templates + booklets (one per VL) ──
 
-    graph.add_transform(
-        "booklet_template",
-        input_names=[
-            "vl_synthesis",
-            "src:booklet_config",
-            "src:query_types",
-        ],
-        transform=_make_booklet_template_transform(db, title, lesson_id),
-        description=f"Booklet template: {title}",
-    )
+    for vl_id in vl_ids:
+        graph.add_transform(
+            f"booklet_template:{vl_id}",
+            input_names=[
+                "analysis_merge",
+                "src:booklet_config",
+                "src:query_types",
+            ],
+            transform=_make_booklet_template_transform(db, title, lesson_id, vl_id),
+            description=f"Booklet template ({vl_id}): {title}",
+        )
 
-    graph.add_transform(
-        "booklet",
-        input_names=[
-            "booklet_template",
-            "src:query_types",
-        ],
-        transform=_make_booklet_transform(db),
-        description=f"Booklet: {title}",
-        tags={"type": "llm"},
-    )
+        graph.add_transform(
+            f"booklet:{vl_id}",
+            input_names=[
+                f"booklet_template:{vl_id}",
+                "src:query_types",
+            ],
+            transform=_make_booklet_transform(db, vl_id),
+            description=f"Booklet ({vl_id}): {title}",
+            tags={"vl": vl_id, "type": "llm"},
+        )
 
-    # ── Book assembly (just wraps the single booklet) ──
+    # ── Book synthesis (combine all 5 VL booklets) ──
 
     graph.add_transform(
         "book",
-        input_names=["booklet"],
-        transform=_make_book_assembly_transform(db),
-        description="Book assembly",
+        input_names=[f"booklet:{vl_id}" for vl_id in vl_ids],
+        transform=_make_book_synthesis_transform(db, vl_ids),
+        description="Book synthesis (all 5 VL booklets)",
     )
 
     return graph
