@@ -363,6 +363,7 @@ def run_cross_query_pass(
     frameworks: list[dict],
     pass_b_schema: dict,
     budget_max: int = 3,
+    cache_prefix: str = "pipeline",
 ) -> dict:
     """Orchestrate the full cross-query enrichment for one VL.
 
@@ -375,7 +376,7 @@ def run_cross_query_pass(
     Returns the enriched result dict (or original if budget_max=0 or no queries generated).
     """
     # Load source VL's first-pass result
-    source_result = db.get_cache(f"pipeline:analysis_b:{vl_id}")
+    source_result = db.get_cache(f"{cache_prefix}:analysis_b:{vl_id}")
     if not source_result:
         raise ValueError(f"No first-pass result for {vl_id}")
 
@@ -385,7 +386,7 @@ def run_cross_query_pass(
         if char.get("role") != "primary":
             continue
         vid = char["id"]
-        result = db.get_cache(f"pipeline:analysis_b:{vid}")
+        result = db.get_cache(f"{cache_prefix}:analysis_b:{vid}")
         if result:
             all_results[vid] = result
 
@@ -408,7 +409,7 @@ def run_cross_query_pass(
             "budget_max": 0,
             "queries": [],
         }
-        db.set_cache(f"pipeline:cross_query_log:{vl_id}", log_dict)
+        db.set_cache(f"{cache_prefix}:cross_query_log:{vl_id}", log_dict)
         return source_result
 
     # Step 1: Generate cross-queries
@@ -428,7 +429,7 @@ def run_cross_query_pass(
             "budget_max": budget_max,
             "queries": [],
         }
-        db.set_cache(f"pipeline:cross_query_log:{vl_id}", log_dict)
+        db.set_cache(f"{cache_prefix}:cross_query_log:{vl_id}", log_dict)
         return source_result
 
     # Step 2: Execute cross-queries
@@ -451,7 +452,7 @@ def run_cross_query_pass(
     )
 
     # Step 4: Write enriched result (overwrites first-pass)
-    db.set_cache(f"pipeline:analysis_b:{vl_id}", enriched)
+    db.set_cache(f"{cache_prefix}:analysis_b:{vl_id}", enriched)
 
     # Step 5: Write log
     log_dict = {
@@ -468,7 +469,7 @@ def run_cross_query_pass(
             for i, req in enumerate(requests)
         ],
     }
-    db.set_cache(f"pipeline:cross_query_log:{vl_id}", log_dict)
+    db.set_cache(f"{cache_prefix}:cross_query_log:{vl_id}", log_dict)
 
     print(f"  [{vl_id}] Cross-query enrichment complete ({log.budget_used} queries used).", flush=True)
     return enriched

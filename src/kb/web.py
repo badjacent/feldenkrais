@@ -27,7 +27,7 @@ load_dotenv(Path(__file__).parent.parent.parent / ".env")
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from llm import LLM
 
@@ -77,45 +77,33 @@ def _is_pipeline_locked() -> bool:
     return True
 
 
-# ── Background pipeline runner ───────────────────────────────────────────
+# ── Pipeline runner (on-demand only, no background loop) ─────────────────
 
-_pipeline_task: asyncio.Task | None = None
-_pipeline_lock = asyncio.Lock()
-
-
-async def _pipeline_background_loop():
-    """Background loop that rebuilds stale pipeline nodes."""
-    await asyncio.sleep(5)  # let server finish starting
-    while True:
-        try:
-            if _pipeline_lock.locked():
-                await asyncio.sleep(30)
-                continue
-            if _is_pipeline_locked():
-                await asyncio.sleep(10)
-                continue
-            async with _pipeline_lock:
-                await asyncio.to_thread(_run_pipeline_cycle)
-        except asyncio.CancelledError:
-            raise
-        except Exception as e:
-            print(f"[pipeline] background error: {e}")
-        await asyncio.sleep(30)
+_pipeline_run_lock = asyncio.Lock()
 
 
-def _run_pipeline_cycle():
-    """One synchronous cycle: compute staleness, run stale nodes."""
+def _run_pipeline_for_lesson(lesson_id: str):
+    """Run all stale nodes for a single lesson (synchronous, called from thread)."""
     if _is_pipeline_locked():
+        print(f"[pipeline] skipping run for {lesson_id[:8]}... — global lock held")
         return
 
     try:
         from pipeline import PipelineStateStore, PipelineExecutor
-        from pipeline_graph import build_book_pipeline
+        from pipeline_graph import build_lesson_pipeline, get_book_lessons
     except ImportError:
         from .pipeline import PipelineStateStore, PipelineExecutor
-        from .pipeline_graph import build_book_pipeline
+        from .pipeline_graph import build_lesson_pipeline, get_book_lessons
 
-    graph = build_book_pipeline(_db)
+    # Find title from registry
+    lessons = get_book_lessons(_db)
+    title = "Unknown Lesson"
+    for entry in lessons:
+        if entry["lesson_id"] == lesson_id:
+            title = entry["title"]
+            break
+
+    graph = build_lesson_pipeline(_db, lesson_id, title)
     store = PipelineStateStore(_db)
     store.initialize()
     executor = PipelineExecutor(graph, store)
@@ -123,28 +111,19 @@ def _run_pipeline_cycle():
     if isinstance(results, list) and results:
         fresh = sum(1 for r in results if r.status.value == "fresh")
         errors = sum(1 for r in results if r.status.value == "error")
-        print(f"[pipeline] cycle complete: {fresh} succeeded, {errors} errors out of {len(results)} nodes")
+        print(f"[pipeline] lesson {lesson_id[:8]}... complete: {fresh} succeeded, {errors} errors out of {len(results)} nodes")
 
 
 @asynccontextmanager
 async def _lifespan(app):
-    global _pipeline_task
     if _db and not IS_LAMBDA:
         # Clear zombie RUNNING states from previous server run
         with _db.get_cursor() as cur:
             cur.execute(
                 "UPDATE pipeline_node_state SET status = 'stale' WHERE status = 'running'"
             )
-        _pipeline_task = asyncio.create_task(_pipeline_background_loop())
-        print("[pipeline] background runner started")
+        print("[pipeline] on-demand mode (no background runner)")
     yield
-    if _pipeline_task:
-        _pipeline_task.cancel()
-        try:
-            await _pipeline_task
-        except asyncio.CancelledError:
-            pass
-        print("[pipeline] background runner stopped")
 
 
 app = FastAPI(title="Feldenkrais Lesson Analyzer", lifespan=_lifespan)
@@ -2883,15 +2862,25 @@ async def analyze(
 def _build_book_pipeline_section() -> str:
     """Build the Book Pipeline status section for the dashboard."""
     try:
-        from pipeline_graph import build_book_pipeline
+        from pipeline_graph import build_book_pipeline, get_book_lessons
         from pipeline import PipelineStateStore, PipelineExecutor, NodeStatus
     except ImportError:
-        from .pipeline_graph import build_book_pipeline
+        from .pipeline_graph import build_book_pipeline, get_book_lessons
         from .pipeline import PipelineStateStore, PipelineExecutor, NodeStatus
 
-    graph = build_book_pipeline(_db)
+    lessons = get_book_lessons(_db)
+    graph = build_book_pipeline(_db, lesson_entries=lessons)
     store = PipelineStateStore(_db)
     store.initialize()
+
+    # Handle empty graph (no lessons)
+    if not graph.nodes:
+        return """
+        <p style="color: #999; padding: 20px 0;">
+            No lessons registered. Use the form below to add a lesson to the book.
+        </p>
+        """ + _build_lesson_manager_html(lessons)
+
     executor = PipelineExecutor(graph, store)
     states = executor.compute_staleness()
     order = graph.topological_order()
@@ -2902,6 +2891,7 @@ def _build_book_pipeline_section() -> str:
         if s.status in (NodeStatus.STALE, NodeStatus.PENDING, NodeStatus.ERROR)
     )
     fresh_count = sum(1 for s in states.values() if s.status == NodeStatus.FRESH)
+    running_count = sum(1 for s in states.values() if s.status == NodeStatus.RUNNING)
     total = len(states)
 
     status_colors = {
@@ -2911,6 +2901,40 @@ def _build_book_pipeline_section() -> str:
         "error": "#dc3545",
         "running": "#17a2b8",
     }
+
+    # Build per-lesson summary cards with Run buttons
+    lesson_cards = []
+    for entry in lessons:
+        lid = entry["lesson_id"]
+        ltitle = entry.get("title", "Untitled")
+        # Count this lesson's node states
+        lesson_nodes = {n: s for n, s in states.items() if n.startswith(f"{lid}:")}
+        l_fresh = sum(1 for s in lesson_nodes.values() if s.status == NodeStatus.FRESH)
+        l_stale = sum(1 for s in lesson_nodes.values()
+                      if s.status in (NodeStatus.STALE, NodeStatus.PENDING, NodeStatus.ERROR))
+        l_running = sum(1 for s in lesson_nodes.values() if s.status == NodeStatus.RUNNING)
+        l_total = len(lesson_nodes)
+
+        if l_running > 0:
+            badge = f'<span style="color: #17a2b8; font-weight: bold;">RUNNING ({l_running})</span>'
+            run_btn = f'<button class="run-lesson-btn" data-lesson="{lid}" disabled style="opacity:0.5;background:#eee;border:1px solid #ccc;border-radius:4px;padding:4px 12px;font-size:0.85em;">Running...</button>'
+        elif l_stale > 0:
+            badge = f'<span style="color: #ffc107; font-weight: bold;">{l_stale} stale</span>'
+            run_btn = f'<button class="run-lesson-btn" data-lesson="{lid}" style="background:#007bff;color:#fff;border:none;border-radius:4px;padding:4px 12px;cursor:pointer;font-size:0.85em;">Run Pipeline</button>'
+        else:
+            badge = f'<span style="color: #28a745;">All fresh</span>'
+            run_btn = f'<button class="run-lesson-btn" data-lesson="{lid}" style="background:none;border:1px solid #28a745;color:#28a745;border-radius:4px;padding:4px 12px;cursor:pointer;font-size:0.85em;">Re-run</button>'
+
+        lesson_cards.append(f"""
+        <div class="card" style="text-align: left; padding: 12px;">
+            <div style="font-weight: bold; margin-bottom: 4px;">{ltitle}</div>
+            <div style="font-size: 0.8em; color: #999; margin-bottom: 6px; font-family: monospace;">{lid[:12]}...</div>
+            <div style="font-size: 0.85em; margin-bottom: 8px;">{l_fresh}/{l_total} fresh &mdash; {badge}</div>
+            <div>{run_btn}</div>
+        </div>
+        """)
+
+    lesson_cards_html = "\n".join(lesson_cards) if lesson_cards else ""
 
     # Show transforms first, then sources at the bottom
     transforms = [n for n in order if graph.nodes[n].kind.value == "transform"]
@@ -2977,7 +3001,15 @@ def _build_book_pipeline_section() -> str:
     rows_html = "\n".join(rows)
 
     return f"""
-    <div class="cards" style="margin-top: 15px;">
+    <h3>Lessons in Book</h3>
+    <div class="cards" style="margin-top: 10px;">
+        {lesson_cards_html}
+    </div>
+
+    {_build_lesson_manager_html(lessons)}
+
+    <h3 style="margin-top: 24px;">Pipeline Nodes</h3>
+    <div class="cards" style="margin-top: 10px;">
         <div class="card">
             <div class="value">{total}</div>
             <div class="label">Total Nodes</div>
@@ -2989,6 +3021,10 @@ def _build_book_pipeline_section() -> str:
         <div class="card">
             <div class="value" style="color: {('#ffc107' if stale_count else '#333')};">{stale_count}</div>
             <div class="label">Stale / Pending</div>
+        </div>
+        <div class="card">
+            <div class="value" style="color: {('#17a2b8' if running_count else '#333')};">{running_count}</div>
+            <div class="label">Running</div>
         </div>
     </div>
     <table class="compact" id="pipeline-table">
@@ -3007,8 +3043,83 @@ def _build_book_pipeline_section() -> str:
         </tbody>
     </table>
     <p style="font-size: 0.85em; color: #999; margin-top: 10px;">
-        Rebuild stale nodes: <code>uv run python -m src.kb.pipeline run</code>
+        Rebuild stale nodes: <code>.venv/bin/python src/kb/pipeline.py run --lesson LESSON_ID</code>
     </p>
+    """
+
+
+def _build_lesson_manager_html(lessons: list[dict]) -> str:
+    """Build the lesson picker / add form for the dashboard."""
+    # Build a list of available lessons grouped by source
+    sources = []
+    available_by_source: dict[int, list[dict]] = {}
+    if _db:
+        with _db.get_cursor(commit=False) as cur:
+            # Load sources
+            cur.execute(
+                "SELECT id, name, category_name FROM document_source ORDER BY COALESCE(category_name, name)"
+            )
+            sources = [dict(r) for r in cur.fetchall()]
+
+            # Load available lessons (with transcriptions, not already in book)
+            cur.execute(
+                """SELECT d.id, d.title, d.source_id FROM document d
+                   JOIN analysis a ON a.document_id = d.id AND a.type_id = 1
+                   ORDER BY d.title"""
+            )
+            existing_ids = {e["lesson_id"] for e in lessons}
+            for row in cur.fetchall():
+                if str(row["id"]) not in existing_ids:
+                    sid = row["source_id"]
+                    available_by_source.setdefault(sid, []).append(
+                        {"id": str(row["id"]), "title": row["title"] or "Untitled"}
+                    )
+
+    # Build source filter options (only sources that have available lessons)
+    source_options = '<option value="all">All sources</option>\n'
+    for src in sources:
+        sid = src["id"]
+        if sid not in available_by_source:
+            continue
+        label = src["category_name"] or src["name"]
+        count = len(available_by_source[sid])
+        source_options += f'<option value="{sid}">{label} ({count})</option>\n'
+
+    # Build lesson options with data-source attribute for filtering
+    lesson_options = ""
+    for src in sources:
+        sid = src["id"]
+        for item in available_by_source.get(sid, []):
+            lesson_options += f'<option value="{item["id"]}" data-source="{sid}">{item["title"]}</option>\n'
+
+    # Show current lessons with remove buttons
+    current_items = ""
+    for i, entry in enumerate(lessons):
+        current_items += f"""
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+            <span style="font-size:0.85em;">{i+1}. {entry.get('title', 'Untitled')}
+                <span style="color:#999;font-family:monospace;font-size:0.8em;">({entry['lesson_id'][:12]}...)</span>
+            </span>
+            <button class="remove-lesson-btn" data-lesson="{entry['lesson_id']}"
+                style="background:none;border:1px solid #dc3545;color:#dc3545;border-radius:3px;padding:1px 6px;cursor:pointer;font-size:0.75em;">remove</button>
+        </div>
+        """
+
+    return f"""
+    <div style="margin-top: 16px; padding: 12px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px;">
+        <div style="font-weight: bold; margin-bottom: 8px;">Manage Book Lessons</div>
+        {current_items}
+        <div style="display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
+            <select id="source-filter" style="padding: 4px 8px; font-size: 0.85em;">
+                {source_options}
+            </select>
+            <select id="add-lesson-select" style="flex: 1; min-width: 200px; padding: 4px 8px; font-size: 0.85em;">
+                <option value="">-- Select a lesson --</option>
+                {lesson_options}
+            </select>
+            <button id="add-lesson-btn" style="background: #28a745; color: #fff; border: none; border-radius: 4px; padding: 4px 12px; cursor: pointer; font-size: 0.85em;">Add</button>
+        </div>
+    </div>
     """
 
 
@@ -3296,7 +3407,7 @@ def build_pipeline_html() -> str:
             }});
         }});
 
-        // Event delegation for toggle and rebuild buttons (works after DOM updates)
+        // Event delegation for toggle, rebuild, run, add-lesson, and remove-lesson buttons
         document.getElementById('tab-analysis').addEventListener('click', function(e) {{
             var btn = e.target;
             if (btn.classList.contains('toggle-btn')) {{
@@ -3347,6 +3458,67 @@ def build_pipeline_html() -> str:
                         btn.style.color = '#dc3545';
                         btn.disabled = false;
                     }});
+            }}
+            // Run pipeline for a lesson
+            if (btn.classList.contains('run-lesson-btn')) {{
+                var lessonId = btn.dataset.lesson;
+                btn.disabled = true;
+                var orig = btn.textContent;
+                btn.textContent = 'Starting...';
+                fetch('/api/pipeline/run/' + encodeURIComponent(lessonId), {{ method: 'POST' }})
+                    .then(function(r) {{ return r.json(); }})
+                    .then(function(data) {{
+                        btn.textContent = data.status === 'started' ? 'Running...' : (data.status || 'done');
+                        // Will be refreshed by auto-poll
+                    }})
+                    .catch(function() {{
+                        btn.textContent = 'Error';
+                        btn.disabled = false;
+                    }});
+            }}
+            // Remove lesson from book
+            if (btn.classList.contains('remove-lesson-btn')) {{
+                var lessonId = btn.dataset.lesson;
+                if (!confirm('Remove this lesson from the book?')) return;
+                btn.disabled = true;
+                btn.textContent = '...';
+                fetch('/api/pipeline/book-lessons/remove', {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{lesson_id: lessonId}})
+                }})
+                    .then(function() {{ location.reload(); }})
+                    .catch(function() {{ btn.textContent = 'err'; btn.disabled = false; }});
+            }}
+            // Add lesson to book
+            if (btn.id === 'add-lesson-btn') {{
+                var sel = document.getElementById('add-lesson-select');
+                var val = sel.value;
+                if (!val) return;
+                btn.disabled = true;
+                btn.textContent = '...';
+                fetch('/api/pipeline/book-lessons', {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{lesson_id: val, title: sel.options[sel.selectedIndex].text}})
+                }})
+                    .then(function() {{ location.reload(); }})
+                    .catch(function() {{ btn.textContent = 'err'; btn.disabled = false; }});
+            }}
+        }});
+
+        // Source filter: show/hide lesson options based on selected source
+        document.getElementById('tab-analysis').addEventListener('change', function(e) {{
+            if (e.target.id === 'source-filter') {{
+                var sourceId = e.target.value;
+                var sel = document.getElementById('add-lesson-select');
+                if (!sel) return;
+                for (var i = 0; i < sel.options.length; i++) {{
+                    var opt = sel.options[i];
+                    if (!opt.value) continue; // skip placeholder
+                    opt.style.display = (sourceId === 'all' || opt.dataset.source === sourceId) ? '' : 'none';
+                }}
+                sel.value = ''; // reset selection when filter changes
             }}
         }});
 
@@ -6379,10 +6551,9 @@ async def booklet_page(category: str = "", lesson: str = "", fill: str = "", fra
         return RedirectResponse(url="/", status_code=303)
 
     # Check if a filled booklet exists in the pipeline cache for this lesson
-    pipeline_lesson_id = "e48ad223-c642-4672-a779-b58727725cab"
-    if _db and lesson == pipeline_lesson_id:
-        cache_key_suffix = f":{framework}" if framework else ""
-        filled_data = _db.get_cache(f"pipeline:booklet{cache_key_suffix}")
+    # Check if this lesson has a filled booklet in the namespaced pipeline cache
+    if _db and framework:
+        filled_data = _db.get_cache(f"pipeline:{lesson}:booklet:{framework}")
         if filled_data and filled_data.get("html"):
             return filled_data["html"]
 
@@ -6447,34 +6618,33 @@ async def booklet_page(category: str = "", lesson: str = "", fill: str = "", fra
 
 
 # --- Book (curated volume) ---
-# Single lesson analysed through all 5 VL lenses.
-BOOK_LESSONS = {
-    "VL-1": {
-        "lesson_id": "e48ad223-c642-4672-a779-b58727725cab",
-        "category": "db:4",
-        "title": "The Anti-Gravity Lesson",
-    },
-    "VL-2": {
-        "lesson_id": "e48ad223-c642-4672-a779-b58727725cab",
-        "category": "db:4",
-        "title": "The Anti-Gravity Lesson",
-    },
-    "VL-3": {
-        "lesson_id": "e48ad223-c642-4672-a779-b58727725cab",
-        "category": "db:4",
-        "title": "The Anti-Gravity Lesson",
-    },
-    "VL-4": {
-        "lesson_id": "e48ad223-c642-4672-a779-b58727725cab",
-        "category": "db:4",
-        "title": "The Anti-Gravity Lesson",
-    },
-    "VL-5": {
-        "lesson_id": "e48ad223-c642-4672-a779-b58727725cab",
-        "category": "db:4",
-        "title": "The Anti-Gravity Lesson",
-    },
-}
+# Lessons are now loaded from the pipeline:book_lessons registry.
+# BOOK_LESSONS is kept as a derived dict for backward compatibility with
+# code that references it (e.g. booklet_config source node hashing).
+def _load_book_lessons_compat() -> dict:
+    """Load BOOK_LESSONS dict from the registry (backward-compatible format)."""
+    try:
+        from pipeline_graph import get_book_lessons
+    except ImportError:
+        from .pipeline_graph import get_book_lessons
+    if not _db:
+        return {}
+    lessons = get_book_lessons(_db)
+    if not lessons:
+        return {}
+    # Map every VL to the first lesson for backwards compat
+    first = lessons[0]
+    vl_ids = sorted(VL_BOOKLET_INTROS.keys())
+    return {
+        vl_id: {
+            "lesson_id": first["lesson_id"],
+            "title": first.get("title", "Untitled"),
+        }
+        for vl_id in vl_ids
+    }
+
+
+BOOK_LESSONS = _load_book_lessons_compat()
 
 
 def _extract_booklet_sections(booklet_html: str) -> dict[str, str]:
@@ -6519,24 +6689,36 @@ async def book_redirect():
 
 @app.get("/", response_class=HTMLResponse)
 async def book_page():
-    """Render the single-lesson book: one lesson analysed through all 5 VL lenses."""
+    """Render the book: lessons analysed through all 5 VL lenses."""
+    try:
+        from pipeline_graph import get_book_lessons
+    except ImportError:
+        from .pipeline_graph import get_book_lessons
 
-    # Load all 5 VL booklets from pipeline cache
     vl_ids = sorted(VL_BOOKLET_INTROS.keys())  # VL-1 .. VL-5
+
+    # Load lesson registry
+    lessons = get_book_lessons(_db) if _db else []
+    # Use first lesson for the main title / data (multi-lesson display TBD)
+    first_lesson = lessons[0] if lessons else None
+    first_lid = first_lesson["lesson_id"] if first_lesson else None
+
+    # Load all 5 VL booklets from namespaced pipeline cache
     booklets: dict[str, str | None] = {}
-    if _db:
+    if _db and first_lid:
+        cache_prefix = f"pipeline:{first_lid}"
         for vl_id in vl_ids:
-            data = _db.get_cache(f"pipeline:booklet:{vl_id}")
+            data = _db.get_cache(f"{cache_prefix}:booklet:{vl_id}")
             booklets[vl_id] = data.get("html") if data else None
     else:
         booklets = {vl_id: None for vl_id in vl_ids}
 
-    # Read lesson title from pipeline analysis_a result
+    # Read lesson title from pipeline analysis_a result (namespaced)
     default_tab = "all-voices"
-    title = "Untitled Lesson"
+    title = first_lesson["title"] if first_lesson else "Untitled Lesson"
     pass_a = None
-    if _db:
-        pass_a = _db.get_cache("pipeline:analysis_a")
+    if _db and first_lid:
+        pass_a = _db.get_cache(f"pipeline:{first_lid}:analysis_a")
         if pass_a and isinstance(pass_a, dict):
             title = pass_a.get("lesson_title", "") or title
 
@@ -6668,9 +6850,9 @@ async def book_page():
     # Extract shadow_voice entries from analysis data (raw first-person Blob observations)
     blob_name = VL_BOOKLET_INTROS.get("VL-1", {}).get("habit_label_derived", "The Blob")
     blob_parts = []
-    if _db:
-        # Try new cache key first, fall back to old
-        analysis_data = _db.get_cache("pipeline:analysis_merge") or _db.get_cache("pipeline:vl_synthesis")
+    if _db and first_lid:
+        # Try namespaced cache key first, fall back to legacy
+        analysis_data = _db.get_cache(f"pipeline:{first_lid}:analysis_merge") or _db.get_cache("pipeline:analysis_merge") or _db.get_cache("pipeline:vl_synthesis")
         if analysis_data:
             for vl_id in vl_ids:
                 vl = analysis_data.get("vl_analyses", {}).get(vl_id, {})
@@ -6702,7 +6884,7 @@ async def book_page():
     # Show the raw lesson transcription broken by its own section headings
     import re as _re
     lesson_text_content = ""
-    lesson_id = BOOK_LESSONS.get("VL-1", {}).get("lesson_id", "")
+    lesson_id = first_lid or ""
     if _db and lesson_id:
         transcription = _db.get_document_transcription(lesson_id)
         if transcription:
@@ -6914,7 +7096,7 @@ async def book_page():
 <body>
     <a href="/pipeline" class="back">Pipeline Dashboard &rarr;</a>
     <h1>{title}</h1>
-    <p>Single lesson analysed through all five Viewpoint Lenses.</p>
+    <p>Lesson analysed through all five Viewpoint Lenses.</p>
     <div class="book-tabs">
         {"".join(tab_buttons)}
     </div>
@@ -7075,6 +7257,83 @@ async def rebuild_pipeline_node(node_name: str):
     store.initialize()
     store.invalidate(node_name)
     return JSONResponse({"status": "invalidated", "node": node_name})
+
+
+@app.post("/api/pipeline/run/{lesson_id}")
+async def run_pipeline_for_lesson(lesson_id: str):
+    """Trigger an on-demand pipeline run for a single lesson."""
+    if not _db:
+        return JSONResponse({"error": "Database not configured"}, status_code=500)
+    if _pipeline_run_lock.locked():
+        return JSONResponse({"status": "already_running", "message": "A pipeline run is already in progress"})
+
+    async def _run():
+        async with _pipeline_run_lock:
+            await asyncio.to_thread(_run_pipeline_for_lesson, lesson_id)
+
+    asyncio.create_task(_run())
+    return JSONResponse({"status": "started", "lesson_id": lesson_id})
+
+
+@app.post("/api/pipeline/book-lessons")
+async def add_book_lesson(request: Request):
+    """Add a lesson to the book registry."""
+    if not _db:
+        return JSONResponse({"error": "Database not configured"}, status_code=500)
+    try:
+        from pipeline_graph import get_book_lessons, set_book_lessons
+    except ImportError:
+        from .pipeline_graph import get_book_lessons, set_book_lessons
+
+    body = await request.json()
+    lesson_id = body.get("lesson_id")
+    title = body.get("title", "Untitled")
+    if not lesson_id:
+        return JSONResponse({"error": "lesson_id required"}, status_code=400)
+
+    lessons = get_book_lessons(_db)
+    # Don't add duplicates
+    if any(e["lesson_id"] == lesson_id for e in lessons):
+        return JSONResponse({"status": "already_exists", "lessons": lessons})
+
+    lessons.append({"lesson_id": lesson_id, "title": title})
+    set_book_lessons(_db, lessons)
+    return JSONResponse({"status": "added", "lessons": lessons})
+
+
+@app.post("/api/pipeline/book-lessons/remove")
+async def remove_book_lesson(request: Request):
+    """Remove a lesson from the book registry."""
+    if not _db:
+        return JSONResponse({"error": "Database not configured"}, status_code=500)
+    try:
+        from pipeline_graph import get_book_lessons, set_book_lessons
+    except ImportError:
+        from .pipeline_graph import get_book_lessons, set_book_lessons
+
+    body = await request.json()
+    lesson_id = body.get("lesson_id")
+    if not lesson_id:
+        return JSONResponse({"error": "lesson_id required"}, status_code=400)
+
+    lessons = get_book_lessons(_db)
+    lessons = [e for e in lessons if e["lesson_id"] != lesson_id]
+    set_book_lessons(_db, lessons)
+    return JSONResponse({"status": "removed", "lessons": lessons})
+
+
+@app.get("/api/pipeline/book-lessons")
+async def list_book_lessons():
+    """List all lessons in the book registry."""
+    if not _db:
+        return JSONResponse({"error": "Database not configured"}, status_code=500)
+    try:
+        from pipeline_graph import get_book_lessons
+    except ImportError:
+        from .pipeline_graph import get_book_lessons
+
+    lessons = get_book_lessons(_db)
+    return JSONResponse({"lessons": lessons})
 
 
 @app.post("/admin/clear-cache")

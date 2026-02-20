@@ -899,6 +899,7 @@ def main():
     status_p = sub.add_parser("status", help="Show node staleness")
     status_p.add_argument("--stale", action="store_true", help="Only show stale nodes")
     status_p.add_argument("--json", action="store_true", help="Output JSON for programmatic use")
+    status_p.add_argument("--lesson", help="Show status for a single lesson (lesson_id)")
 
     # run
     run_p = sub.add_parser("run", help="Rebuild stale nodes")
@@ -906,13 +907,18 @@ def main():
     run_p.add_argument("--dry-run", action="store_true", help="Show what would run")
     run_p.add_argument("--json", action="store_true", help="Output JSON (for --dry-run)")
     run_p.add_argument("--timeout", type=float, help="Total time budget in seconds")
+    run_p.add_argument("--lesson", help="Run pipeline for a single lesson (lesson_id)")
 
     # graph
-    sub.add_parser("graph", help="Print graph structure")
+    graph_p = sub.add_parser("graph", help="Print graph structure")
+    graph_p.add_argument("--lesson", help="Show graph for a single lesson (lesson_id)")
 
     # invalidate
     inv_p = sub.add_parser("invalidate", help="Force-invalidate nodes by pattern")
     inv_p.add_argument("pattern", help="Name prefix or glob pattern (e.g. 'analysis_b:*')")
+
+    # lessons
+    sub.add_parser("lessons", help="List registered book lessons")
 
     args = parser.parse_args()
 
@@ -945,16 +951,40 @@ def main():
     db = Database(db_url)
 
     try:
-        from pipeline_graph import build_book_pipeline
+        from pipeline_graph import build_book_pipeline, build_lesson_pipeline, get_book_lessons
     except ImportError:
-        from src.kb.pipeline_graph import build_book_pipeline
+        from src.kb.pipeline_graph import build_book_pipeline, build_lesson_pipeline, get_book_lessons
 
-    graph = build_book_pipeline(db)
+    def _build_graph(lesson_id=None):
+        """Build graph: single lesson if specified, otherwise full book pipeline."""
+        if lesson_id:
+            # Find title from registry
+            lessons = get_book_lessons(db)
+            title = "Unknown Lesson"
+            for entry in lessons:
+                if entry["lesson_id"] == lesson_id:
+                    title = entry["title"]
+                    break
+            return build_lesson_pipeline(db, lesson_id, title)
+        return build_book_pipeline(db)
+
     store = PipelineStateStore(db)
     store.initialize()
-    executor = PipelineExecutor(graph, store)
 
-    if args.command == "status":
+    if args.command == "lessons":
+        lessons = get_book_lessons(db)
+        if not lessons:
+            print("No lessons registered. Add lessons via the pipeline dashboard.")
+        else:
+            print(f"{'#':<4} {'Lesson ID':<40} {'Title'}")
+            print("─" * 80)
+            for i, entry in enumerate(lessons, 1):
+                print(f"{i:<4} {entry['lesson_id']:<40} {entry.get('title', '?')}")
+
+    elif args.command == "status":
+        lesson_id = getattr(args, "lesson", None)
+        graph = _build_graph(lesson_id)
+        executor = PipelineExecutor(graph, store)
         if args.json:
             print(json.dumps(executor.status_json(), indent=2))
         else:
@@ -962,6 +992,9 @@ def main():
             _print_status(graph, states, stale_only=args.stale)
 
     elif args.command == "run":
+        lesson_id = getattr(args, "lesson", None)
+        graph = _build_graph(lesson_id)
+        executor = PipelineExecutor(graph, store)
         if args.dry_run:
             result = executor.run_stale(dry_run=True, target_node=args.node)
             if hasattr(args, "json") and args.json:
@@ -994,6 +1027,8 @@ def main():
                 print("Nothing to run — all nodes fresh.")
 
     elif args.command == "graph":
+        lesson_id = getattr(args, "lesson", None)
+        graph = _build_graph(lesson_id)
         _print_graph(graph)
 
     elif args.command == "invalidate":

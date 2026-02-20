@@ -231,18 +231,24 @@ class Database:
                 statement = statement.strip()
                 if statement:
                     cursor.execute(statement)
-            # Migrations: add columns if missing (safe for existing tables)
+            # Migrations: add columns if missing (safe for concurrent execution)
             for table, column, col_type in [
                 ("document_source", "category_name", "TEXT"),
                 ("document_source", "visible", "BOOLEAN NOT NULL DEFAULT TRUE"),
                 ("document", "category_name", "TEXT"),
             ]:
-                cursor.execute(f"""
-                    DO $$ BEGIN
-                        ALTER TABLE {table} ADD COLUMN {column} {col_type};
-                    EXCEPTION WHEN duplicate_column THEN NULL;
-                    END $$;
-                """)
+                cursor.execute(
+                    """SELECT 1 FROM information_schema.columns
+                       WHERE table_name = %s AND column_name = %s""",
+                    (table, column),
+                )
+                if not cursor.fetchone():
+                    cursor.execute(f"""
+                        DO $$ BEGIN
+                            ALTER TABLE {table} ADD COLUMN {column} {col_type};
+                        EXCEPTION WHEN duplicate_column THEN NULL;
+                        END $$;
+                    """)
             # Seed enum values
             for statement in SEED_DATA.strip().split(';'):
                 statement = statement.strip()
