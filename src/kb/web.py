@@ -2524,7 +2524,7 @@ def build_result_html(job: dict | None, job_id: str, schema: dict) -> str:
         <strong>Job not found</strong><br>
         The analysis job with ID {job_id} was not found. It may have expired or the ID is invalid.
     </div>
-    <p><a href="/">Start a new analysis</a></p>
+    <p><a href="/analyzer">Start a new analysis</a></p>
 </body>
 </html>
 """
@@ -2583,7 +2583,7 @@ def build_result_html(job: dict | None, job_id: str, schema: dict) -> str:
         <strong>Analysis failed</strong><br>
         {error_msg}
     </div>
-    <p><a href="/">Try again</a></p>
+    <p><a href="/analyzer">Try again</a></p>
 </body>
 </html>
 """
@@ -2631,7 +2631,7 @@ def build_result_html(job: dict | None, job_id: str, schema: dict) -> str:
 </head>
 <body>
     <div class="nav">
-        <a href="/">&larr; Analyze another lesson</a>
+        <a href="/analyzer">&larr; Analyze another lesson</a>
     </div>
     {result_html}
 </body>
@@ -2639,7 +2639,7 @@ def build_result_html(job: dict | None, job_id: str, schema: dict) -> str:
 """
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/analyzer", response_class=HTMLResponse)
 async def home():
     """Show the input form."""
     return build_html()
@@ -2657,7 +2657,7 @@ async def get_lesson_text(category: str, filename: str):
 @app.get("/analyze")
 async def analyze_redirect():
     """Redirect GET requests to home."""
-    return RedirectResponse(url="/", status_code=303)
+    return RedirectResponse(url="/analyzer", status_code=303)
 
 
 ANALYSIS_TIMEOUT = 900  # 15 minutes
@@ -3019,7 +3019,7 @@ def build_pipeline_html() -> str:
 <!DOCTYPE html><html><head><title>Pipeline Dashboard</title>
 <style>body { font-family: -apple-system, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }</style>
 </head><body><h1>Pipeline Dashboard</h1><p>Database not configured. Set DATABASE_URL to enable.</p>
-<p><a href="/">&larr; Back to Analyzer</a></p></body></html>"""
+<p><a href="/analyzer">&larr; Back to Analyzer</a></p></body></html>"""
 
     try:
         summary = _db.get_pipeline_summary()
@@ -3030,7 +3030,7 @@ def build_pipeline_html() -> str:
 <!DOCTYPE html><html><head><title>Pipeline Dashboard</title>
 <style>body {{ font-family: -apple-system, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }}</style>
 </head><body><h1>Pipeline Dashboard</h1><div style="color: red;">Error: {e}</div>
-<p><a href="/">&larr; Back to Analyzer</a></p></body></html>"""
+<p><a href="/analyzer">&larr; Back to Analyzer</a></p></body></html>"""
 
     # Summary cards
     doc_total = summary.get("documents", {}).get("total", 0)
@@ -3217,7 +3217,7 @@ def build_pipeline_html() -> str:
     </style>
 </head>
 <body>
-    <div class="nav"><a href="/">&larr; Back to Analyzer</a></div>
+    <div class="nav"><a href="/analyzer">&larr; Back to Analyzer</a></div>
     <h1>Pipeline Dashboard</h1>
 
     <div class="tabs">
@@ -3411,7 +3411,7 @@ table {{ border-collapse: collapse; width: 100%; margin: 10px 0; }}
 th, td {{ border: 1px solid #ddd; padding: 6px 10px; text-align: left; }}
 th {{ background: #f0f0f0; }}
 </style></head><body>
-<div class="nav"><a href="/">&larr; Back to Analyzer</a> | <a href="/pipeline">Pipeline</a></div>
+<div class="nav"><a href="/">&larr; Back to Book</a> | <a href="/analyzer">Analyzer</a></div>
 {report_html}
 </body></html>"""
 
@@ -3742,7 +3742,7 @@ def build_pass0b_html() -> str:
 <body>
     <h1>Pass 0b: Segment Enrichment</h1>
     <p>Experiment page. Runs Pass 0 (rule-based segmentation) then Pass 0b (LLM enrichment of each segment).
-       <a href="/" style="float: right; color: #007bff; text-decoration: none; font-size: 0.9em;">&larr; Main Analyzer</a>
+       <a href="/analyzer" style="float: right; color: #007bff; text-decoration: none; font-size: 0.9em;">&larr; Main Analyzer</a>
     </p>
 
     <form id="pass0b-form" onsubmit="submitForm(event)">
@@ -4495,7 +4495,7 @@ def build_explore_html() -> str:
     <h1>Exploration Agent</h1>
     <p style="color: #666; margin-top: 0;">
         Iteratively explore a lesson analysis. The agent suggests areas of interest; you choose where to dig deeper.
-        <a href="/" style="float: right; color: #007bff; text-decoration: none; font-size: 0.9em;">&larr; Main Analyzer</a>
+        <a href="/analyzer" style="float: right; color: #007bff; text-decoration: none; font-size: 0.9em;">&larr; Main Analyzer</a>
     </p>
 
     <div class="top-bar">
@@ -6362,7 +6362,7 @@ def build_booklet_html(
     </style>
 </head>
 <body>
-    <a href="/book" class="back-link">&larr; All Booklets</a>
+    <a href="/" class="back-link">&larr; All Booklets</a>
     {body}
     <footer style="margin-top:48px;padding-top:12px;border-top:1px solid #e8e2d9;font-family:'Inter',sans-serif;font-size:0.75em;color:#bbb;">
         Generated {datetime.now(timezone.utc).strftime("%b %d, %Y at %I:%M %p")} UTC
@@ -6376,7 +6376,7 @@ def build_booklet_html(
 async def booklet_page(category: str = "", lesson: str = "", fill: str = "", framework: str = ""):
     """Render a lesson booklet from cached analysis."""
     if not category or not lesson:
-        return RedirectResponse(url="/book", status_code=303)
+        return RedirectResponse(url="/", status_code=303)
 
     # Check if a filled booklet exists in the pipeline cache for this lesson
     pipeline_lesson_id = "e48ad223-c642-4672-a779-b58727725cab"
@@ -6395,7 +6395,7 @@ async def booklet_page(category: str = "", lesson: str = "", fill: str = "", fra
     if not cached:
         return HTMLResponse(
             "<h1>No analysis available</h1><p>This lesson hasn't been analyzed yet. "
-            '<a href="/">Go to the analyzer</a> and run it first.</p>',
+            '<a href="/analyzer">Go to the analyzer</a> and run it first.</p>',
             status_code=404,
         )
 
@@ -6511,7 +6511,13 @@ def _extract_booklet_sections(booklet_html: str) -> dict[str, str]:
     return result
 
 
-@app.get("/book", response_class=HTMLResponse)
+@app.get("/book")
+async def book_redirect():
+    """Redirect old /book URL to root."""
+    return RedirectResponse(url="/", status_code=301)
+
+
+@app.get("/", response_class=HTMLResponse)
 async def book_page():
     """Render the single-lesson book: one lesson analysed through all 5 VL lenses."""
 
@@ -6906,7 +6912,7 @@ async def book_page():
     </style>
 </head>
 <body>
-    <a href="/" class="back">&larr; Back to Analyzer</a>
+    <a href="/pipeline" class="back">Pipeline Dashboard &rarr;</a>
     <h1>{title}</h1>
     <p>Single lesson analysed through all five Viewpoint Lenses.</p>
     <div class="book-tabs">
@@ -6951,7 +6957,7 @@ def _booklet_picker_html() -> str:
                 )
 
     if not options:
-        lesson_list = "<p>No analyzed lessons available. <a href='/'>Run an analysis first.</a></p>"
+        lesson_list = "<p>No analyzed lessons available. <a href='/analyzer'>Run an analysis first.</a></p>"
     else:
         lesson_list = "<ul>" + "\n".join(options) + "</ul>"
 
@@ -6988,7 +6994,7 @@ def _booklet_picker_html() -> str:
     </style>
 </head>
 <body>
-    <a href="/" class="back">&larr; Back to Analyzer</a>
+    <a href="/analyzer" class="back">&larr; Back to Analyzer</a>
     <h1>Lesson Companion Booklets</h1>
     <p>Select a lesson to view its companion booklet.</p>
     {lesson_list}
