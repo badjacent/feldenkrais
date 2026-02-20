@@ -6514,7 +6514,6 @@ def _extract_booklet_sections(booklet_html: str) -> dict[str, str]:
 @app.get("/book", response_class=HTMLResponse)
 async def book_page():
     """Render the single-lesson book: one lesson analysed through all 5 VL lenses."""
-    title = "The Anti-Gravity Lesson"
 
     # Load all 5 VL booklets from pipeline cache
     vl_ids = sorted(VL_BOOKLET_INTROS.keys())  # VL-1 .. VL-5
@@ -6526,10 +6525,14 @@ async def book_page():
     else:
         booklets = {vl_id: None for vl_id in vl_ids}
 
-    # Determine default tab: primary_framework from pass_a, or VL-1
+    # Read lesson title from pipeline analysis_a result
     default_tab = "all-voices"
+    title = "Untitled Lesson"
+    pass_a = None
     if _db:
         pass_a = _db.get_cache("pipeline:analysis_a")
+        if pass_a and isinstance(pass_a, dict):
+            title = pass_a.get("lesson_title", "") or title
 
     # --- Extract sections from each booklet ---
     all_sections: dict[str, dict[str, str]] = {}  # vl_id -> {section_name: html}
@@ -6558,69 +6561,101 @@ async def book_page():
             f'</div>'
         )
 
-    # Part 2: Journey sections, interleaved by group/part
-    # Each VL's journey has the same h3 parts (Part 1, Part 2, etc.)
-    # Combine them so each part shows all 5 VL perspectives
-    journey_by_vl = {}
+    # Part 2: Journey voice — each VL's full story extracted from the journey section.
+    # Extract only the llm-filled content (the VL's pedagogical voice),
+    # skipping step lists, questions, and blob/shadow content.
+    journey_voice_parts = []
     for vl_id in vl_ids:
         secs = all_sections.get(vl_id, {})
         journey_html = secs.get("journey", "")
-        if journey_html:
-            journey_by_vl[vl_id] = journey_html
+        if not journey_html:
+            continue
+        info = VL_BOOKLET_INTROS.get(vl_id, {})
+        name = info.get("name", vl_id)
 
-    journey_parts = []
-    if journey_by_vl:
-        # Extract part headings and content from each VL's journey
-        # Split on h3 headings to get per-part content
-        part_pattern = r'<h3>(.*?)</h3>(.*?)(?=<h3|$)'
-        # Get the part names from the first VL that has journey content
-        first_vl = next(iter(journey_by_vl.values()))
-        part_names = _re.findall(r'<h3>(.*?)</h3>', first_vl)
+        # Extract part headings and their llm-filled voice content
+        # Each journey-group has: h3, step-list, llm-filled-group(s), the-question
+        # We want h3 + llm-filled only
+        part_voices = []
+        groups = _re.findall(
+            r'<h3>(.*?)</h3>.*?(?=<h3|$)',
+            journey_html, _re.DOTALL
+        )
+        group_contents = _re.split(r'<h3>.*?</h3>', journey_html)[1:]  # content after each h3
 
-        for part_name in part_names:
-            voice_entries = []
-            for vl_id in vl_ids:
-                jhtml = journey_by_vl.get(vl_id, "")
-                if not jhtml:
-                    continue
-                # Extract this part's content for this VL
-                part_match = _re.search(
-                    r'<h3>' + _re.escape(part_name) + r'</h3>(.*?)(?=<h3|$)',
-                    jhtml, _re.DOTALL
-                )
-                if part_match:
-                    info = VL_BOOKLET_INTROS.get(vl_id, {})
-                    name = info.get("name", vl_id)
-                    voice_entries.append(
-                        f'<div class="voice-entry">'
-                        f'<h4>{name}</h4>'
-                        f'{part_match.group(1).strip()}'
-                        f'</div>'
-                    )
-            if voice_entries:
-                journey_parts.append(
-                    f'<h3>{part_name}</h3>'
-                    + "\n".join(voice_entries)
+        part_headings = _re.findall(r'<h3>(.*?)</h3>', journey_html)
+        for heading, content in zip(part_headings, group_contents):
+            # Extract all llm-filled blocks (the VL voice)
+            filled = _re.findall(
+                r'<div class="llm-filled">(.*?)</div>',
+                content, _re.DOTALL
+            )
+            if filled:
+                part_voices.append(
+                    f'<h4>{heading}</h4>'
+                    + "\n".join(f.strip() for f in filled)
                 )
 
-    # Assemble All Voices content
-    all_voices_sections = []
+        if part_voices:
+            journey_voice_parts.append(
+                f'<div class="voice-entry">'
+                f'<h3>{name}</h3>'
+                + "\n".join(part_voices)
+                + '</div>'
+            )
+
+    # Assemble "All Voices" (narratives only) content
     if narrative_parts:
-        all_voices_sections.append(
-            '<h2>The Narratives</h2>'
-            + "\n".join(narrative_parts)
-        )
-    if journey_parts:
-        all_voices_sections.append(
-            '<h2>The Journey</h2>'
-            + "\n".join(journey_parts)
-        )
-    if all_voices_sections:
-        all_voices_content = "\n".join(all_voices_sections)
+        all_voices_content = "\n".join(narrative_parts)
     else:
         all_voices_content = (
             '<p style="color:#999;font-style:italic;padding:40px 0;">'
             'No booklets generated yet. Run the pipeline first.</p>'
+        )
+
+    # Assemble "Inner Viewpoints" content (pedagogical gloss from journey)
+    if journey_voice_parts:
+        inner_viewpoints_content = "\n".join(journey_voice_parts)
+    else:
+        inner_viewpoints_content = (
+            '<p style="color:#999;font-style:italic;padding:40px 0;">'
+            'No journey data available yet. Run the pipeline first.</p>'
+        )
+
+    # --- "Journey Voices" panel ---
+    # Extract character first-person voice text from the journey section.
+    # Pattern: <p><strong>The Riser:</strong> <em>I feel the floor...</em></p>
+    journey_character_parts = []
+    for vl_id in vl_ids:
+        secs = all_sections.get(vl_id, {})
+        journey_html = secs.get("journey", "")
+        if not journey_html:
+            continue
+        info = VL_BOOKLET_INTROS.get(vl_id, {})
+        char_name = info.get("name", vl_id)
+
+        # Find all instances of this character's voice in the journey
+        # Pattern: <strong>The Riser:</strong> followed by <em>...</em>
+        pattern = (
+            r'<strong>\s*' + _re.escape(char_name) + r'\s*:\s*</strong>\s*'
+            r'<em>(.*?)</em>'
+        )
+        voices = _re.findall(pattern, journey_html, _re.DOTALL)
+        if voices:
+            voice_paragraphs = [f"<p><em>{v.strip()}</em></p>" for v in voices]
+            journey_character_parts.append(
+                f'<div class="voice-entry">'
+                f'<h3>{char_name}</h3>'
+                + "\n".join(voice_paragraphs)
+                + '</div>'
+            )
+
+    if journey_character_parts:
+        journey_voices_content = "\n".join(journey_character_parts)
+    else:
+        journey_voices_content = (
+            '<p style="color:#999;font-style:italic;padding:40px 0;">'
+            'No character voice data available. Run the pipeline first.</p>'
         )
 
     # --- "The Blob" panel ---
@@ -6657,11 +6692,81 @@ async def book_page():
             'No shadow voice data available. Run the pipeline first.</p>'
         )
 
-    # Build tab buttons: All Voices, The Blob, then VL-1..5
+    # --- "Lesson Text" panel ---
+    # Show the raw lesson transcription broken by its own section headings
+    import re as _re
+    lesson_text_content = ""
+    lesson_id = BOOK_LESSONS.get("VL-1", {}).get("lesson_id", "")
+    if _db and lesson_id:
+        transcription = _db.get_document_transcription(lesson_id)
+        if transcription:
+            # Build source attribution link
+            doc = _db.get_document(lesson_id)
+            source_link = ""
+            if doc:
+                source_url = doc.get("source_url", "") or ""
+                doc_title = doc.get("title", "") or title
+                # Get source name
+                source_name = ""
+                if doc.get("source_id"):
+                    with _db.get_cursor(commit=False) as cur:
+                        cur.execute(
+                            "SELECT category_name, name FROM document_source WHERE id = %s",
+                            (doc["source_id"],),
+                        )
+                        row = cur.fetchone()
+                        if row:
+                            source_name = row["category_name"] or row["name"]
+                if source_url:
+                    source_link = (
+                        f'<p class="lesson-source">'
+                        f'<a href="{source_url}">Lesson &ldquo;{title}&rdquo; from {source_name}</a>'
+                        f'</p>'
+                    )
+
+            # Split transcription by **Bold Headings** (markdown-style sections)
+            sections = _re.split(r'\n\*\*([^*]+)\*\*\n', transcription)
+            parts = []
+            # sections[0] is text before first heading (preamble)
+            if sections[0].strip():
+                parts.append(f'<p>{sections[0].strip()}</p>')
+            # Remaining pairs: heading, content
+            for i in range(1, len(sections), 2):
+                heading = sections[i].strip()
+                content = sections[i + 1].strip() if i + 1 < len(sections) else ""
+                # Convert paragraphs (double newlines)
+                paragraphs = [f"<p>{p.strip()}</p>" for p in content.split("\n\n") if p.strip()]
+                parts.append(
+                    f'<div class="lesson-section">'
+                    f'<h3>{heading}</h3>'
+                    + "\n".join(paragraphs)
+                    + '</div>'
+                )
+
+            lesson_text_content = source_link + "\n".join(parts)
+    if not lesson_text_content:
+        lesson_text_content = (
+            '<p style="color:#999;font-style:italic;padding:40px 0;">'
+            'Lesson text not available.</p>'
+        )
+
+    # Build tab buttons: Lesson Text, All Voices, The Blob, then VL-1..5
     tab_buttons = []
     tab_buttons.append(
+        '<button onclick="showBookTab(\'lesson-text\')" id="book-tab-lesson-text" '
+        'class="book-tab">Lesson Text</button>'
+    )
+    tab_buttons.append(
         '<button onclick="showBookTab(\'all-voices\')" id="book-tab-all-voices" '
-        'class="book-tab">All Voices</button>'
+        'class="book-tab">Narratives</button>'
+    )
+    tab_buttons.append(
+        '<button onclick="showBookTab(\'journey-voices\')" id="book-tab-journey-voices" '
+        'class="book-tab">Journey Voices</button>'
+    )
+    tab_buttons.append(
+        '<button onclick="showBookTab(\'inner-viewpoints\')" id="book-tab-inner-viewpoints" '
+        'class="book-tab">Inner Viewpoints</button>'
     )
     tab_buttons.append(
         f'<button onclick="showBookTab(\'blob\')" id="book-tab-blob" '
@@ -6677,7 +6782,10 @@ async def book_page():
 
     # Build tab content panels
     tab_panels = []
+    tab_panels.append(f'<div id="book-content-lesson-text" class="book-panel">{lesson_text_content}</div>')
     tab_panels.append(f'<div id="book-content-all-voices" class="book-panel">{all_voices_content}</div>')
+    tab_panels.append(f'<div id="book-content-journey-voices" class="book-panel">{journey_voices_content}</div>')
+    tab_panels.append(f'<div id="book-content-inner-viewpoints" class="book-panel">{inner_viewpoints_content}</div>')
     tab_panels.append(f'<div id="book-content-blob" class="book-panel">{blob_content}</div>')
     for vl_id in vl_ids:
         html = booklets.get(vl_id)
@@ -6773,6 +6881,27 @@ async def book_page():
             color: #4a6741;
             margin-bottom: 8px;
             margin-top: 0;
+        }}
+        .lesson-source {{
+            margin-bottom: 24px;
+        }}
+        .lesson-source a {{
+            color: #4a6741;
+            text-decoration: none;
+            font-style: italic;
+        }}
+        .lesson-source a:hover {{
+            text-decoration: underline;
+        }}
+        .lesson-section {{
+            margin-bottom: 28px;
+        }}
+        .lesson-section h3 {{
+            font-family: 'Inter', sans-serif;
+            font-size: 1.05em;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 12px;
         }}
     </style>
 </head>

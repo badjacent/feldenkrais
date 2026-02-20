@@ -1,7 +1,3 @@
-Here is the cleaned-up lesson script, containing only the bodily instructions, sensory cues, and guiding imagery. 
-
-***
-
 **The Starting Scan**
 Please lie down on your back. Rest quietly so that you can become conscious of your mind and your body. Take a moment to shift your quality of attention to an open, curious, exploratory sense. 
 
