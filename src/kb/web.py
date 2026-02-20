@@ -2936,22 +2936,38 @@ def _build_book_pipeline_section() -> str:
 
     lesson_cards_html = "\n".join(lesson_cards) if lesson_cards else ""
 
-    # Show transforms first, then sources at the bottom
-    transforms = [n for n in order if graph.nodes[n].kind.value == "transform"]
-    sources = [n for n in order if graph.nodes[n].kind.value == "source"]
-    display_order = transforms + sources
+    # ── Group nodes by lesson vs global ──
+    # Build a lookup from lesson_id -> title
+    lesson_title_map = {e["lesson_id"]: e.get("title", "Untitled") for e in lessons}
 
-    rows = []
-    for name in display_order:
+    # Classify every node into a lesson group or global
+    from collections import OrderedDict
+    lesson_groups: OrderedDict[str, list[str]] = OrderedDict()  # lid -> [node_names]
+    global_nodes: list[str] = []
+
+    for name in order:
+        spec = graph.nodes[name]
+        lid = spec.tags.get("lesson_id")
+        if lid:
+            lesson_groups.setdefault(lid, []).append(name)
+        else:
+            global_nodes.append(name)
+
+    def _node_row(name: str, strip_prefix: str = "") -> str:
+        """Render a single node table row."""
         state = states.get(name)
         if not state:
-            continue
+            return ""
         spec = graph.nodes[name]
         status_val = state.status.value
         color = status_colors.get(status_val, "#333")
         is_transform = spec.kind.value == "transform"
 
-        display_name = f"<strong>{name}</strong>" if is_transform else f'<span style="color: #888;">{name}</span>'
+        # Strip lesson_id prefix from display name
+        label = name
+        if strip_prefix and label.startswith(strip_prefix):
+            label = label[len(strip_prefix):]
+        display_name = f"<strong>{label}</strong>" if is_transform else f'<span style="color: #888;">{label}</span>'
         duration = f"{state.duration_seconds}s" if state.duration_seconds else "&mdash;"
         status_label = status_val.upper() if status_val != "fresh" else "fresh"
 
@@ -2960,12 +2976,10 @@ def _build_book_pipeline_section() -> str:
             error_msg = state.error_message[:80]
             error_row = f'<tr><td></td><td colspan="4" style="color: #dc3545; font-size: 0.8em; padding-top: 0;">{error_msg}</td></tr>'
 
-        # Convert UTC to Eastern
         if state.last_run_at:
-            from datetime import timezone, timedelta
+            from datetime import timezone, timedelta, datetime
             utc_str = str(state.last_run_at)
             try:
-                from datetime import datetime
                 dt = datetime.fromisoformat(utc_str.replace("Z", "+00:00"))
                 if dt.tzinfo is None:
                     dt = dt.replace(tzinfo=timezone.utc)
@@ -2986,7 +3000,7 @@ def _build_book_pipeline_section() -> str:
         toggle_label = "on" if node_enabled else "off"
         toggle_color = "#28a745" if node_enabled else "#999"
 
-        rows.append(f"""
+        return f"""
             <tr data-kind="{kind}" data-time="{sort_time}" data-dur="{sort_dur}" data-status="{status_val}" style="opacity: {row_opacity};">
                 <td>{display_name}</td>
                 <td><span style="color: {color}; font-weight: {'bold' if status_val != 'fresh' else 'normal'};">{status_label}</span></td>
@@ -2996,7 +3010,41 @@ def _build_book_pipeline_section() -> str:
                 <td>{"<button class='rebuild-btn' data-node='" + name + "' style='background: none; border: 1px solid #17a2b8; color: #17a2b8; border-radius: 3px; padding: 1px 8px; cursor: pointer; font-size: 0.8em;'>invalidate</button>" if is_transform else ""}</td>
             </tr>
             {error_row}
+        """
+
+    # Build grouped rows: lesson groups first (only if they have non-fresh nodes), then global
+    rows = []
+    for lid, node_names in lesson_groups.items():
+        # Skip groups where every node is fresh
+        has_non_fresh = any(
+            states.get(n) and states[n].status != NodeStatus.FRESH
+            for n in node_names
+        )
+        if not has_non_fresh:
+            continue
+        title = lesson_title_map.get(lid, lid[:12])
+        rows.append(f"""
+            <tr class="group-header">
+                <td colspan="6" style="background: #f0f0f0; font-weight: bold; padding: 8px 6px 6px; border-top: 2px solid #ccc;">
+                    {title} <span style="color: #999; font-weight: normal; font-family: monospace; font-size: 0.8em;">({lid[:12]}...)</span>
+                </td>
+            </tr>
         """)
+        prefix = f"{lid}:"
+        for n in node_names:
+            rows.append(_node_row(n, strip_prefix=prefix))
+
+    # Global / shared nodes
+    if global_nodes:
+        rows.append(f"""
+            <tr class="group-header">
+                <td colspan="6" style="background: #f0f0f0; font-weight: bold; padding: 8px 6px 6px; border-top: 2px solid #ccc;">
+                    Shared / Global
+                </td>
+            </tr>
+        """)
+        for n in global_nodes:
+            rows.append(_node_row(n))
 
     rows_html = "\n".join(rows)
 
@@ -3130,7 +3178,7 @@ def build_pipeline_html() -> str:
 <!DOCTYPE html><html><head><title>Pipeline Dashboard</title>
 <style>body { font-family: -apple-system, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }</style>
 </head><body><h1>Pipeline Dashboard</h1><p>Database not configured. Set DATABASE_URL to enable.</p>
-<p><a href="/analyzer">&larr; Back to Analyzer</a></p></body></html>"""
+<p><a href="/">&larr; Back to Book</a></p></body></html>"""
 
     try:
         summary = _db.get_pipeline_summary()
@@ -3141,7 +3189,7 @@ def build_pipeline_html() -> str:
 <!DOCTYPE html><html><head><title>Pipeline Dashboard</title>
 <style>body {{ font-family: -apple-system, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }}</style>
 </head><body><h1>Pipeline Dashboard</h1><div style="color: red;">Error: {e}</div>
-<p><a href="/analyzer">&larr; Back to Analyzer</a></p></body></html>"""
+<p><a href="/">&larr; Back to Book</a></p></body></html>"""
 
     # Summary cards
     doc_total = summary.get("documents", {}).get("total", 0)
@@ -3328,7 +3376,7 @@ def build_pipeline_html() -> str:
     </style>
 </head>
 <body>
-    <div class="nav"><a href="/analyzer">&larr; Back to Analyzer</a></div>
+    <div class="nav"><a href="/">&larr; Back to Book</a></div>
     <h1>Pipeline Dashboard</h1>
 
     <div class="tabs">
@@ -3507,20 +3555,32 @@ def build_pipeline_html() -> str:
             }}
         }});
 
-        // Source filter: show/hide lesson options based on selected source
-        document.getElementById('tab-analysis').addEventListener('change', function(e) {{
-            if (e.target.id === 'source-filter') {{
-                var sourceId = e.target.value;
-                var sel = document.getElementById('add-lesson-select');
-                if (!sel) return;
-                for (var i = 0; i < sel.options.length; i++) {{
-                    var opt = sel.options[i];
-                    if (!opt.value) continue; // skip placeholder
-                    opt.style.display = (sourceId === 'all' || opt.dataset.source === sourceId) ? '' : 'none';
-                }}
-                sel.value = ''; // reset selection when filter changes
+        // Source filter: rebuild lesson select based on selected source
+        (function() {{
+            var sel = document.getElementById('add-lesson-select');
+            var filter = document.getElementById('source-filter');
+            if (!sel || !filter) return;
+            // Store all options (skip placeholder at index 0)
+            var allOpts = [];
+            for (var i = 1; i < sel.options.length; i++) {{
+                var o = sel.options[i];
+                allOpts.push({{value: o.value, text: o.text, source: o.dataset.source}});
             }}
-        }});
+            filter.addEventListener('change', function() {{
+                var sourceId = filter.value;
+                // Remove all except placeholder
+                while (sel.options.length > 1) sel.remove(1);
+                allOpts.forEach(function(item) {{
+                    if (sourceId === 'all' || item.source === sourceId) {{
+                        var opt = document.createElement('option');
+                        opt.value = item.value;
+                        opt.textContent = item.text;
+                        opt.dataset.source = item.source;
+                        sel.appendChild(opt);
+                    }}
+                }});
+            }});
+        }})();
 
         // Auto-refresh: poll pipeline status every 5 seconds
         (function() {{
@@ -6688,7 +6748,7 @@ async def book_redirect():
 
 
 @app.get("/", response_class=HTMLResponse)
-async def book_page():
+async def book_page(request: Request):
     """Render the book: lessons analysed through all 5 VL lenses."""
     try:
         from pipeline_graph import get_book_lessons
@@ -6697,11 +6757,24 @@ async def book_page():
 
     vl_ids = sorted(VL_BOOKLET_INTROS.keys())  # VL-1 .. VL-5
 
-    # Load lesson registry
+    # Load lesson registry and find which have completed booklets
     lessons = get_book_lessons(_db) if _db else []
-    # Use first lesson for the main title / data (multi-lesson display TBD)
-    first_lesson = lessons[0] if lessons else None
-    first_lid = first_lesson["lesson_id"] if first_lesson else None
+    completed_lessons = []
+    if _db:
+        for entry in lessons:
+            lid = entry["lesson_id"]
+            # A lesson is "completed" if at least one VL booklet exists
+            if any(_db.get_cache(f"pipeline:{lid}:booklet:{vl}") for vl in vl_ids):
+                completed_lessons.append(entry)
+
+    # Select lesson from query param, or default to first completed
+    selected_lid = request.query_params.get("lesson")
+    selected_lesson = None
+    if selected_lid:
+        selected_lesson = next((e for e in completed_lessons if e["lesson_id"] == selected_lid), None)
+    if not selected_lesson and completed_lessons:
+        selected_lesson = completed_lessons[0]
+    first_lid = selected_lesson["lesson_id"] if selected_lesson else None
 
     # Load all 5 VL booklets from namespaced pipeline cache
     booklets: dict[str, str | None] = {}
@@ -6715,7 +6788,7 @@ async def book_page():
 
     # Read lesson title from pipeline analysis_a result (namespaced)
     default_tab = "all-voices"
-    title = first_lesson["title"] if first_lesson else "Untitled Lesson"
+    title = selected_lesson["title"] if selected_lesson else "Untitled Lesson"
     pass_a = None
     if _db and first_lid:
         pass_a = _db.get_cache(f"pipeline:{first_lid}:analysis_a")
@@ -6988,6 +7061,24 @@ async def book_page():
             f'<div id="book-content-{vl_id}" class="book-panel">{content}</div>'
         )
 
+    # Build lesson selector (only if multiple completed lessons)
+    lesson_selector = ""
+    if len(completed_lessons) > 1:
+        opts = []
+        for entry in completed_lessons:
+            lid = entry["lesson_id"]
+            ltitle = entry.get("title", "Untitled")
+            sel = " selected" if lid == first_lid else ""
+            opts.append(f'<option value="{lid}"{sel}>{ltitle}</option>')
+        lesson_selector = (
+            '<select id="lesson-select" onchange="window.location=\'/?lesson=\'+this.value"'
+            ' style="font-family:Inter,sans-serif;font-size:0.85em;padding:4px 8px;'
+            'border:1px solid #c4bfb5;border-radius:4px;background:#fff;color:#555;">'
+            + "".join(opts) + '</select>'
+        )
+    elif len(completed_lessons) == 1:
+        lesson_selector = ""  # no selector needed for single lesson
+
     return f"""<!DOCTYPE html>
 <html>
 <head>
@@ -7094,9 +7185,11 @@ async def book_page():
     </style>
 </head>
 <body>
-    <a href="/pipeline" class="back">Pipeline Dashboard &rarr;</a>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <a href="/pipeline" class="back" style="margin:0;">Pipeline Dashboard &rarr;</a>
+        {lesson_selector}
+    </div>
     <h1>{title}</h1>
-    <p>Lesson analysed through all five Viewpoint Lenses.</p>
     <div class="book-tabs">
         {"".join(tab_buttons)}
     </div>
