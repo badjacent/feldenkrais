@@ -6152,6 +6152,17 @@ def build_booklet_html(
         .llm-query .query-prompt {{
             margin: 0;
         }}
+        .llm-query-unfilled {{
+            margin: 12px 0;
+            padding: 10px 16px;
+            background: #f5f5f5;
+            border: 1px dashed #ccc;
+            border-radius: 6px;
+            font-size: 0.85em;
+            color: #999;
+            font-style: italic;
+            text-align: center;
+        }}
         .llm-filled {{
             margin: 12px 0;
         }}
@@ -6368,14 +6379,13 @@ async def booklet_page(category: str = "", lesson: str = "", fill: str = "", fra
         # Show a simple lesson picker
         return _booklet_picker_html()
 
-    # Check if this lesson matches the pipeline lesson; serve from pipeline cache
-    if _db and framework:
-        filled_data = _db.get_cache("pipeline:booklet")
+    # Check if a filled booklet exists in the pipeline cache for this lesson
+    pipeline_lesson_id = "abfddaf1-e837-4ed5-9d59-6e53056eb759"
+    if _db and lesson == pipeline_lesson_id:
+        cache_key_suffix = f":{framework}" if framework else ""
+        filled_data = _db.get_cache(f"pipeline:booklet{cache_key_suffix}")
         if filled_data and filled_data.get("html"):
-            # Verify this is actually the pipeline lesson
-            pipeline_lesson_id = "abfddaf1-e837-4ed5-9d59-6e53056eb759"
-            if lesson == pipeline_lesson_id:
-                return filled_data["html"]
+            return filled_data["html"]
 
     text = load_lesson(category, lesson).strip()
     if not text:
@@ -6424,6 +6434,15 @@ async def booklet_page(category: str = "", lesson: str = "", fill: str = "", fra
             max_review_cycles=0,  # skip review for web; use CLI for iteration
         )
         html = await asyncio.to_thread(agent.fill, html)
+    else:
+        # Replace unfilled query blocks with a placeholder label
+        import re
+        html = re.sub(
+            r'<div class="llm-query"[^>]*>.*?</div>',
+            '<div class="llm-query-unfilled">Block unfilled</div>',
+            html,
+            flags=re.DOTALL,
+        )
 
     return html
 

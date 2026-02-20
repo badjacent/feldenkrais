@@ -94,11 +94,13 @@ cython_debug/
 
 # Project specific
 private_examples/
+.DS_Store
+*.db
 
 # Terraform
-terraform/.terraform/
-terraform/*.tfstate
-terraform/*.tfstate.*
+terraform/**/.terraform/
+terraform/**/*.tfstate
+terraform/**/*.tfstate.*
 # Commit lock file for CI reproducibility
 # terraform/.terraform.lock.hcl
 terraform/*.zip

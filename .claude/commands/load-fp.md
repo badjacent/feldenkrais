@@ -6,12 +6,24 @@ Downloads audio from feldenkraisproject.com lesson pages and stages them to S3 f
 
 ## Authentication
 
-Cookies are at `~/.feldenkrais_cookies.json`. If scraping fails with a paywall or auth error, the cookies have probably expired. Tell the user to:
+Cookies are at `~/.feldenkrais_cookies.json`. Before running the scraper, ALWAYS ask the user to paste fresh cookies from their browser. Use AskUserQuestion:
 
-1. Log in at feldenkraisproject.com in Safari
-2. Dev Tools (Cmd+Opt+I) → Storage → Cookies
-3. Copy `wordpress_logged_in_*` and `wordpress_sec_*` values
-4. Update `~/.feldenkrais_cookies.json`
+> "Paste your feldenkraisproject.com cookies from browser DevTools (Storage → Cookies). Select the wordpress_logged_in_* and wordpress_sec_* rows and paste them."
+
+The pasted text will be tab-separated columns from DevTools, like:
+```
+wordpress_logged_in_abc123    user%40email.com%7C...    feldenkraisproject.com    /    Session    197 B    ✓    ✓
+wordpress_sec_abc123    user%40email.com%7C...    feldenkraisproject.com    /wp-content/plugins    Session    191 B    ✓    ✓
+```
+
+Parse this by splitting each line on tabs — column 0 is the cookie name, column 1 is the value. Extract only rows whose name starts with `wordpress_logged_in_` or `wordpress_sec_`. Write the result as JSON to `~/.feldenkrais_cookies.json`:
+
+```json
+{
+  "wordpress_logged_in_abc123": "user%40email.com%7C...",
+  "wordpress_sec_abc123": "user%40email.com%7C..."
+}
+```
 
 ## How to run
 

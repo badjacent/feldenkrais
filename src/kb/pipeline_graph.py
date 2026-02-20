@@ -1,6 +1,13 @@
 """Book pipeline graph definition.
 
-Wires up ~40 nodes for the 5-lesson book generation pipeline.
+Single-lesson pipeline: one lesson analysed through all 5 VL agents,
+enriched via cross-VL queries, merged via a VL-synthesis node, then
+rendered as a single booklet.
+
+Pipeline shape:
+    src:lesson → analysis_a → analysis_b:{VL-1..5} → cross_query:{VL-1..5}
+                                                        → vl_synthesis → booklet_template → booklet → book
+
 Each transform is a factory closure that does its actual work by reading
 from DB/files/pipeline cache, and writes results to both pipeline
 namespace and legacy cache keys for /booklet endpoint compatibility.
@@ -96,7 +103,7 @@ def _web():
 # ── Transform factories ─────────────────────────────────────────────────
 
 
-def _make_analysis_a_transform(db, lesson_id: str, vl_id: str, fv: Optional[str]):
+def _make_analysis_a_transform(db, lesson_id: str, fv: Optional[str]):
     """Analysis A: segmentation + classification + SPIFFER-Q decomposition."""
     def transform(**_kwargs) -> str:
         w = _web()
@@ -114,7 +121,7 @@ def _make_analysis_a_transform(db, lesson_id: str, vl_id: str, fv: Optional[str]
         result = w.run_pass_a(text, framework_version=fv)
 
         # Store in pipeline namespace for downstream nodes
-        db.set_cache(f"pipeline:analysis_a:{vl_id}", result)
+        db.set_cache("pipeline:analysis_a", result)
 
         return json.dumps(result, sort_keys=True)
 
@@ -131,10 +138,10 @@ def _make_analysis_b_transform(db, lesson_id: str, vl_id: str, fv: Optional[str]
             raise ValueError(f"No transcription for lesson {lesson_id}")
         text = text.strip()
 
-        # Read Analysis A result from pipeline cache
-        pass_a_result = db.get_cache(f"pipeline:analysis_a:{vl_id}")
+        # Read Analysis A result from pipeline cache (single, shared)
+        pass_a_result = db.get_cache("pipeline:analysis_a")
         if not pass_a_result:
-            raise ValueError(f"Analysis A result not found in pipeline cache for {vl_id}")
+            raise ValueError("Analysis A result not found in pipeline cache")
 
         # Run Pass B for this specific VL framework
         result = w.run_pass_b(text, pass_a_result, vl_id, framework_version=fv)
@@ -155,23 +162,76 @@ def _make_analysis_b_transform(db, lesson_id: str, vl_id: str, fv: Optional[str]
     return transform
 
 
-def _make_booklet_template_transform(db, vl_id: str, title: str, lesson_id: str):
-    """Render booklet HTML template from cached analysis data (non-LLM).
+def _make_cross_query_transform(db, lesson_id: str, vl_id: str, fv: Optional[str]):
+    """Cross-query enrichment: VL reviews peer analyses and asks focused follow-ups."""
+    def transform(**_kwargs) -> str:
+        w = _web()
+        try:
+            from cross_query import run_cross_query_pass
+        except ImportError:
+            from src.kb.cross_query import run_cross_query_pass
 
-    Produces HTML with unfilled query blocks that will be filled by the booklet node.
+        text = db.get_document_transcription(lesson_id)
+        if not text:
+            raise ValueError(f"No transcription for lesson {lesson_id}")
+        text = text.strip()
+
+        frameworks = w.load_frameworks(fv)
+
+        # Load Pass B schema
+        schema_path = w.DATA_DIR / "pass_b.schema.json"
+        pass_b_schema = json.loads(schema_path.read_text()) if schema_path.exists() else {}
+
+        llm = w.get_llm()
+
+        result = run_cross_query_pass(
+            llm, vl_id, db, text, frameworks, pass_b_schema,
+        )
+
+        return json.dumps(result, sort_keys=True)
+
+    return transform
+
+
+def _make_vl_synthesis_transform(db, vl_ids: list[str]):
+    """Merge all 5 VL analysis_b results into a single synthesis object.
+
+    Placeholder logic: packages the results into a combined dict.
+    """
+    def transform(**_kwargs) -> str:
+        pass_a = db.get_cache("pipeline:analysis_a")
+        if not pass_a:
+            raise ValueError("Analysis A result not found in pipeline cache")
+
+        vl_analyses = {}
+        for vl_id in vl_ids:
+            result = db.get_cache(f"pipeline:analysis_b:{vl_id}")
+            if result:
+                vl_analyses[vl_id] = {"status": "complete", "result": result}
+
+        combined = {"pass_a_result": pass_a, "vl_analyses": vl_analyses}
+        db.set_cache("pipeline:vl_synthesis", combined)
+        return json.dumps(combined, sort_keys=True)
+
+    return transform
+
+
+def _make_booklet_template_transform(db, title: str, lesson_id: str):
+    """Render booklet HTML template from VL synthesis data (non-LLM).
+
+    Reads the synthesis output and uses the primary framework from pass_a
+    to render a single-lens booklet. Produces HTML with unfilled query blocks.
     """
     def transform(**_kwargs) -> str:
         w = _web()
 
-        pass_a = db.get_cache(f"pipeline:analysis_a:{vl_id}")
-        pass_b = db.get_cache(f"pipeline:analysis_b:{vl_id}")
-        if not pass_a or not pass_b:
-            raise ValueError(f"Analysis data not found for {vl_id}")
+        synthesis = db.get_cache("pipeline:vl_synthesis")
+        if not synthesis:
+            raise ValueError("VL synthesis data not found")
 
-        combined = {
-            "pass_a_result": pass_a,
-            "vl_analyses": {vl_id: {"status": "complete", "result": pass_b}},
-        }
+        # Use primary framework from pass_a to pick the VL for rendering
+        pass_a = synthesis.get("pass_a_result", {})
+        primary_vl = pass_a.get("primary_framework", "VL-1")
 
         # Get source_url from document metadata
         source_url = ""
@@ -180,23 +240,23 @@ def _make_booklet_template_transform(db, vl_id: str, title: str, lesson_id: str)
             source_url = doc.get("source_url", "") or ""
 
         html = w.build_booklet_html(
-            combined,
+            synthesis,
             lesson_title=title,
-            framework=vl_id,
+            framework=primary_vl,
             source_url=source_url,
             original_title=title,
         )
 
-        db.set_cache(f"pipeline:booklet_template:{vl_id}", {"html": html})
+        db.set_cache("pipeline:booklet_template", {"html": html})
         return html
 
     return transform
 
 
-def _make_booklet_transform(db, vl_id: str):
-    """Fill LLM query blocks in a booklet template via QueryAgent.
+def _make_booklet_transform(db):
+    """Fill LLM query blocks in the single booklet template via QueryAgent.
 
-    This is the final booklet node - produces the complete, filled booklet.
+    This is the final booklet node — produces the complete, filled booklet.
     """
     def transform(**_kwargs) -> str:
         w = _web()
@@ -205,318 +265,39 @@ def _make_booklet_transform(db, vl_id: str):
         except ImportError:
             from src.kb.query_agent import QueryAgent
 
-        template_data = db.get_cache(f"pipeline:booklet_template:{vl_id}")
+        template_data = db.get_cache("pipeline:booklet_template")
         if not template_data or "html" not in template_data:
-            raise ValueError(f"Booklet template not found for {vl_id}")
+            raise ValueError("Booklet template not found")
 
         html = template_data["html"]
         # Check node metadata for model override
         llm_key = w.DEFAULT_LLM
-        meta = db.get_cache(f"pipeline_meta:booklet:{vl_id}")
+        meta = db.get_cache("pipeline_meta:booklet")
         if meta and meta.get("llm"):
             llm_key = meta["llm"]
-            print(f"[booklet:{vl_id}] Using model override: {llm_key}", flush=True)
+            print(f"[booklet] Using model override: {llm_key}", flush=True)
         agent = QueryAgent(
             llm=w.get_llm(llm_key),
             max_review_cycles=0,
         )
         filled = agent.fill(html)
 
-        db.set_cache(f"pipeline:booklet:{vl_id}", {"html": filled})
-        return filled
-
-    return transform
-
-
-def _make_volume_intro_transform(db):
-    """Generate the volume introduction (query block + LLM fill)."""
-    def transform(**_kwargs) -> str:
-        w = _web()
-        try:
-            from query_agent import QueryAgent
-        except ImportError:
-            from src.kb.query_agent import QueryAgent
-
-        # Build lens and lesson context for the query block
-        lenses = []
-        for vl_id in sorted(w.VL_BOOKLET_INTROS.keys()):
-            info = w.VL_BOOKLET_INTROS[vl_id]
-            lenses.append({
-                "id": vl_id,
-                "name": info["name"],
-                "subtitle": info["subtitle"],
-                "lens_description": info["lens"],
-            })
-
-        lesson_entries = []
-        for vl_id in sorted(w.BOOK_LESSONS.keys()):
-            entry = w.BOOK_LESSONS[vl_id]
-            if entry:
-                lesson_entries.append({
-                    "title": entry["title"],
-                    "framework_id": vl_id,
-                    "framework_name": w.VL_BOOKLET_INTROS[vl_id]["name"],
-                })
-
-        volume_context = {"lenses": lenses, "lessons": lesson_entries}
-        volume_query = w.booklet_query_block("volume-intro", volume_context)
-
-        agent = QueryAgent(
-            llm=w.get_llm(w.DEFAULT_LLM),
-            max_review_cycles=0,
-        )
-        filled = agent.fill(volume_query)
-
-        db.set_cache("pipeline:volume_intro", {"html": filled})
+        db.set_cache("pipeline:booklet", {"html": filled})
         return filled
 
     return transform
 
 
 def _make_book_assembly_transform(db):
-    """Assemble the full book from volume intro + filled booklets."""
+    """Assemble the book from the single filled booklet."""
     def transform(**_kwargs) -> str:
-        w = _web()
+        data = db.get_cache("pipeline:booklet")
+        if not data or "html" not in data:
+            raise ValueError("Booklet not found in pipeline cache")
 
-        # Gather all pieces
-        intro_data = db.get_cache("pipeline:volume_intro")
-        intro_html = intro_data.get("html", "") if intro_data else ""
-
-        # Fixed council section (no LLM, rendered inline)
-        council_html = w.render_council_section()
-
-        booklet_parts = []
-        for vl_id in sorted(w.BOOK_LESSONS.keys()):
-            data = db.get_cache(f"pipeline:booklet:{vl_id}")
-            if data and "html" in data:
-                booklet_parts.append(
-                    f'<div class="booklet-chapter" data-vl="{vl_id}">\n'
-                    f'{data["html"]}\n'
-                    f'</div>'
-                )
-
-        book_html = intro_html + "\n\n" + council_html + "\n\n" + "\n\n".join(booklet_parts)
+        book_html = data["html"]
         db.set_cache("pipeline:book", {"html": book_html})
         return book_html
-
-    return transform
-
-
-def _collect_chapter_data(db):
-    """Collect chapter HTML and intro text from pipeline cache.
-
-    Shared by both critic transforms and review_summary.
-    Skips VL-4 (being reworked).
-    """
-    w = _web()
-    try:
-        from critics import _html_to_text
-    except ImportError:
-        from .critics import _html_to_text
-
-    intro_data = db.get_cache("pipeline:volume_intro")
-    intro_text = ""
-    if intro_data and "html" in intro_data:
-        intro_text = _html_to_text(intro_data["html"])
-
-    skip_vl_ids = {"VL-4"}
-
-    chapters = []
-    for vl_id in sorted(w.BOOK_LESSONS.keys()):
-        if vl_id in skip_vl_ids:
-            continue
-        data = db.get_cache(f"pipeline:booklet:{vl_id}")
-        if data and "html" in data:
-            info = w.VL_BOOKLET_INTROS[vl_id]
-            entry = w.BOOK_LESSONS[vl_id]
-            chapters.append({
-                "title": entry["title"],
-                "lens": info["name"],
-                "html": data["html"],
-            })
-
-    return chapters, intro_text
-
-
-def _make_student_critic_transform(db):
-    """Run student persona critic on the assembled book chapters."""
-    def transform(**_kwargs) -> str:
-        w = _web()
-        try:
-            from critics import StudentCritic
-        except ImportError:
-            from .critics import StudentCritic
-
-        llm = w.get_llm("gemini-review")
-        critic = StudentCritic(llm=llm)
-
-        chapters, intro_text = _collect_chapter_data(db)
-        result = critic.review(chapters, intro_text)
-
-        _save_with_history(db, "pipeline:critic_student", result)
-        return json.dumps(result, indent=2)
-
-    return transform
-
-
-def _make_specificity_critic_transform(db):
-    """Run specificity critic on the assembled book chapters."""
-    def transform(**_kwargs) -> str:
-        w = _web()
-        try:
-            from critics import SpecificityCritic
-        except ImportError:
-            from .critics import SpecificityCritic
-
-        llm = w.get_llm("gemini-review")
-        critic = SpecificityCritic(llm=llm)
-
-        chapters, intro_text = _collect_chapter_data(db)
-        result = critic.review(chapters, intro_text)
-
-        _save_with_history(db, "pipeline:critic_specificity", result)
-        return json.dumps(result, indent=2)
-
-    return transform
-
-
-def _make_review_summary_transform(db):
-    """Summarize critic outputs into ranked actionable issues.
-
-    Aggregates findings from both critic_student and critic_specificity
-    into a ranked list of the top 10 issues, with critic attribution.
-    """
-    def transform(**_kwargs) -> str:
-        w = _web()
-
-        student_data = db.get_cache("pipeline:critic_student")
-        specificity_data = db.get_cache("pipeline:critic_specificity")
-
-        if not student_data:
-            raise ValueError("Student critic results not found")
-        if not specificity_data:
-            raise ValueError("Specificity critic results not found")
-
-        # Build context about book composition
-        lens_info = []
-        for vl_id in sorted(w.VL_BOOKLET_INTROS.keys()):
-            info = w.VL_BOOKLET_INTROS[vl_id]
-            lens_info.append(f"- {vl_id}: {info['name']} ({info['subtitle']})")
-
-        query_types = list(w.BOOKLET_QUERY_TYPES.keys())
-
-        composition_context = f"""
-The book is generated by a pipeline with these components:
-
-STRUCTURE:
-- Volume introduction (LLM-generated via 'volume-intro' query type)
-- Council of Five section (static HTML in data/council_intro.html)
-- Five booklets, one per analytical lens:
-{chr(10).join(lens_info)}
-
-CONFIGURABLE COMPONENTS (can be changed via prompts/config):
-- Query type prompts in BOOKLET_QUERY_TYPES: {', '.join(query_types)}
-- VL framework definitions in data/frameworks/v2/frameworks.json
-- Individual VL prompts in data/frameworks/v2/vl1.md through vl5.md
-- Pass A prompt (segmentation/classification) in data/frameworks/v2/pass_a.md
-- Pass B prompt (synthesis) in data/frameworks/v2/pass_b.md
-
-EACH BOOKLET CONTAINS:
-- Cover with title and lens info
-- Person Inside narrative (LLM-filled via 'lens-synthesis' query type)
-- Central Inquiry section
-- Core Concepts section (LLM-filled via 'lesson-concepts' query type)
-- Journey section with per-section glosses (LLM-filled via 'pedagogical-gloss' query type)
-- What Changed section (washing summary)
-"""
-
-        student_json = json.dumps(student_data, indent=2)
-        specificity_json = json.dumps(specificity_data, indent=2)
-
-        prompt = f"""You are analyzing structured critic feedback to identify actionable improvements for a book.
-
-{composition_context}
-
-Two independent critics have reviewed the book:
-
-## STUDENT CRITIC
-Reads as a first-time student with no Feldenkrais background. Scores each section on
-recognition (does the text match lived experience?), insight (does it add understanding?),
-invitation (does it invite exploration vs. lecturing?), accessibility (clear language?),
-and engagement (would the reader keep reading?). Scores 1-5, with callouts for low scores.
-
-{student_json}
-
-## SPECIFICITY CRITIC
-Checks whether sections are grounded in THIS lesson's specific movements, or contain
-generic text that could appear in any booklet. Counts concrete movement references,
-lists generic sentences, and scores specificity 1-5.
-
-{specificity_json}
-
-Based on BOTH critics' findings, identify the TOP 10 issues that, if addressed, would
-most improve the book.
-
-IMPORTANT CONTEXT on lens vocabulary: The five analytical lenses are VIEWPOINTS, not
-vocabulary partitions. Shared descriptive words (release, soften, weight, effort, ease)
-appearing across chapters is NORMAL and EXPECTED. Do NOT rank "vocabulary bleed" or
-"shared words across lenses" as a high-impact issue.
-
-For each issue, provide:
-1. **Issue**: Clear description of the problem
-2. **Critic**: Which critic flagged it — "student", "specificity", or "both"
-3. **Component**: Which part of the system it relates to (e.g., "booklet-reflection prompt", "VL-3 analysis", "volume-intro")
-4. **Impact**: High / Medium / Low
-5. **Actionable**: Yes / No - can this be fixed by changing prompts, config, or templates?
-6. **Fix sketch**: If actionable, a brief description of what change might help
-
-Rank by impact (highest first). Focus on issues that are ACTIONABLE.
-
-Return as a JSON object with this structure:
-{{
-  "issues": [
-    {{
-      "rank": 1,
-      "issue": "...",
-      "critic": "student|specificity|both",
-      "component": "...",
-      "impact": "high|medium|low",
-      "actionable": true|false,
-      "fix_sketch": "..."
-    }},
-    ...
-  ],
-  "summary": "2-3 sentence overall assessment"
-}}
-"""
-
-        llm = w.get_llm("gemini-review")
-        result = llm.complete_structured_json(prompt, {
-            "type": "object",
-            "properties": {
-                "issues": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "rank": {"type": "integer"},
-                            "issue": {"type": "string"},
-                            "critic": {"type": "string"},
-                            "component": {"type": "string"},
-                            "impact": {"type": "string"},
-                            "actionable": {"type": "boolean"},
-                            "fix_sketch": {"type": "string"},
-                        },
-                        "required": ["rank", "issue", "critic", "component", "impact", "actionable"],
-                    },
-                },
-                "summary": {"type": "string"},
-            },
-            "required": ["issues", "summary"],
-        })
-
-        _save_with_history(db, "pipeline:review_summary", result)
-        return json.dumps(result, indent=2)
 
     return transform
 
@@ -525,7 +306,11 @@ Return as a JSON object with this structure:
 
 
 def build_book_pipeline(db, framework_version: Optional[str] = None) -> PipelineGraph:
-    """Build the complete pipeline graph for the 5-lesson book.
+    """Build the single-lesson pipeline: one lesson through all 5 VL agents.
+
+    Pipeline shape:
+        src:lesson → analysis_a → analysis_b:{VL-1..5} → cross_query:{VL-1..5}
+                                                            → vl_synthesis → booklet_template → booklet → book
 
     Args:
         db: Database instance
@@ -535,10 +320,28 @@ def build_book_pipeline(db, framework_version: Optional[str] = None) -> Pipeline
     fv = framework_version
     prompts_dir, resolved_fv = w._resolve_prompts_dir(fv)
 
+    # Single lesson definition (The Anti-Gravity Lesson, formerly VL-1's lesson)
+    PIPELINE_LESSON = {
+        "lesson_id": "abfddaf1-e837-4ed5-9d59-6e53056eb759",
+        "title": "The Anti-Gravity Lesson",
+        "category": "db:4",
+    }
+    lesson_id = PIPELINE_LESSON["lesson_id"]
+    title = PIPELINE_LESSON["title"]
+
+    # All 5 VL IDs for the parallel analysis_b fan-out
+    vl_ids = sorted(w.VL_BOOKLET_INTROS.keys())
+
     graph = PipelineGraph()
 
-    # ── Shared source nodes ──
+    # ── Source nodes ──
 
+    graph.add_source(
+        "src:lesson",
+        db_lesson_hasher(db, lesson_id),
+        description=f"Lesson: {title}",
+        tags={"lesson_id": lesson_id},
+    )
     graph.add_source(
         "src:analysis_a_prompt",
         file_hasher(prompts_dir / "pass_a.md"),
@@ -577,141 +380,91 @@ def build_book_pipeline(db, framework_version: Optional[str] = None) -> Pipeline
         dict_hasher(w.BOOKLET_QUERY_TYPES),
         description="Booklet query type definitions",
     )
-    graph.add_source(
-        "src:council_intro",
-        file_hasher(w.DATA_DIR / "council_intro.html"),
-        description="Council of Five intro section",
+
+    # ── Single Analysis A ──
+
+    graph.add_transform(
+        "analysis_a",
+        input_names=[
+            "src:lesson",
+            "src:analysis_a_prompt",
+            "src:analysis_a_schema",
+            "src:frameworks",
+        ],
+        transform=_make_analysis_a_transform(db, lesson_id, fv),
+        description=f"Analysis A: {title}",
+        tags={"type": "llm"},
     )
-    graph.add_source(
-        "src:critics",
-        file_hasher(Path(__file__).parent / "critics.py"),
-        description="Critic prompts (student + specificity)",
-    )
 
-    # ── Per-lesson source + transform nodes ──
+    # ── Five parallel Analysis B nodes (one per VL) ──
 
-    # Resolve VL → prompt file mapping from framework registry
-    frameworks = w.load_frameworks(fv)
-    vl_prompt_map = {f["id"]: f["prompt_file"] for f in frameworks}
-
-    for vl_id, lesson_info in sorted(w.BOOK_LESSONS.items()):
-        lesson_id = lesson_info["lesson_id"]
-        title = lesson_info["title"]
-        vl_file = vl_prompt_map.get(vl_id, f"{vl_id.lower().replace('-', '')}.md")
-
-        # Source: lesson transcription from DB
-        graph.add_source(
-            f"src:lesson:{vl_id}",
-            db_lesson_hasher(db, lesson_id),
-            description=f"Lesson: {title}",
-            tags={"vl": vl_id, "lesson_id": lesson_id},
-        )
-
-        # Source: VL-specific prompt file
-        graph.add_source(
-            f"src:vl_prompt:{vl_id}",
-            file_hasher(prompts_dir / vl_file),
-            description=f"VL prompt: {vl_file}",
-            tags={"vl": vl_id},
-        )
-
-        # Transform: Analysis A (segmentation + classification + decomposition)
-        graph.add_transform(
-            f"analysis_a:{vl_id}",
-            input_names=[
-                f"src:lesson:{vl_id}",
-                "src:analysis_a_prompt",
-                "src:analysis_a_schema",
-                "src:frameworks",
-            ],
-            transform=_make_analysis_a_transform(db, lesson_id, vl_id, fv),
-            description=f"Analysis A: {title}",
-            tags={"vl": vl_id, "type": "llm"},
-        )
-
-        # Transform: Analysis B (VL-specific synthesis)
+    for vl_id in vl_ids:
         graph.add_transform(
             f"analysis_b:{vl_id}",
             input_names=[
-                f"src:lesson:{vl_id}",
-                f"analysis_a:{vl_id}",
+                "src:lesson",
+                "analysis_a",
                 "src:analysis_b_prompt",
-                f"src:vl_prompt:{vl_id}",
+                "src:frameworks",
                 "src:analysis_b_schema",
             ],
             transform=_make_analysis_b_transform(db, lesson_id, vl_id, fv),
-            description=f"Analysis B: {title}",
+            description=f"Analysis B ({vl_id}): {title}",
             tags={"vl": vl_id, "type": "llm"},
         )
 
-        # Transform: Render booklet template (unfilled HTML with query blocks)
-        graph.add_transform(
-            f"booklet_template:{vl_id}",
-            input_names=[
-                f"analysis_a:{vl_id}",
-                f"analysis_b:{vl_id}",
-                "src:booklet_config",
-                "src:query_types",
-            ],
-            transform=_make_booklet_template_transform(db, vl_id, title, lesson_id),
-            description=f"Booklet template: {title}",
-            tags={"vl": vl_id},
-        )
+    # ── Five parallel Cross-Query Enrichment nodes (one per VL) ──
+    # Each depends on ALL 5 analysis_b nodes so all first-pass results are available.
 
-        # Transform: Fill query blocks to produce finished booklet
+    for vl_id in vl_ids:
         graph.add_transform(
-            f"booklet:{vl_id}",
-            input_names=[
-                f"booklet_template:{vl_id}",
-                "src:query_types",
-            ],
-            transform=_make_booklet_transform(db, vl_id),
-            description=f"Booklet: {title}",
+            f"cross_query:{vl_id}",
+            input_names=[f"analysis_b:{vid}" for vid in vl_ids],
+            transform=_make_cross_query_transform(db, lesson_id, vl_id, fv),
+            description=f"Cross-query enrichment ({vl_id})",
             tags={"vl": vl_id, "type": "llm"},
         )
 
-    # ── Assembly nodes ──
+    # ── VL Synthesis (merge all enriched analysis_b results) ──
 
     graph.add_transform(
-        "volume_intro",
-        input_names=["src:booklet_config", "src:query_types"],
-        transform=_make_volume_intro_transform(db),
-        description="Volume introduction",
+        "vl_synthesis",
+        input_names=[f"cross_query:{vl_id}" for vl_id in vl_ids],
+        transform=_make_vl_synthesis_transform(db, vl_ids),
+        description="VL synthesis (merge all analyses)",
+    )
+
+    # ── Single booklet template + booklet ──
+
+    graph.add_transform(
+        "booklet_template",
+        input_names=[
+            "vl_synthesis",
+            "src:booklet_config",
+            "src:query_types",
+        ],
+        transform=_make_booklet_template_transform(db, title, lesson_id),
+        description=f"Booklet template: {title}",
+    )
+
+    graph.add_transform(
+        "booklet",
+        input_names=[
+            "booklet_template",
+            "src:query_types",
+        ],
+        transform=_make_booklet_transform(db),
+        description=f"Booklet: {title}",
         tags={"type": "llm"},
     )
 
-    book_inputs = ["volume_intro", "src:council_intro"] + [
-        f"booklet:{vl}" for vl in sorted(w.BOOK_LESSONS.keys())
-    ]
+    # ── Book assembly (just wraps the single booklet) ──
+
     graph.add_transform(
         "book",
-        input_names=book_inputs,
+        input_names=["booklet"],
         transform=_make_book_assembly_transform(db),
         description="Book assembly",
-    )
-
-    graph.add_transform(
-        "critic_student",
-        input_names=["book", "src:critics"],
-        transform=_make_student_critic_transform(db),
-        description="Student persona critic",
-        tags={"type": "llm"},
-    )
-
-    graph.add_transform(
-        "critic_specificity",
-        input_names=["book", "src:critics"],
-        transform=_make_specificity_critic_transform(db),
-        description="Specificity critic",
-        tags={"type": "llm"},
-    )
-
-    graph.add_transform(
-        "review_summary",
-        input_names=["critic_student", "critic_specificity"],
-        transform=_make_review_summary_transform(db),
-        description="Review summary (ranked issues)",
-        tags={"type": "llm"},
     )
 
     return graph
