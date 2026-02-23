@@ -615,7 +615,7 @@ def format_text_with_segments(pass_0_result: dict) -> str:
 
 
 def load_pass_0b() -> tuple[str, dict]:
-    """Load Pass 0b prompt and schema (Segment Enrichment)."""
+    """Load Pass 0b prompt and schema (Step-Level Enrichment)."""
     prompt_path = DATA_DIR / "pass_0b.md"
     schema_path = DATA_DIR / "pass_0b.schema.json"
     prompt = prompt_path.read_text() if prompt_path.exists() else ""
@@ -623,46 +623,122 @@ def load_pass_0b() -> tuple[str, dict]:
     return prompt, schema
 
 
+def format_steps_for_0b(pass_a_result: dict) -> str:
+    """Build LLM input text for Pass 0b from Pass A output.
+
+    Iterates groups → steps within each group, including original segment texts.
+    Returns formatted text like:
+
+    ## Group 1: Setup and Home Position
+    Establishing baseline configuration...
+
+    ### Step 1 [S, P] — Lie on back, feel contact with floor
+    [1] Lie on your back on the floor.
+    [2] Feel the contact of your body with the surface.
+    """
+    pass_0 = pass_a_result.get("pass_0", {})
+    segments = pass_0.get("segments", [])
+    seg_lookup = {s["id"]: s["text"] for s in segments}
+
+    steps = pass_a_result.get("steps", [])
+    step_lookup = {s["step_number"]: s for s in steps}
+
+    groups = pass_a_result.get("groups", [])
+
+    # Track which steps are assigned to groups
+    grouped_step_nums = set()
+    for g in groups:
+        for sn in g.get("steps", []):
+            grouped_step_nums.add(sn)
+
+    lines = []
+
+    for g in groups:
+        gnum = g.get("group_number", 0)
+        label = g.get("label", "")
+        desc = g.get("description", "")
+        lines.append(f"## Group {gnum}: {label}")
+        if desc:
+            lines.append(desc)
+        lines.append("")
+
+        for sn in g.get("steps", []):
+            step = step_lookup.get(sn)
+            if not step:
+                continue
+            tags_str = ", ".join(step.get("tags", []))
+            instruction = step.get("instruction", "")
+            lines.append(f"### Step {sn} [{tags_str}] — {instruction}")
+
+            # Include original segment texts
+            for seg_id in step.get("segments", []):
+                text = seg_lookup.get(seg_id, "")
+                if text:
+                    lines.append(f"[{seg_id}] {text}")
+
+            lines.append("")
+
+    # Handle ungrouped steps
+    ungrouped = [s for s in steps if s["step_number"] not in grouped_step_nums]
+    if ungrouped:
+        lines.append("## Ungrouped Steps")
+        lines.append("")
+        for step in ungrouped:
+            sn = step["step_number"]
+            tags_str = ", ".join(step.get("tags", []))
+            instruction = step.get("instruction", "")
+            lines.append(f"### Step {sn} [{tags_str}] — {instruction}")
+            for seg_id in step.get("segments", []):
+                text = seg_lookup.get(seg_id, "")
+                if text:
+                    lines.append(f"[{seg_id}] {text}")
+            lines.append("")
+
+    return "\n".join(lines)
+
+
 def run_pass_0b(lesson_text: str, provider_key: str | None = None, debug_log: list | None = None) -> dict:
     """
-    Pass 0b: LLM-based segment enrichment.
+    Pass 0b: Step-level somatic feature extraction.
 
-    Takes raw lesson text, runs Pass 0 to segment it, then sends segments
-    to an LLM for enrichment (clarified text, movement, intent, implicit context).
+    Runs Pass A to decompose the lesson into steps/groups, then sends
+    the step-level input to an LLM for enrichment.
 
     Returns:
         {
-            "pass_0": { ... pass 0 result ... },
-            "enriched_segments": [ { id, clarified, movement, intent, implicit }, ... ]
+            "pass_a": { ... pass A result ... },
+            "enriched_steps": [ { step_number, group_number, clarified, ... }, ... ],
+            "elapsed": float,
+            "cached": bool,
         }
     """
     import time
 
-    # Run Pass 0 first
-    pass_0_result = run_pass_0(lesson_text)
-    segmented_text = format_text_with_segments(pass_0_result)
+    # Run Pass A first (has its own cache)
+    pass_a_result = run_pass_a(lesson_text, provider_key, debug_log)
+    steps_text = format_steps_for_0b(pass_a_result)
 
     # Load prompt and schema
     prompt_template, schema = load_pass_0b()
 
     # Build the full prompt
-    prompt = prompt_template + segmented_text
+    prompt = prompt_template + steps_text
 
     system_prompt = (
-        "You are an expert Feldenkrais practitioner enriching lesson segments. "
-        "Process every segment. Do not skip, merge, or split segments."
+        "You are an expert Feldenkrais practitioner enriching lesson steps. "
+        "Process every step. Do not skip, merge, or split steps."
     )
 
-    # Check cache
-    cache_suffix = ":pass_0b"
+    # Check cache (v2 suffix breaks from old segment-level cache)
+    cache_suffix = ":pass_0b_v2"
     if provider_key and provider_key != DEFAULT_LLM:
         cache_suffix += f":{provider_key}"
     cache_key = get_cache_key(lesson_text.strip() + cache_suffix)
     cached = load_cached_analysis(cache_key)
     if cached:
         return {
-            "pass_0": pass_0_result,
-            "enriched_segments": cached.get("enriched_segments", []),
+            "pass_a": pass_a_result,
+            "enriched_steps": cached.get("enriched_steps", []),
             "cached": True,
         }
 
@@ -672,10 +748,10 @@ def run_pass_0b(lesson_text: str, provider_key: str | None = None, debug_log: li
 
     if debug_log is not None:
         debug_log.append({
-            "label": f"Pass 0b ({provider_key or DEFAULT_LLM})",
+            "name": "Pass 0b",
             "provider": provider_key or DEFAULT_LLM,
             "prompt": prompt,
-            "system_prompt": system_prompt,
+            "system": system_prompt,
             "schema": schema,
         })
 
@@ -691,14 +767,14 @@ def run_pass_0b(lesson_text: str, provider_key: str | None = None, debug_log: li
             debug_log[-1]["output"] = json.dumps(result, indent=2)
             debug_log[-1]["elapsed"] = elapsed
 
-        enriched = result.get("segments", [])
+        enriched = result.get("steps", [])
 
         # Cache the result
-        save_cached_analysis(cache_key, {"enriched_segments": enriched})
+        save_cached_analysis(cache_key, {"enriched_steps": enriched})
 
         return {
-            "pass_0": pass_0_result,
-            "enriched_segments": enriched,
+            "pass_a": pass_a_result,
+            "enriched_steps": enriched,
             "elapsed": elapsed,
             "cached": False,
         }
@@ -924,6 +1000,14 @@ def get_available_lessons() -> tuple[dict[str, list[tuple[str, str]]], dict[str,
 
     # Skip empty sources (e.g. OTHER with no documents)
     categories = {k: v for k, v in categories.items() if v}
+
+    # Sort lessons within each category alphabetically by display name
+    for key in categories:
+        categories[key].sort(key=lambda x: x[1].lower())
+
+    # Sort categories alphabetically by display name
+    sorted_keys = sorted(categories.keys(), key=lambda k: display_names.get(k, k).lower())
+    categories = {k: categories[k] for k in sorted_keys}
 
     return categories, display_names
 
@@ -3663,7 +3747,7 @@ async def api_pass0b(
     selected_lesson: str = Form(""),
     provider: str = Form(""),
 ):
-    """Run Pass 0 + Pass 0b and return results."""
+    """Run Pass A + Pass 0b and return results."""
     text = lesson_text.strip()
     if not text:
         return JSONResponse({"error": "Please enter or select lesson text."}, status_code=400)
@@ -3678,14 +3762,16 @@ async def api_pass0b(
         )
         result_html = render_pass0b_result(result)
         debug_html = render_debug_log(debug_log) if debug_log else ""
+        pass_a = result.get("pass_a", {})
         return JSONResponse({
             "status": "complete",
             "result_html": result_html,
             "debug_html": debug_html,
             "elapsed": result.get("elapsed"),
             "cached": result.get("cached", False),
-            "segment_count": len(result.get("pass_0", {}).get("segments", [])),
-            "enriched_count": len(result.get("enriched_segments", [])),
+            "step_count": len(pass_a.get("steps", [])),
+            "group_count": len(pass_a.get("groups", [])),
+            "enriched_count": len(result.get("enriched_steps", [])),
         })
     except asyncio.TimeoutError:
         return JSONResponse({"error": "Analysis timed out."}, status_code=504)
@@ -3697,83 +3783,183 @@ async def api_pass0b(
         }, status_code=500)
 
 
+def _render_step_bullets(e: dict, html_module) -> str:
+    """Render a single enriched step as clarified text + bullet points."""
+    esc = html_module.escape
+    parts = []
+
+    # Clarified text as the step body
+    cl = e.get("clarified", "")
+    if cl:
+        parts.append(f'<div style="margin-bottom: 6px;">{esc(cl)}</div>')
+
+    # Bullet list of enrichment fields
+    bullets = []
+    md = e.get("mechanical_directive", "")
+    if md and not md.lower().startswith("none"):
+        bullets.append(f"<strong>Mechanical Directive:</strong> {esc(md)}")
+
+    qc = e.get("quality_constraint", "")
+    if qc and qc.lower() != "none":
+        bullets.append(f"<strong>Quality Constraint:</strong> {esc(qc)}")
+
+    si = e.get("sensory_inquiry", "")
+    if si:
+        bullets.append(f"<strong>Sensory Inquiry:</strong> {esc(si)}")
+
+    diff = e.get("differentiation", "")
+    if diff and diff.lower() != "none":
+        bullets.append(f"<strong>Differentiation:</strong> {esc(diff)}")
+
+    act = e.get("activation", "")
+    if act and act.lower() != "none":
+        bullets.append(f"<strong>Activation:</strong> {esc(act)}")
+
+    inhib = e.get("inhibition", "")
+    if inhib and inhib.lower() != "none":
+        bullets.append(f"<strong>Inhibition:</strong> {esc(inhib)}")
+
+    tr = e.get("transmission_route", "")
+    if tr and tr.lower() != "none":
+        bullets.append(f"<strong>Transmission Route:</strong> {esc(tr)}")
+
+    gp = e.get("ground_push", "")
+    if gp and gp.lower() != "none":
+        bullets.append(f"<strong>Ground Push:</strong> {esc(gp)}")
+
+    intent = e.get("intent", "")
+    if intent:
+        bullets.append(f"<strong>Intent:</strong> {esc(intent)}")
+
+    if bullets:
+        items = "".join(f"<li>{b}</li>" for b in bullets)
+        parts.append(f'<ul style="margin: 4px 0 0 0; padding-left: 20px; font-size: 0.9em; '
+                     f'color: #444;">{items}</ul>')
+
+    return "\n".join(parts)
+
+
+def _render_original_segments(pa_step: dict, seg_lookup: dict, html_module) -> str:
+    """Render a collapsible <details> with the original transcript segments for a step."""
+    seg_ids = pa_step.get("segments", [])
+    if not seg_ids:
+        return ""
+    esc = html_module.escape
+    n = len(seg_ids)
+    label = f"Original text ({n} segment{'s' if n != 1 else ''})"
+    lines = []
+    for sid in seg_ids:
+        text = seg_lookup.get(sid, "")
+        if text:
+            lines.append(f'<div style="margin: 2px 0;"><span style="color: #999; font-size: 0.85em;">[{sid}]</span> {esc(text)}</div>')
+    if not lines:
+        return ""
+    return (
+        f'<details style="margin-top: 6px;">'
+        f'<summary style="cursor: pointer; font-size: 0.85em; color: #888;">{label}</summary>'
+        f'<div style="margin-top: 4px; padding: 6px 10px; background: #fafafa; '
+        f'border-radius: 4px; font-size: 0.85em; color: #555;">{"".join(lines)}</div>'
+        f'</details>'
+    )
+
+
 def render_pass0b_result(result: dict) -> str:
-    """Render Pass 0 + Pass 0b results as HTML."""
-    pass_0 = result.get("pass_0", {})
-    segments = pass_0.get("segments", [])
-    enriched = result.get("enriched_segments", [])
+    """Render Pass A + Pass 0b results as grouped steps with bullet-point enrichment."""
+    import html as html_module
+    pass_a = result.get("pass_a", {})
+    groups = pass_a.get("groups", [])
+    pa_steps = pass_a.get("steps", [])
+    enriched = result.get("enriched_steps", [])
 
-    # Build lookup for enriched segments by ID
-    enriched_lookup = {e["id"]: e for e in enriched}
+    enriched_lookup = {e["step_number"]: e for e in enriched}
+    pa_step_lookup = {s["step_number"]: s for s in pa_steps}
 
-    html = []
-    html.append(f'<p style="color: #666; font-size: 0.9em;">Pass 0: {len(segments)} segments | '
-                f'Pass 0b: {len(enriched)} enriched</p>')
+    # Build segment text lookup from Pass 0
+    pass_0 = pass_a.get("pass_0", {})
+    seg_lookup = {s["id"]: s["text"] for s in pass_0.get("segments", [])}
 
-    for seg in segments:
-        sid = seg["id"]
-        e = enriched_lookup.get(sid, {})
+    # Count totals
+    total_steps = len(enriched)
+    irrelevant = sum(1 for e in enriched if not e.get("relevance", True))
+    relevant = total_steps - irrelevant
+    num_groups = len(groups)
 
-        html.append(f'<div style="margin-bottom: 16px; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">')
+    out = []
+    out.append(f'<p style="color: #666; font-size: 0.9em;">{total_steps} steps across '
+               f'{num_groups} groups, {relevant} lesson-relevant, {irrelevant} omitted</p>')
 
-        # Header with segment ID
-        html.append(f'<div style="background: #f0f0f0; padding: 8px 12px; font-weight: bold; font-size: 0.9em; color: #555;">'
-                    f'Segment #{sid}</div>')
+    # Render by group
+    rendered_steps = set()
+    for g in groups:
+        gnum = g.get("group_number", 0)
+        label = g.get("label", "")
+        desc = g.get("description", "")
 
-        html.append('<div style="padding: 12px;">')
+        group_step_nums = g.get("steps", [])
+        group_relevant = [sn for sn in group_step_nums
+                          if enriched_lookup.get(sn, {}).get("relevance", True)]
+        if not group_relevant:
+            for sn in group_step_nums:
+                rendered_steps.add(sn)
+            continue
 
-        # Original text
-        html.append(f'<div style="margin-bottom: 10px;">'
-                    f'<div style="font-size: 0.8em; color: #999; text-transform: uppercase; margin-bottom: 2px;">Original</div>'
-                    f'<div style="padding: 8px; background: #fafafa; border-left: 3px solid #ccc; color: #333;">{seg["text"]}</div>'
-                    f'</div>')
+        # Group header
+        out.append(
+            f'<div style="margin-top: 24px; margin-bottom: 8px; padding: 8px 12px; '
+            f'background: #e8f0fe; border-left: 4px solid #1a73e8; border-radius: 4px;">'
+            f'<strong style="color: #1a73e8;">Group {gnum}: {html_module.escape(label)}</strong>'
+        )
+        if desc:
+            out.append(f'<div style="color: #555; font-size: 0.85em; margin-top: 4px;">'
+                        f'{html_module.escape(desc)}</div>')
+        out.append('</div>')
 
-        if e:
-            # Three-tier extraction
-            if e.get("mechanical_directive"):
-                html.append(f'<div style="margin-bottom: 10px;">'
-                            f'<div style="font-size: 0.8em; color: #999; text-transform: uppercase; margin-bottom: 2px;">Mechanical Directive</div>'
-                            f'<div style="padding: 8px; background: #f0f0f0; border-left: 3px solid #6c757d; color: #333;">{e["mechanical_directive"]}</div>'
-                            f'</div>')
+        for sn in group_step_nums:
+            rendered_steps.add(sn)
+            e = enriched_lookup.get(sn, {})
+            if not e.get("relevance", True):
+                continue
 
-            if e.get("quality_constraint"):
-                html.append(f'<div style="margin-bottom: 10px;">'
-                            f'<div style="font-size: 0.8em; color: #999; text-transform: uppercase; margin-bottom: 2px;">Quality Constraint</div>'
-                            f'<div style="padding: 8px; background: #f0fff0; border-left: 3px solid #28a745; color: #333;">{e["quality_constraint"]}</div>'
-                            f'</div>')
+            pa_step = pa_step_lookup.get(sn, {})
+            instruction = pa_step.get("instruction", "")
 
-            if e.get("sensory_inquiry"):
-                html.append(f'<div style="margin-bottom: 10px;">'
-                            f'<div style="font-size: 0.8em; color: #999; text-transform: uppercase; margin-bottom: 2px;">Sensory Inquiry</div>'
-                            f'<div style="padding: 8px; background: #fff8f0; border-left: 3px solid #fd7e14; color: #333;">{e["sensory_inquiry"]}</div>'
-                            f'</div>')
+            orig_html = _render_original_segments(pa_step, seg_lookup, html_module)
+            out.append(
+                f'<div style="margin: 12px 0 4px 0; padding: 8px 12px; '
+                f'background: #f8f9fa; border-radius: 4px; border: 1px solid #e0e0e0;">'
+                f'<strong>Step {sn}</strong>'
+                f' &mdash; <em>{html_module.escape(instruction)}</em>'
+                f'<div style="margin-top: 6px;">{_render_step_bullets(e, html_module)}</div>'
+                f'{orig_html}'
+                f'</div>'
+            )
 
-            # Clarified rewrite
-            if e.get("clarified"):
-                html.append(f'<div style="margin-bottom: 10px;">'
-                            f'<div style="font-size: 0.8em; color: #999; text-transform: uppercase; margin-bottom: 2px;">Clarified</div>'
-                            f'<div style="padding: 8px; background: #f0f8ff; border-left: 3px solid #007bff; color: #333;">{e["clarified"]}</div>'
-                            f'</div>')
+    # Render any ungrouped steps
+    ungrouped = [e for e in enriched if e["step_number"] not in rendered_steps]
+    if ungrouped:
+        out.append(
+            '<div style="margin-top: 24px; margin-bottom: 8px; padding: 8px 12px; '
+            'background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">'
+            '<strong style="color: #856404;">Ungrouped Steps</strong></div>'
+        )
+        for e in ungrouped:
+            if not e.get("relevance", True):
+                continue
+            sn = e["step_number"]
+            pa_step = pa_step_lookup.get(sn, {})
+            instruction = pa_step.get("instruction", "")
+            orig_html = _render_original_segments(pa_step, seg_lookup, html_module)
+            out.append(
+                f'<div style="margin: 12px 0 4px 0; padding: 8px 12px; '
+                f'background: #f8f9fa; border-radius: 4px; border: 1px solid #e0e0e0;">'
+                f'<strong>Step {sn}</strong>'
+                f' &mdash; <em>{html_module.escape(instruction)}</em>'
+                f'<div style="margin-top: 6px;">{_render_step_bullets(e, html_module)}</div>'
+                f'{orig_html}'
+                f'</div>'
+            )
 
-            # Global anchor (optional)
-            if e.get("global_anchor"):
-                html.append(f'<div style="margin-bottom: 10px;">'
-                            f'<div style="font-size: 0.8em; color: #999; text-transform: uppercase; margin-bottom: 2px;">Global Anchor</div>'
-                            f'<div style="padding: 8px; background: #f8f0ff; border-left: 3px solid #6f42c1; color: #333;">{e["global_anchor"]}</div>'
-                            f'</div>')
-
-            # Intent
-            if e.get("intent"):
-                html.append(f'<div style="margin-bottom: 10px;">'
-                            f'<div style="font-size: 0.8em; color: #999; text-transform: uppercase; margin-bottom: 2px;">Intent</div>'
-                            f'<div style="padding: 8px; background: #e8f4fd; border-left: 3px solid #17a2b8; color: #333;">{e["intent"]}</div>'
-                            f'</div>')
-        else:
-            html.append('<div style="color: #999; font-style: italic;">No enrichment for this segment</div>')
-
-        html.append('</div></div>')
-
-    return "\n".join(html)
+    return "\n".join(out)
 
 
 def build_pass0b_html() -> str:
@@ -3795,7 +3981,7 @@ def build_pass0b_html() -> str:
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Pass 0b Experiment - Segment Enrichment</title>
+    <title>Pass 0b Experiment - Step-Level Enrichment</title>
     <style>
         body {{
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -3914,7 +4100,7 @@ def build_pass0b_html() -> str:
             const form = document.getElementById('pass0b-form');
 
             btn.disabled = true;
-            btn.textContent = 'Running Pass 0 + 0b...';
+            btn.textContent = 'Running Pass A + Pass 0b...';
             spinner.style.display = 'block';
             resultDiv.innerHTML = '';
             debugDiv.innerHTML = '';
@@ -3952,7 +4138,7 @@ def build_pass0b_html() -> str:
                     }} else {{
                         stats = 'Completed in ' + (data.elapsed || '?') + 's';
                     }}
-                    stats += ' | ' + (data.segment_count || '?') + ' segments, ' + (data.enriched_count || '?') + ' enriched';
+                    stats += ' | ' + (data.step_count || '?') + ' steps in ' + (data.group_count || '?') + ' groups, ' + (data.enriched_count || '?') + ' enriched';
                     resultDiv.innerHTML = '<p style="color: #28a745; font-weight: bold;">' + stats + '</p>' + data.result_html;
                 }}
                 if (data.debug_html) debugDiv.innerHTML = data.debug_html;
@@ -3972,8 +4158,8 @@ def build_pass0b_html() -> str:
     </script>
 </head>
 <body>
-    <h1>Pass 0b: Segment Enrichment</h1>
-    <p>Experiment page. Runs Pass 0 (rule-based segmentation) then Pass 0b (LLM enrichment of each segment).
+    <h1>Pass 0b: Step-Level Enrichment</h1>
+    <p>Experiment page. Runs Pass A (decomposition into steps &amp; groups) then Pass 0b (LLM enrichment of each step).
        <a href="/analyzer" style="float: right; color: #007bff; text-decoration: none; font-size: 0.9em;">&larr; Main Analyzer</a>
     </p>
 
@@ -4016,7 +4202,7 @@ def build_pass0b_html() -> str:
 
     <div id="loading-spinner" class="loading-spinner">
         <span class="spinner"></span>
-        <span>Running segment enrichment...</span>
+        <span>Running Pass A + Pass 0b step enrichment...</span>
         <div id="loading-elapsed" style="font-size: 0.85em; color: #999; margin-top: 8px;"></div>
     </div>
 

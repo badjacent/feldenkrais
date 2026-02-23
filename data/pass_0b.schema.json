@@ -1,47 +1,71 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Pass0bResult",
-  "description": "Pass 0b: Somatic feature extraction with three-tier architecture",
+  "description": "Pass 0b: Step-level somatic feature extraction with three-tier architecture",
   "type": "object",
   "properties": {
-    "segments": {
+    "steps": {
       "type": "array",
-      "description": "Enriched segments, one per input segment, in order",
+      "description": "Enriched steps, one per input step, in order",
       "items": {
         "type": "object",
         "properties": {
-          "id": {
+          "step_number": {
             "type": "integer",
-            "description": "Segment ID matching the input segment"
+            "description": "Step number matching the input step"
+          },
+          "group_number": {
+            "type": "integer",
+            "description": "Group number this step belongs to"
           },
           "mechanical_directive": {
             "type": "string",
-            "description": "The explicit physical command or description of what the segment is (if not a movement)"
+            "description": "The explicit physical command. If no physical action, write 'None — [label]'."
           },
           "quality_constraint": {
             "type": "string",
-            "description": "Adjectives, metaphors, or modifiers that shape effort or movement quality"
+            "description": "Literal somatic language directing attention to how the student moves — cues for internal sensation, effort regulation, bodily awareness. Write 'None' if absent."
           },
           "sensory_inquiry": {
             "type": "string",
-            "description": "What the student is asked to feel or notice, especially in non-moving parts. Tag questions as primary learning objective."
+            "description": "What the student is asked to feel or notice, especially in non-moving parts. Extract literally from original segment texts."
           },
           "clarified": {
             "type": "string",
-            "description": "Clear rewrite with all ambiguous references resolved"
+            "description": "Clear rewrite of the full somatic event with all ambiguous references resolved"
           },
-          "global_anchor": {
+          "differentiation": {
             "type": "string",
-            "description": "Connection between local movement and distant skeletal foundation (optional)"
+            "description": "What body parts or movements are being distinguished from each other. Anatomical language. Write 'None' if absent."
+          },
+          "activation": {
+            "type": "string",
+            "description": "What muscles, chains, or skeletal structures are being recruited or engaged. Anatomical language. Write 'None' for rest/attentional steps."
+          },
+          "inhibition": {
+            "type": "string",
+            "description": "What must release or stay quiet to allow transmission. Write 'None' if not applicable."
+          },
+          "transmission_route": {
+            "type": "string",
+            "description": "Skeletal path of force/movement using arrow notation (e.g. 'foot → femur → pelvis → spine'). Write 'None' if no clear path."
+          },
+          "ground_push": {
+            "type": "string",
+            "description": "Where the body presses into the floor to generate ground reaction force supporting this movement. Write 'None' if not applicable."
+          },
+          "relevance": {
+            "type": "boolean",
+            "description": "true if the step is part of the lesson content, false if it is off-topic noise (technical issues, mute/unmute, admin chatter)"
           },
           "intent": {
             "type": "string",
-            "description": "Pedagogical purpose: the learning strategy behind this instruction"
+            "description": "Pedagogical purpose: the learning strategy behind this step"
           }
         },
-        "required": ["id", "mechanical_directive", "quality_constraint", "sensory_inquiry", "clarified", "intent"]
+        "required": ["step_number", "group_number", "mechanical_directive", "quality_constraint", "sensory_inquiry", "clarified", "relevance", "intent"]
       }
     }
   },
-  "required": ["segments"]
+  "required": ["steps"]
 }
