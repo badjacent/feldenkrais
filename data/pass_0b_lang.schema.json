@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Pass0bLangResult",
+  "description": "Pass 0b-lang: Step-level language extraction with lesson-level summary",
+  "type": "object",
+  "properties": {
+    "steps": {
+      "type": "array",
+      "description": "Language extraction per step, one per input step, in order",
+      "items": {
+        "type": "object",
+        "properties": {
+          "step_number": {
+            "type": "integer",
+            "description": "Step number matching the input step"
+          },
+          "group_number": {
+            "type": "integer",
+            "description": "Group number this step belongs to"
+          },
+          "attention_cues": {
+            "type": "string",
+            "description": "Literal phrases where the teacher directs attention and perception — what to notice, feel, sense, listen for, imagine. Semicolon-separated. Write 'None' if absent."
+          },
+          "effort_language": {
+            "type": "string",
+            "description": "Literal phrases framing effort, ease, permission, constraint, negation. Semicolon-separated. Write 'None' if absent."
+          },
+          "image_language": {
+            "type": "string",
+            "description": "Literal metaphors, analogies, physical imagery, vivid descriptive language. Semicolon-separated. Write 'None' if absent."
+          },
+          "explanatory_language": {
+            "type": "string",
+            "description": "Literal cause-effect explanations, biomechanical reasoning, pedagogical transparency. Semicolon-separated. Write 'None' if absent."
+          },
+          "distinctive_phrasing": {
+            "type": "string",
+            "description": "Notable word choices specific to this teacher's voice that don't fit the above categories. Semicolon-separated. Write 'None' if absent."
+          }
+        },
+        "required": ["step_number", "group_number", "attention_cues", "effort_language", "image_language", "explanatory_language", "distinctive_phrasing"]
+      }
+    },
+    "summary": {
+      "type": "object",
+      "description": "Lesson-level summary of the teacher's language patterns",
+      "properties": {
+        "speaker_principles": {
+          "type": "array",
+          "description": "3-7 principles of how this teacher uses language to connect to the student. Each names a pattern, gives an example, and explains the pedagogical purpose.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "signature_vocabulary": {
+          "type": "array",
+          "description": "Words or phrases distinctive to this teacher, each with brief context.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "dominant_attention_mode": {
+          "type": "string",
+          "description": "The primary way this teacher directs attention across the whole lesson."
+        },
+        "effort_philosophy": {
+          "type": "string",
+          "description": "1-2 sentence summary of this teacher's relationship to effort, as expressed through language."
+        },
+        "teaching_voice_summary": {
+          "type": "string",
+          "description": "3-5 sentence paragraph characterizing how this teacher uses language as a pedagogical tool. Written for a trainee teacher."
+        }
+      },
+      "required": ["speaker_principles", "signature_vocabulary", "dominant_attention_mode", "effort_philosophy", "teaching_voice_summary"]
+    }
+  },
+  "required": ["steps", "summary"]
+}

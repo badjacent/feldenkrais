@@ -81,6 +81,7 @@ class LLM:
 
     # Clients are created lazily
     _client: object = field(default=None, init=False, repr=False)
+    last_usage: dict = field(default_factory=dict, init=False, repr=False)
 
     def __post_init__(self):
         if self.provider not in ("anthropic", "openai", "gemini"):
@@ -493,6 +494,11 @@ class LLM:
 
         response = self.client.messages.create(**kwargs)
 
+        self.last_usage = {
+            "tokens_in": getattr(response.usage, "input_tokens", None),
+            "tokens_out": getattr(response.usage, "output_tokens", None),
+        }
+
         for block in response.content:
             if block.type == "tool_use":
                 return block.input
@@ -535,6 +541,13 @@ class LLM:
             kwargs["temperature"] = temperature
 
         response = self.client.chat.completions.create(**kwargs)
+
+        if hasattr(response, "usage") and response.usage:
+            self.last_usage = {
+                "tokens_in": response.usage.prompt_tokens,
+                "tokens_out": response.usage.completion_tokens,
+            }
+
         raw_text = response.choices[0].message.content
         try:
             return json.loads(raw_text)
@@ -571,6 +584,13 @@ class LLM:
             contents=prompt,
             config=config,
         )
+
+        if hasattr(response, 'usage_metadata') and response.usage_metadata:
+            u = response.usage_metadata
+            self.last_usage = {
+                "tokens_in": getattr(u, 'prompt_token_count', None),
+                "tokens_out": getattr(u, 'candidates_token_count', None),
+            }
 
         # Check finish reason for truncation
         finish_reason = None

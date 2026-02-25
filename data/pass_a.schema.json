@@ -54,19 +54,20 @@
             "type": "string",
             "description": "Brief pedagogical note (optional)"
           },
-          "segments": {
-            "type": "array",
-            "items": {
-              "type": "integer"
-            },
-            "description": "Segment IDs from the source text that this step covers"
+          "segment_start": {
+            "type": "integer",
+            "description": "First segment ID this step covers (inclusive)"
+          },
+          "segment_end": {
+            "type": "integer",
+            "description": "Last segment ID this step covers (inclusive)"
           },
           "is_home": {
             "type": "boolean",
             "description": "True if this step is a return to the home position"
           }
         },
-        "required": ["step_number", "instruction", "tags", "segments"]
+        "required": ["step_number", "instruction", "tags", "segment_start", "segment_end"]
       }
     },
     "groups": {

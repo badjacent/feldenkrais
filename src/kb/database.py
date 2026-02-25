@@ -793,7 +793,9 @@ class Database:
         with self.get_cursor(commit=False) as cursor:
             cursor.execute("""
                 SELECT d.id, d.title, d.category_name,
-                       d.lesson_date, d.lesson_index, d.created_at
+                       d.lesson_date, d.lesson_index, d.created_at,
+                       d.metadata->'scraper'->>'instructor' as instructor,
+                       d.source_url
                 FROM document d
                 JOIN analysis a ON a.document_id = d.id AND a.type_id = 1
                 WHERE d.source_id = %s

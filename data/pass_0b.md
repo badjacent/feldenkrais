@@ -28,7 +28,7 @@ For each step, extract the following three tiers:
 
 1. **mechanical_directive**: The explicit physical command — what the student is told to do with their body (e.g. "Lift the right arm", "Turn the head to the left"). If no physical action is present, write "None — [brief label]" (e.g. "None — attentional pause", "None — rest", "None — contextual remark", "None — sensory check-in"). Do NOT restate sensory or attentional instructions here — those belong in sensory_inquiry.
 
-2. **quality_constraint**: The somatic language directing the student's attention to *how* they move — words and phrases that cue internal sensation, effort regulation, or bodily awareness (e.g. "softly"; "without straining"; "feel the weight"; "let the arm be heavy"; "sense the contact with the floor"; "as small as possible"). Extract these cues **literally from the original segment texts** within the step. Separate multiple cues with semicolons. If no attentional somatic cues are present, write "None".
+2. **attentional_cue**: The somatic language directing the student's attention to *how* they move — words and phrases that cue internal sensation, effort regulation, or bodily awareness (e.g. "softly"; "without straining"; "feel the weight"; "let the arm be heavy"; "sense the contact with the floor"; "as small as possible"). Extract these cues **literally from the original segment texts** within the step. Separate multiple cues with semicolons. If no attentional somatic cues are present, write "None".
 
 3. **sensory_inquiry**: The "search" instruction — what the student is asked to feel, notice, or attend to, especially in the non-moving parts of the body (e.g. "Notice the weight shift in the chest", "Where does the movement reach in the spine?"). Extract **literally from the original segment texts**.
 
@@ -55,7 +55,7 @@ For each step, extract the following three tiers:
 When extracting features, prioritize the **non-action** instructions:
 
 - **Action**: "Reach the arm." → Lower priority. This is the mechanical directive.
-- **Non-Action**: "Keep the elbow loosely straight and listen for the ribs." → **Higher priority.** This contains the quality constraint, the sensory inquiry, and often the actual learning.
+- **Non-Action**: "Keep the elbow loosely straight and listen for the ribs." → **Higher priority.** This contains the attentional cue, the sensory inquiry, and often the actual learning.
 
 The **value** of a Feldenkrais lesson is found in:
 - **Differentiation**: What stays still while something else moves.
@@ -71,6 +71,22 @@ Ensure these are foregrounded in your output. If a step contains both a gross mo
 - Include the `group_number` from the group each step belongs to.
 - Keep `clarified` concise but complete — it should cover the full somatic event.
 - Not every step will have all three tiers (e.g. a rest instruction has no sensory_inquiry). Populate what applies.
+
+## Lesson-Level Summary
+
+After analyzing all steps, produce a `summary` object that captures the biomechanical architecture of the lesson as a whole. This summary should synthesize patterns across all steps — not just restate individual step data.
+
+1. **primary_transmission_routes**: The 2–5 dominant skeletal transmission routes explored across the lesson. Use arrow notation with a brief label. Example: "foot → femur → pelvis → lumbar spine (lower chain extension)". Include only routes that recur across multiple steps or form the lesson's central theme.
+
+2. **differentiation_strategy**: What differentiations does this lesson build, and in what order? How does the sequence of differentiations create the lesson's learning arc? (2–3 sentences)
+
+3. **key_inhibitions**: The most important structures that must release or stay quiet in this lesson. Each entry names the structure and explains why its release matters for the lesson's movement logic. 3–5 entries.
+
+4. **ground_force_strategy**: How does this lesson use ground reaction forces? Which contact points are primary, and how does the lesson shift between them? (1–2 sentences)
+
+5. **somatic_architecture_summary**: A short paragraph (3–5 sentences) summarizing the biomechanical logic of the lesson as a whole. Written for a Feldenkrais trainee — what is the lesson teaching the nervous system, and through what somatic strategy? Be specific and practical.
+
+**Note:** The summary appears AFTER all steps in the output. If the output is truncated by token limits, the steps (which are more critical) are preserved.
 
 ## Lesson Steps
 

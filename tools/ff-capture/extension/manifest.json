@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "Feldenkrais Capture",
+  "version": "1.2",
+  "description": "Captures audio from Feldenkrais First and Feldenkrais Project lesson pages",
+  "permissions": [
+    "webRequest",
+    "storage"
+  ],
+  "host_permissions": [
+    "*://*.sndcdn.com/*",
+    "*://*.soundcloud.com/*",
+    "*://player.vimeo.com/*",
+    "*://app.feldenkraisfirst.com/*",
+    "*://feldenkraisproject.com/*",
+    "*://www.feldenkraisproject.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://app.feldenkraisfirst.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "*://feldenkraisproject.com/*",
+        "*://www.feldenkraisproject.com/*"
+      ],
+      "js": ["content-fp.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Feldenkrais Capture"
+  }
+}

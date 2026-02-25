@@ -30,6 +30,7 @@ from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from llm import LLM
+from storage import Storage
 
 
 # ── Pipeline lock (DB-based, 5-minute expiry) ───────────────────────────
@@ -623,6 +624,15 @@ def load_pass_0b() -> tuple[str, dict]:
     return prompt, schema
 
 
+def load_pass_0b_lang() -> tuple[str, dict]:
+    """Load Pass 0b-lang prompt and schema (Step-Level Language Analysis)."""
+    prompt_path = DATA_DIR / "pass_0b_lang.md"
+    schema_path = DATA_DIR / "pass_0b_lang.schema.json"
+    prompt = prompt_path.read_text() if prompt_path.exists() else ""
+    schema = json.loads(schema_path.read_text()) if schema_path.exists() else {}
+    return prompt, schema
+
+
 def format_steps_for_0b(pass_a_result: dict) -> str:
     """Build LLM input text for Pass 0b from Pass A output.
 
@@ -739,6 +749,7 @@ def run_pass_0b(lesson_text: str, provider_key: str | None = None, debug_log: li
         return {
             "pass_a": pass_a_result,
             "enriched_steps": cached.get("enriched_steps", []),
+            "summary": cached.get("summary", {}),
             "cached": True,
         }
 
@@ -768,15 +779,146 @@ def run_pass_0b(lesson_text: str, provider_key: str | None = None, debug_log: li
             debug_log[-1]["elapsed"] = elapsed
 
         enriched = result.get("steps", [])
+        summary = result.get("summary", {})
+
+        # Validate step count — LLM may silently truncate large outputs
+        expected_count = len(pass_a_result.get("steps", []))
+        actual_count = len(enriched)
+        truncation_warning = None
+        if actual_count < expected_count:
+            truncation_warning = (
+                f"LLM returned {actual_count} of {expected_count} steps "
+                f"(missing steps {actual_count + 1}-{expected_count}). "
+                f"Output was likely truncated due to token limits."
+            )
+            import logging
+            logging.warning(f"Pass 0b truncation: {truncation_warning}")
+
+        # Capture token usage
+        usage = llm.last_usage if llm.last_usage else {}
 
         # Cache the result
-        save_cached_analysis(cache_key, {"enriched_steps": enriched})
+        save_cached_analysis(cache_key, {"enriched_steps": enriched, "summary": summary, "usage": usage})
 
         return {
             "pass_a": pass_a_result,
             "enriched_steps": enriched,
+            "summary": summary,
             "elapsed": elapsed,
             "cached": False,
+            "truncation_warning": truncation_warning,
+            "usage": usage,
+        }
+
+    except Exception as e:
+        if debug_log is not None:
+            debug_log[-1]["error"] = str(e)
+        raise
+
+
+def run_pass_0b_lang(lesson_text: str, provider_key: str | None = None, debug_log: list | None = None) -> dict:
+    """
+    Pass 0b-lang: Step-level language analysis.
+
+    Runs Pass A to decompose the lesson into steps/groups, then sends
+    the step-level input to an LLM for language analysis.
+
+    Returns:
+        {
+            "pass_a": { ... pass A result ... },
+            "enriched_steps": [ { step_number, group_number, ... }, ... ],
+            "summary": { speaker_principles, signature_vocabulary, ... },
+            "elapsed": float,
+            "cached": bool,
+        }
+    """
+    import time
+
+    # Run Pass A first (has its own cache)
+    pass_a_result = run_pass_a(lesson_text, provider_key, debug_log)
+    steps_text = format_steps_for_0b(pass_a_result)
+
+    # Load prompt and schema
+    prompt_template, schema = load_pass_0b_lang()
+
+    # Build the full prompt
+    prompt = prompt_template + steps_text
+
+    system_prompt = (
+        "You are an expert in Feldenkrais pedagogy and language analysis. "
+        "Analyze the teacher's language choices at each step. "
+        "Process every step. Do not skip, merge, or split steps."
+    )
+
+    # Check cache
+    cache_suffix = ":pass_0b_lang_v1"
+    if provider_key and provider_key != DEFAULT_LLM:
+        cache_suffix += f":{provider_key}"
+    cache_key = get_cache_key(lesson_text.strip() + cache_suffix)
+    cached = load_cached_analysis(cache_key)
+    if cached:
+        return {
+            "pass_a": pass_a_result,
+            "enriched_steps": cached.get("enriched_steps", []),
+            "summary": cached.get("summary", {}),
+            "cached": True,
+        }
+
+    # Run LLM
+    llm = get_llm(provider_key)
+    t0 = time.time()
+
+    if debug_log is not None:
+        debug_log.append({
+            "name": "Pass 0b-lang",
+            "provider": provider_key or DEFAULT_LLM,
+            "prompt": prompt,
+            "system": system_prompt,
+            "schema": schema,
+        })
+
+    try:
+        result = llm.complete_structured_json(
+            prompt=prompt,
+            schema=schema,
+            system=system_prompt,
+        )
+        elapsed = round(time.time() - t0, 1)
+
+        if debug_log is not None:
+            debug_log[-1]["output"] = json.dumps(result, indent=2)
+            debug_log[-1]["elapsed"] = elapsed
+
+        enriched = result.get("steps", [])
+        summary = result.get("summary", {})
+
+        # Validate step count
+        expected_count = len(pass_a_result.get("steps", []))
+        actual_count = len(enriched)
+        truncation_warning = None
+        if actual_count < expected_count:
+            truncation_warning = (
+                f"LLM returned {actual_count} of {expected_count} steps "
+                f"(missing steps {actual_count + 1}-{expected_count}). "
+                f"Output was likely truncated due to token limits."
+            )
+            import logging
+            logging.warning(f"Pass 0b-lang truncation: {truncation_warning}")
+
+        # Capture token usage
+        usage = llm.last_usage if llm.last_usage else {}
+
+        # Cache the result
+        save_cached_analysis(cache_key, {"enriched_steps": enriched, "summary": summary, "usage": usage})
+
+        return {
+            "pass_a": pass_a_result,
+            "enriched_steps": enriched,
+            "summary": summary,
+            "elapsed": elapsed,
+            "cached": False,
+            "truncation_warning": truncation_warning,
+            "usage": usage,
         }
 
     except Exception as e:
@@ -907,7 +1049,19 @@ LLM_CONFIGS = {
         "provider": "anthropic",
         "model": "claude-sonnet-4-20250514",
         "api_key_env": "ANTHROPIC_API_KEY",
-        "default_max_tokens": 16384,
+        "default_max_tokens": 64000,
+    },
+    "anthropic-sonnet-4.5": {
+        "provider": "anthropic",
+        "model": "claude-sonnet-4-5-20250929",
+        "api_key_env": "ANTHROPIC_API_KEY",
+        "default_max_tokens": 64000,
+    },
+    "anthropic-haiku": {
+        "provider": "anthropic",
+        "model": "claude-haiku-4-5-20251001",
+        "api_key_env": "ANTHROPIC_API_KEY",
+        "default_max_tokens": 64000,
     },
 }
 
@@ -974,13 +1128,17 @@ def get_available_lessons() -> tuple[dict[str, list[tuple[str, str]]], dict[str,
                 source_bucket = []     # docs without override
 
                 for doc in _db.get_source_lessons(src["source_id"]):
+                    title = doc["title"]
+                    instructor = doc.get("instructor")
+                    display = f"{title} ({instructor})" if instructor else title
+                    source_url = doc.get("source_url") or ""
                     doc_cat = doc.get("category_name")
                     if doc_cat:
                         override_buckets.setdefault(doc_cat, []).append(
-                            (str(doc["id"]), doc["title"])
+                            (str(doc["id"]), display, source_url)
                         )
                     else:
-                        source_bucket.append((str(doc["id"]), doc["title"]))
+                        source_bucket.append((str(doc["id"]), display, source_url))
 
                 # Add override buckets as separate categories
                 for cat_name, lessons in override_buckets.items():
@@ -1169,6 +1327,31 @@ def run_pass_a(lesson_text: str, provider_key: str | None = None, debug_log: lis
             "schema": pass_a_schema,
             "output": result,
         })
+
+    # Normalize segment_start/segment_end → segments array for downstream compatibility
+    all_input_ids = set(s["id"] for s in pass_0_result.get("segments", []))
+    for step in result.get("steps", []):
+        if "segment_start" in step and "segment_end" in step and "segments" not in step:
+            # Generate the full range, but only include IDs that exist in the input
+            # (transcripts may have non-contiguous IDs)
+            seg_start = step["segment_start"]
+            seg_end = step["segment_end"]
+            step["segments"] = sorted(
+                sid for sid in all_input_ids if seg_start <= sid <= seg_end
+            )
+
+    # Validate segment coverage — check for gaps
+    all_covered_ids = set()
+    for step in result.get("steps", []):
+        all_covered_ids.update(step.get("segments", []))
+    missing_ids = sorted(all_input_ids - all_covered_ids)
+    if missing_ids:
+        import logging
+        logging.warning(
+            f"Pass A segment gap: {len(missing_ids)} segments not assigned to any step: "
+            f"{missing_ids[:20]}{'...' if len(missing_ids) > 20 else ''}"
+        )
+        result["segment_gaps"] = missing_ids
 
     # Attach Pass 0 segments to result for UI rendering
     result["pass_0"] = pass_0_result
@@ -2114,7 +2297,7 @@ def build_html(lesson_text: str = "", selected_category: str = "", selected_less
     # Build lessons data as JSON for JavaScript
     import json
     lessons_json = json.dumps({
-        cat: [(f, d) for f, d in lessons]
+        cat: [(t[0], t[1]) for t in lessons]
         for cat, lessons in categories.items()
     })
 
@@ -2480,7 +2663,7 @@ def build_html(lesson_text: str = "", selected_category: str = "", selected_less
        <a href="/pipeline" style="float: right; color: #007bff; text-decoration: none; font-size: 0.9em; margin-left: 15px;">Pipeline Dashboard &rarr;</a>
        <a href="/booklet" style="float: right; color: #007bff; text-decoration: none; font-size: 0.9em; margin-left: 15px;">Booklet &rarr;</a>
        <a href="/explore" style="float: right; color: #007bff; text-decoration: none; font-size: 0.9em; margin-left: 15px;">Explore &rarr;</a>
-       <a href="/pass0b" style="float: right; color: #007bff; text-decoration: none; font-size: 0.9em;">Pass 0b Experiment &rarr;</a>
+       <a href="/pass0b" style="float: right; color: #007bff; text-decoration: none; font-size: 0.9em;">Pass 0b Analysis &rarr;</a>
     </p>
 
     <script>
@@ -3255,25 +3438,11 @@ def _build_lesson_manager_html(lessons: list[dict]) -> str:
     """
 
 
-def build_pipeline_html() -> str:
-    """Build the pipeline dashboard HTML page."""
-    if not _db:
-        return """
-<!DOCTYPE html><html><head><title>Pipeline Dashboard</title>
-<style>body { font-family: -apple-system, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }</style>
-</head><body><h1>Pipeline Dashboard</h1><p>Database not configured. Set DATABASE_URL to enable.</p>
-<p><a href="/">&larr; Back to Book</a></p></body></html>"""
-
-    try:
-        summary = _db.get_pipeline_summary()
-        events = _db.get_pipeline_log(limit=50)
-        documents = _db.get_document_pipeline_view(limit=50)
-    except Exception as e:
-        return f"""
-<!DOCTYPE html><html><head><title>Pipeline Dashboard</title>
-<style>body {{ font-family: -apple-system, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }}</style>
-</head><body><h1>Pipeline Dashboard</h1><div style="color: red;">Error: {e}</div>
-<p><a href="/">&larr; Back to Book</a></p></body></html>"""
+def _build_ingestion_html() -> str:
+    """Build the ingestion tab content HTML (cards + events + documents tables)."""
+    summary = _db.get_pipeline_summary()
+    events = _db.get_pipeline_log(limit=50)
+    documents = _db.get_document_pipeline_view(limit=50)
 
     # Summary cards
     doc_total = summary.get("documents", {}).get("total", 0)
@@ -3350,6 +3519,82 @@ def build_pipeline_html() -> str:
 
     events_html = "\n".join(event_rows) if event_rows else '<tr><td colspan="5" style="text-align: center; color: #999;">No events yet</td></tr>'
     docs_html = "\n".join(doc_rows) if doc_rows else '<tr><td colspan="5" style="text-align: center; color: #999;">No documents yet</td></tr>'
+
+    return f"""
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+            <button id="refresh-ingestion" style="padding: 4px 12px; border: 1px solid #007bff; background: white; color: #007bff; border-radius: 4px; cursor: pointer; font-size: 0.85em;">Refresh</button>
+            <span id="refresh-status" style="font-size: 0.8em; color: #999;"></span>
+        </div>
+        <div class="cards">
+            <div class="card">
+                <div class="value">{doc_total}</div>
+                <div class="label">Total Documents</div>
+            </div>
+            <div class="card">
+                <div class="value">{transcribed}</div>
+                <div class="label">Transcribed</div>
+            </div>
+            <div class="card">
+                <div class="value">{pending_docs}</div>
+                <div class="label">Pending Docs</div>
+            </div>
+            <div class="card">
+                <div class="value">{pending_jobs}</div>
+                <div class="label">Pending Jobs</div>
+            </div>
+            <div class="card">
+                <div class="value" style="color: {('#dc3545' if failed_jobs else '#333')};">{failed_jobs}</div>
+                <div class="label">Failed Jobs</div>
+            </div>
+        </div>
+
+        <h2>Recent Events</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Event</th>
+                    <th>Title</th>
+                    <th>Doc ID</th>
+                    <th>Detail</th>
+                </tr>
+            </thead>
+            <tbody>
+                {events_html}
+            </tbody>
+        </table>
+
+        <h2>Documents</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Created</th>
+                    <th>Title</th>
+                    <th>Category</th>
+                    <th>Status</th>
+                    <th>Jobs</th>
+                </tr>
+            </thead>
+            <tbody>
+                {docs_html}
+            </tbody>
+        </table>
+    """
+
+
+def build_pipeline_html() -> str:
+    """Build the pipeline dashboard HTML page."""
+    if not _db:
+        return """
+<!DOCTYPE html><html><head><title>Pipeline Dashboard</title>
+<style>body { font-family: -apple-system, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }</style>
+</head><body><h1>Pipeline Dashboard</h1><p>Database not configured. Set DATABASE_URL to enable.</p>
+<p><a href="/">&larr; Back to Book</a></p></body></html>"""
+
+    try:
+        ingestion_html = _build_ingestion_html()
+    except Exception as e:
+        ingestion_html = f'<div style="color: red;">Error loading ingestion data: {e}</div>'
 
     # Book pipeline section
     try:
@@ -3473,60 +3718,7 @@ def build_pipeline_html() -> str:
     </div>
 
     <div id="tab-ingestion" class="tab-content">
-        <div class="cards">
-            <div class="card">
-                <div class="value">{doc_total}</div>
-                <div class="label">Total Documents</div>
-            </div>
-            <div class="card">
-                <div class="value">{transcribed}</div>
-                <div class="label">Transcribed</div>
-            </div>
-            <div class="card">
-                <div class="value">{pending_docs}</div>
-                <div class="label">Pending Docs</div>
-            </div>
-            <div class="card">
-                <div class="value">{pending_jobs}</div>
-                <div class="label">Pending Jobs</div>
-            </div>
-            <div class="card">
-                <div class="value" style="color: {('#dc3545' if failed_jobs else '#333')};">{failed_jobs}</div>
-                <div class="label">Failed Jobs</div>
-            </div>
-        </div>
-
-        <h2>Recent Events</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Time</th>
-                    <th>Event</th>
-                    <th>Title</th>
-                    <th>Doc ID</th>
-                    <th>Detail</th>
-                </tr>
-            </thead>
-            <tbody>
-                {events_html}
-            </tbody>
-        </table>
-
-        <h2>Documents</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Created</th>
-                    <th>Title</th>
-                    <th>Category</th>
-                    <th>Status</th>
-                    <th>Jobs</th>
-                </tr>
-            </thead>
-            <tbody>
-                {docs_html}
-            </tbody>
-        </table>
+        {ingestion_html}
     </div>
 
     <script>
@@ -3692,6 +3884,27 @@ def build_pipeline_html() -> str:
                 setTimeout(function() {{ paused = false; }}, 1000);
             }});
         }})();
+
+        // Ingestion tab refresh button
+        document.addEventListener('click', function(e) {{
+            if (e.target && e.target.id === 'refresh-ingestion') {{
+                var btn = e.target;
+                var statusEl = document.getElementById('refresh-status');
+                btn.disabled = true;
+                btn.textContent = 'Refreshing...';
+                if (statusEl) statusEl.textContent = '';
+                fetch('/api/pipeline/ingestion')
+                    .then(function(r) {{ return r.text(); }})
+                    .then(function(html) {{
+                        document.getElementById('tab-ingestion').innerHTML = html;
+                    }})
+                    .catch(function(err) {{
+                        if (statusEl) statusEl.textContent = 'Error: ' + err;
+                        btn.disabled = false;
+                        btn.textContent = 'Refresh';
+                    }});
+            }}
+        }});
     </script>
 </body>
 </html>
@@ -3740,6 +3953,34 @@ async def pass0b_page():
     return build_pass0b_html()
 
 
+@app.post("/api/pass0b/clear-cache")
+async def api_pass0b_clear_cache():
+    """Clear Pass A + Pass 0b cache entries."""
+    if not _db:
+        return JSONResponse({"error": "No database connection"}, status_code=500)
+
+    rows = _db.list_cache()
+    keys = []
+    for r in rows:
+        try:
+            data = _db.get_cache(r["key"])
+        except Exception:
+            continue
+        if not data:
+            continue
+        # Pass 0b entries
+        if "enriched_segments" in data or "enriched_steps" in data:
+            keys.append(r["key"])
+        # Pass A entries (have "steps" and "classifications" but not enriched_steps)
+        elif "steps" in data and "classifications" in data:
+            keys.append(r["key"])
+    if keys:
+        with _db.get_cursor() as cur:
+            for k in keys:
+                cur.execute("DELETE FROM cache WHERE key = %s", (k,))
+    return JSONResponse({"deleted": len(keys)})
+
+
 @app.post("/api/pass0b")
 async def api_pass0b(
     lesson_text: str = Form(""),
@@ -3760,9 +4001,14 @@ async def api_pass0b(
             asyncio.to_thread(run_pass_0b, text, prov, debug_log),
             timeout=ANALYSIS_TIMEOUT,
         )
+        # Align with whisper timestamps for step-level timing
+        whisper_segments = load_whisper_segments(selected_category, selected_lesson)
+        if whisper_segments:
+            align_pass0_with_whisper(result.get("pass_a", {}).get("pass_0", {}), whisper_segments)
         result_html = render_pass0b_result(result)
         debug_html = render_debug_log(debug_log) if debug_log else ""
         pass_a = result.get("pass_a", {})
+        usage = result.get("usage", {})
         return JSONResponse({
             "status": "complete",
             "result_html": result_html,
@@ -3772,6 +4018,329 @@ async def api_pass0b(
             "step_count": len(pass_a.get("steps", [])),
             "group_count": len(pass_a.get("groups", [])),
             "enriched_count": len(result.get("enriched_steps", [])),
+            "tokens_in": usage.get("tokens_in"),
+            "tokens_out": usage.get("tokens_out"),
+        })
+    except asyncio.TimeoutError:
+        return JSONResponse({"error": "Analysis timed out."}, status_code=504)
+    except Exception as e:
+        debug_html = render_debug_log(debug_log) if debug_log else ""
+        return JSONResponse({
+            "error": str(e),
+            "debug_html": debug_html,
+        }, status_code=500)
+
+
+@app.post("/api/pass0b-combined")
+async def api_pass0b_combined(
+    lesson_text: str = Form(""),
+    selected_category: str = Form(""),
+    selected_lesson: str = Form(""),
+    provider: str = Form(""),
+):
+    """Run Pass A + both Pass 0b (somatic + language) in parallel, return merged results."""
+    text = lesson_text.strip()
+    if not text:
+        return JSONResponse({"error": "Please enter or select lesson text."}, status_code=400)
+
+    prov = provider if provider else None
+    debug_log_somatic = []
+    debug_log_lang = []
+
+    try:
+        somatic_result, lang_result = await asyncio.wait_for(
+            asyncio.gather(
+                asyncio.to_thread(run_pass_0b, text, prov, debug_log_somatic),
+                asyncio.to_thread(run_pass_0b_lang, text, prov, debug_log_lang),
+            ),
+            timeout=ANALYSIS_TIMEOUT,
+        )
+        # Align whisper timestamps (somatic result has pass_a)
+        whisper_segments = load_whisper_segments(selected_category, selected_lesson)
+        if whisper_segments:
+            align_pass0_with_whisper(somatic_result.get("pass_a", {}).get("pass_0", {}), whisper_segments)
+            # Lang result shares the same pass_a, align it too
+            align_pass0_with_whisper(lang_result.get("pass_a", {}).get("pass_0", {}), whisper_segments)
+
+        result_html = render_pass0b_combined_result(somatic_result, lang_result)
+        debug_html = ""
+        if debug_log_somatic:
+            debug_html += render_debug_log(debug_log_somatic)
+        if debug_log_lang:
+            debug_html += render_debug_log(debug_log_lang)
+
+        pass_a = somatic_result.get("pass_a", {})
+        som_usage = somatic_result.get("usage", {})
+        lang_usage = lang_result.get("usage", {})
+        # Sum token counts
+        tokens_in = None
+        tokens_out = None
+        if som_usage.get("tokens_in") is not None and lang_usage.get("tokens_in") is not None:
+            tokens_in = som_usage["tokens_in"] + lang_usage["tokens_in"]
+            tokens_out = (som_usage.get("tokens_out") or 0) + (lang_usage.get("tokens_out") or 0)
+
+        return JSONResponse({
+            "status": "complete",
+            "result_html": result_html,
+            "debug_html": debug_html,
+            "elapsed_somatic": somatic_result.get("elapsed"),
+            "elapsed_lang": lang_result.get("elapsed"),
+            "cached_somatic": somatic_result.get("cached", False),
+            "cached_lang": lang_result.get("cached", False),
+            "step_count": len(pass_a.get("steps", [])),
+            "group_count": len(pass_a.get("groups", [])),
+            "tokens_in": tokens_in,
+            "tokens_out": tokens_out,
+        })
+    except asyncio.TimeoutError:
+        return JSONResponse({"error": "Analysis timed out."}, status_code=504)
+    except Exception as e:
+        debug_html = ""
+        if debug_log_somatic:
+            debug_html += render_debug_log(debug_log_somatic)
+        if debug_log_lang:
+            debug_html += render_debug_log(debug_log_lang)
+        return JSONResponse({
+            "error": str(e),
+            "debug_html": debug_html,
+        }, status_code=500)
+
+
+# --- Pass 0b Player: Audio-synced card view ---
+
+@app.get("/api/audio-url/{document_id}")
+async def api_audio_url(document_id: str):
+    """Return a presigned S3 URL for the lesson's audio file."""
+    if not _db or not KB_BUCKET:
+        return JSONResponse({"error": "Database or S3 not configured"}, status_code=500)
+    doc = _db.get_document(document_id)
+    if not doc or not doc.get("s3_key"):
+        return JSONResponse({"error": "Document or audio not found"}, status_code=404)
+    storage = Storage(KB_BUCKET)
+    url = storage.generate_presigned_url(doc["s3_key"], expiry_seconds=7200)
+    return JSONResponse({"audio_url": url})
+
+
+@app.get("/api/whisper-segments/{document_id}")
+async def api_whisper_segments(document_id: str):
+    """Return raw whisper segments for pre-analysis segment sync."""
+    if not _db:
+        return JSONResponse({"error": "Database not configured"}, status_code=500)
+    segments = _db.get_document_whisper_segments(document_id)
+    if segments is None:
+        return JSONResponse({"error": "No whisper segments found"}, status_code=404)
+    return JSONResponse({"segments": segments})
+
+
+@app.post("/api/pass0b-combined-json")
+async def api_pass0b_combined_json(
+    lesson_text: str = Form(""),
+    selected_category: str = Form(""),
+    selected_lesson: str = Form(""),
+    provider: str = Form(""),
+):
+    """Run Pass A + both Pass 0b analyses, return structured JSON for the player."""
+    text = lesson_text.strip()
+    if not text:
+        return JSONResponse({"error": "Please enter or select lesson text."}, status_code=400)
+
+    prov = provider if provider else None
+
+    try:
+        somatic_result, lang_result = await asyncio.wait_for(
+            asyncio.gather(
+                asyncio.to_thread(run_pass_0b, text, prov),
+                asyncio.to_thread(run_pass_0b_lang, text, prov),
+            ),
+            timeout=ANALYSIS_TIMEOUT,
+        )
+        # Align whisper timestamps
+        whisper_segments = load_whisper_segments(selected_category, selected_lesson)
+        if whisper_segments:
+            align_pass0_with_whisper(somatic_result.get("pass_a", {}).get("pass_0", {}), whisper_segments)
+            align_pass0_with_whisper(lang_result.get("pass_a", {}).get("pass_0", {}), whisper_segments)
+
+        # Build structured JSON
+        pass_a = somatic_result.get("pass_a", {})
+        groups = pass_a.get("groups", [])
+        pa_steps = pass_a.get("steps", [])
+        pass_0 = pass_a.get("pass_0", {})
+
+        somatic_enriched = somatic_result.get("enriched_steps", [])
+        lang_enriched = lang_result.get("enriched_steps", [])
+        lang_summary = lang_result.get("summary", {})
+        somatic_summary = somatic_result.get("summary", {})
+
+        somatic_lookup = {e["step_number"]: e for e in somatic_enriched}
+        lang_lookup = {e["step_number"]: e for e in lang_enriched}
+
+        # Segment lookups
+        seg_lookup = {s["id"]: s for s in pass_0.get("segments", [])}
+
+        # Build step objects
+        steps_json = []
+        for pa_step in pa_steps:
+            sn = pa_step["step_number"]
+            gn = pa_step.get("group_number")
+            instruction = pa_step.get("instruction", "")
+            tags = pa_step.get("tags", [])
+            seg_ids = pa_step.get("segments", [])
+
+            # Compute time range from segments
+            segments_data = []
+            time_starts = []
+            time_ends = []
+            for sid in seg_ids:
+                seg = seg_lookup.get(sid, {})
+                seg_entry = {"id": sid, "text": seg.get("text", "")}
+                if seg.get("time_start") is not None:
+                    seg_entry["time_start"] = seg["time_start"]
+                    seg_entry["time_end"] = seg.get("time_end", seg["time_start"])
+                    time_starts.append(seg_entry["time_start"])
+                    time_ends.append(seg_entry["time_end"])
+                segments_data.append(seg_entry)
+
+            step_obj = {
+                "step_number": sn,
+                "group_number": gn,
+                "instruction": instruction,
+                "tags": tags,
+                "time_start": min(time_starts) if time_starts else None,
+                "time_end": max(time_ends) if time_ends else None,
+                "segments": segments_data,
+            }
+
+            # Somatic analysis
+            som = somatic_lookup.get(sn)
+            if som:
+                step_obj["somatic"] = {
+                    k: som.get(k, "")
+                    for k in ["clarified", "intent", "differentiation", "activation",
+                              "inhibition", "transmission_route", "ground_push",
+                              "mechanical_directive", "attentional_cue"]
+                }
+                step_obj["relevance"] = som.get("relevance", True)
+            else:
+                step_obj["relevance"] = True
+
+            # Language analysis
+            lang = lang_lookup.get(sn)
+            lang_dict = {}
+            if lang:
+                lang_dict = {
+                    k: lang.get(k, "")
+                    for k in ["explanatory_language", "attention_cues", "effort_language",
+                              "image_language", "distinctive_phrasing"]
+                }
+            # sensory_inquiry comes from somatic pass but belongs in language display
+            if som and som.get("sensory_inquiry"):
+                lang_dict["sensory_inquiry"] = som["sensory_inquiry"]
+            if lang_dict:
+                step_obj["language"] = lang_dict
+
+            steps_json.append(step_obj)
+
+        return JSONResponse({
+            "groups": [
+                {"group_number": g.get("group_number"), "label": g.get("label", ""),
+                 "description": g.get("description", ""), "steps": g.get("steps", [])}
+                for g in groups
+            ],
+            "steps": steps_json,
+            "lang_summary": lang_summary,
+            "somatic_summary": somatic_summary,
+            "elapsed_somatic": somatic_result.get("elapsed"),
+            "elapsed_lang": lang_result.get("elapsed"),
+            "cached_somatic": somatic_result.get("cached", False),
+            "cached_lang": lang_result.get("cached", False),
+        })
+    except asyncio.TimeoutError:
+        return JSONResponse({"error": "Analysis timed out."}, status_code=504)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/pass0b-player", response_class=HTMLResponse)
+async def pass0b_player_page():
+    """Pass 0b audio player page."""
+    return build_pass0b_player_html()
+
+
+# --- Pass 0b-lang: Language Analysis ---
+
+@app.get("/pass0b-lang", response_class=HTMLResponse)
+async def pass0b_lang_page():
+    """Pass 0b-lang language analysis page."""
+    return build_pass0b_lang_html()
+
+
+@app.post("/api/pass0b-lang/clear-cache")
+async def api_pass0b_lang_clear_cache():
+    """Clear Pass 0b-lang cache entries."""
+    if not _db:
+        return JSONResponse({"error": "No database connection"}, status_code=500)
+
+    rows = _db.list_cache()
+    keys = []
+    for r in rows:
+        k = r["key"]
+        # Match keys that contain the lang cache suffix
+        # Cache keys are hashes, so we need to check the data
+        try:
+            data = _db.get_cache(k)
+        except Exception:
+            continue
+        if not data:
+            continue
+        # Lang entries have "summary" alongside "enriched_steps"
+        if "enriched_steps" in data and "summary" in data:
+            keys.append(k)
+    if keys:
+        with _db.get_cursor() as cur:
+            for k in keys:
+                cur.execute("DELETE FROM cache WHERE key = %s", (k,))
+    return JSONResponse({"deleted": len(keys)})
+
+
+@app.post("/api/pass0b-lang")
+async def api_pass0b_lang(
+    lesson_text: str = Form(""),
+    selected_category: str = Form(""),
+    selected_lesson: str = Form(""),
+    provider: str = Form(""),
+):
+    """Run Pass A + Pass 0b-lang and return results."""
+    text = lesson_text.strip()
+    if not text:
+        return JSONResponse({"error": "Please enter or select lesson text."}, status_code=400)
+
+    prov = provider if provider else None
+    debug_log = []
+
+    try:
+        result = await asyncio.wait_for(
+            asyncio.to_thread(run_pass_0b_lang, text, prov, debug_log),
+            timeout=ANALYSIS_TIMEOUT,
+        )
+        # Align with whisper timestamps for step-level timing
+        whisper_segments = load_whisper_segments(selected_category, selected_lesson)
+        if whisper_segments:
+            align_pass0_with_whisper(result.get("pass_a", {}).get("pass_0", {}), whisper_segments)
+        result_html = render_pass0b_lang_result(result)
+        debug_html = render_debug_log(debug_log) if debug_log else ""
+        pass_a = result.get("pass_a", {})
+        usage = result.get("usage", {})
+        return JSONResponse({
+            "status": "complete",
+            "result_html": result_html,
+            "debug_html": debug_html,
+            "elapsed": result.get("elapsed"),
+            "cached": result.get("cached", False),
+            "step_count": len(pass_a.get("steps", [])),
+            "group_count": len(pass_a.get("groups", [])),
+            "enriched_count": len(result.get("enriched_steps", [])),
+            "tokens_in": usage.get("tokens_in"),
+            "tokens_out": usage.get("tokens_out"),
         })
     except asyncio.TimeoutError:
         return JSONResponse({"error": "Analysis timed out."}, status_code=504)
@@ -3793,19 +4362,11 @@ def _render_step_bullets(e: dict, html_module) -> str:
     if cl:
         parts.append(f'<div style="margin-bottom: 6px;">{esc(cl)}</div>')
 
-    # Bullet list of enrichment fields
+    # Bullet list of enrichment fields — ordered abstract-to-concrete
     bullets = []
-    md = e.get("mechanical_directive", "")
-    if md and not md.lower().startswith("none"):
-        bullets.append(f"<strong>Mechanical Directive:</strong> {esc(md)}")
-
-    qc = e.get("quality_constraint", "")
-    if qc and qc.lower() != "none":
-        bullets.append(f"<strong>Quality Constraint:</strong> {esc(qc)}")
-
-    si = e.get("sensory_inquiry", "")
-    if si:
-        bullets.append(f"<strong>Sensory Inquiry:</strong> {esc(si)}")
+    intent = e.get("intent", "")
+    if intent:
+        bullets.append(f"<strong>Intent:</strong> {esc(intent)}")
 
     diff = e.get("differentiation", "")
     if diff and diff.lower() != "none":
@@ -3827,9 +4388,17 @@ def _render_step_bullets(e: dict, html_module) -> str:
     if gp and gp.lower() != "none":
         bullets.append(f"<strong>Ground Push:</strong> {esc(gp)}")
 
-    intent = e.get("intent", "")
-    if intent:
-        bullets.append(f"<strong>Intent:</strong> {esc(intent)}")
+    md = e.get("mechanical_directive", "")
+    if md and not md.lower().startswith("none"):
+        bullets.append(f"<strong>Mechanical Directive:</strong> {esc(md)}")
+
+    qc = e.get("attentional_cue", "")
+    if qc and qc.lower() != "none":
+        bullets.append(f"<strong>Attentional Cue:</strong> {esc(qc)}")
+
+    si = e.get("sensory_inquiry", "")
+    if si:
+        bullets.append(f"<strong>Sensory Inquiry:</strong> {esc(si)}")
 
     if bullets:
         items = "".join(f"<li>{b}</li>" for b in bullets)
@@ -3874,19 +4443,70 @@ def render_pass0b_result(result: dict) -> str:
     enriched_lookup = {e["step_number"]: e for e in enriched}
     pa_step_lookup = {s["step_number"]: s for s in pa_steps}
 
-    # Build segment text lookup from Pass 0
+    # Build segment text and time lookups from Pass 0
     pass_0 = pass_a.get("pass_0", {})
     seg_lookup = {s["id"]: s["text"] for s in pass_0.get("segments", [])}
+    seg_time_lookup = {s["id"]: (s.get("time_start"), s.get("time_end"))
+                       for s in pass_0.get("segments", [])
+                       if s.get("time_start") is not None}
+
+    def _step_time_str(pa_step):
+        """Get formatted time range for a step from its segments."""
+        seg_ids = pa_step.get("segments", [])
+        if not seg_ids or not seg_time_lookup:
+            return ""
+        starts = [seg_time_lookup[sid][0] for sid in seg_ids if sid in seg_time_lookup]
+        ends = [seg_time_lookup[sid][1] for sid in seg_ids if sid in seg_time_lookup]
+        if not starts or not ends:
+            return ""
+        return f" ({format_timestamp(min(starts))} – {format_timestamp(max(ends))})"
 
     # Count totals
-    total_steps = len(enriched)
+    total_pa_steps = len(pa_steps)
+    total_enriched = len(enriched)
     irrelevant = sum(1 for e in enriched if not e.get("relevance", True))
-    relevant = total_steps - irrelevant
+    relevant = total_enriched - irrelevant
     num_groups = len(groups)
+    missing_count = total_pa_steps - total_enriched
 
     out = []
-    out.append(f'<p style="color: #666; font-size: 0.9em;">{total_steps} steps across '
-               f'{num_groups} groups, {relevant} lesson-relevant, {irrelevant} omitted</p>')
+
+    # Segment gap warning (Pass A dropped segments)
+    segment_gaps = pass_a.get("segment_gaps", [])
+    if segment_gaps:
+        gap_str = ", ".join(str(s) for s in segment_gaps[:30])
+        if len(segment_gaps) > 30:
+            gap_str += f"... ({len(segment_gaps)} total)"
+        out.append(
+            f'<div style="margin-bottom: 12px; padding: 10px 14px; '
+            f'background: #fff3cd; border: 1px solid #ffc107; border-radius: 6px; '
+            f'color: #856404;">'
+            f'<strong>Warning — Pass A segment gaps:</strong> '
+            f'{len(segment_gaps)} transcript segments were not assigned to any step: '
+            f'[{html_module.escape(gap_str)}]. '
+            f'Clear the Pass A cache and re-run.'
+            f'</div>'
+        )
+
+    # Truncation warning
+    truncation_warning = result.get("truncation_warning")
+    if missing_count > 0 or truncation_warning:
+        warning_msg = truncation_warning or (
+            f"LLM returned {total_enriched} of {total_pa_steps} steps "
+            f"({missing_count} steps missing)."
+        )
+        out.append(
+            f'<div style="margin-bottom: 12px; padding: 10px 14px; '
+            f'background: #fff3cd; border: 1px solid #ffc107; border-radius: 6px; '
+            f'color: #856404;">'
+            f'<strong>Warning — Incomplete output:</strong> {html_module.escape(warning_msg)} '
+            f'Clear the 0b cache and re-run to retry.'
+            f'</div>'
+        )
+
+    out.append(f'<p style="color: #666; font-size: 0.9em;">{total_enriched} of {total_pa_steps} steps enriched across '
+               f'{num_groups} groups, {relevant} lesson-relevant, {irrelevant} omitted'
+               f'{f", {missing_count} missing" if missing_count > 0 else ""}</p>')
 
     # Render by group
     rendered_steps = set()
@@ -3916,18 +4536,37 @@ def render_pass0b_result(result: dict) -> str:
 
         for sn in group_step_nums:
             rendered_steps.add(sn)
-            e = enriched_lookup.get(sn, {})
-            if not e.get("relevance", True):
-                continue
-
+            e = enriched_lookup.get(sn)
             pa_step = pa_step_lookup.get(sn, {})
             instruction = pa_step.get("instruction", "")
 
+            if e is None:
+                # Step exists in Pass A but missing from LLM output (truncation)
+                time_str = _step_time_str(pa_step)
+                orig_html = _render_original_segments(pa_step, seg_lookup, html_module)
+                out.append(
+                    f'<div style="margin: 12px 0 4px 0; padding: 8px 12px; '
+                    f'background: #fce4ec; border-radius: 4px; border: 1px solid #ef9a9a;">'
+                    f'<strong>Step {sn}</strong>'
+                    f'<span style="color: #888; font-size: 0.85em;">{html_module.escape(time_str)}</span>'
+                    f' &mdash; <em>{html_module.escape(instruction)}</em>'
+                    f'<div style="color: #c62828; font-size: 0.85em; margin-top: 4px;">'
+                    f'Not enriched (LLM output truncated)</div>'
+                    f'{orig_html}'
+                    f'</div>'
+                )
+                continue
+
+            if not e.get("relevance", True):
+                continue
+
+            time_str = _step_time_str(pa_step)
             orig_html = _render_original_segments(pa_step, seg_lookup, html_module)
             out.append(
                 f'<div style="margin: 12px 0 4px 0; padding: 8px 12px; '
                 f'background: #f8f9fa; border-radius: 4px; border: 1px solid #e0e0e0;">'
                 f'<strong>Step {sn}</strong>'
+                f'<span style="color: #888; font-size: 0.85em;">{html_module.escape(time_str)}</span>'
                 f' &mdash; <em>{html_module.escape(instruction)}</em>'
                 f'<div style="margin-top: 6px;">{_render_step_bullets(e, html_module)}</div>'
                 f'{orig_html}'
@@ -3948,13 +4587,507 @@ def render_pass0b_result(result: dict) -> str:
             sn = e["step_number"]
             pa_step = pa_step_lookup.get(sn, {})
             instruction = pa_step.get("instruction", "")
+            time_str = _step_time_str(pa_step)
             orig_html = _render_original_segments(pa_step, seg_lookup, html_module)
             out.append(
                 f'<div style="margin: 12px 0 4px 0; padding: 8px 12px; '
                 f'background: #f8f9fa; border-radius: 4px; border: 1px solid #e0e0e0;">'
                 f'<strong>Step {sn}</strong>'
+                f'<span style="color: #888; font-size: 0.85em;">{html_module.escape(time_str)}</span>'
                 f' &mdash; <em>{html_module.escape(instruction)}</em>'
                 f'<div style="margin-top: 6px;">{_render_step_bullets(e, html_module)}</div>'
+                f'{orig_html}'
+                f'</div>'
+            )
+
+    return "\n".join(out)
+
+
+def _render_lang_step_bullets(e: dict, html_module) -> str:
+    """Render bullet list of language extraction fields for a step.
+
+    Ordered abstract-to-concrete: explanatory first, literal quotations last.
+    """
+    esc = html_module.escape
+    bullets = []
+
+    el = e.get("explanatory_language", "")
+    if el and el.lower() != "none":
+        bullets.append(f"<strong>Explanatory:</strong> {esc(el)}")
+
+    ac = e.get("attention_cues", "")
+    if ac and ac.lower() != "none":
+        bullets.append(f"<strong>Attention Cues:</strong> {esc(ac)}")
+
+    ef = e.get("effort_language", "")
+    if ef and ef.lower() != "none":
+        bullets.append(f"<strong>Effort:</strong> {esc(ef)}")
+
+    il = e.get("image_language", "")
+    if il and il.lower() != "none":
+        bullets.append(f"<strong>Imagery:</strong> {esc(il)}")
+
+    dp = e.get("distinctive_phrasing", "")
+    if dp and dp.lower() != "none":
+        bullets.append(f"<strong>Distinctive:</strong> {esc(dp)}")
+
+    if bullets:
+        items = "".join(f"<li>{b}</li>" for b in bullets)
+        return (f'<ul style="margin: 4px 0 0 0; padding-left: 20px; font-size: 0.9em; '
+                f'color: #444;">{items}</ul>')
+    return ""
+
+
+def _render_lang_summary(summary: dict, html_module) -> str:
+    """Render the lesson-level language summary block."""
+    esc = html_module.escape
+    out = []
+    out.append(
+        '<div style="margin-bottom: 24px; padding: 16px 20px; '
+        'background: #f0f7ff; border: 1px solid #b3d4fc; border-radius: 8px;">'
+        '<h3 style="margin: 0 0 12px 0; color: #1a56db;">Lesson-Level Language Summary</h3>'
+    )
+
+    # Teaching voice summary
+    tvs = summary.get("teaching_voice_summary", "")
+    if tvs:
+        out.append(
+            f'<div style="margin-bottom: 14px; padding: 10px 14px; '
+            f'background: white; border-radius: 6px; border-left: 3px solid #1a56db; '
+            f'font-style: italic; color: #333;">{esc(tvs)}</div>'
+        )
+
+    # Speaker principles
+    principles = summary.get("speaker_principles", [])
+    if principles:
+        out.append('<div style="margin-bottom: 12px;"><strong>Speaker Principles:</strong>')
+        out.append('<ol style="margin: 6px 0 0 0; padding-left: 24px;">')
+        for p in principles:
+            out.append(f'<li style="margin-bottom: 6px;">{esc(p)}</li>')
+        out.append('</ol></div>')
+
+    # Signature vocabulary
+    vocab = summary.get("signature_vocabulary", [])
+    if vocab:
+        out.append('<div style="margin-bottom: 12px;"><strong>Signature Vocabulary:</strong>')
+        out.append('<ul style="margin: 6px 0 0 0; padding-left: 24px;">')
+        for v in vocab:
+            out.append(f'<li>{esc(v)}</li>')
+        out.append('</ul></div>')
+
+    # Dominant attention mode
+    dsm = summary.get("dominant_attention_mode", "")
+    if dsm:
+        out.append(f'<div style="margin-bottom: 8px;"><strong>Dominant Attention Mode:</strong> {esc(dsm)}</div>')
+
+    # Effort philosophy
+    ep = summary.get("effort_philosophy", "")
+    if ep:
+        out.append(f'<div style="margin-bottom: 8px;"><strong>Effort Philosophy:</strong> {esc(ep)}</div>')
+
+    out.append('</div>')
+    return "\n".join(out)
+
+
+def _render_somatic_summary(summary: dict, html_module) -> str:
+    """Render the lesson-level somatic architecture summary block."""
+    esc = html_module.escape
+    out = []
+    out.append(
+        '<div style="margin-bottom: 24px; padding: 16px 20px; '
+        'background: #f0fff4; border: 1px solid #a3d9a5; border-radius: 8px;">'
+        '<h3 style="margin: 0 0 12px 0; color: #2d6a4f;">Lesson-Level Somatic Summary</h3>'
+    )
+
+    # Somatic architecture summary
+    sas = summary.get("somatic_architecture_summary", "")
+    if sas:
+        out.append(
+            f'<div style="margin-bottom: 14px; padding: 10px 14px; '
+            f'background: white; border-radius: 6px; border-left: 3px solid #2d6a4f; '
+            f'font-style: italic; color: #333;">{esc(sas)}</div>'
+        )
+
+    # Primary transmission routes
+    routes = summary.get("primary_transmission_routes", [])
+    if routes:
+        out.append('<div style="margin-bottom: 12px;"><strong>Primary Transmission Routes:</strong>')
+        out.append('<ul style="margin: 6px 0 0 0; padding-left: 24px;">')
+        for r in routes:
+            out.append(f'<li>{esc(r)}</li>')
+        out.append('</ul></div>')
+
+    # Differentiation strategy
+    ds = summary.get("differentiation_strategy", "")
+    if ds:
+        out.append(f'<div style="margin-bottom: 8px;"><strong>Differentiation Strategy:</strong> {esc(ds)}</div>')
+
+    # Key inhibitions
+    inhib = summary.get("key_inhibitions", [])
+    if inhib:
+        out.append('<div style="margin-bottom: 12px;"><strong>Key Inhibitions:</strong>')
+        out.append('<ul style="margin: 6px 0 0 0; padding-left: 24px;">')
+        for i in inhib:
+            out.append(f'<li>{esc(i)}</li>')
+        out.append('</ul></div>')
+
+    # Ground force strategy
+    gfs = summary.get("ground_force_strategy", "")
+    if gfs:
+        out.append(f'<div style="margin-bottom: 8px;"><strong>Ground Force Strategy:</strong> {esc(gfs)}</div>')
+
+    out.append('</div>')
+    return "\n".join(out)
+
+
+def render_pass0b_lang_result(result: dict) -> str:
+    """Render Pass A + Pass 0b-lang results as summary + grouped steps with language bullets."""
+    import html as html_module
+    pass_a = result.get("pass_a", {})
+    groups = pass_a.get("groups", [])
+    pa_steps = pass_a.get("steps", [])
+    enriched = result.get("enriched_steps", [])
+    summary = result.get("summary", {})
+
+    enriched_lookup = {e["step_number"]: e for e in enriched}
+    pa_step_lookup = {s["step_number"]: s for s in pa_steps}
+
+    # Build segment text and time lookups from Pass 0
+    pass_0 = pass_a.get("pass_0", {})
+    seg_lookup = {s["id"]: s["text"] for s in pass_0.get("segments", [])}
+    seg_time_lookup = {s["id"]: (s.get("time_start"), s.get("time_end"))
+                       for s in pass_0.get("segments", [])
+                       if s.get("time_start") is not None}
+
+    def _step_time_str(pa_step):
+        seg_ids = pa_step.get("segments", [])
+        if not seg_ids or not seg_time_lookup:
+            return ""
+        starts = [seg_time_lookup[sid][0] for sid in seg_ids if sid in seg_time_lookup]
+        ends = [seg_time_lookup[sid][1] for sid in seg_ids if sid in seg_time_lookup]
+        if not starts or not ends:
+            return ""
+        return f" ({format_timestamp(min(starts))} – {format_timestamp(max(ends))})"
+
+    total_pa_steps = len(pa_steps)
+    total_enriched = len(enriched)
+    num_groups = len(groups)
+    missing_count = total_pa_steps - total_enriched
+
+    out = []
+
+    # Lesson-level summary at the top
+    if summary:
+        out.append(_render_lang_summary(summary, html_module))
+
+    # Truncation warning
+    truncation_warning = result.get("truncation_warning")
+    if missing_count > 0 or truncation_warning:
+        warning_msg = truncation_warning or (
+            f"LLM returned {total_enriched} of {total_pa_steps} steps "
+            f"({missing_count} steps missing)."
+        )
+        out.append(
+            f'<div style="margin-bottom: 12px; padding: 10px 14px; '
+            f'background: #fff3cd; border: 1px solid #ffc107; border-radius: 6px; '
+            f'color: #856404;">'
+            f'<strong>Warning — Incomplete output:</strong> {html_module.escape(warning_msg)} '
+            f'Clear the cache and re-run to retry.'
+            f'</div>'
+        )
+
+    out.append(f'<p style="color: #666; font-size: 0.9em;">{total_enriched} of {total_pa_steps} steps analyzed across '
+               f'{num_groups} groups'
+               f'{f", {missing_count} missing" if missing_count > 0 else ""}</p>')
+
+    # Render by group
+    rendered_steps = set()
+    for g in groups:
+        gnum = g.get("group_number", 0)
+        label = g.get("label", "")
+        desc = g.get("description", "")
+        group_step_nums = g.get("steps", [])
+
+        # Group header
+        out.append(
+            f'<div style="margin-top: 24px; margin-bottom: 8px; padding: 8px 12px; '
+            f'background: #e8f0fe; border-left: 4px solid #1a73e8; border-radius: 4px;">'
+            f'<strong style="color: #1a73e8;">Group {gnum}: {html_module.escape(label)}</strong>'
+        )
+        if desc:
+            out.append(f'<div style="color: #555; font-size: 0.85em; margin-top: 4px;">'
+                        f'{html_module.escape(desc)}</div>')
+        out.append('</div>')
+
+        for sn in group_step_nums:
+            rendered_steps.add(sn)
+            e = enriched_lookup.get(sn)
+            pa_step = pa_step_lookup.get(sn, {})
+            instruction = pa_step.get("instruction", "")
+
+            if e is None:
+                time_str = _step_time_str(pa_step)
+                orig_html = _render_original_segments(pa_step, seg_lookup, html_module)
+                out.append(
+                    f'<div style="margin: 12px 0 4px 0; padding: 8px 12px; '
+                    f'background: #fce4ec; border-radius: 4px; border: 1px solid #ef9a9a;">'
+                    f'<strong>Step {sn}</strong>'
+                    f'<span style="color: #888; font-size: 0.85em;">{html_module.escape(time_str)}</span>'
+                    f' &mdash; <em>{html_module.escape(instruction)}</em>'
+                    f'<div style="color: #c62828; font-size: 0.85em; margin-top: 4px;">'
+                    f'Not analyzed (LLM output truncated)</div>'
+                    f'{orig_html}'
+                    f'</div>'
+                )
+                continue
+
+            time_str = _step_time_str(pa_step)
+            orig_html = _render_original_segments(pa_step, seg_lookup, html_module)
+            out.append(
+                f'<div style="margin: 12px 0 4px 0; padding: 8px 12px; '
+                f'background: #f8f9fa; border-radius: 4px; border: 1px solid #e0e0e0;">'
+                f'<strong>Step {sn}</strong>'
+                f'<span style="color: #888; font-size: 0.85em;">{html_module.escape(time_str)}</span>'
+                f' &mdash; <em>{html_module.escape(instruction)}</em>'
+                f'<div style="margin-top: 6px;">{_render_lang_step_bullets(e, html_module)}</div>'
+                f'{orig_html}'
+                f'</div>'
+            )
+
+    # Render any ungrouped steps
+    ungrouped = [e for e in enriched if e["step_number"] not in rendered_steps]
+    if ungrouped:
+        out.append(
+            '<div style="margin-top: 24px; margin-bottom: 8px; padding: 8px 12px; '
+            'background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">'
+            '<strong style="color: #856404;">Ungrouped Steps</strong></div>'
+        )
+        for e in ungrouped:
+            sn = e["step_number"]
+            pa_step = pa_step_lookup.get(sn, {})
+            instruction = pa_step.get("instruction", "")
+            time_str = _step_time_str(pa_step)
+            orig_html = _render_original_segments(pa_step, seg_lookup, html_module)
+            out.append(
+                f'<div style="margin: 12px 0 4px 0; padding: 8px 12px; '
+                f'background: #f8f9fa; border-radius: 4px; border: 1px solid #e0e0e0;">'
+                f'<strong>Step {sn}</strong>'
+                f'<span style="color: #888; font-size: 0.85em;">{html_module.escape(time_str)}</span>'
+                f' &mdash; <em>{html_module.escape(instruction)}</em>'
+                f'<div style="margin-top: 6px;">{_render_lang_step_bullets(e, html_module)}</div>'
+                f'{orig_html}'
+                f'</div>'
+            )
+
+    return "\n".join(out)
+
+
+def render_pass0b_combined_result(somatic_result: dict, lang_result: dict) -> str:
+    """Render merged somatic + language results as a single step list.
+
+    Language summary at top, then each step shows somatic bullets followed by language bullets.
+    """
+    import html as html_module
+    esc = html_module.escape
+
+    pass_a = somatic_result.get("pass_a", {})
+    groups = pass_a.get("groups", [])
+    pa_steps = pass_a.get("steps", [])
+
+    somatic_enriched = somatic_result.get("enriched_steps", [])
+    lang_enriched = lang_result.get("enriched_steps", [])
+    lang_summary = lang_result.get("summary", {})
+    somatic_summary = somatic_result.get("summary", {})
+
+    somatic_lookup = {e["step_number"]: e for e in somatic_enriched}
+    lang_lookup = {e["step_number"]: e for e in lang_enriched}
+    pa_step_lookup = {s["step_number"]: s for s in pa_steps}
+
+    # Build segment text and time lookups from Pass 0
+    pass_0 = pass_a.get("pass_0", {})
+    seg_lookup = {s["id"]: s["text"] for s in pass_0.get("segments", [])}
+    seg_time_lookup = {s["id"]: (s.get("time_start"), s.get("time_end"))
+                       for s in pass_0.get("segments", [])
+                       if s.get("time_start") is not None}
+
+    def _step_time_str(pa_step):
+        seg_ids = pa_step.get("segments", [])
+        if not seg_ids or not seg_time_lookup:
+            return ""
+        starts = [seg_time_lookup[sid][0] for sid in seg_ids if sid in seg_time_lookup]
+        ends = [seg_time_lookup[sid][1] for sid in seg_ids if sid in seg_time_lookup]
+        if not starts or not ends:
+            return ""
+        return f" ({format_timestamp(min(starts))} – {format_timestamp(max(ends))})"
+
+    total_pa_steps = len(pa_steps)
+    total_somatic = len(somatic_enriched)
+    total_lang = len(lang_enriched)
+    num_groups = len(groups)
+
+    out = []
+
+    # Summaries at top
+    if somatic_summary:
+        out.append(_render_somatic_summary(somatic_summary, html_module))
+    if lang_summary:
+        out.append(_render_lang_summary(lang_summary, html_module))
+
+    # Warnings
+    for label, total in [("Somatic", total_somatic), ("Language", total_lang)]:
+        missing = total_pa_steps - total
+        if missing > 0:
+            out.append(
+                f'<div style="margin-bottom: 12px; padding: 10px 14px; '
+                f'background: #fff3cd; border: 1px solid #ffc107; border-radius: 6px; '
+                f'color: #856404;">'
+                f'<strong>Warning — {label}:</strong> {total} of {total_pa_steps} steps '
+                f'({missing} missing). Clear cache and re-run.'
+                f'</div>'
+            )
+
+    somatic_warning = somatic_result.get("truncation_warning")
+    if somatic_warning:
+        out.append(
+            f'<div style="margin-bottom: 12px; padding: 10px 14px; '
+            f'background: #fff3cd; border: 1px solid #ffc107; border-radius: 6px; '
+            f'color: #856404;">'
+            f'<strong>Warning — Somatic:</strong> {esc(somatic_warning)}'
+            f'</div>'
+        )
+
+    # Segment gap warning
+    segment_gaps = pass_a.get("segment_gaps", [])
+    if segment_gaps:
+        gap_str = ", ".join(str(s) for s in segment_gaps[:30])
+        if len(segment_gaps) > 30:
+            gap_str += f"... ({len(segment_gaps)} total)"
+        out.append(
+            f'<div style="margin-bottom: 12px; padding: 10px 14px; '
+            f'background: #fff3cd; border: 1px solid #ffc107; border-radius: 6px; '
+            f'color: #856404;">'
+            f'<strong>Warning — Pass A segment gaps:</strong> '
+            f'{len(segment_gaps)} transcript segments not assigned to any step: '
+            f'[{esc(gap_str)}].'
+            f'</div>'
+        )
+
+    irrelevant = sum(1 for e in somatic_enriched if not e.get("relevance", True))
+    relevant = total_somatic - irrelevant
+    out.append(f'<p style="color: #666; font-size: 0.9em;">{total_pa_steps} steps across '
+               f'{num_groups} groups, {relevant} lesson-relevant, {irrelevant} omitted</p>')
+
+    # Render by group
+    rendered_steps = set()
+    for g in groups:
+        gnum = g.get("group_number", 0)
+        label = g.get("label", "")
+        desc = g.get("description", "")
+        group_step_nums = g.get("steps", [])
+
+        group_relevant = [sn for sn in group_step_nums
+                          if somatic_lookup.get(sn, {}).get("relevance", True)]
+        if not group_relevant:
+            for sn in group_step_nums:
+                rendered_steps.add(sn)
+            continue
+
+        # Group header
+        out.append(
+            f'<div style="margin-top: 24px; margin-bottom: 8px; padding: 8px 12px; '
+            f'background: #e8f0fe; border-left: 4px solid #1a73e8; border-radius: 4px;">'
+            f'<strong style="color: #1a73e8;">Group {gnum}: {esc(label)}</strong>'
+        )
+        if desc:
+            out.append(f'<div style="color: #555; font-size: 0.85em; margin-top: 4px;">'
+                        f'{esc(desc)}</div>')
+        out.append('</div>')
+
+        for sn in group_step_nums:
+            rendered_steps.add(sn)
+            som = somatic_lookup.get(sn)
+            lang = lang_lookup.get(sn)
+            pa_step = pa_step_lookup.get(sn, {})
+            instruction = pa_step.get("instruction", "")
+            time_str = _step_time_str(pa_step)
+            orig_html = _render_original_segments(pa_step, seg_lookup, html_module)
+
+            if som is None and lang is None:
+                out.append(
+                    f'<div style="margin: 12px 0 4px 0; padding: 8px 12px; '
+                    f'background: #fce4ec; border-radius: 4px; border: 1px solid #ef9a9a;">'
+                    f'<strong>Step {sn}</strong>'
+                    f'<span style="color: #888; font-size: 0.85em;">{esc(time_str)}</span>'
+                    f' &mdash; <em>{esc(instruction)}</em>'
+                    f'<div style="color: #c62828; font-size: 0.85em; margin-top: 4px;">'
+                    f'Not enriched (LLM output truncated)</div>'
+                    f'{orig_html}'
+                    f'</div>'
+                )
+                continue
+
+            # Skip irrelevant steps (somatic pass marks relevance)
+            if som and not som.get("relevance", True):
+                continue
+
+            # Build merged bullet content
+            parts = []
+            if som:
+                somatic_html = _render_step_bullets(som, html_module)
+                if somatic_html:
+                    parts.append(somatic_html)
+            if lang:
+                lang_html = _render_lang_step_bullets(lang, html_module)
+                if lang_html:
+                    parts.append(lang_html)
+
+            merged = "\n".join(parts)
+
+            out.append(
+                f'<div style="margin: 12px 0 4px 0; padding: 8px 12px; '
+                f'background: #f8f9fa; border-radius: 4px; border: 1px solid #e0e0e0;">'
+                f'<strong>Step {sn}</strong>'
+                f'<span style="color: #888; font-size: 0.85em;">{esc(time_str)}</span>'
+                f' &mdash; <em>{esc(instruction)}</em>'
+                f'<div style="margin-top: 6px;">{merged}</div>'
+                f'{orig_html}'
+                f'</div>'
+            )
+
+    # Ungrouped steps
+    ungrouped_nums = [s["step_number"] for s in pa_steps if s["step_number"] not in rendered_steps]
+    if ungrouped_nums:
+        out.append(
+            '<div style="margin-top: 24px; margin-bottom: 8px; padding: 8px 12px; '
+            'background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">'
+            '<strong style="color: #856404;">Ungrouped Steps</strong></div>'
+        )
+        for sn in ungrouped_nums:
+            som = somatic_lookup.get(sn)
+            lang = lang_lookup.get(sn)
+            if som and not som.get("relevance", True):
+                continue
+            pa_step = pa_step_lookup.get(sn, {})
+            instruction = pa_step.get("instruction", "")
+            time_str = _step_time_str(pa_step)
+            orig_html = _render_original_segments(pa_step, seg_lookup, html_module)
+            parts = []
+            if som:
+                somatic_html = _render_step_bullets(som, html_module)
+                if somatic_html:
+                    parts.append(somatic_html)
+            if lang:
+                lang_html = _render_lang_step_bullets(lang, html_module)
+                if lang_html:
+                    parts.append(lang_html)
+            merged = "\n".join(parts)
+            out.append(
+                f'<div style="margin: 12px 0 4px 0; padding: 8px 12px; '
+                f'background: #f8f9fa; border-radius: 4px; border: 1px solid #e0e0e0;">'
+                f'<strong>Step {sn}</strong>'
+                f'<span style="color: #888; font-size: 0.85em;">{esc(time_str)}</span>'
+                f' &mdash; <em>{esc(instruction)}</em>'
+                f'<div style="margin-top: 6px;">{merged}</div>'
                 f'{orig_html}'
                 f'</div>'
             )
@@ -3973,7 +5106,7 @@ def build_pass0b_html() -> str:
     category_select = "\n".join(category_options)
 
     lessons_json = json.dumps({
-        cat: [(f, d) for f, d in lessons]
+        cat: [(t[0], t[1], t[2] if len(t) > 2 else "") for t in lessons]
         for cat, lessons in categories.items()
     })
 
@@ -3981,7 +5114,888 @@ def build_pass0b_html() -> str:
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Pass 0b Experiment - Step-Level Enrichment</title>
+    <title>Pass 0b: Step-Level Analysis</title>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }}
+        h1 {{ color: #333; }}
+        select {{
+            width: 100%;
+            padding: 10px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }}
+        textarea {{
+            width: 100%;
+            height: 200px;
+            font-family: monospace;
+            font-size: 14px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }}
+        button {{
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }}
+        button:hover {{ background-color: #0056b3; }}
+        button:disabled {{ background-color: #ccc; cursor: not-allowed; }}
+        .error {{ color: red; padding: 10px; background: #fee; border-radius: 4px; }}
+        label {{ font-weight: bold; display: block; margin-bottom: 5px; }}
+        .form-group {{ margin-bottom: 15px; }}
+        .or-divider {{ text-align: center; color: #666; margin: 10px 0; }}
+        .loading-spinner {{
+            display: none;
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            text-align: center;
+        }}
+        .loading-spinner .spinner {{
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            border: 3px solid #ddd;
+            border-top-color: #007bff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            vertical-align: middle;
+            margin-right: 10px;
+        }}
+        @keyframes spin {{
+            to {{ transform: rotate(360deg); }}
+        }}
+    </style>
+    <script>
+        const lessonsData = {lessons_json};
+
+        function onCategoryChange(select) {{
+            const category = select.value;
+            const lessonSelect = document.getElementById('selected_lesson');
+            lessonSelect.innerHTML = '<option value="">-- Select lesson --</option>';
+            document.getElementById('source-link').innerHTML = '';
+            if (category && lessonsData[category]) {{
+                lessonsData[category].forEach(([filename, display, sourceUrl]) => {{
+                    const option = document.createElement('option');
+                    option.value = filename;
+                    option.textContent = display;
+                    if (sourceUrl) option.dataset.sourceUrl = sourceUrl;
+                    lessonSelect.appendChild(option);
+                }});
+            }}
+            document.getElementById('lesson_text').value = '';
+        }}
+
+        async function onLessonSelect(select) {{
+            const textarea = document.getElementById('lesson_text');
+            const category = document.getElementById('selected_category').value;
+            const linkEl = document.getElementById('source-link');
+            const selectedOption = select.options[select.selectedIndex];
+            const sourceUrl = selectedOption ? selectedOption.dataset.sourceUrl : '';
+            if (sourceUrl) {{
+                linkEl.innerHTML = '<a href="' + sourceUrl + '" target="_blank" style="color: #007bff; font-size: 0.9em;">View original lesson &rarr;</a>';
+            }} else {{
+                linkEl.innerHTML = '';
+            }}
+            if (select.value && category) {{
+                textarea.value = '';
+                textarea.disabled = true;
+                textarea.placeholder = 'Loading lesson...';
+                textarea.style.opacity = '0.5';
+                try {{
+                    const response = await fetch('/api/lesson/' + encodeURIComponent(category) + '/' + encodeURIComponent(select.value));
+                    const data = await response.json();
+                    if (data.text) textarea.value = data.text;
+                    else textarea.placeholder = 'Error loading lesson';
+                }} catch (error) {{
+                    textarea.placeholder = 'Error loading lesson';
+                }}
+                textarea.disabled = false;
+                textarea.style.opacity = '1';
+            }} else {{
+                textarea.value = '';
+                textarea.disabled = false;
+                textarea.style.opacity = '1';
+                textarea.placeholder = 'Paste lesson text here...';
+                linkEl.innerHTML = '';
+            }}
+        }}
+
+        async function submitForm(event) {{
+            event.preventDefault();
+            const btn = document.getElementById('submit-btn');
+            const spinner = document.getElementById('loading-spinner');
+            const resultDiv = document.getElementById('result');
+            const debugDiv = document.getElementById('debug');
+            const form = document.getElementById('pass0b-form');
+
+            btn.disabled = true;
+            btn.textContent = 'Running Pass A + somatic + language...';
+            spinner.style.display = 'block';
+            resultDiv.innerHTML = '';
+            debugDiv.innerHTML = '';
+            var startTime = Date.now();
+            var timer = setInterval(function() {{
+                var elapsed = Math.floor((Date.now() - startTime) / 1000);
+                document.getElementById('loading-elapsed').textContent = elapsed + 's';
+            }}, 1000);
+
+            try {{
+                const response = await fetch('/api/pass0b-combined', {{
+                    method: 'POST',
+                    body: new FormData(form)
+                }});
+                const data = await response.json();
+                clearInterval(timer);
+
+                if (data.error) {{
+                    var msg = data.error;
+                    if (msg.includes('\\n')) {{
+                        resultDiv.innerHTML = '<div class="error"><strong>Error:</strong><pre style="white-space: pre-wrap; word-wrap: break-word; margin-top: 8px;">' + msg.replace(/</g, '&lt;') + '</pre></div>';
+                    }} else {{
+                        resultDiv.innerHTML = '<div class="error">Error: ' + msg + '</div>';
+                    }}
+                    if (data.debug_html) debugDiv.innerHTML = data.debug_html;
+                    resetForm();
+                    return;
+                }}
+
+                if (data.result_html) {{
+                    var parts = [];
+                    var somTime = data.cached_somatic ? 'cached' : (data.elapsed_somatic || '?') + 's';
+                    var langTime = data.cached_lang ? 'cached' : (data.elapsed_lang || '?') + 's';
+                    parts.push('Somatic: ' + somTime + ', Language: ' + langTime);
+                    parts.push((data.step_count || '?') + ' steps in ' + (data.group_count || '?') + ' groups');
+                    if (data.tokens_in && data.tokens_out) {{
+                        parts.push(data.tokens_in.toLocaleString() + ' in / ' + data.tokens_out.toLocaleString() + ' out tokens');
+                    }}
+                    resultDiv.innerHTML = '<p style="color: #28a745; font-weight: bold;">' + parts.join(' | ') + '</p>' + data.result_html;
+                }}
+                if (data.debug_html) debugDiv.innerHTML = data.debug_html;
+                resetForm();
+            }} catch (error) {{
+                clearInterval(timer);
+                resultDiv.innerHTML = '<div class="error">Error: ' + error.message + '</div>';
+                resetForm();
+            }}
+        }}
+
+        function resetForm() {{
+            document.getElementById('submit-btn').disabled = false;
+            document.getElementById('submit-btn').textContent = 'Run Analysis';
+            document.getElementById('loading-spinner').style.display = 'none';
+        }}
+
+        async function clearCache() {{
+            const btn = document.getElementById('clear-cache-btn');
+            btn.disabled = true;
+            btn.textContent = 'Clearing...';
+            try {{
+                // Clear both caches in parallel
+                const [r1, r2] = await Promise.all([
+                    fetch('/api/pass0b/clear-cache', {{ method: 'POST' }}),
+                    fetch('/api/pass0b-lang/clear-cache', {{ method: 'POST' }})
+                ]);
+                const [d1, d2] = await Promise.all([r1.json(), r2.json()]);
+                var total = (d1.deleted || 0) + (d2.deleted || 0);
+                btn.textContent = 'Cleared ' + total + ' entries';
+                setTimeout(() => {{ btn.textContent = 'Clear Cache'; btn.disabled = false; }}, 2000);
+            }} catch (error) {{
+                btn.textContent = 'Error';
+                setTimeout(() => {{ btn.textContent = 'Clear Cache'; btn.disabled = false; }}, 2000);
+            }}
+        }}
+    </script>
+</head>
+<body>
+    <h1>Pass 0b: Step-Level Analysis</h1>
+    <p>Runs Pass A (decomposition) then somatic enrichment and language analysis in parallel.
+       <span style="float: right; font-size: 0.9em;">
+           <a href="/pass0b-player" style="color: #007bff; text-decoration: none; margin-right: 12px;">Audio Player &rarr;</a>
+           <a href="/analyzer" style="color: #007bff; text-decoration: none;">&larr; Main Analyzer</a>
+       </span>
+    </p>
+
+    <form id="pass0b-form" onsubmit="submitForm(event)">
+        <div class="form-group">
+            <label for="selected_category">Category:</label>
+            <select name="selected_category" id="selected_category" onchange="onCategoryChange(this)">
+                {category_select}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="selected_lesson">Lesson:</label>
+            <select name="selected_lesson" id="selected_lesson" onchange="onLessonSelect(this)">
+                <option value="">-- Select lesson --</option>
+            </select>
+            <div id="source-link" style="margin-top: 4px;"></div>
+        </div>
+
+        <div class="or-divider">— OR —</div>
+
+        <div class="form-group">
+            <label for="lesson_text">Paste Lesson Text:</label>
+            <textarea name="lesson_text" id="lesson_text" placeholder="Paste lesson text here..."></textarea>
+        </div>
+
+        <div style="margin: 10px 0;">
+            <label style="font-size: 0.9em;">
+                Provider:
+                <select name="provider" style="margin-left: 4px; padding: 2px 6px; width: auto;">
+                    <option value="">Default (Gemini)</option>
+                    <option value="gemini">Gemini 3 Flash</option>
+                    <option value="openai">OpenAI (GPT-5)</option>
+                    <option value="anthropic">Sonnet 4.6</option>
+                    <option value="anthropic-sonnet-4.5">Sonnet 4.5</option>
+                    <option value="anthropic-haiku">Haiku 4.5</option>
+                </select>
+            </label>
+        </div>
+
+        <button type="submit" id="submit-btn">Run Analysis</button>
+        <button type="button" id="clear-cache-btn" onclick="clearCache()" style="background-color: #6c757d; margin-left: 8px;">Clear Cache</button>
+    </form>
+
+    <div id="loading-spinner" class="loading-spinner">
+        <span class="spinner"></span>
+        <span>Running Pass A + somatic &amp; language analysis...</span>
+        <div id="loading-elapsed" style="font-size: 0.85em; color: #999; margin-top: 8px;"></div>
+    </div>
+
+    <div id="result" style="margin-top: 20px;"></div>
+    <div id="debug" style="margin-top: 20px;"></div>
+</body>
+</html>
+"""
+
+
+def build_pass0b_player_html() -> str:
+    """Build the Pass 0b audio player page HTML."""
+    categories, display_names = get_available_lessons()
+
+    category_options = ['<option value="">-- Select category --</option>']
+    for cat_name in categories.keys():
+        cat_display = display_names.get(cat_name, cat_name.replace("_", " ").title())
+        category_options.append(f'<option value="{cat_name}">{cat_display}</option>')
+    category_select = "\n".join(category_options)
+
+    lessons_json = json.dumps({
+        cat: [(t[0], t[1], t[2] if len(t) > 2 else "") for t in lessons]
+        for cat, lessons in categories.items()
+    })
+
+    return f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Pass 0b: Audio Player</title>
+    <style>
+        * {{ box-sizing: border-box; }}
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1500px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            background: #fafafa;
+        }}
+        h1 {{ color: #333; margin-bottom: 4px; }}
+        .nav-links {{ margin-bottom: 16px; font-size: 0.9em; }}
+        .nav-links a {{ color: #007bff; text-decoration: none; margin-right: 16px; }}
+        .nav-links a:hover {{ text-decoration: underline; }}
+
+        .controls {{
+            display: flex; gap: 8px; align-items: end; flex-wrap: wrap;
+            margin-bottom: 16px;
+        }}
+        .controls .field {{ flex: 1; min-width: 150px; }}
+        .controls label {{ font-size: 0.8em; font-weight: 600; color: #555; display: block; margin-bottom: 2px; }}
+        .controls select {{
+            width: 100%; padding: 8px; font-size: 13px;
+            border: 1px solid #ccc; border-radius: 4px;
+        }}
+        .controls button {{
+            padding: 8px 20px; font-size: 14px; border: none; border-radius: 4px;
+            cursor: pointer; font-weight: 600; white-space: nowrap;
+        }}
+        .btn-run {{ background: #007bff; color: white; }}
+        .btn-run:hover {{ background: #0056b3; }}
+        .btn-run:disabled {{ background: #ccc; cursor: not-allowed; }}
+
+        /* Audio player */
+        .audio-container {{
+            margin-bottom: 16px; padding: 12px 16px;
+            background: #fff; border: 1px solid #e0e0e0; border-radius: 8px;
+        }}
+        .audio-container audio {{ width: 100%; }}
+        .audio-hidden {{ display: none; }}
+
+        /* Card */
+        .card {{
+            background: #fff; border: 1px solid #e0e0e0; border-radius: 10px;
+            padding: 24px; margin-bottom: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+            min-height: 300px;
+            display: flex; flex-direction: column;
+        }}
+        .card-placeholder {{
+            color: #999; text-align: center; padding: 60px 20px;
+            font-size: 1.1em;
+        }}
+        .group-label {{
+            font-size: 0.8em; font-weight: 700; color: #1a73e8;
+            text-transform: uppercase; letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }}
+        .step-header {{
+            font-size: 1.15em; font-weight: 700; color: #222;
+            margin-bottom: 2px;
+        }}
+        .step-time {{ color: #888; font-weight: 400; font-size: 0.85em; }}
+        .step-instruction {{
+            color: #444; font-style: italic; margin-bottom: 12px;
+            font-size: 0.95em;
+        }}
+
+        /* Segment highlight box */
+        .segment-box {{
+            background: #fffde7; border: 2px solid #fdd835;
+            border-radius: 6px; padding: 12px 16px;
+            margin-top: 10px; font-size: 0.95em;
+            line-height: 1.5; color: #333;
+            min-height: 50px;
+        }}
+
+        /* Analysis sections */
+        .analysis-section {{
+            margin-bottom: 12px;
+        }}
+        .analysis-section h4 {{
+            font-size: 0.8em; font-weight: 700; color: #666;
+            text-transform: uppercase; letter-spacing: 0.5px;
+            margin: 0 0 6px 0; padding-bottom: 4px;
+            border-bottom: 1px solid #eee;
+        }}
+        .analysis-section ul {{
+            margin: 0; padding-left: 18px; font-size: 0.9em; color: #444;
+        }}
+        .analysis-section li {{ margin-bottom: 4px; }}
+        .analysis-section strong {{ color: #333; }}
+
+        /* Navigation */
+        .card-nav {{
+            display: flex; justify-content: space-between; align-items: center;
+            margin-top: auto; padding-top: 16px;
+            border-top: 1px solid #eee;
+        }}
+        .card-nav button {{
+            padding: 6px 16px; font-size: 13px; border: 1px solid #ccc;
+            border-radius: 4px; background: #fff; cursor: pointer;
+            color: #333; font-weight: 500;
+        }}
+        .card-nav button:hover {{ background: #f0f0f0; }}
+        .card-nav button:disabled {{ opacity: 0.3; cursor: not-allowed; }}
+        .card-nav .step-counter {{ color: #888; font-size: 0.85em; }}
+
+        /* Progress bar */
+        .progress-bar {{
+            font-size: 0.85em; color: #888; text-align: center;
+        }}
+
+        /* Loading / status */
+        .status-msg {{
+            text-align: center; padding: 12px; color: #666;
+            font-size: 0.9em;
+        }}
+        .status-msg.error {{ color: #c62828; background: #ffebee; border-radius: 6px; }}
+        .spinner-inline {{
+            display: inline-block; width: 16px; height: 16px;
+            border: 2px solid #ddd; border-top-color: #007bff;
+            border-radius: 50%; animation: spin 0.8s linear infinite;
+            vertical-align: middle; margin-right: 6px;
+        }}
+        @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
+    </style>
+</head>
+<body>
+    <h1>Pass 0b: Audio Player</h1>
+    <div class="nav-links">
+        <a href="/pass0b">&larr; Back to Pass 0b</a>
+        <a href="/analyzer">Main Analyzer</a>
+    </div>
+
+    <div class="controls">
+        <div class="field">
+            <label>Category</label>
+            <select id="selected_category" onchange="onCategoryChange(this)">
+                {category_select}
+            </select>
+        </div>
+        <div class="field">
+            <label>Lesson</label>
+            <select id="selected_lesson" onchange="onLessonSelect(this)">
+                <option value="">-- Select lesson --</option>
+            </select>
+        </div>
+        <div class="field" style="flex: 0.5;">
+            <label>Provider</label>
+            <select id="provider">
+                <option value="">Default (Gemini)</option>
+                <option value="gemini">Gemini 3 Flash</option>
+                <option value="openai">OpenAI (GPT-5)</option>
+                <option value="anthropic">Sonnet 4.6</option>
+            </select>
+        </div>
+        <button class="btn-run" id="run-btn" onclick="runAnalysis()" disabled>Run</button>
+    </div>
+
+    <div class="audio-container audio-hidden" id="audio-container">
+        <audio id="audio-player" controls preload="auto"></audio>
+        <div class="segment-box" id="segment-box">
+            <div id="segment-text"></div>
+        </div>
+    </div>
+
+    <div id="status-area"></div>
+
+    <div class="card" id="card">
+        <div class="card-placeholder" id="card-placeholder">
+            Select a lesson to begin. Audio will load automatically.<br>
+            Click <strong>Run</strong> to add somatic &amp; language analysis.
+        </div>
+        <div id="card-content" style="display:none; flex: 1; flex-direction: column;">
+            <div class="group-label" id="card-group"></div>
+            <div class="step-header">
+                <span id="card-step-label"></span>
+                <span class="step-time" id="card-step-time"></span>
+            </div>
+            <div class="step-instruction" id="card-instruction"></div>
+
+            <div id="analysis-somatic" class="analysis-section" style="display:none;">
+                <h4>Somatic</h4>
+                <ul id="somatic-bullets"></ul>
+            </div>
+            <div id="analysis-lang" class="analysis-section" style="display:none;">
+                <h4>Language</h4>
+                <ul id="lang-bullets"></ul>
+            </div>
+
+            <div class="card-nav">
+                <button id="nav-prev" onclick="navigate(-1)">&larr; Previous</button>
+                <span class="step-counter" id="step-counter"></span>
+                <button id="nav-next" onclick="navigate(1)">Next &rarr;</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="progress-bar" id="progress-bar"></div>
+
+<script>
+const lessonsData = {lessons_json};
+
+// State
+let whisperSegments = null;  // raw whisper segments
+let analysisData = null;     // structured analysis JSON
+let currentStepIdx = 0;
+let audioReady = false;
+let selectedDocId = null;
+let selectedCategory = '';
+let autoAdvance = true;
+
+const audio = document.getElementById('audio-player');
+const audioContainer = document.getElementById('audio-container');
+
+// ── Category / lesson selection ──
+
+function onCategoryChange(sel) {{
+    const lessonSel = document.getElementById('selected_lesson');
+    lessonSel.innerHTML = '<option value="">-- Select lesson --</option>';
+    selectedCategory = sel.value;
+    if (sel.value && lessonsData[sel.value]) {{
+        lessonsData[sel.value].forEach(([id, display, sourceUrl]) => {{
+            const opt = document.createElement('option');
+            opt.value = id;
+            opt.textContent = display;
+            lessonSel.appendChild(opt);
+        }});
+    }}
+    resetPlayer();
+}}
+
+async function onLessonSelect(sel) {{
+    resetPlayer();
+    selectedDocId = sel.value;
+    if (!selectedDocId || !selectedCategory) return;
+
+    showStatus('Loading audio and segments...');
+
+    // Load audio URL and whisper segments in parallel
+    try {{
+        const [audioRes, segRes] = await Promise.all([
+            fetch('/api/audio-url/' + encodeURIComponent(selectedDocId)),
+            fetch('/api/whisper-segments/' + encodeURIComponent(selectedDocId)),
+        ]);
+        const audioData = await audioRes.json();
+        const segData = await segRes.json();
+
+        if (audioData.audio_url) {{
+            audio.src = audioData.audio_url;
+            audioContainer.classList.remove('audio-hidden');
+            audioReady = true;
+        }} else {{
+            showStatus('No audio available for this lesson.', true);
+        }}
+
+        if (segData.segments) {{
+            whisperSegments = segData.segments;
+        }}
+
+        document.getElementById('run-btn').disabled = false;
+        clearStatus();
+    }} catch (e) {{
+        showStatus('Error loading lesson data: ' + e.message, true);
+    }}
+}}
+
+// ── Run analysis ──
+
+async function runAnalysis() {{
+    const btn = document.getElementById('run-btn');
+    btn.disabled = true;
+    btn.textContent = 'Running...';
+    showStatus('<span class="spinner-inline"></span> Running Pass A + somatic & language analysis...');
+
+    // We need lesson text — fetch it
+    try {{
+        const textRes = await fetch('/api/lesson/' + encodeURIComponent(selectedCategory) + '/' + encodeURIComponent(selectedDocId));
+        const textData = await textRes.json();
+        if (!textData.text) {{
+            showStatus('Could not load lesson text.', true);
+            btn.disabled = false;
+            btn.textContent = 'Run';
+            return;
+        }}
+
+        const form = new FormData();
+        form.append('lesson_text', textData.text);
+        form.append('selected_category', selectedCategory);
+        form.append('selected_lesson', selectedDocId);
+        form.append('provider', document.getElementById('provider').value);
+
+        const res = await fetch('/api/pass0b-combined-json', {{
+            method: 'POST',
+            body: form,
+        }});
+        const data = await res.json();
+
+        if (data.error) {{
+            showStatus('Error: ' + data.error, true);
+            btn.disabled = false;
+            btn.textContent = 'Run';
+            return;
+        }}
+
+        analysisData = data;
+        currentStepIdx = 0;
+        renderCard();
+        clearStatus();
+
+        // Show timing info
+        const somTime = data.cached_somatic ? 'cached' : (data.elapsed_somatic || '?') + 's';
+        const langTime = data.cached_lang ? 'cached' : (data.elapsed_lang || '?') + 's';
+        document.getElementById('progress-bar').textContent =
+            data.steps.length + ' steps | Somatic: ' + somTime + ', Language: ' + langTime;
+
+        btn.textContent = 'Run';
+        btn.disabled = false;
+    }} catch (e) {{
+        showStatus('Error: ' + e.message, true);
+        btn.textContent = 'Run';
+        btn.disabled = false;
+    }}
+}}
+
+// ── Card rendering ──
+
+function renderCard() {{
+    if (!analysisData || !analysisData.steps.length) return;
+
+    document.getElementById('card-placeholder').style.display = 'none';
+    const content = document.getElementById('card-content');
+    content.style.display = 'flex';
+
+    const step = analysisData.steps[currentStepIdx];
+    const group = analysisData.groups.find(g => g.group_number === step.group_number);
+
+    // Group label
+    document.getElementById('card-group').textContent =
+        group ? 'Group ' + group.group_number + ': ' + group.label : '';
+
+    // Step header
+    document.getElementById('card-step-label').textContent = 'Step ' + step.step_number;
+    if (step.time_start != null && step.time_end != null) {{
+        document.getElementById('card-step-time').textContent =
+            '(' + fmtTime(step.time_start) + ' \u2013 ' + fmtTime(step.time_end) + ')';
+    }} else {{
+        document.getElementById('card-step-time').textContent = '';
+    }}
+
+    // Instruction
+    document.getElementById('card-instruction').textContent = step.instruction || '';
+
+    // Segment text — show first segment initially
+    updateSegmentForTime(audio.currentTime);
+
+    // Somatic bullets
+    const somDiv = document.getElementById('analysis-somatic');
+    const somUl = document.getElementById('somatic-bullets');
+    somUl.innerHTML = '';
+    if (step.somatic) {{
+        const fields = [
+            ['Intent', 'intent'], ['Differentiation', 'differentiation'],
+            ['Activation', 'activation'], ['Inhibition', 'inhibition'],
+            ['Transmission Route', 'transmission_route'], ['Ground Push', 'ground_push'],
+            ['Mechanical Directive', 'mechanical_directive'],
+            ['Attentional Cue', 'attentional_cue'],
+        ];
+        let hasBullets = false;
+        fields.forEach(([label, key]) => {{
+            const val = step.somatic[key];
+            if (val && val.toLowerCase() !== 'none') {{
+                const li = document.createElement('li');
+                li.innerHTML = '<strong>' + label + ':</strong> ' + escHtml(val);
+                somUl.appendChild(li);
+                hasBullets = true;
+            }}
+        }});
+        // Show clarified text
+        if (step.somatic.clarified) {{
+            const li = document.createElement('li');
+            li.innerHTML = '<strong>Clarified:</strong> ' + escHtml(step.somatic.clarified);
+            li.style.fontStyle = 'italic';
+            somUl.prepend(li);
+            hasBullets = true;
+        }}
+        somDiv.style.display = hasBullets ? '' : 'none';
+    }} else {{
+        somDiv.style.display = 'none';
+    }}
+
+    // Language bullets
+    const langDiv = document.getElementById('analysis-lang');
+    const langUl = document.getElementById('lang-bullets');
+    langUl.innerHTML = '';
+    if (step.language) {{
+        const fields = [
+            ['Explanatory', 'explanatory_language'], ['Attention Cues', 'attention_cues'],
+            ['Effort', 'effort_language'], ['Imagery', 'image_language'],
+            ['Distinctive', 'distinctive_phrasing'], ['Sensory Inquiry', 'sensory_inquiry'],
+        ];
+        let hasBullets = false;
+        fields.forEach(([label, key]) => {{
+            const val = step.language[key];
+            if (val && val.toLowerCase() !== 'none') {{
+                const li = document.createElement('li');
+                li.innerHTML = '<strong>' + label + ':</strong> ' + escHtml(val);
+                langUl.appendChild(li);
+                hasBullets = true;
+            }}
+        }});
+        langDiv.style.display = hasBullets ? '' : 'none';
+    }} else {{
+        langDiv.style.display = 'none';
+    }}
+
+    // Navigation
+    document.getElementById('nav-prev').disabled = (currentStepIdx === 0);
+    document.getElementById('nav-next').disabled = (currentStepIdx === analysisData.steps.length - 1);
+    document.getElementById('step-counter').textContent =
+        'Step ' + (currentStepIdx + 1) + ' of ' + analysisData.steps.length;
+}}
+
+function navigate(delta) {{
+    if (!analysisData) return;
+    const newIdx = currentStepIdx + delta;
+    if (newIdx < 0 || newIdx >= analysisData.steps.length) return;
+    autoAdvance = false; // manual nav disables auto-advance briefly
+    currentStepIdx = newIdx;
+    renderCard();
+
+    // Seek audio to step start
+    const step = analysisData.steps[currentStepIdx];
+    if (step.time_start != null && audioReady) {{
+        audio.currentTime = step.time_start;
+    }}
+    // Re-enable auto-advance after a short delay
+    setTimeout(() => {{ autoAdvance = true; }}, 500);
+}}
+
+// ── Audio sync ──
+
+audio.addEventListener('timeupdate', function() {{
+    const t = audio.currentTime;
+
+    // Update segment highlight
+    updateSegmentForTime(t);
+
+    // Auto-advance to correct step
+    if (analysisData && autoAdvance) {{
+        const stepIdx = findStepForTime(t);
+        if (stepIdx !== -1 && stepIdx !== currentStepIdx) {{
+            currentStepIdx = stepIdx;
+            renderCard();
+        }}
+    }}
+}});
+
+function updateSegmentForTime(t) {{
+    const segBox = document.getElementById('segment-text');
+    if (!segBox) return;
+
+    // If analysis data exists, use step-level segments
+    if (analysisData) {{
+        const step = analysisData.steps[currentStepIdx];
+        if (step && step.segments) {{
+            for (const seg of step.segments) {{
+                if (seg.time_start != null && t >= seg.time_start && t <= seg.time_end) {{
+                    segBox.textContent = seg.text;
+                    return;
+                }}
+            }}
+            // If no segment matches, show the step's first segment or nothing
+            if (step.segments.length > 0) {{
+                // Find the closest segment
+                let closest = step.segments[0];
+                let minDist = Infinity;
+                for (const seg of step.segments) {{
+                    if (seg.time_start != null) {{
+                        const dist = Math.abs(seg.time_start - t);
+                        if (dist < minDist) {{ minDist = dist; closest = seg; }}
+                    }}
+                }}
+                segBox.textContent = closest.text || '';
+            }}
+            return;
+        }}
+    }}
+
+    // Fallback: use raw whisper segments
+    if (whisperSegments) {{
+        for (const ws of whisperSegments) {{
+            if (t >= ws.start && t <= ws.end) {{
+                segBox.textContent = ws.text;
+                return;
+            }}
+        }}
+    }}
+}}
+
+function findStepForTime(t) {{
+    if (!analysisData) return -1;
+    for (let i = 0; i < analysisData.steps.length; i++) {{
+        const s = analysisData.steps[i];
+        if (s.time_start != null && s.time_end != null) {{
+            if (t >= s.time_start && t <= s.time_end) return i;
+        }}
+    }}
+    return -1;
+}}
+
+// ── Keyboard nav ──
+
+document.addEventListener('keydown', function(e) {{
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+    if (e.key === 'ArrowLeft') {{ navigate(-1); e.preventDefault(); }}
+    if (e.key === 'ArrowRight') {{ navigate(1); e.preventDefault(); }}
+    if (e.key === ' ') {{
+        if (audioReady) {{
+            if (audio.paused) audio.play(); else audio.pause();
+            e.preventDefault();
+        }}
+    }}
+}});
+
+// ── Helpers ──
+
+function fmtTime(seconds) {{
+    if (seconds == null) return '';
+    const s = Math.floor(seconds);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    if (h > 0) return h + ':' + String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+    return m + ':' + String(sec).padStart(2, '0');
+}}
+
+function escHtml(str) {{
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}}
+
+function showStatus(msg, isError) {{
+    const el = document.getElementById('status-area');
+    el.innerHTML = '<div class="status-msg' + (isError ? ' error' : '') + '">' + msg + '</div>';
+}}
+
+function clearStatus() {{
+    document.getElementById('status-area').innerHTML = '';
+}}
+
+function resetPlayer() {{
+    whisperSegments = null;
+    analysisData = null;
+    currentStepIdx = 0;
+    audioReady = false;
+    audio.src = '';
+    audioContainer.classList.add('audio-hidden');
+    document.getElementById('run-btn').disabled = true;
+    document.getElementById('card-placeholder').style.display = '';
+    document.getElementById('card-content').style.display = 'none';
+    document.getElementById('progress-bar').textContent = '';
+    clearStatus();
+}}
+</script>
+</body>
+</html>
+"""
+
+
+def build_pass0b_lang_html() -> str:
+    """Build the Pass 0b-lang language analysis page HTML."""
+    categories, display_names = get_available_lessons()
+
+    category_options = ['<option value="">-- Select category --</option>']
+    for cat_name in categories.keys():
+        cat_display = display_names.get(cat_name, cat_name.replace("_", " ").title())
+        category_options.append(f'<option value="{cat_name}">{cat_display}</option>')
+    category_select = "\n".join(category_options)
+
+    lessons_json = json.dumps({
+        cat: [(t[0], t[1]) for t in lessons]
+        for cat, lessons in categories.items()
+    })
+
+    return f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Pass 0b-lang: Language Analysis</title>
     <style>
         body {{
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -4097,10 +6111,10 @@ def build_pass0b_html() -> str:
             const spinner = document.getElementById('loading-spinner');
             const resultDiv = document.getElementById('result');
             const debugDiv = document.getElementById('debug');
-            const form = document.getElementById('pass0b-form');
+            const form = document.getElementById('pass0b-lang-form');
 
             btn.disabled = true;
-            btn.textContent = 'Running Pass A + Pass 0b...';
+            btn.textContent = 'Running Pass A + Language Analysis...';
             spinner.style.display = 'block';
             resultDiv.innerHTML = '';
             debugDiv.innerHTML = '';
@@ -4112,7 +6126,7 @@ def build_pass0b_html() -> str:
 
             try {{
                 const formData = new FormData(form);
-                const response = await fetch('/api/pass0b', {{
+                const response = await fetch('/api/pass0b-lang', {{
                     method: 'POST',
                     body: formData
                 }});
@@ -4138,7 +6152,7 @@ def build_pass0b_html() -> str:
                     }} else {{
                         stats = 'Completed in ' + (data.elapsed || '?') + 's';
                     }}
-                    stats += ' | ' + (data.step_count || '?') + ' steps in ' + (data.group_count || '?') + ' groups, ' + (data.enriched_count || '?') + ' enriched';
+                    stats += ' | ' + (data.step_count || '?') + ' steps in ' + (data.group_count || '?') + ' groups, ' + (data.enriched_count || '?') + ' analyzed';
                     resultDiv.innerHTML = '<p style="color: #28a745; font-weight: bold;">' + stats + '</p>' + data.result_html;
                 }}
                 if (data.debug_html) debugDiv.innerHTML = data.debug_html;
@@ -4152,18 +6166,34 @@ def build_pass0b_html() -> str:
 
         function resetForm() {{
             document.getElementById('submit-btn').disabled = false;
-            document.getElementById('submit-btn').textContent = 'Run Pass 0b';
+            document.getElementById('submit-btn').textContent = 'Run Language Analysis';
             document.getElementById('loading-spinner').style.display = 'none';
+        }}
+
+        async function clearCache() {{
+            const btn = document.getElementById('clear-cache-btn');
+            btn.disabled = true;
+            btn.textContent = 'Clearing...';
+            try {{
+                const response = await fetch('/api/pass0b-lang/clear-cache', {{ method: 'POST' }});
+                const data = await response.json();
+                btn.textContent = 'Cleared ' + data.deleted + ' entries';
+                setTimeout(() => {{ btn.textContent = 'Clear Cache'; btn.disabled = false; }}, 2000);
+            }} catch (error) {{
+                btn.textContent = 'Error';
+                setTimeout(() => {{ btn.textContent = 'Clear Cache'; btn.disabled = false; }}, 2000);
+            }}
         }}
     </script>
 </head>
 <body>
-    <h1>Pass 0b: Step-Level Enrichment</h1>
-    <p>Experiment page. Runs Pass A (decomposition into steps &amp; groups) then Pass 0b (LLM enrichment of each step).
+    <h1>Pass 0b: Language Analysis</h1>
+    <p>Analyzes the teacher's word choice, sensory framing, effort language, and pedagogical stance at each step.
+       <a href="/pass0b" style="float: right; color: #007bff; text-decoration: none; font-size: 0.9em; margin-left: 15px;">Somatic Enrichment &rarr;</a>
        <a href="/analyzer" style="float: right; color: #007bff; text-decoration: none; font-size: 0.9em;">&larr; Main Analyzer</a>
     </p>
 
-    <form id="pass0b-form" onsubmit="submitForm(event)">
+    <form id="pass0b-lang-form" onsubmit="submitForm(event)">
         <div class="form-group">
             <label for="selected_category">Category:</label>
             <select name="selected_category" id="selected_category" onchange="onCategoryChange(this)">
@@ -4178,7 +6208,7 @@ def build_pass0b_html() -> str:
             </select>
         </div>
 
-        <div class="or-divider">— OR —</div>
+        <div class="or-divider">&mdash; OR &mdash;</div>
 
         <div class="form-group">
             <label for="lesson_text">Paste Lesson Text:</label>
@@ -4190,19 +6220,22 @@ def build_pass0b_html() -> str:
                 Provider:
                 <select name="provider" style="margin-left: 4px; padding: 2px 6px; width: auto;">
                     <option value="">Default (Gemini)</option>
-                    <option value="gemini">Gemini</option>
+                    <option value="gemini">Gemini 3 Flash</option>
                     <option value="openai">OpenAI (GPT-5)</option>
-                    <option value="anthropic">Anthropic (Claude)</option>
+                    <option value="anthropic">Sonnet 4.6</option>
+                    <option value="anthropic-sonnet-4.5">Sonnet 4.5</option>
+                    <option value="anthropic-haiku">Haiku 4.5</option>
                 </select>
             </label>
         </div>
 
-        <button type="submit" id="submit-btn">Run Pass 0b</button>
+        <button type="submit" id="submit-btn">Run Language Analysis</button>
+        <button type="button" id="clear-cache-btn" onclick="clearCache()" style="background-color: #6c757d; margin-left: 8px;">Clear Cache</button>
     </form>
 
     <div id="loading-spinner" class="loading-spinner">
         <span class="spinner"></span>
-        <span>Running Pass A + Pass 0b step enrichment...</span>
+        <span>Running Pass A + language analysis...</span>
         <div id="loading-elapsed" style="font-size: 0.85em; color: #999; margin-top: 8px;"></div>
     </div>
 
@@ -4658,7 +6691,7 @@ def build_explore_html() -> str:
     category_select = "\n".join(category_options)
 
     lessons_json = json.dumps({
-        cat: [(f, d) for f, d in lessons]
+        cat: [(t[0], t[1]) for t in lessons]
         for cat, lessons in categories.items()
     })
 
@@ -7501,6 +9534,18 @@ async def pipeline_status():
         return HTMLResponse("<p>Database not configured.</p>", status_code=503)
     try:
         html = _build_book_pipeline_section()
+        return HTMLResponse(html)
+    except Exception as e:
+        return HTMLResponse(f"<p style='color: red;'>Error: {e}</p>", status_code=500)
+
+
+@app.get("/api/pipeline/ingestion")
+async def pipeline_ingestion():
+    """Return the ingestion tab content HTML for refresh."""
+    if not _db:
+        return HTMLResponse("<p>Database not configured.</p>", status_code=503)
+    try:
+        html = _build_ingestion_html()
         return HTMLResponse(html)
     except Exception as e:
         return HTMLResponse(f"<p style='color: red;'>Error: {e}</p>", status_code=500)

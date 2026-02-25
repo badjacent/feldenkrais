@@ -43,9 +43,13 @@ For each step, provide:
 - Step number
 - The instruction/movement (summarized in your own words)
 - Relevant SPIFFER-Q tags
-- Segment IDs from the source text (e.g., `[45, 46, 47]` if the step covers segments 45-47)
+- `segment_start` and `segment_end`: the first and last segment IDs this step covers (inclusive). All segments in the range belong to this step.
 - Brief note on the pedagogical purpose (optional)
 - Whether this step is a **return to home position** (`is_home: true`)
+
+### Segment Coverage
+
+**Steps must tile the entire transcript with no gaps.** Step 1's `segment_start` must be the first segment in the lesson. Each subsequent step's `segment_start` must be exactly one more than the previous step's `segment_end`. The last step's `segment_end` must be the last segment in the lesson. Every segment belongs to exactly one step — no gaps, no overlaps, no dropped segments.
 
 ### Home Position
 
@@ -65,7 +69,7 @@ Guidelines:
 - Include the step numbers that belong to each group (e.g., `[1, 2, 3]`)
 - Give each group a short label describing the exploration (e.g., "Pelvic clock 12-6", "Bilateral push-pull with heels")
 - Aim for roughly 5-8 groups. Fewer than 4 loses lesson structure; more than 10 is too granular.
-- Rest/pause steps can be folded into the preceding group or stand alone if they mark a significant transition
+- Rest/pause steps at the end of a movement exploration belong to the preceding group. Do NOT leave rest steps ungrouped. Every step must belong to exactly one group.
 
 ---
 
@@ -77,5 +81,5 @@ Provide your analysis in the structured format with:
 3. `secondary_frameworks` - VLs scoring >= 0.3
 4. `rationale` - brief explanation of classification
 5. `home_position` - description of the base configuration the student returns to
-6. `steps` - the SPIFFER-Q decomposed lesson, each with `segments` array referencing source text and `is_home` flag for return-to-home steps
+6. `steps` - the SPIFFER-Q decomposed lesson, each with `segment_start`/`segment_end` range and `is_home` flag for return-to-home steps
 7. `groups` - clustered step groups for the analytical table, each with `label`, `steps` (step numbers), and `description`
