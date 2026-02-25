@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Pass0bCondensedResult",
+  "description": "Condensed lesson summary: one card per group + a setting card. Group cards first (truncation protection).",
+  "type": "object",
+  "properties": {
+    "group_cards": {
+      "type": "array",
+      "description": "One card per movement exploration group, in group order",
+      "items": {
+        "type": "object",
+        "properties": {
+          "group_number": {
+            "type": "integer",
+            "description": "Group number from Pass A"
+          },
+          "group_label": {
+            "type": "string",
+            "description": "Short label for this group (from Pass A)"
+          },
+          "title": {
+            "type": "string",
+            "description": "A short evocative title for this card — capture the essential quality of what happens (not the same as group_label)"
+          },
+          "the_action": {
+            "type": "string",
+            "description": "What you do: the essential physical sequence condensed into 2-4 sentences. Written as direct instruction ('You lift... you turn...'), integrating the clarified movements from all steps in this group into a flowing description. Not a list."
+          },
+          "the_body": {
+            "type": "string",
+            "description": "What is happening physically: the biomechanical story of this group. Which structures activate, which must release, where force travels, what is being differentiated from what. Written as a short paragraph (3-5 sentences) that a practitioner could read and understand the movement logic."
+          },
+          "the_attention": {
+            "type": "string",
+            "description": "What to notice: the attentional and sensory landscape of this group. What the teacher directs you to feel, sense, listen for. Preserve the teacher's literal language where it is striking. Written as 2-4 sentences."
+          },
+          "the_intention": {
+            "type": "string",
+            "description": "Why this matters: the pedagogical purpose and the teacher's explanations. What is the learning strategy? What cause-and-effect reasoning does the teacher offer? Written as 1-3 sentences."
+          },
+          "the_voice": {
+            "type": "string",
+            "description": "How the teacher speaks here: the linguistic character of this group — effort language, imagery, metaphors, distinctive phrasing. Preserve literal quotes. If no distinctive language in this group, write 'None'. Written as 1-3 sentences."
+          }
+        },
+        "required": ["group_number", "group_label", "title", "the_action", "the_body", "the_attention", "the_intention", "the_voice"]
+      }
+    },
+    "setting": {
+      "type": "object",
+      "description": "The setting card: creates the felt space of the lesson for the reader. Generated AFTER group cards to protect groups from truncation.",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "A short evocative title for the lesson as a whole"
+        },
+        "somatic_intent": {
+          "type": "string",
+          "description": "What the lesson is physically about — the muscular trajectory and somatic architecture. What will the body learn? What is the central differentiation or transmission being developed? 2-4 sentences."
+        },
+        "space": {
+          "type": "string",
+          "description": "The felt space of the lesson: starting position, quality of the environment the teacher creates, the overall attentional tone. This should help the reader enter the lesson — not describe it from outside. 2-3 sentences."
+        },
+        "teacher_presence": {
+          "type": "string",
+          "description": "The teacher's tone and additional pedagogical intent. How does this teacher approach this material? What is their characteristic way of guiding? Any particular emphasis or teaching strategy visible in their language? 2-3 sentences."
+        },
+        "arc": {
+          "type": "string",
+          "description": "The lesson's movement arc — how the groups build on each other. What is the learning trajectory from beginning to end? 2-3 sentences."
+        }
+      },
+      "required": ["title", "somatic_intent", "space", "teacher_presence", "arc"]
+    }
+  },
+  "required": ["group_cards", "setting"]
+}

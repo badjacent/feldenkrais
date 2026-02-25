@@ -1,0 +1,10 @@
+# Pass 0b Condensed: Original Design Instruction
+
+> what i'd like is a new llm query after the existing 0b queries that yields a short version of the lesson. think of it as an intro card plus a card per group. the intro card should give an overall intro to the lesson, including the somatic intent and muscular trajectory of the lesson. it should not avoid nor focus overly on feldenkrais generalities. it should also include an indication of the speaker's tone and any additional intent related to the lesson that he exhibits. the purpose of the intro card is to create a space for the reader that is similar to the space of being physically in the lesson - in fact, let's not call it the "intro" card, let's call it the "setting" card. feel free to suggest a better name for that card. after that, there should be one card per "group". that should summarize all the points of the 0b analysis (both queries) for that group. you will note that the different attributes in the different 0b analysis are aimed at different "listeners" in the person - some are metacognitive, some are attentional, some are physical, some are linguistic, some are sensory - each has its own character when it comes to experience (somatic, linguistic, immediacy vs narrative) and all of these points of view should be preserved in their essential way. it may be helpful to make a taxonomy of these points of view in order to preserve and these points of view and then integrate them - that is an empirical question to be decided along the way - but the prompt should make these points of view clear. let's call this query - including both the summary and the group query - the "pass0b_short_query". i think the summary should be asked after the groups. the input should be the outputs of both pass0b queries and also the pass-a query.
+
+## Design Decisions
+
+- Renamed from "pass0b_short" to "pass0b_condensed"
+- The lesson-level card is called the "setting" card
+- Five Points of View taxonomy preserves distinct experiential registers
+- Group cards generated before setting card (truncation protection)

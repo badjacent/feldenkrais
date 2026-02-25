@@ -87,8 +87,30 @@ Each principle includes:
 
 ---
 
+## 8. Teleceptors and the completion of rotational chains
+
+**What it is**: The eyes (and to a lesser extent, ears) are *teleceptors* — distance sensors that orient the organism in space. In rotation, the eyes are not passive passengers; they are active participants in the movement chain. The vestibulo-ocular reflex (VOR) naturally counter-rotates the eyes relative to the head to stabilize gaze during movement. This opposition — eyes going one way while the body spirals the other — is a fundamental mechanism of rotation, not a technique specific to any one lesson.
+
+The suboccipital muscles (rectus capitis posterior major/minor, obliquus capitis superior/inferior) form the deepest layer of the neck and connect the atlas and axis to the skull. These muscles are richly innervated with proprioceptors and are directly coupled to eye movement — they respond to where the eyes are looking. When the eyes are fixed at short focal length, the suboccipitals increase their tone, effectively "thickening" the top of the spine and blocking the sequential cascade of vertebral rotation from reaching the skull. When the eyes gaze into the distance, this tone decreases, and the vertebrae at the top of the spine become free to turn relative to the skull.
+
+**Why it matters for analysis**: The eyes are part of the rotational story whether or not the teacher mentions them. A lesson that teaches rotation is necessarily engaging the VOR, the suboccipitals, and the eye-spine coupling — even if the instruction only says "turn your head." When a teacher *does* explicitly invoke the eyes (as a counterweight, as a focal length experiment, as a tracking task), they are making visible a mechanism that is always operative. This means:
+- A lesson about rotation that never mentions the eyes is still an eye lesson at the biomechanical level
+- A lesson that explicitly uses eye opposition (eyes going opposite to the body's spiral) is revealing how the movement chain completes itself through the teleceptors
+- Focal length affects tone: long-distance gaze reduces suboccipital tone, freeing the atlas/axis to participate in rotation; short-distance gaze locks them
+
+**What it looks like in a lesson**: Instructions to let the eyes go in the opposite direction of the movement. Gazing into the distance while rotating. Noticing the quality of rotation with eyes open vs. closed, or near-focus vs. far-focus. Head-pinned-to-floor explorations where the body rotates beneath a stationary skull (the eyes help maintain the head's position). Instructions to "look through" the direction of a movement or to track something visually during a transition.
+
+> "you use the eyes as a counterweight to the knees" — Andrew Gibbons, Carriage of the Head Part 1
+
+> "if you're looking far enough into the distance, the eyes can serve as a very good counterweight to the knees" — Andrew Gibbons, Carriage of the Head Part 1
+
+> "Watch what happens to the quality of the cascade when you keep the focal length short... The breathing may change. The whole tone in the system changes with the focal length." — Andrew Gibbons, Carriage of the Head Part 1
+
+---
+
 ## Source lessons
 
 These principles were primarily identified through analysis of:
 - **Coordinating Flexors and Extensors** — Andrew Gibbons' version (document ID: `b5255f3e-1789-4d5b-b43a-1d319abed0b0`), compared with Moshe Feldenkrais's original from "Awareness Through Movement"
 - **Waist Steering Differential** (document ID: `ba29a9a4-d2a5-4b24-a7e1-94c3d04bd9f4`)
+- **Carriage of the Head, Part 1** — Andrew Gibbons (document ID: `2bf94f97-cf71-49df-951e-2ee8c0665e51`): Signal lesson for teleceptor/eye opposition in rotation

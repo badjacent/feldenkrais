@@ -927,6 +927,239 @@ def run_pass_0b_lang(lesson_text: str, provider_key: str | None = None, debug_lo
         raise
 
 
+# ── Pass 0b Condensed: Lesson Cards ──────────────────────────────────────
+
+
+def load_pass_0b_condensed() -> tuple[str, dict]:
+    """Load Pass 0b condensed prompt and schema."""
+    prompt_path = DATA_DIR / "pass_0b_condensed.md"
+    schema_path = DATA_DIR / "pass_0b_condensed.schema.json"
+    prompt = prompt_path.read_text() if prompt_path.exists() else ""
+    schema = json.loads(schema_path.read_text()) if schema_path.exists() else {}
+    return prompt, schema
+
+
+def format_input_for_0b_condensed(
+    pass_a_result: dict,
+    somatic_enriched: list,
+    somatic_summary: dict,
+    lang_enriched: list,
+    lang_summary: dict,
+) -> str:
+    """Build LLM input text for Pass 0b Condensed from all prior analysis outputs.
+
+    Assembles a markdown document with:
+    - Lesson-level summaries (somatic + language) for big-picture context
+    - Per group: all steps with somatic + language fields
+    """
+    lines = []
+
+    # ── Lesson-level summaries ──
+    lines.append("## Lesson-Level Summaries")
+    lines.append("")
+
+    if somatic_summary:
+        lines.append("### Somatic Architecture Summary")
+        if somatic_summary.get("somatic_architecture_summary"):
+            lines.append(somatic_summary["somatic_architecture_summary"])
+            lines.append("")
+        if somatic_summary.get("primary_transmission_routes"):
+            lines.append("**Primary Transmission Routes:**")
+            for route in somatic_summary["primary_transmission_routes"]:
+                lines.append(f"- {route}")
+            lines.append("")
+        if somatic_summary.get("differentiation_strategy"):
+            lines.append(f"**Differentiation Strategy:** {somatic_summary['differentiation_strategy']}")
+            lines.append("")
+        if somatic_summary.get("key_inhibitions"):
+            lines.append("**Key Inhibitions:**")
+            for inhib in somatic_summary["key_inhibitions"]:
+                lines.append(f"- {inhib}")
+            lines.append("")
+        if somatic_summary.get("ground_force_strategy"):
+            lines.append(f"**Ground Force Strategy:** {somatic_summary['ground_force_strategy']}")
+            lines.append("")
+
+    if lang_summary:
+        lines.append("### Language Summary")
+        if lang_summary.get("teaching_voice_summary"):
+            lines.append(lang_summary["teaching_voice_summary"])
+            lines.append("")
+        if lang_summary.get("dominant_attention_mode"):
+            lines.append(f"**Dominant Attention Mode:** {lang_summary['dominant_attention_mode']}")
+            lines.append("")
+        if lang_summary.get("effort_philosophy"):
+            lines.append(f"**Effort Philosophy:** {lang_summary['effort_philosophy']}")
+            lines.append("")
+        if lang_summary.get("speaker_principles"):
+            lines.append("**Speaker Principles:**")
+            for princ in lang_summary["speaker_principles"]:
+                lines.append(f"- {princ}")
+            lines.append("")
+        if lang_summary.get("signature_vocabulary"):
+            lines.append("**Signature Vocabulary:**")
+            for vocab in lang_summary["signature_vocabulary"]:
+                lines.append(f"- {vocab}")
+            lines.append("")
+
+    # ── Per-group step data ──
+    lines.append("## Groups and Steps")
+    lines.append("")
+
+    # Build lookups
+    somatic_lookup = {e["step_number"]: e for e in somatic_enriched}
+    lang_lookup = {e["step_number"]: e for e in lang_enriched}
+
+    groups = pass_a_result.get("groups", [])
+    steps = pass_a_result.get("steps", [])
+    step_lookup = {s["step_number"]: s for s in steps}
+
+    somatic_fields = [
+        "clarified", "mechanical_directive", "attentional_cue", "sensory_inquiry",
+        "differentiation", "activation", "inhibition", "transmission_route",
+        "ground_push", "intent",
+    ]
+    lang_fields = [
+        "attention_cues", "effort_language", "image_language",
+        "explanatory_language", "distinctive_phrasing",
+    ]
+
+    for g in groups:
+        gnum = g.get("group_number", 0)
+        label = g.get("label", "")
+        desc = g.get("description", "")
+        lines.append(f"### Group {gnum}: {label}")
+        if desc:
+            lines.append(desc)
+        lines.append("")
+
+        for sn in g.get("steps", []):
+            pa_step = step_lookup.get(sn)
+            if not pa_step:
+                continue
+            instruction = pa_step.get("instruction", "")
+            lines.append(f"#### Step {sn} — {instruction}")
+
+            som = somatic_lookup.get(sn, {})
+            for field in somatic_fields:
+                val = som.get(field, "")
+                if val and str(val).lower() != "none":
+                    lines.append(f"- **{field}**: {val}")
+
+            lang = lang_lookup.get(sn, {})
+            for field in lang_fields:
+                val = lang.get(field, "")
+                if val and str(val).lower() != "none":
+                    lines.append(f"- **{field}**: {val}")
+
+            lines.append("")
+
+    return "\n".join(lines)
+
+
+def run_pass_0b_condensed(
+    somatic_result: dict,
+    lang_result: dict,
+    lesson_text: str,
+    provider_key: str | None = None,
+    debug_log: list | None = None,
+) -> dict:
+    """
+    Pass 0b Condensed: Generate lesson cards from prior analyses.
+
+    Takes pre-computed somatic and language results (does NOT re-run them).
+
+    Returns:
+        {
+            "group_cards": [...],
+            "setting": {...},
+            "elapsed": float,
+            "cached": bool,
+        }
+    """
+    import time
+
+    pass_a_result = somatic_result.get("pass_a", {})
+    somatic_enriched = somatic_result.get("enriched_steps", [])
+    somatic_summary = somatic_result.get("summary", {})
+    lang_enriched = lang_result.get("enriched_steps", [])
+    lang_summary = lang_result.get("summary", {})
+
+    # Format input
+    input_text = format_input_for_0b_condensed(
+        pass_a_result, somatic_enriched, somatic_summary, lang_enriched, lang_summary
+    )
+
+    # Load prompt and schema
+    prompt_template, schema = load_pass_0b_condensed()
+    prompt = prompt_template + input_text
+
+    system_prompt = (
+        "You are an expert Feldenkrais practitioner creating condensed lesson cards. "
+        "Preserve all five points of view. Generate group cards first, then the setting card."
+    )
+
+    # Check cache
+    cache_suffix = ":pass_0b_condensed_v1"
+    if provider_key and provider_key != DEFAULT_LLM:
+        cache_suffix += f":{provider_key}"
+    cache_key = get_cache_key(lesson_text.strip() + cache_suffix)
+    cached = load_cached_analysis(cache_key)
+    if cached:
+        return {
+            "group_cards": cached.get("group_cards", []),
+            "setting": cached.get("setting", {}),
+            "cached": True,
+        }
+
+    # Run LLM
+    llm = get_llm(provider_key)
+    t0 = time.time()
+
+    if debug_log is not None:
+        debug_log.append({
+            "name": "Pass 0b Condensed",
+            "provider": provider_key or DEFAULT_LLM,
+            "prompt": prompt,
+            "system": system_prompt,
+            "schema": schema,
+        })
+
+    try:
+        result = llm.complete_structured_json(
+            prompt=prompt,
+            schema=schema,
+            system=system_prompt,
+        )
+        elapsed = round(time.time() - t0, 1)
+
+        if debug_log is not None:
+            debug_log[-1]["output"] = json.dumps(result, indent=2)
+            debug_log[-1]["elapsed"] = elapsed
+
+        group_cards = result.get("group_cards", [])
+        setting = result.get("setting", {})
+
+        # Capture token usage
+        usage = llm.last_usage if llm.last_usage else {}
+
+        # Cache the result
+        save_cached_analysis(cache_key, {"group_cards": group_cards, "setting": setting, "usage": usage})
+
+        return {
+            "group_cards": group_cards,
+            "setting": setting,
+            "elapsed": elapsed,
+            "cached": False,
+            "usage": usage,
+        }
+
+    except Exception as e:
+        if debug_log is not None:
+            debug_log[-1]["error"] = str(e)
+        raise
+
+
 def format_timestamp(seconds: float) -> str:
     """Format seconds as M:SS or H:MM:SS."""
     if seconds is None:
@@ -1784,71 +2017,109 @@ def render_multi_vl_analyses(vl_analyses: dict, schema: dict, pass_a_result: dic
 
 
 def render_debug_log(debug_log: list) -> str:
-    """Render raw LLM input/output debug log as collapsible HTML sections."""
+    """Render raw LLM input/output debug log as a flat tabbed UI.
+
+    Self-contained: embeds its own JS and uses unique IDs so it works on any
+    page and can be rendered multiple times without collisions.
+    """
     if not debug_log:
         return ""
 
     import html as html_module
+    import random
+    import string
 
-    parts = ['<div class="debug-log" style="margin-top: 30px; border-top: 2px solid #ddd; padding-top: 15px;">']
-    parts.append('<h2 style="cursor: pointer;" onclick="document.getElementById(\'debug-contents\').style.display = document.getElementById(\'debug-contents\').style.display === \'none\' ? \'block\' : \'none\';">Raw I/O <span style="font-size: 0.7em; color: #999;">(click to toggle)</span></h2>')
-    parts.append('<div id="debug-contents" style="display: none;">')
+    # Filter out cached-only entries that have no useful content
+    entries = [
+        e for e in debug_log
+        if e.get("prompt") or e.get("output") or e.get("error")
+    ]
+    if not entries:
+        return ""
 
-    # Sub-tabs for each exchange
-    parts.append('<div class="debug-tabs" style="margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 4px;">')
-    for i, entry in enumerate(debug_log):
+    # Unique prefix to avoid ID collisions
+    uid = "dbg_" + "".join(random.choices(string.ascii_lowercase, k=6))
+
+    pre_style = (
+        "background: {bg}; padding: 12px; border-radius: 6px; "
+        "white-space: pre-wrap; word-wrap: break-word; "
+        "max-height: 600px; overflow-y: auto; font-size: 0.8em; margin: 0;"
+    )
+
+    parts = [
+        f'<div id="{uid}" style="margin-top: 30px; border-top: 2px solid #ddd; padding-top: 15px;">',
+        f'<h2 style="cursor:pointer;" '
+        f"""onclick="var c=document.getElementById('{uid}_body');c.style.display=c.style.display==='none'?'block':'none';">"""
+        'Raw I/O <span style="font-size:0.7em;color:#999;">(click to toggle)</span></h2>',
+        f'<div id="{uid}_body" style="display:none;">',
+    ]
+
+    # --- Tab bar ---
+    parts.append('<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px;">')
+    for i, entry in enumerate(entries):
         name = entry.get("name", f"Query {i+1}")
         provider = entry.get("provider", "")
         has_error = "error" in entry
-        color = "#dc3545" if has_error else "#6c757d"
-        active = "background: #007bff; color: white;" if i == 0 else f"background: #e9ecef; color: {color};"
-        label = f'{name} [{provider}]'
+        label = f'{name} [{provider}]' if provider else name
         if has_error:
-            label += " (error)"
-        parts.append(f'<button onclick="showDebugTab({i})" id="debug-tab-{i}" style="padding: 6px 12px; border: 1px solid #ccc; cursor: pointer; {active} border-radius: 4px; font-size: 0.85em;">{label}</button>')
+            label += " (err)"
+        active_bg = "#007bff" if i == 0 else "#e9ecef"
+        active_fg = "white" if i == 0 else ("#dc3545" if has_error else "#6c757d")
+        parts.append(
+            f'<button id="{uid}_tab{i}" onclick="{uid}_show({i})" '
+            f'style="padding:6px 12px;border:1px solid #ccc;cursor:pointer;'
+            f'background:{active_bg};color:{active_fg};border-radius:4px;font-size:0.85em;">'
+            f'{label}</button>'
+        )
     parts.append('</div>')
 
-    for i, entry in enumerate(debug_log):
+    # --- Tab panels ---
+    for i, entry in enumerate(entries):
         display = "block" if i == 0 else "none"
-        name = entry.get("name", f"Query {i+1}")
-        provider = entry.get("provider", "")
-        parts.append(f'<div id="debug-content-{i}" class="debug-entry" style="display: {display};">')
+        parts.append(f'<div id="{uid}_panel{i}" style="display:{display};">')
 
-        # Prompt
+        # Input section
         prompt = entry.get("prompt", "")
-        prompt_chars = len(prompt)
-        parts.append(f'<details style="margin-bottom: 10px;"><summary style="cursor: pointer; font-weight: bold; color: #555;">Prompt ({prompt_chars:,} chars)</summary>')
-        parts.append(f'<pre style="background: #f8f9fa; padding: 12px; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word; max-height: 500px; overflow-y: auto; font-size: 0.8em;">{html_module.escape(prompt)}</pre>')
-        parts.append('</details>')
-
-        # System prompt
         system = entry.get("system", "")
-        if system:
-            parts.append(f'<details style="margin-bottom: 10px;"><summary style="cursor: pointer; font-weight: bold; color: #555;">System Prompt ({len(system):,} chars)</summary>')
-            parts.append(f'<pre style="background: #f0f8ff; padding: 12px; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word; max-height: 300px; overflow-y: auto; font-size: 0.8em;">{html_module.escape(system)}</pre>')
-            parts.append('</details>')
-
-        # Schema
         schema = entry.get("schema")
-        if schema:
-            schema_str = json.dumps(schema, indent=2)
-            parts.append(f'<details style="margin-bottom: 10px;"><summary style="cursor: pointer; font-weight: bold; color: #555;">Schema ({len(schema_str):,} chars)</summary>')
-            parts.append(f'<pre style="background: #fff8f0; padding: 12px; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word; max-height: 400px; overflow-y: auto; font-size: 0.8em;">{html_module.escape(schema_str)}</pre>')
-            parts.append('</details>')
+        if prompt or system:
+            parts.append('<div style="margin-bottom:12px;">')
+            parts.append('<strong style="color:#555;">Input</strong>')
+            if system:
+                parts.append(f'<div style="margin-top:6px;font-size:0.8em;color:#888;">System ({len(system):,} chars)</div>')
+                parts.append(f'<pre style="{pre_style.format(bg="#f0f8ff")}">{html_module.escape(system)}</pre>')
+            if prompt:
+                parts.append(f'<div style="margin-top:6px;font-size:0.8em;color:#888;">Prompt ({len(prompt):,} chars)</div>')
+                parts.append(f'<pre style="{pre_style.format(bg="#f8f9fa")}">{html_module.escape(prompt)}</pre>')
+            if schema:
+                schema_str = json.dumps(schema, indent=2)
+                parts.append(f'<div style="margin-top:6px;font-size:0.8em;color:#888;">Schema ({len(schema_str):,} chars)</div>')
+                parts.append(f'<pre style="{pre_style.format(bg="#fff8f0")}">{html_module.escape(schema_str)}</pre>')
+            parts.append('</div>')
 
-        # Output or Error
+        # Output section
         if "error" in entry:
             error_str = entry["error"]
-            parts.append(f'<details open style="margin-bottom: 10px;"><summary style="cursor: pointer; font-weight: bold; color: #dc3545;">Output (ERROR)</summary>')
-            parts.append(f'<pre style="background: #fff5f5; padding: 12px; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word; max-height: 600px; overflow-y: auto; font-size: 0.8em; border: 1px solid #f5c6cb;">{html_module.escape(error_str)}</pre>')
-            parts.append('</details>')
+            parts.append('<strong style="color:#dc3545;">Output (ERROR)</strong>')
+            parts.append(f'<pre style="{pre_style.format(bg="#fff5f5")}border:1px solid #f5c6cb;">{html_module.escape(error_str)}</pre>')
         elif "output" in entry:
             output_str = json.dumps(entry["output"], indent=2)
-            parts.append(f'<details style="margin-bottom: 10px;"><summary style="cursor: pointer; font-weight: bold; color: #555;">Output ({len(output_str):,} chars)</summary>')
-            parts.append(f'<pre style="background: #f0fff0; padding: 12px; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word; max-height: 600px; overflow-y: auto; font-size: 0.8em;">{html_module.escape(output_str)}</pre>')
-            parts.append('</details>')
+            parts.append(f'<strong style="color:#555;">Output ({len(output_str):,} chars)</strong>')
+            parts.append(f'<pre style="{pre_style.format(bg="#f0fff0")}">{html_module.escape(output_str)}</pre>')
 
         parts.append('</div>')
+
+    # --- Inline JS for tab switching ---
+    parts.append(f'''<script>
+function {uid}_show(idx) {{
+  for (var i = 0; i < {len(entries)}; i++) {{
+    var p = document.getElementById("{uid}_panel" + i);
+    var t = document.getElementById("{uid}_tab" + i);
+    if (p) p.style.display = i === idx ? "block" : "none";
+    if (t) {{ t.style.background = i === idx ? "#007bff" : "#e9ecef"; t.style.color = i === idx ? "white" : "#6c757d"; }}
+  }}
+}}
+</script>''')
 
     parts.append('</div></div>')
     return "\n".join(parts)
@@ -4063,11 +4334,7 @@ async def api_pass0b_combined(
             align_pass0_with_whisper(lang_result.get("pass_a", {}).get("pass_0", {}), whisper_segments)
 
         result_html = render_pass0b_combined_result(somatic_result, lang_result)
-        debug_html = ""
-        if debug_log_somatic:
-            debug_html += render_debug_log(debug_log_somatic)
-        if debug_log_lang:
-            debug_html += render_debug_log(debug_log_lang)
+        debug_html = render_debug_log(debug_log_somatic + debug_log_lang)
 
         pass_a = somatic_result.get("pass_a", {})
         som_usage = somatic_result.get("usage", {})
@@ -4095,11 +4362,7 @@ async def api_pass0b_combined(
     except asyncio.TimeoutError:
         return JSONResponse({"error": "Analysis timed out."}, status_code=504)
     except Exception as e:
-        debug_html = ""
-        if debug_log_somatic:
-            debug_html += render_debug_log(debug_log_somatic)
-        if debug_log_lang:
-            debug_html += render_debug_log(debug_log_lang)
+        debug_html = render_debug_log(debug_log_somatic + debug_log_lang)
         return JSONResponse({
             "error": str(e),
             "debug_html": debug_html,
@@ -4253,6 +4516,46 @@ async def api_pass0b_combined_json(
             "elapsed_lang": lang_result.get("elapsed"),
             "cached_somatic": somatic_result.get("cached", False),
             "cached_lang": lang_result.get("cached", False),
+        })
+    except asyncio.TimeoutError:
+        return JSONResponse({"error": "Analysis timed out."}, status_code=504)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/pass0b-condensed")
+async def api_pass0b_condensed(
+    lesson_text: str = Form(""),
+    provider: str = Form(""),
+):
+    """Run Pass 0b + Pass 0b-lang (cached) then Pass 0b Condensed."""
+    text = lesson_text.strip()
+    if not text:
+        return JSONResponse({"error": "Please enter or select lesson text."}, status_code=400)
+
+    prov = provider if provider else None
+
+    try:
+        # Run somatic + language analyses (will hit cache if already run)
+        somatic_result, lang_result = await asyncio.wait_for(
+            asyncio.gather(
+                asyncio.to_thread(run_pass_0b, text, prov),
+                asyncio.to_thread(run_pass_0b_lang, text, prov),
+            ),
+            timeout=ANALYSIS_TIMEOUT,
+        )
+
+        # Run condensed synthesis
+        condensed_result = await asyncio.wait_for(
+            asyncio.to_thread(run_pass_0b_condensed, somatic_result, lang_result, text, prov),
+            timeout=ANALYSIS_TIMEOUT,
+        )
+
+        return JSONResponse({
+            "group_cards": condensed_result.get("group_cards", []),
+            "setting": condensed_result.get("setting", {}),
+            "elapsed": condensed_result.get("elapsed"),
+            "cached": condensed_result.get("cached", False),
         })
     except asyncio.TimeoutError:
         return JSONResponse({"error": "Analysis timed out."}, status_code=504)
@@ -5436,6 +5739,57 @@ def build_pass0b_player_html() -> str:
         .btn-run {{ background: #007bff; color: white; }}
         .btn-run:hover {{ background: #0056b3; }}
         .btn-run:disabled {{ background: #ccc; cursor: not-allowed; }}
+        .btn-condensed {{ background: #6c757d; color: white; }}
+        .btn-condensed:hover {{ background: #545b62; }}
+        .btn-condensed:disabled {{ background: #ccc; cursor: not-allowed; }}
+
+        /* Condensed cards */
+        .condensed-card {{
+            background: #fff; border: 1px solid #e0e0e0; border-radius: 10px;
+            padding: 24px; margin-bottom: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        }}
+        .condensed-card h3 {{
+            margin: 0 0 4px 0; font-size: 1.2em; color: #222;
+        }}
+        .condensed-card .group-tag {{
+            font-size: 0.8em; font-weight: 700; color: #1a73e8;
+            text-transform: uppercase; letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }}
+        .condensed-card .setting-tag {{
+            font-size: 0.8em; font-weight: 700; color: #e65100;
+            text-transform: uppercase; letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }}
+        .pov-section {{
+            margin-bottom: 10px; padding: 10px 14px;
+            border-radius: 6px; border-left: 4px solid;
+            font-size: 0.92em; line-height: 1.55;
+        }}
+        .pov-section .pov-label {{
+            font-size: 0.75em; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.5px; margin-bottom: 4px;
+        }}
+        .pov-action {{ background: #f5f5f5; border-color: #616161; }}
+        .pov-action .pov-label {{ color: #616161; }}
+        .pov-body {{ background: #e8f5e9; border-color: #4caf50; }}
+        .pov-body .pov-label {{ color: #2e7d32; }}
+        .pov-attention {{ background: #fff3e0; border-color: #ff9800; }}
+        .pov-attention .pov-label {{ color: #e65100; }}
+        .pov-intention {{ background: #e3f2fd; border-color: #2196f3; }}
+        .pov-intention .pov-label {{ color: #1565c0; }}
+        .pov-voice {{ background: #f3e5f5; border-color: #9c27b0; }}
+        .pov-voice .pov-label {{ color: #7b1fa2; }}
+        .setting-field {{
+            margin-bottom: 10px; padding: 10px 14px;
+            border-radius: 6px; border-left: 4px solid #e65100;
+            background: #fff8f0; font-size: 0.92em; line-height: 1.55;
+        }}
+        .setting-field .field-label {{
+            font-size: 0.75em; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.5px; margin-bottom: 4px; color: #e65100;
+        }}
 
         /* Audio player */
         .audio-container {{
@@ -5562,6 +5916,7 @@ def build_pass0b_player_html() -> str:
             </select>
         </div>
         <button class="btn-run" id="run-btn" onclick="runAnalysis()" disabled>Run</button>
+        <button class="btn-condensed" id="condensed-btn" onclick="runCondensed()" disabled>Condensed</button>
     </div>
 
     <div class="audio-container audio-hidden" id="audio-container">
@@ -5604,6 +5959,12 @@ def build_pass0b_player_html() -> str:
     </div>
 
     <div class="progress-bar" id="progress-bar"></div>
+
+    <!-- Condensed cards view (hidden by default) -->
+    <div id="condensed-view" style="display:none;">
+        <div id="condensed-setting-card"></div>
+        <div id="condensed-group-cards"></div>
+    </div>
 
 <script>
 const lessonsData = {lessons_json};
@@ -5666,6 +6027,8 @@ async function onLessonSelect(sel) {{
         }}
 
         document.getElementById('run-btn').disabled = false;
+        document.getElementById('condensed-btn').disabled = false;
+        condensedLessonText = null;
         clearStatus();
     }} catch (e) {{
         showStatus('Error loading lesson data: ' + e.message, true);
@@ -5675,6 +6038,10 @@ async function onLessonSelect(sel) {{
 // ── Run analysis ──
 
 async function runAnalysis() {{
+    // Switch back to step view if condensed is showing
+    document.getElementById('condensed-view').style.display = 'none';
+    document.getElementById('card').style.display = '';
+
     const btn = document.getElementById('run-btn');
     btn.disabled = true;
     btn.textContent = 'Running...';
@@ -5965,11 +6332,137 @@ function resetPlayer() {{
     audio.src = '';
     audioContainer.classList.add('audio-hidden');
     document.getElementById('run-btn').disabled = true;
+    document.getElementById('condensed-btn').disabled = true;
     document.getElementById('card-placeholder').style.display = '';
     document.getElementById('card-content').style.display = 'none';
     document.getElementById('progress-bar').textContent = '';
+    document.getElementById('condensed-view').style.display = 'none';
+    document.getElementById('condensed-setting-card').innerHTML = '';
+    document.getElementById('condensed-group-cards').innerHTML = '';
     clearStatus();
 }}
+
+// ── Condensed view ──
+
+let condensedLessonText = null;
+
+async function runCondensed() {{
+    const btn = document.getElementById('condensed-btn');
+    btn.disabled = true;
+    btn.textContent = 'Loading...';
+
+    // Hide step view, show condensed
+    document.getElementById('card').style.display = 'none';
+    document.getElementById('progress-bar').textContent = '';
+    document.getElementById('condensed-view').style.display = 'block';
+
+    showStatus('<span class="spinner-inline"></span> Generating condensed lesson cards...');
+
+    try {{
+        // Fetch lesson text if not already loaded
+        if (!condensedLessonText) {{
+            const textRes = await fetch('/api/lesson/' + encodeURIComponent(selectedCategory) + '/' + encodeURIComponent(selectedDocId));
+            const textData = await textRes.json();
+            if (!textData.text) {{
+                showStatus('Could not load lesson text.', true);
+                btn.disabled = false;
+                btn.textContent = 'Condensed';
+                return;
+            }}
+            condensedLessonText = textData.text;
+        }}
+
+        const form = new FormData();
+        form.append('lesson_text', condensedLessonText);
+        form.append('provider', document.getElementById('provider').value);
+
+        const res = await fetch('/api/pass0b-condensed', {{
+            method: 'POST',
+            body: form,
+        }});
+        const data = await res.json();
+
+        if (data.error) {{
+            showStatus('Error: ' + data.error, true);
+            btn.disabled = false;
+            btn.textContent = 'Condensed';
+            return;
+        }}
+
+        renderCondensedCards(data);
+        clearStatus();
+
+        const timing = data.cached ? 'cached' : (data.elapsed || '?') + 's';
+        document.getElementById('progress-bar').textContent =
+            (data.group_cards ? data.group_cards.length : 0) + ' group cards | ' + timing;
+
+        btn.textContent = 'Condensed';
+        btn.disabled = false;
+    }} catch (e) {{
+        showStatus('Error: ' + e.message, true);
+        btn.textContent = 'Condensed';
+        btn.disabled = false;
+    }}
+}}
+
+function renderCondensedCards(data) {{
+    const settingDiv = document.getElementById('condensed-setting-card');
+    const groupsDiv = document.getElementById('condensed-group-cards');
+    settingDiv.innerHTML = '';
+    groupsDiv.innerHTML = '';
+
+    // Setting card (displayed first, even though generated last)
+    if (data.setting) {{
+        const s = data.setting;
+        let html = '<div class="condensed-card">';
+        html += '<div class="setting-tag">Lesson Setting</div>';
+        html += '<h3>' + escHtml(s.title || '') + '</h3>';
+        if (s.somatic_intent) {{
+            html += '<p style="font-style:italic;margin:8px 0 12px 0;color:#444;">' + escHtml(s.somatic_intent) + '</p>';
+        }}
+        const settingAttrs = [];
+        if (s.space) settingAttrs.push('<li><strong>Space:</strong> ' + escHtml(s.space) + '</li>');
+        if (s.teacher_presence) settingAttrs.push('<li><strong>Teacher Presence:</strong> ' + escHtml(s.teacher_presence) + '</li>');
+        if (s.arc) settingAttrs.push('<li><strong>Arc:</strong> ' + escHtml(s.arc) + '</li>');
+        if (settingAttrs.length) {{
+            html += '<ul style="margin:0;padding-left:20px;color:#444;font-size:0.95em;">' + settingAttrs.join('') + '</ul>';
+        }}
+        html += '</div>';
+        settingDiv.innerHTML = html;
+    }}
+
+    // Group cards
+    if (data.group_cards) {{
+        data.group_cards.forEach(card => {{
+            let html = '<div class="condensed-card">';
+            html += '<div class="group-tag">Group ' + card.group_number + ': ' + escHtml(card.group_label || '') + '</div>';
+            html += '<h3>' + escHtml(card.title || '') + '</h3>';
+
+            if (card.the_action) {{
+                html += '<p style="margin:8px 0 12px 0;color:#444;">' + escHtml(card.the_action) + '</p>';
+            }}
+            const groupAttrs = [];
+            if (card.the_body) groupAttrs.push('<li><strong>Body:</strong> ' + escHtml(card.the_body) + '</li>');
+            if (card.the_attention) groupAttrs.push('<li><strong>Attention:</strong> ' + escHtml(card.the_attention) + '</li>');
+            if (card.the_intention) groupAttrs.push('<li><strong>Intention:</strong> ' + escHtml(card.the_intention) + '</li>');
+            if (card.the_voice && card.the_voice.toLowerCase() !== 'none') groupAttrs.push('<li><strong>Voice:</strong> ' + escHtml(card.the_voice) + '</li>');
+            if (groupAttrs.length) {{
+                html += '<ul style="margin:0;padding-left:20px;color:#444;font-size:0.95em;">' + groupAttrs.join('') + '</ul>';
+            }}
+
+            html += '</div>';
+            groupsDiv.innerHTML += html;
+        }});
+    }}
+}}
+
+// Switch back to step view
+function showStepView() {{
+    document.getElementById('condensed-view').style.display = 'none';
+    document.getElementById('card').style.display = '';
+    if (analysisData) renderCard();
+}}
+
 </script>
 </body>
 </html>
