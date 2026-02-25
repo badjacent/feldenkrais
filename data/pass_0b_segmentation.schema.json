@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Pass0bSegmentation",
+  "description": "Identifies pedagogical arc segments within a Feldenkrais lesson for separate condensed synthesis.",
+  "type": "object",
+  "properties": {
+    "segments": {
+      "type": "array",
+      "description": "Contiguous segments of the lesson, each representing a distinct pedagogical arc. Most lessons have exactly one segment.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "segment_number": {
+            "type": "integer",
+            "description": "Sequential segment number, starting at 1"
+          },
+          "groups": {
+            "type": "array",
+            "items": { "type": "integer" },
+            "description": "Group numbers belonging to this segment, in order"
+          },
+          "theme": {
+            "type": "string",
+            "description": "Brief phrase capturing the organizing principle of this segment"
+          },
+          "transition_note": {
+            "type": ["string", "null"],
+            "description": "What shifts at the boundary to the next segment. Null for the last segment."
+          }
+        },
+        "required": ["segment_number", "groups", "theme", "transition_note"]
+      },
+      "minItems": 1,
+      "maxItems": 3
+    }
+  },
+  "required": ["segments"]
+}

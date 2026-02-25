@@ -939,18 +939,165 @@ def load_pass_0b_condensed() -> tuple[str, dict]:
     return prompt, schema
 
 
+def load_pass_0b_segmentation() -> tuple[str, dict]:
+    """Load Pass 0b segmentation prompt and schema."""
+    prompt_path = DATA_DIR / "pass_0b_segmentation.md"
+    schema_path = DATA_DIR / "pass_0b_segmentation.schema.json"
+    prompt = prompt_path.read_text() if prompt_path.exists() else ""
+    schema = json.loads(schema_path.read_text()) if schema_path.exists() else {}
+    return prompt, schema
+
+
+def format_input_for_segmentation(
+    pass_a_result: dict,
+    somatic_summary: dict,
+    lang_summary: dict,
+) -> str:
+    """Build lightweight LLM input for segmentation query.
+
+    Includes only group labels/descriptions and lesson-level summaries
+    (not full step data) to keep the query fast and cheap.
+    """
+    lines = []
+
+    # ── Lesson-level summaries (brief) ──
+    lines.append("## Lesson-Level Summaries")
+    lines.append("")
+
+    if somatic_summary:
+        if somatic_summary.get("somatic_architecture_summary"):
+            lines.append("### Somatic Architecture Summary")
+            lines.append(somatic_summary["somatic_architecture_summary"])
+            lines.append("")
+        if somatic_summary.get("differentiation_strategy"):
+            lines.append(f"**Differentiation Strategy:** {somatic_summary['differentiation_strategy']}")
+            lines.append("")
+
+    if lang_summary:
+        if lang_summary.get("teaching_voice_summary"):
+            lines.append("### Language Summary")
+            lines.append(lang_summary["teaching_voice_summary"])
+            lines.append("")
+
+    # ── Group list with descriptions ──
+    lines.append("## Groups")
+    lines.append("")
+
+    groups = pass_a_result.get("groups", [])
+    steps = pass_a_result.get("steps", [])
+    step_lookup = {s["step_number"]: s for s in steps}
+
+    for g in groups:
+        gnum = g.get("group_number", 0)
+        label = g.get("label", "")
+        desc = g.get("description", "")
+        lines.append(f"### Group {gnum}: {label}")
+        if desc:
+            lines.append(desc)
+
+        # Include step instructions (lightweight — just the text, no enrichment)
+        step_nums = g.get("steps", [])
+        if step_nums:
+            step_texts = []
+            for sn in step_nums:
+                pa_step = step_lookup.get(sn)
+                if pa_step:
+                    step_texts.append(f"- Step {sn}: {pa_step.get('instruction', '')}")
+            if step_texts:
+                lines.append("\n".join(step_texts))
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def run_segmentation_query(
+    pass_a_result: dict,
+    somatic_summary: dict,
+    lang_summary: dict,
+    lesson_text: str,
+    provider_key: str | None = None,
+    debug_log: list | None = None,
+    skip_cache: bool = False,
+) -> dict:
+    """Run the segmentation query to identify pedagogical arcs.
+
+    Returns the segmentation result dict with a 'segments' key.
+    """
+    import time
+
+    input_text = format_input_for_segmentation(pass_a_result, somatic_summary, lang_summary)
+
+    prompt_template, schema = load_pass_0b_segmentation()
+    prompt = prompt_template + input_text
+
+    system_prompt = (
+        "You are an expert Feldenkrais practitioner identifying pedagogical arcs in a lesson. "
+        "Most lessons are a single arc. Only segment when there is a genuine shift in organizing principle."
+    )
+
+    # Check cache
+    cache_suffix = ":segmentation_v2"
+    if provider_key and provider_key != DEFAULT_LLM:
+        cache_suffix += f":{provider_key}"
+    cache_key = get_cache_key(lesson_text.strip() + cache_suffix)
+    if not skip_cache:
+        cached = load_cached_analysis(cache_key)
+        if cached:
+            return {"segments": cached.get("segments", []), "cached": True}
+
+    # Run LLM
+    llm = get_llm(provider_key)
+    t0 = time.time()
+
+    if debug_log is not None:
+        debug_log.append({
+            "name": "Segmentation",
+            "provider": provider_key or DEFAULT_LLM,
+            "prompt": prompt,
+            "system": system_prompt,
+            "schema": schema,
+        })
+
+    try:
+        result = llm.complete_structured_json(
+            prompt=prompt,
+            schema=schema,
+            system=system_prompt,
+        )
+        elapsed = round(time.time() - t0, 1)
+
+        if debug_log is not None:
+            debug_log[-1]["output"] = json.dumps(result, indent=2)
+            debug_log[-1]["elapsed"] = elapsed
+
+        segments = result.get("segments", [])
+        usage = llm.last_usage if llm.last_usage else {}
+
+        save_cached_analysis(cache_key, {"segments": segments, "usage": usage})
+
+        return {"segments": segments, "elapsed": elapsed, "cached": False, "usage": usage}
+
+    except Exception as e:
+        if debug_log is not None:
+            debug_log[-1]["error"] = str(e)
+        raise
+
+
 def format_input_for_0b_condensed(
     pass_a_result: dict,
     somatic_enriched: list,
     somatic_summary: dict,
     lang_enriched: list,
     lang_summary: dict,
+    group_filter: set | None = None,
 ) -> str:
     """Build LLM input text for Pass 0b Condensed from all prior analysis outputs.
 
     Assembles a markdown document with:
     - Lesson-level summaries (somatic + language) for big-picture context
     - Per group: all steps with somatic + language fields
+
+    If group_filter is provided, only include groups whose group_number is in the set.
     """
     lines = []
 
@@ -1026,6 +1173,8 @@ def format_input_for_0b_condensed(
 
     for g in groups:
         gnum = g.get("group_number", 0)
+        if group_filter is not None and gnum not in group_filter:
+            continue
         label = g.get("label", "")
         desc = g.get("description", "")
         lines.append(f"### Group {gnum}: {label}")
@@ -1057,22 +1206,124 @@ def format_input_for_0b_condensed(
     return "\n".join(lines)
 
 
+def _run_condensed_for_groups(
+    pass_a_result: dict,
+    somatic_enriched: list,
+    somatic_summary: dict,
+    lang_enriched: list,
+    lang_summary: dict,
+    group_filter: set | None,
+    provider_key: str | None,
+    debug_log: list | None,
+    segment_context: dict | None = None,
+) -> dict:
+    """Run a single condensed synthesis call, optionally filtered to specific groups.
+
+    segment_context, if provided, contains:
+        - segment_number: int
+        - theme: str
+        - total_segments: int
+        - all_segments: list of {segment_number, theme, groups}
+
+    Returns raw LLM result dict with group_cards and setting.
+    """
+    input_text = format_input_for_0b_condensed(
+        pass_a_result, somatic_enriched, somatic_summary,
+        lang_enriched, lang_summary, group_filter=group_filter,
+    )
+
+    prompt_template, schema = load_pass_0b_condensed()
+
+    # For multi-segment runs, load foreground/background framing from template
+    if segment_context:
+        seg_num = segment_context["segment_number"]
+        seg_theme = segment_context["theme"]
+        all_segs = segment_context["all_segments"]
+
+        seg_overview = "\n".join(
+            f"  - Segment {s['segment_number']}: Groups {s['groups']} — {s['theme']}"
+            for s in all_segs
+        )
+
+        segment_template_path = DATA_DIR / "pass_0b_condensed_segment.md"
+        segment_preamble = segment_template_path.read_text() if segment_template_path.exists() else ""
+        segment_preamble += (
+            f"You are synthesizing **Segment {seg_num}: {seg_theme}**.\n\n"
+            f"{seg_overview}\n\n"
+        )
+
+        prompt = prompt_template + segment_preamble + input_text
+    else:
+        prompt = prompt_template + input_text
+
+    system_prompt = (
+        "You are an expert Feldenkrais practitioner creating condensed lesson cards. "
+        "Preserve all five points of view. Generate group cards first, then the setting card."
+    )
+
+    if debug_log is not None:
+        label = "Pass 0b Condensed"
+        if group_filter:
+            label += f" (groups {sorted(group_filter)})"
+        debug_log.append({
+            "name": label,
+            "provider": provider_key or DEFAULT_LLM,
+            "prompt": prompt,
+            "system": system_prompt,
+            "schema": schema,
+        })
+
+    llm = get_llm(provider_key)
+
+    try:
+        result = llm.complete_structured_json(
+            prompt=prompt,
+            schema=schema,
+            system=system_prompt,
+        )
+
+        if debug_log is not None:
+            debug_log[-1]["output"] = json.dumps(result, indent=2)
+
+        usage = llm.last_usage if llm.last_usage else {}
+        return {
+            "group_cards": result.get("group_cards", []),
+            "setting": result.get("setting", {}),
+            "usage": usage,
+        }
+
+    except Exception as e:
+        if debug_log is not None:
+            debug_log[-1]["error"] = str(e)
+        raise
+
+
 def run_pass_0b_condensed(
     somatic_result: dict,
     lang_result: dict,
     lesson_text: str,
     provider_key: str | None = None,
     debug_log: list | None = None,
+    skip_cache: bool = False,
 ) -> dict:
     """
     Pass 0b Condensed: Generate lesson cards from prior analyses.
 
-    Takes pre-computed somatic and language results (does NOT re-run them).
+    Two-phase approach:
+    1. Segmentation query identifies pedagogical arcs
+    2. Per-segment condensed synthesis (one call per segment)
 
     Returns:
         {
-            "group_cards": [...],
-            "setting": {...},
+            "segments": [
+                {
+                    "segment_number": 1,
+                    "theme": "...",
+                    "transition_note": "...",
+                    "group_cards": [...],
+                    "setting": {...},
+                }
+            ],
             "elapsed": float,
             "cached": bool,
         }
@@ -1085,79 +1336,88 @@ def run_pass_0b_condensed(
     lang_enriched = lang_result.get("enriched_steps", [])
     lang_summary = lang_result.get("summary", {})
 
-    # Format input
-    input_text = format_input_for_0b_condensed(
-        pass_a_result, somatic_enriched, somatic_summary, lang_enriched, lang_summary
-    )
-
-    # Load prompt and schema
-    prompt_template, schema = load_pass_0b_condensed()
-    prompt = prompt_template + input_text
-
-    system_prompt = (
-        "You are an expert Feldenkrais practitioner creating condensed lesson cards. "
-        "Preserve all five points of view. Generate group cards first, then the setting card."
-    )
-
-    # Check cache
-    cache_suffix = ":pass_0b_condensed_v1"
+    # Check cache (v4 — segmented output with foreground/background framing)
+    cache_suffix = ":pass_0b_condensed_v4"
     if provider_key and provider_key != DEFAULT_LLM:
         cache_suffix += f":{provider_key}"
     cache_key = get_cache_key(lesson_text.strip() + cache_suffix)
-    cached = load_cached_analysis(cache_key)
-    if cached:
-        return {
-            "group_cards": cached.get("group_cards", []),
-            "setting": cached.get("setting", {}),
-            "cached": True,
-        }
+    if not skip_cache:
+        cached = load_cached_analysis(cache_key)
+        if cached:
+            return {
+                "segments": cached.get("segments", []),
+                "cached": True,
+            }
 
-    # Run LLM
-    llm = get_llm(provider_key)
     t0 = time.time()
 
-    if debug_log is not None:
-        debug_log.append({
-            "name": "Pass 0b Condensed",
-            "provider": provider_key or DEFAULT_LLM,
-            "prompt": prompt,
-            "system": system_prompt,
-            "schema": schema,
-        })
+    # Phase 1: Segmentation
+    seg_result = run_segmentation_query(
+        pass_a_result, somatic_summary, lang_summary,
+        lesson_text, provider_key, debug_log, skip_cache=skip_cache,
+    )
+    segments_meta = seg_result.get("segments", [])
 
-    try:
-        result = llm.complete_structured_json(
-            prompt=prompt,
-            schema=schema,
-            system=system_prompt,
+    # Phase 2: Per-segment condensed synthesis
+    output_segments = []
+
+    if len(segments_meta) <= 1:
+        # Single segment — run without group filter (identical to old behavior)
+        condensed = _run_condensed_for_groups(
+            pass_a_result, somatic_enriched, somatic_summary,
+            lang_enriched, lang_summary,
+            group_filter=None,
+            provider_key=provider_key,
+            debug_log=debug_log,
         )
-        elapsed = round(time.time() - t0, 1)
+        seg_meta = segments_meta[0] if segments_meta else {}
+        output_segments.append({
+            "segment_number": seg_meta.get("segment_number", 1),
+            "theme": seg_meta.get("theme", ""),
+            "transition_note": seg_meta.get("transition_note"),
+            "group_cards": condensed["group_cards"],
+            "setting": condensed["setting"],
+        })
+    else:
+        # Multiple segments — run condensed per segment with foreground/background framing
+        all_segs_summary = [
+            {"segment_number": s.get("segment_number", i+1), "theme": s.get("theme", ""), "groups": s.get("groups", [])}
+            for i, s in enumerate(segments_meta)
+        ]
+        for seg_meta in segments_meta:
+            group_nums = set(seg_meta.get("groups", []))
+            seg_ctx = {
+                "segment_number": seg_meta.get("segment_number", 1),
+                "theme": seg_meta.get("theme", ""),
+                "total_segments": len(segments_meta),
+                "all_segments": all_segs_summary,
+            }
+            condensed = _run_condensed_for_groups(
+                pass_a_result, somatic_enriched, somatic_summary,
+                lang_enriched, lang_summary,
+                group_filter=group_nums,
+                provider_key=provider_key,
+                debug_log=debug_log,
+                segment_context=seg_ctx,
+            )
+            output_segments.append({
+                "segment_number": seg_meta.get("segment_number", 1),
+                "theme": seg_meta.get("theme", ""),
+                "transition_note": seg_meta.get("transition_note"),
+                "group_cards": condensed["group_cards"],
+                "setting": condensed["setting"],
+            })
 
-        if debug_log is not None:
-            debug_log[-1]["output"] = json.dumps(result, indent=2)
-            debug_log[-1]["elapsed"] = elapsed
+    elapsed = round(time.time() - t0, 1)
 
-        group_cards = result.get("group_cards", [])
-        setting = result.get("setting", {})
+    # Cache the segmented result
+    save_cached_analysis(cache_key, {"segments": output_segments})
 
-        # Capture token usage
-        usage = llm.last_usage if llm.last_usage else {}
-
-        # Cache the result
-        save_cached_analysis(cache_key, {"group_cards": group_cards, "setting": setting, "usage": usage})
-
-        return {
-            "group_cards": group_cards,
-            "setting": setting,
-            "elapsed": elapsed,
-            "cached": False,
-            "usage": usage,
-        }
-
-    except Exception as e:
-        if debug_log is not None:
-            debug_log[-1]["error"] = str(e)
-        raise
+    return {
+        "segments": output_segments,
+        "elapsed": elapsed,
+        "cached": False,
+    }
 
 
 def format_timestamp(seconds: float) -> str:
@@ -4527,6 +4787,7 @@ async def api_pass0b_combined_json(
 async def api_pass0b_condensed(
     lesson_text: str = Form(""),
     provider: str = Form(""),
+    skip_cache: str = Form(""),
 ):
     """Run Pass 0b + Pass 0b-lang (cached) then Pass 0b Condensed."""
     text = lesson_text.strip()
@@ -4534,6 +4795,7 @@ async def api_pass0b_condensed(
         return JSONResponse({"error": "Please enter or select lesson text."}, status_code=400)
 
     prov = provider if provider else None
+    no_cache = skip_cache == "1"
 
     try:
         # Run somatic + language analyses (will hit cache if already run)
@@ -4547,13 +4809,12 @@ async def api_pass0b_condensed(
 
         # Run condensed synthesis
         condensed_result = await asyncio.wait_for(
-            asyncio.to_thread(run_pass_0b_condensed, somatic_result, lang_result, text, prov),
+            asyncio.to_thread(run_pass_0b_condensed, somatic_result, lang_result, text, prov, skip_cache=no_cache),
             timeout=ANALYSIS_TIMEOUT,
         )
 
         return JSONResponse({
-            "group_cards": condensed_result.get("group_cards", []),
-            "setting": condensed_result.get("setting", {}),
+            "segments": condensed_result.get("segments", []),
             "elapsed": condensed_result.get("elapsed"),
             "cached": condensed_result.get("cached", False),
         })
@@ -5486,6 +5747,17 @@ def build_pass0b_html() -> str:
     <script>
         const lessonsData = {lessons_json};
 
+        function updatePlayerLink() {{
+            const cat = document.getElementById('selected_category').value;
+            const lesson = document.getElementById('selected_lesson').value;
+            const link = document.getElementById('player-link');
+            if (link) {{
+                let href = '/pass0b-player';
+                if (cat && lesson) href += '?category=' + encodeURIComponent(cat) + '&lesson=' + encodeURIComponent(lesson);
+                link.href = href;
+            }}
+        }}
+
         function onCategoryChange(select) {{
             const category = select.value;
             const lessonSelect = document.getElementById('selected_lesson');
@@ -5501,6 +5773,7 @@ def build_pass0b_html() -> str:
                 }});
             }}
             document.getElementById('lesson_text').value = '';
+            updatePlayerLink();
         }}
 
         async function onLessonSelect(select) {{
@@ -5536,6 +5809,7 @@ def build_pass0b_html() -> str:
                 textarea.placeholder = 'Paste lesson text here...';
                 linkEl.innerHTML = '';
             }}
+            updatePlayerLink();
         }}
 
         async function submitForm(event) {{
@@ -5628,7 +5902,7 @@ def build_pass0b_html() -> str:
     <h1>Pass 0b: Step-Level Analysis</h1>
     <p>Runs Pass A (decomposition) then somatic enrichment and language analysis in parallel.
        <span style="float: right; font-size: 0.9em;">
-           <a href="/pass0b-player" style="color: #007bff; text-decoration: none; margin-right: 12px;">Audio Player &rarr;</a>
+           <a id="player-link" href="/pass0b-player" style="color: #007bff; text-decoration: none; margin-right: 12px;">Audio Player &rarr;</a>
            <a href="/analyzer" style="color: #007bff; text-decoration: none;">&larr; Main Analyzer</a>
        </span>
     </p>
@@ -5917,6 +6191,7 @@ def build_pass0b_player_html() -> str:
         </div>
         <button class="btn-run" id="run-btn" onclick="runAnalysis()" disabled>Run</button>
         <button class="btn-condensed" id="condensed-btn" onclick="runCondensed()" disabled>Condensed</button>
+        <label style="font-size:0.8em;color:#666;margin-left:8px;cursor:pointer;"><input type="checkbox" id="skip-cache-cb" style="margin-right:3px;">Skip cache</label>
     </div>
 
     <div class="audio-container audio-hidden" id="audio-container">
@@ -6375,6 +6650,9 @@ async function runCondensed() {{
         const form = new FormData();
         form.append('lesson_text', condensedLessonText);
         form.append('provider', document.getElementById('provider').value);
+        if (document.getElementById('skip-cache-cb').checked) {{
+            form.append('skip_cache', '1');
+        }}
 
         const res = await fetch('/api/pass0b-condensed', {{
             method: 'POST',
@@ -6393,8 +6671,11 @@ async function runCondensed() {{
         clearStatus();
 
         const timing = data.cached ? 'cached' : (data.elapsed || '?') + 's';
+        const segs = data.segments || [];
+        const totalCards = segs.reduce((n, seg) => n + (seg.group_cards ? seg.group_cards.length : 0), 0);
+        const segLabel = segs.length > 1 ? ' | ' + segs.length + ' segments' : '';
         document.getElementById('progress-bar').textContent =
-            (data.group_cards ? data.group_cards.length : 0) + ' group cards | ' + timing;
+            totalCards + ' group cards' + segLabel + ' | ' + timing;
 
         btn.textContent = 'Condensed';
         btn.disabled = false;
@@ -6405,54 +6686,84 @@ async function runCondensed() {{
     }}
 }}
 
+function renderSettingCard(s, label) {{
+    let html = '<div class="condensed-card">';
+    html += '<div class="setting-tag">' + escHtml(label) + '</div>';
+    html += '<h3>' + escHtml(s.title || '') + '</h3>';
+    if (s.somatic_intent) {{
+        html += '<p style="font-style:italic;margin:8px 0 12px 0;color:#444;">' + escHtml(s.somatic_intent) + '</p>';
+    }}
+    const settingAttrs = [];
+    if (s.space) settingAttrs.push('<li><strong>Space:</strong> ' + escHtml(s.space) + '</li>');
+    if (s.teacher_presence) settingAttrs.push('<li><strong>Teacher Presence:</strong> ' + escHtml(s.teacher_presence) + '</li>');
+    if (s.arc) settingAttrs.push('<li><strong>Arc:</strong> ' + escHtml(s.arc) + '</li>');
+    if (settingAttrs.length) {{
+        html += '<ul style="margin:0;padding-left:20px;color:#444;font-size:0.95em;">' + settingAttrs.join('') + '</ul>';
+    }}
+    html += '</div>';
+    return html;
+}}
+
+function renderGroupCards(cards) {{
+    let html = '';
+    cards.forEach(card => {{
+        html += '<div class="condensed-card">';
+        html += '<div class="group-tag">Group ' + card.group_number + ': ' + escHtml(card.group_label || '') + '</div>';
+        html += '<h3>' + escHtml(card.title || '') + '</h3>';
+
+        if (card.the_action) {{
+            html += '<p style="margin:8px 0 12px 0;color:#444;">' + escHtml(card.the_action) + '</p>';
+        }}
+        const groupAttrs = [];
+        if (card.the_body) groupAttrs.push('<li><strong>Body:</strong> ' + escHtml(card.the_body) + '</li>');
+        if (card.the_attention) groupAttrs.push('<li><strong>Attention:</strong> ' + escHtml(card.the_attention) + '</li>');
+        if (card.the_intention) groupAttrs.push('<li><strong>Intention:</strong> ' + escHtml(card.the_intention) + '</li>');
+        if (card.the_voice && card.the_voice.toLowerCase() !== 'none') groupAttrs.push('<li><strong>Voice:</strong> ' + escHtml(card.the_voice) + '</li>');
+        if (groupAttrs.length) {{
+            html += '<ul style="margin:0;padding-left:20px;color:#444;font-size:0.95em;">' + groupAttrs.join('') + '</ul>';
+        }}
+
+        html += '</div>';
+    }});
+    return html;
+}}
+
 function renderCondensedCards(data) {{
     const settingDiv = document.getElementById('condensed-setting-card');
     const groupsDiv = document.getElementById('condensed-group-cards');
     settingDiv.innerHTML = '';
     groupsDiv.innerHTML = '';
 
-    // Setting card (displayed first, even though generated last)
-    if (data.setting) {{
-        const s = data.setting;
-        let html = '<div class="condensed-card">';
-        html += '<div class="setting-tag">Lesson Setting</div>';
-        html += '<h3>' + escHtml(s.title || '') + '</h3>';
-        if (s.somatic_intent) {{
-            html += '<p style="font-style:italic;margin:8px 0 12px 0;color:#444;">' + escHtml(s.somatic_intent) + '</p>';
+    const segments = data.segments || [];
+
+    if (segments.length <= 1) {{
+        // Single segment — render exactly as before
+        const seg = segments[0] || {{}};
+        if (seg.setting) {{
+            settingDiv.innerHTML = renderSettingCard(seg.setting, 'Lesson Setting');
         }}
-        const settingAttrs = [];
-        if (s.space) settingAttrs.push('<li><strong>Space:</strong> ' + escHtml(s.space) + '</li>');
-        if (s.teacher_presence) settingAttrs.push('<li><strong>Teacher Presence:</strong> ' + escHtml(s.teacher_presence) + '</li>');
-        if (s.arc) settingAttrs.push('<li><strong>Arc:</strong> ' + escHtml(s.arc) + '</li>');
-        if (settingAttrs.length) {{
-            html += '<ul style="margin:0;padding-left:20px;color:#444;font-size:0.95em;">' + settingAttrs.join('') + '</ul>';
+        if (seg.group_cards) {{
+            groupsDiv.innerHTML = renderGroupCards(seg.group_cards);
         }}
-        html += '</div>';
-        settingDiv.innerHTML = html;
-    }}
-
-    // Group cards
-    if (data.group_cards) {{
-        data.group_cards.forEach(card => {{
-            let html = '<div class="condensed-card">';
-            html += '<div class="group-tag">Group ' + card.group_number + ': ' + escHtml(card.group_label || '') + '</div>';
-            html += '<h3>' + escHtml(card.title || '') + '</h3>';
-
-            if (card.the_action) {{
-                html += '<p style="margin:8px 0 12px 0;color:#444;">' + escHtml(card.the_action) + '</p>';
+    }} else {{
+        // Multiple segments — render per-segment setting + group cards
+        let settingHtml = '';
+        let groupHtml = '';
+        segments.forEach(seg => {{
+            const segLabel = 'Segment ' + seg.segment_number + ': ' + (seg.theme || '');
+            if (seg.setting) {{
+                settingHtml += renderSettingCard(seg.setting, segLabel);
             }}
-            const groupAttrs = [];
-            if (card.the_body) groupAttrs.push('<li><strong>Body:</strong> ' + escHtml(card.the_body) + '</li>');
-            if (card.the_attention) groupAttrs.push('<li><strong>Attention:</strong> ' + escHtml(card.the_attention) + '</li>');
-            if (card.the_intention) groupAttrs.push('<li><strong>Intention:</strong> ' + escHtml(card.the_intention) + '</li>');
-            if (card.the_voice && card.the_voice.toLowerCase() !== 'none') groupAttrs.push('<li><strong>Voice:</strong> ' + escHtml(card.the_voice) + '</li>');
-            if (groupAttrs.length) {{
-                html += '<ul style="margin:0;padding-left:20px;color:#444;font-size:0.95em;">' + groupAttrs.join('') + '</ul>';
+            if (seg.group_cards) {{
+                groupHtml += '<div class="segment-divider" style="margin:18px 0 8px 0;padding:6px 10px;background:#f0f4ff;border-left:3px solid #4a6fa5;font-size:0.9em;color:#4a6fa5;font-weight:600;">'
+                    + escHtml(segLabel)
+                    + (seg.transition_note ? '<span style="font-weight:normal;color:#666;margin-left:10px;">' + escHtml(seg.transition_note) + '</span>' : '')
+                    + '</div>';
+                groupHtml += renderGroupCards(seg.group_cards);
             }}
-
-            html += '</div>';
-            groupsDiv.innerHTML += html;
         }});
+        settingDiv.innerHTML = settingHtml;
+        groupsDiv.innerHTML = groupHtml;
     }}
 }}
 
@@ -6462,6 +6773,21 @@ function showStepView() {{
     document.getElementById('card').style.display = '';
     if (analysisData) renderCard();
 }}
+
+// Auto-select lesson from query params (e.g. linked from pass0b analyzer)
+(function() {{
+    const params = new URLSearchParams(window.location.search);
+    const cat = params.get('category');
+    const lesson = params.get('lesson');
+    if (cat && lesson) {{
+        const catSel = document.getElementById('selected_category');
+        catSel.value = cat;
+        onCategoryChange(catSel);
+        const lessonSel = document.getElementById('selected_lesson');
+        lessonSel.value = lesson;
+        onLessonSelect(lessonSel);
+    }}
+}})();
 
 </script>
 </body>
