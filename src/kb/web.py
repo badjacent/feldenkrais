@@ -1018,6 +1018,7 @@ def run_segmentation_query(
     provider_key: str | None = None,
     debug_log: list | None = None,
     skip_cache: bool = False,
+    hint: str = "",
 ) -> dict:
     """Run the segmentation query to identify pedagogical arcs.
 
@@ -1028,18 +1029,27 @@ def run_segmentation_query(
     input_text = format_input_for_segmentation(pass_a_result, somatic_summary, lang_summary)
 
     prompt_template, schema = load_pass_0b_segmentation()
-    prompt = prompt_template + input_text
+
+    # Inject user hint if provided
+    hint_block = ""
+    if hint and hint.strip():
+        hint_block = f"\n\n## User Guidance\n{hint.strip()}\n"
+
+    prompt = prompt_template + hint_block + input_text
 
     system_prompt = (
         "You are an expert Feldenkrais practitioner identifying pedagogical arcs in a lesson. "
-        "Most lessons are a single arc. Only segment when there is a genuine shift in organizing principle."
+        "Most lessons are a single arc. Only segment when there is a genuine shift in organizing principle. "
+        "HARD CONSTRAINTS: Maximum 2 segments. The first segment must include at least the first four groups. "
+        "Never split the early exploratory phase of a lesson into its own segment."
     )
 
-    # Check cache
+    # Check cache (hint is included so different hints produce different results)
     cache_suffix = ":segmentation_v2"
     if provider_key and provider_key != DEFAULT_LLM:
         cache_suffix += f":{provider_key}"
-    cache_key = get_cache_key(lesson_text.strip() + cache_suffix)
+    hint_suffix = f":hint:{hint.strip()}" if hint and hint.strip() else ""
+    cache_key = get_cache_key(lesson_text.strip() + cache_suffix + hint_suffix)
     if not skip_cache:
         cached = load_cached_analysis(cache_key)
         if cached:
@@ -1216,6 +1226,7 @@ def _run_condensed_for_groups(
     provider_key: str | None,
     debug_log: list | None,
     segment_context: dict | None = None,
+    hint: str = "",
 ) -> dict:
     """Run a single condensed synthesis call, optionally filtered to specific groups.
 
@@ -1255,6 +1266,12 @@ def _run_condensed_for_groups(
         prompt = prompt_template + segment_preamble + input_text
     else:
         prompt = prompt_template + input_text
+
+    # Inject user hint if provided (between prompt template and input data)
+    if hint and hint.strip():
+        hint_block = f"\n\n## User Guidance\n{hint.strip()}\n"
+        # Insert hint before the input data section
+        prompt = prompt_template + (segment_preamble if segment_context else "") + hint_block + input_text
 
     system_prompt = (
         "You are an expert Feldenkrais practitioner creating condensed lesson cards. "
@@ -1305,6 +1322,7 @@ def run_pass_0b_condensed(
     provider_key: str | None = None,
     debug_log: list | None = None,
     skip_cache: bool = False,
+    hint: str = "",
 ) -> dict:
     """
     Pass 0b Condensed: Generate lesson cards from prior analyses.
@@ -1340,7 +1358,8 @@ def run_pass_0b_condensed(
     cache_suffix = ":pass_0b_condensed_v4"
     if provider_key and provider_key != DEFAULT_LLM:
         cache_suffix += f":{provider_key}"
-    cache_key = get_cache_key(lesson_text.strip() + cache_suffix)
+    hint_suffix = f":hint:{hint.strip()}" if hint and hint.strip() else ""
+    cache_key = get_cache_key(lesson_text.strip() + cache_suffix + hint_suffix)
     if not skip_cache:
         cached = load_cached_analysis(cache_key)
         if cached:
@@ -1355,6 +1374,7 @@ def run_pass_0b_condensed(
     seg_result = run_segmentation_query(
         pass_a_result, somatic_summary, lang_summary,
         lesson_text, provider_key, debug_log, skip_cache=skip_cache,
+        hint=hint,
     )
     segments_meta = seg_result.get("segments", [])
 
@@ -1369,6 +1389,7 @@ def run_pass_0b_condensed(
             group_filter=None,
             provider_key=provider_key,
             debug_log=debug_log,
+            hint=hint,
         )
         seg_meta = segments_meta[0] if segments_meta else {}
         output_segments.append({
@@ -1399,6 +1420,7 @@ def run_pass_0b_condensed(
                 provider_key=provider_key,
                 debug_log=debug_log,
                 segment_context=seg_ctx,
+                hint=hint,
             )
             output_segments.append({
                 "segment_number": seg_meta.get("segment_number", 1),
@@ -4788,6 +4810,7 @@ async def api_pass0b_condensed(
     lesson_text: str = Form(""),
     provider: str = Form(""),
     skip_cache: str = Form(""),
+    hint: str = Form(""),
 ):
     """Run Pass 0b + Pass 0b-lang (cached) then Pass 0b Condensed."""
     text = lesson_text.strip()
@@ -4796,6 +4819,7 @@ async def api_pass0b_condensed(
 
     prov = provider if provider else None
     no_cache = skip_cache == "1"
+    user_hint = hint.strip()
 
     try:
         # Run somatic + language analyses (will hit cache if already run)
@@ -4809,7 +4833,7 @@ async def api_pass0b_condensed(
 
         # Run condensed synthesis
         condensed_result = await asyncio.wait_for(
-            asyncio.to_thread(run_pass_0b_condensed, somatic_result, lang_result, text, prov, skip_cache=no_cache),
+            asyncio.to_thread(run_pass_0b_condensed, somatic_result, lang_result, text, prov, skip_cache=no_cache, hint=user_hint),
             timeout=ANALYSIS_TIMEOUT,
         )
 
@@ -4820,6 +4844,192 @@ async def api_pass0b_condensed(
         })
     except asyncio.TimeoutError:
         return JSONResponse({"error": "Analysis timed out."}, status_code=504)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+def assemble_chat_context(
+    lesson_text: str,
+    context_config: dict,
+    somatic_result: dict | None = None,
+    lang_result: dict | None = None,
+    condensed_result: dict | None = None,
+) -> str:
+    """Assemble system prompt for lesson chat from selected context layers."""
+    parts = [
+        "You are a knowledgeable Feldenkrais practitioner having a conversation about this lesson. "
+        "Answer questions using the analysis context provided below. Be specific and grounded "
+        "in what the analysis reveals about this particular lesson. "
+        "Keep responses concise — aim for 2-4 short paragraphs unless the user asks for more detail."
+    ]
+
+    if context_config.get("lesson_text") and lesson_text:
+        parts.append("\n\n## Original Lesson Text\n" + lesson_text)
+
+    if somatic_result:
+        pass_a = somatic_result.get("pass_a", {})
+        groups = pass_a.get("groups", [])
+
+        if context_config.get("pass_a") and groups:
+            # Build step lookup — pass_a["steps"] has full step dicts
+            step_lookup = {}
+            for s in pass_a.get("steps", []):
+                if isinstance(s, dict):
+                    step_lookup[s.get("step_number")] = s
+
+            lines = ["\n\n## Lesson Structure (Pass A)"]
+            for g in groups:
+                lines.append(f"\n### Group {g.get('group_number', '?')}: {g.get('label', '')}")
+                lines.append(g.get("description", ""))
+                for step_ref in g.get("steps", []):
+                    # steps in groups are just step numbers (ints)
+                    sn = step_ref if isinstance(step_ref, int) else step_ref.get("step_number", "?") if isinstance(step_ref, dict) else "?"
+                    step_data = step_lookup.get(sn, {})
+                    instruction = step_data.get("instruction", "")
+                    lines.append(f"- Step {sn}: {instruction}")
+            parts.append("\n".join(lines))
+
+        somatic_steps = somatic_result.get("enriched_steps", [])
+        if context_config.get("somatic") and somatic_steps:
+            lines = ["\n\n## Somatic Enrichment"]
+            for step in somatic_steps:
+                lines.append(f"\n**Step {step.get('step_number', '?')}**")
+                for field in ["differentiation", "activation", "inhibition", "transmission_route", "ground_push"]:
+                    val = step.get(field, "")
+                    if val and str(val).lower() != "none":
+                        lines.append(f"- {field}: {val}")
+            parts.append("\n".join(lines))
+
+        somatic_summary = somatic_result.get("summary", {})
+        if context_config.get("somatic_summary") and somatic_summary:
+            lines = ["\n\n## Somatic Architecture Summary"]
+            for key, val in somatic_summary.items():
+                if val and str(val).lower() != "none":
+                    lines.append(f"- **{key}**: {val}")
+            parts.append("\n".join(lines))
+
+    if lang_result:
+        lang_steps = lang_result.get("enriched_steps", [])
+        if context_config.get("language") and lang_steps:
+            lines = ["\n\n## Language Enrichment"]
+            for step in lang_steps:
+                lines.append(f"\n**Step {step.get('step_number', '?')}**")
+                for field in ["pedagogical_mode", "teacher_strategy", "sensory_channel", "sensory_inquiry"]:
+                    val = step.get(field, "")
+                    if val and str(val).lower() != "none":
+                        lines.append(f"- {field}: {val}")
+            parts.append("\n".join(lines))
+
+        lang_summary = lang_result.get("summary", {})
+        if context_config.get("language_summary") and lang_summary:
+            lines = ["\n\n## Language Summary"]
+            for key, val in lang_summary.items():
+                if val and str(val).lower() != "none":
+                    lines.append(f"- **{key}**: {val}")
+            parts.append("\n".join(lines))
+
+    if context_config.get("condensed") and condensed_result:
+        segments = condensed_result.get("segments", [])
+        if segments:
+            lines = ["\n\n## Condensed Cards"]
+            for seg in segments:
+                setting = seg.get("setting", {})
+                if setting:
+                    lines.append(f"\n### Setting: {setting.get('title', '')}")
+                    if setting.get("somatic_intent"):
+                        lines.append(f"*{setting['somatic_intent']}*")
+                    for attr in ["space", "teacher_presence", "arc"]:
+                        val = setting.get(attr, "")
+                        if val:
+                            lines.append(f"- {attr}: {val}")
+                for card in seg.get("group_cards", []):
+                    lines.append(f"\n### Group {card.get('group_number', '?')}: {card.get('group_label', '')}")
+                    lines.append(f"**{card.get('title', '')}**")
+                    if card.get("the_action"):
+                        lines.append(f"Action: {card['the_action']}")
+                    for attr in ["the_body", "the_attention", "the_intention", "the_voice"]:
+                        val = card.get(attr, "")
+                        if val and val.lower() != "none":
+                            lines.append(f"- {attr.replace('the_', '')}: {val}")
+            parts.append("\n".join(lines))
+
+    return "\n".join(parts)
+
+
+@app.post("/api/lesson-chat")
+async def api_lesson_chat(request: Request):
+    """Lesson chat endpoint — converse with the lesson using analysis context."""
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON body."}, status_code=400)
+
+    messages = body.get("messages", [])
+    if not messages:
+        return JSONResponse({"error": "No messages provided."}, status_code=400)
+
+    provider_key = body.get("provider") or None
+    context_config = body.get("context_config", {})
+    lesson_text = body.get("lesson_text", "").strip()
+
+    if not lesson_text:
+        return JSONResponse({"error": "No lesson text provided."}, status_code=400)
+
+    # Load cached analysis data from lesson text hash
+    somatic_result = None
+    lang_result = None
+    condensed_result = None
+
+    # Somatic (pass_0b_v2)
+    som_suffix = ":pass_0b_v2"
+    if provider_key and provider_key != DEFAULT_LLM:
+        som_suffix += f":{provider_key}"
+    som_cached = load_cached_analysis(get_cache_key(lesson_text + som_suffix))
+    if som_cached:
+        # Load pass_a separately (cached with :pass_a suffix)
+        pass_a_cached = load_cached_analysis(get_cache_key(lesson_text + ":pass_a"))
+        somatic_result = {
+            "pass_a": pass_a_cached or {},
+            "enriched_steps": som_cached.get("enriched_steps", []),
+            "summary": som_cached.get("summary", {}),
+        }
+
+    # Language (pass_0b_lang_v1)
+    lang_suffix = ":pass_0b_lang_v1"
+    if provider_key and provider_key != DEFAULT_LLM:
+        lang_suffix += f":{provider_key}"
+    lang_cached = load_cached_analysis(get_cache_key(lesson_text + lang_suffix))
+    if lang_cached:
+        lang_result = {
+            "enriched_steps": lang_cached.get("enriched_steps", []),
+            "summary": lang_cached.get("summary", {}),
+        }
+
+    # Condensed (pass_0b_condensed_v4)
+    cond_suffix = ":pass_0b_condensed_v4"
+    if provider_key and provider_key != DEFAULT_LLM:
+        cond_suffix += f":{provider_key}"
+    cond_cached = load_cached_analysis(get_cache_key(lesson_text + cond_suffix))
+    if cond_cached:
+        condensed_result = {"segments": cond_cached.get("segments", [])}
+
+    system_prompt = assemble_chat_context(
+        lesson_text, context_config,
+        somatic_result=somatic_result,
+        lang_result=lang_result,
+        condensed_result=condensed_result,
+    )
+
+    # Call LLM with chat messages
+    try:
+        llm = get_llm(provider_key)
+        chat_messages = [{"role": m["role"], "content": m["content"]} for m in messages if m.get("role") in ("user", "assistant")]
+
+        response_text = await asyncio.to_thread(
+            llm.chat, chat_messages, system=system_prompt,
+        )
+
+        return JSONResponse({"response": response_text})
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
@@ -6158,6 +6368,61 @@ def build_pass0b_player_html() -> str:
             vertical-align: middle; margin-right: 6px;
         }}
         @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
+
+        /* Chat panel */
+        .chat-panel {{
+            margin-top: 24px; border: 1px solid #e0e0e0; border-radius: 10px;
+            background: #fff; overflow: hidden;
+        }}
+        .chat-header {{
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 16px; background: #f5f5f5; border-bottom: 1px solid #e0e0e0;
+            cursor: pointer; user-select: none;
+        }}
+        .chat-header h3 {{ margin: 0; font-size: 0.95em; color: #333; }}
+        .chat-header .toggle {{ font-size: 0.8em; color: #888; }}
+        .chat-body {{ display: none; }}
+        .chat-body.open {{ display: block; }}
+        .chat-context-config {{
+            padding: 8px 16px; background: #fafafa; border-bottom: 1px solid #eee;
+            font-size: 0.8em; color: #555;
+        }}
+        .chat-context-config label {{
+            margin-right: 12px; cursor: pointer; white-space: nowrap;
+        }}
+        .chat-context-config input[type="checkbox"] {{ margin-right: 3px; }}
+        .chat-messages {{
+            height: 350px; overflow-y: auto; padding: 12px 16px;
+            display: flex; flex-direction: column; gap: 10px;
+        }}
+        .chat-msg {{
+            max-width: 85%; padding: 8px 12px; border-radius: 8px;
+            font-size: 0.9em; line-height: 1.5; white-space: pre-wrap;
+        }}
+        .chat-msg.user {{
+            align-self: flex-end; background: #e3f2fd; color: #1a237e;
+        }}
+        .chat-msg.assistant {{
+            align-self: flex-start; background: #f5f5f5; color: #333;
+        }}
+        .chat-msg.error {{
+            align-self: center; background: #ffebee; color: #c62828; font-size: 0.85em;
+        }}
+        .chat-input-row {{
+            display: flex; gap: 8px; padding: 10px 16px;
+            border-top: 1px solid #eee;
+        }}
+        .chat-input-row input {{
+            flex: 1; padding: 8px 12px; font-size: 0.9em;
+            border: 1px solid #ccc; border-radius: 6px;
+        }}
+        .chat-input-row button {{
+            padding: 8px 16px; font-size: 0.9em; font-weight: 500;
+            border: none; border-radius: 6px; background: #1976d2;
+            color: #fff; cursor: pointer;
+        }}
+        .chat-input-row button:hover {{ background: #1565c0; }}
+        .chat-input-row button:disabled {{ opacity: 0.5; cursor: not-allowed; }}
     </style>
 </head>
 <body>
@@ -6192,6 +6457,11 @@ def build_pass0b_player_html() -> str:
         <button class="btn-run" id="run-btn" onclick="runAnalysis()" disabled>Run</button>
         <button class="btn-condensed" id="condensed-btn" onclick="runCondensed()" disabled>Condensed</button>
         <label style="font-size:0.8em;color:#666;margin-left:8px;cursor:pointer;"><input type="checkbox" id="skip-cache-cb" style="margin-right:3px;">Skip cache</label>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <label style="font-size:0.85em;color:#555;white-space:nowrap;">Hint:</label>
+        <input type="text" id="condensed-hint" placeholder="e.g. this lesson is really about eye-opposition as a structural mechanism"
+               style="flex:1;padding:6px 10px;font-size:0.9em;border:1px solid #ccc;border-radius:4px;">
     </div>
 
     <div class="audio-container audio-hidden" id="audio-container">
@@ -6239,6 +6509,32 @@ def build_pass0b_player_html() -> str:
     <div id="condensed-view" style="display:none;">
         <div id="condensed-setting-card"></div>
         <div id="condensed-group-cards"></div>
+    </div>
+
+    <!-- Lesson Chat panel -->
+    <div class="chat-panel" id="chat-panel">
+        <div class="chat-header" onclick="toggleChat()">
+            <h3>Lesson Chat</h3>
+            <span class="toggle" id="chat-toggle">&#9654; Open</span>
+        </div>
+        <div class="chat-body" id="chat-body">
+            <div class="chat-context-config" id="chat-context-config">
+                <strong>Context:</strong>
+                <label><input type="checkbox" id="ctx-lesson-text" checked> Lesson text</label>
+                <label><input type="checkbox" id="ctx-pass-a" checked> Pass A</label>
+                <label><input type="checkbox" id="ctx-somatic" checked> Somatic</label>
+                <label><input type="checkbox" id="ctx-language" checked> Language</label>
+                <label><input type="checkbox" id="ctx-somatic-summary" checked> Somatic summary</label>
+                <label><input type="checkbox" id="ctx-language-summary" checked> Language summary</label>
+                <label><input type="checkbox" id="ctx-condensed" checked> Condensed cards</label>
+            </div>
+            <div class="chat-messages" id="chat-messages"></div>
+            <div class="chat-input-row">
+                <input type="text" id="chat-input" placeholder="Ask about this lesson..."
+                       onkeydown="if(event.key==='Enter') sendChat()">
+                <button id="chat-send-btn" onclick="sendChat()">Send</button>
+            </div>
+        </div>
     </div>
 
 <script>
@@ -6614,6 +6910,8 @@ function resetPlayer() {{
     document.getElementById('condensed-view').style.display = 'none';
     document.getElementById('condensed-setting-card').innerHTML = '';
     document.getElementById('condensed-group-cards').innerHTML = '';
+    chatMessages = [];
+    document.getElementById('chat-messages').innerHTML = '';
     clearStatus();
 }}
 
@@ -6650,6 +6948,8 @@ async function runCondensed() {{
         const form = new FormData();
         form.append('lesson_text', condensedLessonText);
         form.append('provider', document.getElementById('provider').value);
+        const hintVal = document.getElementById('condensed-hint').value.trim();
+        if (hintVal) form.append('hint', hintVal);
         if (document.getElementById('skip-cache-cb').checked) {{
             form.append('skip_cache', '1');
         }}
@@ -6772,6 +7072,98 @@ function showStepView() {{
     document.getElementById('condensed-view').style.display = 'none';
     document.getElementById('card').style.display = '';
     if (analysisData) renderCard();
+}}
+
+// ── Lesson Chat ──
+
+let chatMessages = [];
+
+function toggleChat() {{
+    const body = document.getElementById('chat-body');
+    const toggle = document.getElementById('chat-toggle');
+    if (body.classList.contains('open')) {{
+        body.classList.remove('open');
+        toggle.innerHTML = '&#9654; Open';
+    }} else {{
+        body.classList.add('open');
+        toggle.innerHTML = '&#9660; Close';
+        document.getElementById('chat-input').focus();
+    }}
+}}
+
+function getChatContextConfig() {{
+    return {{
+        lesson_text: document.getElementById('ctx-lesson-text').checked,
+        pass_a: document.getElementById('ctx-pass-a').checked,
+        somatic: document.getElementById('ctx-somatic').checked,
+        language: document.getElementById('ctx-language').checked,
+        somatic_summary: document.getElementById('ctx-somatic-summary').checked,
+        language_summary: document.getElementById('ctx-language-summary').checked,
+        condensed: document.getElementById('ctx-condensed').checked,
+    }};
+}}
+
+function renderChatMessages() {{
+    const container = document.getElementById('chat-messages');
+    container.innerHTML = chatMessages.map(m => {{
+        const cls = m.role === 'user' ? 'user' : (m.role === 'error' ? 'error' : 'assistant');
+        return '<div class="chat-msg ' + cls + '">' + escHtml(m.content) + '</div>';
+    }}).join('');
+    container.scrollTop = container.scrollHeight;
+}}
+
+async function sendChat() {{
+    const input = document.getElementById('chat-input');
+    const text = input.value.trim();
+    if (!text) return;
+
+    // Need lesson text for context
+    if (!condensedLessonText) {{
+        try {{
+            const textRes = await fetch('/api/lesson/' + encodeURIComponent(selectedCategory) + '/' + encodeURIComponent(selectedDocId));
+            const textData = await textRes.json();
+            if (textData.text) condensedLessonText = textData.text;
+        }} catch(e) {{}}
+    }}
+    if (!condensedLessonText) {{
+        chatMessages.push({{role: 'error', content: 'No lesson text available. Select a lesson first.'}});
+        renderChatMessages();
+        return;
+    }}
+
+    chatMessages.push({{role: 'user', content: text}});
+    input.value = '';
+    renderChatMessages();
+
+    const btn = document.getElementById('chat-send-btn');
+    btn.disabled = true;
+    btn.textContent = '...';
+
+    try {{
+        const apiMessages = chatMessages.filter(m => m.role === 'user' || m.role === 'assistant');
+        const res = await fetch('/api/lesson-chat', {{
+            method: 'POST',
+            headers: {{'Content-Type': 'application/json'}},
+            body: JSON.stringify({{
+                messages: apiMessages,
+                provider: document.getElementById('provider').value || '',
+                context_config: getChatContextConfig(),
+                lesson_text: condensedLessonText,
+            }}),
+        }});
+        const data = await res.json();
+        if (data.error) {{
+            chatMessages.push({{role: 'error', content: data.error}});
+        }} else {{
+            chatMessages.push({{role: 'assistant', content: data.response}});
+        }}
+    }} catch (e) {{
+        chatMessages.push({{role: 'error', content: 'Request failed: ' + e.message}});
+    }}
+
+    btn.disabled = false;
+    btn.textContent = 'Send';
+    renderChatMessages();
 }}
 
 // Auto-select lesson from query params (e.g. linked from pass0b analyzer)

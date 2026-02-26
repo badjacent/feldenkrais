@@ -40,7 +40,7 @@ The setting card creates the felt space of the lesson for the reader. Its purpos
 ### Fields:
 
 - **title**: A short evocative title for the lesson as a whole.
-- **somatic_intent**: What the lesson is physically about — the muscular trajectory and somatic architecture. What will the body learn? What is the central differentiation or transmission being developed? 2-4 sentences. Be specific to this lesson — avoid Feldenkrais generalities.
+- **somatic_intent**: What the lesson is physically about — the muscular trajectory and somatic architecture. What will the body learn? What is the central differentiation or transmission being developed? 2-5 sentences — one idea per sentence, don't pack multiple concepts into a single sentence. Be specific to this lesson — avoid Feldenkrais generalities.
 - **space**: The felt space of the lesson: starting position, quality of the environment the teacher creates, the overall attentional tone. This should help the reader *enter* the lesson — not describe it from outside. 2-3 sentences.
 - **teacher_presence**: The teacher's tone and additional pedagogical intent. How does this teacher approach this material? What is their characteristic way of guiding? Any particular emphasis or teaching strategy visible in their language? 2-3 sentences.
 - **arc**: The lesson's movement arc — how the groups build on each other. What is the learning trajectory from beginning to end? 2-3 sentences.
