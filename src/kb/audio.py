@@ -227,10 +227,12 @@ def reassemble_transcriptions(
     """
     full_text_parts = []
     full_segments = []
+    full_words = []
 
     for i, (result, offset) in enumerate(zip(chunk_results, chunk_offsets)):
         text = result.get("text", "")
         segments = result.get("segments", [])
+        words = result.get("words", [])
 
         # Adjust segment timestamps
         for segment in segments:
@@ -245,9 +247,24 @@ def reassemble_transcriptions(
 
             full_segments.append(adjusted_segment)
 
+        # Adjust word timestamps
+        for word in words:
+            adjusted_word = word.copy()
+            adjusted_word["start"] = word.get("start", 0) + offset
+            adjusted_word["end"] = word.get("end", 0) + offset
+
+            if i > 0 and overlap_seconds > 0:
+                if adjusted_word["start"] < offset + overlap_seconds:
+                    continue
+
+            full_words.append(adjusted_word)
+
         full_text_parts.append(text.strip())
 
-    return {
+    result = {
         "text": " ".join(full_text_parts),
         "segments": full_segments,
     }
+    if full_words:
+        result["words"] = full_words
+    return result

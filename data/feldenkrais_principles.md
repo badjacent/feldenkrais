@@ -108,9 +108,24 @@ The suboccipital muscles (rectus capitis posterior major/minor, obliquus capitis
 
 ---
 
+## 9. Attentional occupation as indirect quieting
+
+**What it is**: When a lesson gives the student a demanding, detailed task with one part of the body (e.g., sensing which hand approaches the midline faster), the parts of the body that are not being addressed receive no volitional instruction. This withdrawal of intentional control allows parasitic tone in those uninstructed parts to settle — not through direct inhibition, but through non-occupation. The nervous system stops maintaining habitual holding patterns in parts that aren't being driven.
+
+The lesson then introduces movement in the now-quieted area. Because that area starts from a state of reduced tone, the nervous system gets to experience the movement without its habitual co-contraction pattern. This becomes a new reference point — the system discovers that the movement is possible with far less effort than it usually uses. The real product is a revised motor plan that no longer includes unnecessary recruitment.
+
+**Why it matters for analysis**: A sequence where the student works intensively with the arms and then transitions to leg movements is not just "now we do arms, now we do legs." The arm work is creating conditions in the legs — by leaving them alone. When the analysis identifies a transition from upper body to lower body work (or vice versa), it should consider whether the first section is serving as attentional occupation that quiets the second area.
+
+**What it looks like in a lesson**: A section of detailed, absorbing work with one body region followed by movement in a different region. The second region's movements are often slow and minimal, preserving the quiet state. The teacher may use the same perceptual framework in both sections (e.g., sensing symmetry with the hands, then sensing symmetry with the knees), transferring a skill that was calibrated where proprioception is fine-grained to where it is coarser.
+
+> Observed in **The Plane of Symmetry** (Jeff Haller): The student first brings hands together along an imagined midline plane, sensing asymmetrical rates of approach — a detailed, absorbing task. The legs lie uninstructed and quiet. Then the knees are brought toward and away from the same plane, applying the same perceptual skill to legs that have settled into reduced tone. The sequence transfers both the sensing framework and the quieted state.
+
+---
+
 ## Source lessons
 
 These principles were primarily identified through analysis of:
 - **Coordinating Flexors and Extensors** — Andrew Gibbons' version (document ID: `b5255f3e-1789-4d5b-b43a-1d319abed0b0`), compared with Moshe Feldenkrais's original from "Awareness Through Movement"
 - **Waist Steering Differential** (document ID: `ba29a9a4-d2a5-4b24-a7e1-94c3d04bd9f4`)
 - **Carriage of the Head, Part 1** — Andrew Gibbons (document ID: `2bf94f97-cf71-49df-951e-2ee8c0665e51`): Signal lesson for teleceptor/eye opposition in rotation
+- **The Plane of Symmetry: A Life Lesson** — Jeff Haller (document ID: `e1185287-735d-479f-b12d-ba5c40c7d104`): Signal lesson for attentional occupation as indirect quieting

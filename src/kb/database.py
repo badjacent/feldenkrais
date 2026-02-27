@@ -827,6 +827,19 @@ class Database:
                 return row["segments"] if isinstance(row["segments"], list) else json.loads(row["segments"])
             return None
 
+    def get_document_whisper_words(self, document_id: str) -> Optional[list]:
+        """Get word-level timestamps for a document from its transcription analysis."""
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute("""
+                SELECT a.data->'words' as words
+                FROM analysis a
+                WHERE a.document_id = %s AND a.type_id = 1
+            """, (document_id,))
+            row = cursor.fetchone()
+            if row and row["words"]:
+                return row["words"] if isinstance(row["words"], list) else json.loads(row["words"])
+            return None
+
     def update_source_category_name(self, source_id: int, category_name: str):
         """Set the display category name for a document source."""
         with self.get_cursor() as cursor:

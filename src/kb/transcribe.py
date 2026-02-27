@@ -84,6 +84,7 @@ def create_batch_request(
             "url": audio_url,
             "response_format": "verbose_json",
             "language": language,
+            "timestamp_granularities": ["word", "segment"],
         },
     }
 
@@ -528,6 +529,7 @@ class TranscriptionService:
                 chunk_results.append({
                     "text": body.get("text", ""),
                     "segments": body.get("segments", []),
+                    "words": body.get("words", []),
                 })
                 chunk_offsets.append(job.get("chunk_offset_seconds") or 0)
 
@@ -540,14 +542,17 @@ class TranscriptionService:
                 combined = reassemble_transcriptions(chunk_results, chunk_offsets)
                 text = combined["text"]
                 segments = combined["segments"]
+                words = combined.get("words", [])
             else:
                 text = chunk_results[0]["text"]
                 segments = chunk_results[0]["segments"]
+                words = chunk_results[0].get("words", [])
 
             # Create analysis record
             analysis_data = {
                 "text": text,
                 "segments": segments,
+                "words": words,
                 "language": "en",  # TODO: get from first chunk
                 "model": self.config.model,
                 "batch_id": batch_id,
@@ -694,6 +699,7 @@ class TranscriptionService:
                         model=self.config.model,
                         response_format="verbose_json",
                         language="en",
+                        timestamp_granularities=["word", "segment"],
                     )
 
                 # Handle segments - may be dicts or objects depending on API
@@ -701,9 +707,15 @@ class TranscriptionService:
                 if segments and hasattr(segments[0], 'model_dump'):
                     segments = [s.model_dump() for s in segments]
 
+                # Handle words - same treatment
+                words = getattr(response, 'words', None) or []
+                if words and hasattr(words[0], 'model_dump'):
+                    words = [w.model_dump() for w in words]
+
                 chunk_results.append({
                     "text": response.text,
                     "segments": segments,
+                    "words": words,
                 })
                 chunk_offsets.append(chunk.offset_seconds)
 
@@ -712,14 +724,17 @@ class TranscriptionService:
                 combined = reassemble_transcriptions(chunk_results, chunk_offsets)
                 text = combined["text"]
                 segments = combined["segments"]
+                words = combined.get("words", [])
             else:
                 text = chunk_results[0]["text"]
                 segments = chunk_results[0]["segments"]
+                words = chunk_results[0].get("words", [])
 
             # Create analysis record
             analysis_data = {
                 "text": text,
                 "segments": segments,
+                "words": words,
                 "language": response.language,
                 "model": self.config.model,
                 "chunk_count": len(chunks),

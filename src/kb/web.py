@@ -920,6 +920,190 @@ def run_pass_0b_lang(lesson_text: str, provider_key: str | None = None, debug_lo
         raise
 
 
+# ── Pass 0b Word-Level Language Annotation ────────────────────────────────
+
+
+def load_pass_0b_word_lang() -> tuple[str, dict]:
+    """Load Pass 0b word-level language annotation prompt and schema."""
+    prompt_path = DATA_DIR / "pass_0b_word_lang.md"
+    schema_path = DATA_DIR / "pass_0b_word_lang.schema.json"
+    prompt = prompt_path.read_text() if prompt_path.exists() else ""
+    schema = json.loads(schema_path.read_text()) if schema_path.exists() else {}
+    return prompt, schema
+
+
+def format_steps_for_word_lang(pass_a_result: dict, lang_enriched: list) -> str:
+    """Build LLM input for word-level annotation from Pass A output + lang analysis.
+
+    Each step shows the original transcript segments followed by the prior
+    language analysis results as context.
+    """
+    pass_0 = pass_a_result.get("pass_0", {})
+    segments = pass_0.get("segments", [])
+    seg_lookup = {s["id"]: s["text"] for s in segments}
+
+    groups = pass_a_result.get("groups", [])
+    steps = pass_a_result.get("steps", [])
+
+    # Build lang lookup
+    lang_lookup = {e["step_number"]: e for e in lang_enriched}
+
+    # Map steps to groups
+    group_lookup = {}
+    for g in groups:
+        for sn in g.get("steps", []):
+            group_lookup[sn] = g
+
+    lines = []
+    for step in steps:
+        sn = step["step_number"]
+        g = group_lookup.get(sn, {})
+        gn = g.get("group_number", "?")
+        g_title = g.get("title", "")
+
+        tags = step.get("tags", [])
+        tag_str = ", ".join(tags) if tags else ""
+        instruction = step.get("instruction", "")
+
+        lines.append(f"## Group {gn}: {g_title}")
+        lines.append(f"### Step {sn} [{tag_str}] — {instruction}")
+
+        # Original segment texts
+        for sid in step.get("segments", []):
+            text = seg_lookup.get(sid, "")
+            if text:
+                lines.append(f"[{sid}] {text}")
+
+        # Prior language analysis as context
+        lang = lang_lookup.get(sn, {})
+        lang_fields = []
+        for field in ["attention_cues", "effort_language", "image_language",
+                      "explanatory_language", "distinctive_phrasing"]:
+            val = lang.get(field, "None")
+            if val and val != "None":
+                label = field.replace("_", " ").title()
+                lang_fields.append(f"  - {label}: {val}")
+
+        if lang_fields:
+            lines.append("\n**Prior language analysis:**")
+            lines.extend(lang_fields)
+
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def run_pass_0b_word_lang(lesson_text: str, provider_key: str | None = None, debug_log: list | None = None) -> dict:
+    """
+    Pass 0b word-level language annotation.
+
+    Runs Pass A (cached) → runs pass_0b_lang (cached) → formats combined input →
+    calls LLM with word-level annotation prompt.
+
+    Returns:
+        {
+            "pass_a": { ... },
+            "word_annotations": [{ step_number, phrases: [{ text, category, note }] }],
+            "elapsed": float,
+            "cached": bool,
+        }
+    """
+    import time
+
+    # Run Pass A first (has its own cache)
+    pass_a_result = run_pass_a(lesson_text, provider_key, debug_log)
+
+    # Run pass_0b_lang (has its own cache)
+    lang_result = run_pass_0b_lang(lesson_text, provider_key, debug_log)
+    lang_enriched = lang_result.get("enriched_steps", [])
+
+    # Format combined input
+    steps_text = format_steps_for_word_lang(pass_a_result, lang_enriched)
+
+    # Load prompt and schema
+    prompt_template, schema = load_pass_0b_word_lang()
+    prompt = prompt_template + steps_text
+
+    system_prompt = (
+        "You are an expert in Feldenkrais pedagogy and language analysis. "
+        "Annotate the teacher's language at the word/phrase level. "
+        "Process every step. Do not skip, merge, or split steps."
+    )
+
+    # Check cache
+    cache_suffix = ":pass_0b_word_lang_v1"
+    if provider_key and provider_key != DEFAULT_LLM:
+        cache_suffix += f":{provider_key}"
+    cache_key = get_cache_key(lesson_text.strip() + cache_suffix)
+    cached = load_cached_analysis(cache_key)
+    if cached:
+        return {
+            "pass_a": pass_a_result,
+            "word_annotations": cached.get("word_annotations", []),
+            "cached": True,
+        }
+
+    # Run LLM
+    llm = get_llm(provider_key)
+    t0 = time.time()
+
+    if debug_log is not None:
+        debug_log.append({
+            "name": "Pass 0b Word-Lang",
+            "provider": provider_key or DEFAULT_LLM,
+            "prompt": prompt,
+            "system": system_prompt,
+            "schema": schema,
+        })
+
+    try:
+        result = llm.complete_structured_json(
+            prompt=prompt,
+            schema=schema,
+            system=system_prompt,
+        )
+        elapsed = round(time.time() - t0, 1)
+
+        if debug_log is not None:
+            debug_log[-1]["output"] = json.dumps(result, indent=2)
+            debug_log[-1]["elapsed"] = elapsed
+
+        word_annotations = result.get("steps", [])
+
+        # Validate step count
+        expected_count = len(pass_a_result.get("steps", []))
+        actual_count = len(word_annotations)
+        truncation_warning = None
+        if actual_count < expected_count:
+            truncation_warning = (
+                f"LLM returned {actual_count} of {expected_count} steps "
+                f"(missing steps {actual_count + 1}-{expected_count}). "
+                f"Output was likely truncated due to token limits."
+            )
+            import logging
+            logging.warning(f"Pass 0b word-lang truncation: {truncation_warning}")
+
+        # Capture token usage
+        usage = llm.last_usage if llm.last_usage else {}
+
+        # Cache the result
+        save_cached_analysis(cache_key, {"word_annotations": word_annotations, "usage": usage})
+
+        return {
+            "pass_a": pass_a_result,
+            "word_annotations": word_annotations,
+            "elapsed": elapsed,
+            "cached": False,
+            "truncation_warning": truncation_warning,
+            "usage": usage,
+        }
+
+    except Exception as e:
+        if debug_log is not None:
+            debug_log[-1]["error"] = str(e)
+        raise
+
+
 # ── Pass 0b Condensed: Lesson Cards ──────────────────────────────────────
 
 
@@ -4640,6 +4824,37 @@ async def api_pass0b_combined(
         }, status_code=500)
 
 
+@app.post("/api/pass0b-word-lang-json")
+async def api_pass0b_word_lang_json(
+    lesson_text: str = Form(""),
+    selected_category: str = Form(""),
+    selected_lesson: str = Form(""),
+    provider: str = Form(""),
+):
+    """Run word-level language annotation and return phrase annotations per step."""
+    text = lesson_text.strip()
+    if not text:
+        return JSONResponse({"error": "Please enter or select lesson text."}, status_code=400)
+
+    prov = provider if provider else None
+
+    try:
+        result = await asyncio.wait_for(
+            asyncio.to_thread(run_pass_0b_word_lang, text, prov),
+            timeout=ANALYSIS_TIMEOUT,
+        )
+        return JSONResponse({
+            "word_annotations": result.get("word_annotations", []),
+            "elapsed": result.get("elapsed"),
+            "cached": result.get("cached", False),
+            "truncation_warning": result.get("truncation_warning"),
+        })
+    except asyncio.TimeoutError:
+        return JSONResponse({"error": "Analysis timed out."}, status_code=504)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 # --- Pass 0b Player: Audio-synced card view ---
 
 @app.get("/api/audio-url/{document_id}")
@@ -4664,6 +4879,17 @@ async def api_whisper_segments(document_id: str):
     if segments is None:
         return JSONResponse({"error": "No whisper segments found"}, status_code=404)
     return JSONResponse({"segments": segments})
+
+
+@app.get("/api/whisper-words/{document_id}")
+async def api_whisper_words(document_id: str):
+    """Return word-level timestamps for karaoke-style text highlighting."""
+    if not _db:
+        return JSONResponse({"error": "Database not configured"}, status_code=500)
+    words = _db.get_document_whisper_words(document_id)
+    if words is None:
+        return JSONResponse({"words": None})
+    return JSONResponse({"words": words})
 
 
 @app.post("/api/pass0b-combined-json")
@@ -6215,6 +6441,31 @@ def build_pass0b_player_html() -> str:
         .btn-condensed {{ background: #6c757d; color: white; }}
         .btn-condensed:hover {{ background: #545b62; }}
         .btn-condensed:disabled {{ background: #ccc; cursor: not-allowed; }}
+        .btn-annotate {{ background: #9c27b0; color: white; }}
+        .btn-annotate:hover {{ background: #7b1fa2; }}
+        .btn-annotate:disabled {{ background: #ccc; cursor: not-allowed; }}
+
+        /* Word-level annotation colors */
+        .word-attention {{ background: rgba(255, 152, 0, 0.25); border-radius: 2px; padding: 0 1px; }}
+        .word-effort {{ background: rgba(76, 175, 80, 0.25); border-radius: 2px; padding: 0 1px; }}
+        .word-image {{ background: rgba(156, 39, 176, 0.25); border-radius: 2px; padding: 0 1px; }}
+        .word-explanatory {{ background: rgba(33, 150, 243, 0.25); border-radius: 2px; padding: 0 1px; }}
+        .word-distinctive {{ background: rgba(233, 30, 99, 0.25); border-radius: 2px; padding: 0 1px; }}
+        .note-line {{
+            font-size: 0.82em; color: #555; min-height: 1.4em;
+            padding: 4px 8px; margin-top: 4px;
+            border-top: 1px solid #f0e68c;
+            font-style: italic;
+        }}
+        .note-category {{
+            font-weight: 600; font-style: normal; font-size: 0.85em;
+            text-transform: uppercase; letter-spacing: 0.3px; margin-right: 4px;
+        }}
+        .note-cat-attention {{ color: #e65100; }}
+        .note-cat-effort {{ color: #2e7d32; }}
+        .note-cat-image {{ color: #7b1fa2; }}
+        .note-cat-explanatory {{ color: #1565c0; }}
+        .note-cat-distinctive {{ color: #c2185b; }}
 
         /* Condensed cards */
         .condensed-card {{
@@ -6304,8 +6555,11 @@ def build_pass0b_player_html() -> str:
             background: #fffde7; border: 2px solid #fdd835;
             border-radius: 6px; padding: 12px 16px;
             margin-top: 10px; font-size: 0.95em;
-            line-height: 1.5; color: #333;
+            line-height: 1.5; color: #555;
             min-height: 50px;
+        }}
+        .segment-box strong {{
+            transition: color 0.15s;
         }}
 
         /* Analysis sections */
@@ -6445,6 +6699,7 @@ def build_pass0b_player_html() -> str:
         </div>
         <button class="btn-run" id="run-btn" onclick="runAnalysis()" disabled>Run</button>
         <button class="btn-condensed" id="condensed-btn" onclick="runCondensed()" disabled>Condensed</button>
+        <button class="btn-annotate" id="annotate-btn" onclick="runAnnotate()" disabled>Annotate</button>
         <label style="font-size:0.8em;color:#666;margin-left:8px;cursor:pointer;"><input type="checkbox" id="skip-cache-cb" style="margin-right:3px;">Skip cache</label>
     </div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
@@ -6457,6 +6712,7 @@ def build_pass0b_player_html() -> str:
         <audio id="audio-player" controls preload="auto"></audio>
         <div class="segment-box" id="segment-box">
             <div id="segment-text"></div>
+            <div class="note-line" id="annotation-note"></div>
         </div>
     </div>
 
@@ -6531,7 +6787,9 @@ const lessonsData = {lessons_json};
 
 // State
 let whisperSegments = null;  // raw whisper segments
+let whisperWords = null;     // word-level timestamps
 let analysisData = null;     // structured analysis JSON
+let wordAnnotations = null;  // word-level language annotations
 let currentStepIdx = 0;
 let audioReady = false;
 let selectedDocId = null;
@@ -6565,14 +6823,16 @@ async function onLessonSelect(sel) {{
 
     showStatus('Loading audio and segments...');
 
-    // Load audio URL and whisper segments in parallel
+    // Load audio URL, whisper segments, and word timestamps in parallel
     try {{
-        const [audioRes, segRes] = await Promise.all([
+        const [audioRes, segRes, wordRes] = await Promise.all([
             fetch('/api/audio-url/' + encodeURIComponent(selectedDocId)),
             fetch('/api/whisper-segments/' + encodeURIComponent(selectedDocId)),
+            fetch('/api/whisper-words/' + encodeURIComponent(selectedDocId)),
         ]);
         const audioData = await audioRes.json();
         const segData = await segRes.json();
+        const wordData = await wordRes.json();
 
         if (audioData.audio_url) {{
             audio.src = audioData.audio_url;
@@ -6586,9 +6846,16 @@ async function onLessonSelect(sel) {{
             whisperSegments = segData.segments;
         }}
 
+        if (wordData.words) {{
+            whisperWords = wordData.words;
+        }}
+
         document.getElementById('run-btn').disabled = false;
         document.getElementById('condensed-btn').disabled = false;
+        document.getElementById('annotate-btn').disabled = false;
         condensedLessonText = null;
+        annotateLessonText = null;
+        wordAnnotations = null;
         clearStatus();
     }} catch (e) {{
         showStatus('Error loading lesson data: ' + e.message, true);
@@ -6790,6 +7057,98 @@ audio.addEventListener('timeupdate', function() {{
     }}
 }});
 
+function getAnnotationsForStep(stepNumber) {{
+    if (!wordAnnotations) return [];
+    const step = wordAnnotations.find(s => s.step_number === stepNumber);
+    return step ? (step.phrases || []) : [];
+}}
+
+function matchPhrasesToWords(rangeWords, phrases) {{
+    // For each phrase, find consecutive words that match
+    // Returns a map: wordIndex -> {{ category, note }}
+    const wordMap = {{}};
+    if (!phrases || !phrases.length) return wordMap;
+
+    // Build a lowercase word array for matching
+    const lcWords = rangeWords.map(w => w.word.toLowerCase().replace(/[.,!?;:'"]/g, ''));
+
+    for (const phrase of phrases) {{
+        const phraseTokens = phrase.text.toLowerCase().replace(/[.,!?;:'"]/g, '').split(/\s+/).filter(t => t);
+        if (!phraseTokens.length) continue;
+
+        // Sliding window search
+        for (let i = 0; i <= lcWords.length - phraseTokens.length; i++) {{
+            let match = true;
+            for (let j = 0; j < phraseTokens.length; j++) {{
+                if (lcWords[i + j] !== phraseTokens[j]) {{
+                    match = false;
+                    break;
+                }}
+            }}
+            if (match) {{
+                for (let j = 0; j < phraseTokens.length; j++) {{
+                    wordMap[i + j] = {{ category: phrase.category, note: phrase.note, text: phrase.text }};
+                }}
+                break;  // first match wins
+            }}
+        }}
+    }}
+    return wordMap;
+}}
+
+function renderTextWithWordHighlight(text, t, timeStart, timeEnd, stepNumber) {{
+    // If no word timestamps, return plain text
+    if (!whisperWords || !whisperWords.length) return escHtml(text);
+
+    // Find words in this time range
+    const rangeWords = [];
+    for (const w of whisperWords) {{
+        if (w.start >= (timeStart - 0.5) && w.end <= (timeEnd + 0.5)) {{
+            rangeWords.push(w);
+        }}
+        if (w.start > timeEnd + 1) break;  // past the range, stop searching
+    }}
+
+    if (!rangeWords.length) return escHtml(text);
+
+    // Get phrase annotations for this step
+    const phrases = stepNumber != null ? getAnnotationsForStep(stepNumber) : [];
+    const wordMap = matchPhrasesToWords(rangeWords, phrases);
+
+    // Build HTML with bold on current word + colored annotation spans
+    let html = '';
+    let currentNote = null;
+    for (let i = 0; i < rangeWords.length; i++) {{
+        const w = rangeWords[i];
+        const isCurrent = (t >= w.start - 0.05 && t <= w.end + 0.05);
+        const ann = wordMap[i];
+        if (i > 0) html += ' ';
+
+        let wordHtml = escHtml(w.word);
+        if (isCurrent) {{
+            wordHtml = '<strong style="color:#1a237e;font-size:1.05em;">' + wordHtml + '</strong>';
+            if (ann) currentNote = ann;
+        }}
+        if (ann) {{
+            wordHtml = '<span class="word-' + ann.category + '">' + wordHtml + '</span>';
+        }}
+        html += wordHtml;
+    }}
+
+    // Update note line
+    const noteLine = document.getElementById('annotation-note');
+    if (noteLine) {{
+        if (currentNote) {{
+            noteLine.innerHTML = '<span class="note-category note-cat-' + currentNote.category + '">'
+                + currentNote.category + '</span> ' + escHtml(currentNote.note);
+        }} else {{
+            noteLine.innerHTML = '';
+        }}
+    }}
+
+    return html;
+}}
+
 function updateSegmentForTime(t) {{
     const segBox = document.getElementById('segment-text');
     if (!segBox) return;
@@ -6797,16 +7156,17 @@ function updateSegmentForTime(t) {{
     // If analysis data exists, use step-level segments
     if (analysisData) {{
         const step = analysisData.steps[currentStepIdx];
+        const stepNum = step ? step.step_number : null;
         if (step && step.segments) {{
             for (const seg of step.segments) {{
                 if (seg.time_start != null && t >= seg.time_start && t <= seg.time_end) {{
-                    segBox.textContent = seg.text;
+                    segBox.innerHTML = renderTextWithWordHighlight(
+                        seg.text, t, seg.time_start, seg.time_end, stepNum);
                     return;
                 }}
             }}
-            // If no segment matches, show the step's first segment or nothing
+            // If no segment matches, show closest segment
             if (step.segments.length > 0) {{
-                // Find the closest segment
                 let closest = step.segments[0];
                 let minDist = Infinity;
                 for (const seg of step.segments) {{
@@ -6815,7 +7175,9 @@ function updateSegmentForTime(t) {{
                         if (dist < minDist) {{ minDist = dist; closest = seg; }}
                     }}
                 }}
-                segBox.textContent = closest.text || '';
+                segBox.innerHTML = renderTextWithWordHighlight(
+                    closest.text || '', t,
+                    closest.time_start || 0, closest.time_end || 0, stepNum);
             }}
             return;
         }}
@@ -6825,7 +7187,8 @@ function updateSegmentForTime(t) {{
     if (whisperSegments) {{
         for (const ws of whisperSegments) {{
             if (t >= ws.start && t <= ws.end) {{
-                segBox.textContent = ws.text;
+                segBox.innerHTML = renderTextWithWordHighlight(
+                    ws.text, t, ws.start, ws.end, null);
                 return;
             }}
         }}
@@ -6886,13 +7249,17 @@ function clearStatus() {{
 
 function resetPlayer() {{
     whisperSegments = null;
+    whisperWords = null;
     analysisData = null;
+    wordAnnotations = null;
     currentStepIdx = 0;
     audioReady = false;
     audio.src = '';
     audioContainer.classList.add('audio-hidden');
     document.getElementById('run-btn').disabled = true;
     document.getElementById('condensed-btn').disabled = true;
+    document.getElementById('annotate-btn').disabled = true;
+    document.getElementById('annotation-note').innerHTML = '';
     document.getElementById('card-placeholder').style.display = '';
     document.getElementById('card-content').style.display = 'none';
     document.getElementById('progress-bar').textContent = '';
@@ -6971,6 +7338,67 @@ async function runCondensed() {{
     }} catch (e) {{
         showStatus('Error: ' + e.message, true);
         btn.textContent = 'Condensed';
+        btn.disabled = false;
+    }}
+}}
+
+// ── Word-level annotation ──
+
+let annotateLessonText = null;
+
+async function runAnnotate() {{
+    const btn = document.getElementById('annotate-btn');
+    btn.disabled = true;
+    btn.textContent = 'Loading...';
+
+    showStatus('<span class="spinner-inline"></span> Generating word-level language annotations...');
+
+    try {{
+        // Fetch lesson text if not already loaded
+        if (!annotateLessonText) {{
+            const textRes = await fetch('/api/lesson/' + encodeURIComponent(selectedCategory) + '/' + encodeURIComponent(selectedDocId));
+            const textData = await textRes.json();
+            if (!textData.text) {{
+                showStatus('Could not load lesson text.', true);
+                btn.disabled = false;
+                btn.textContent = 'Annotate';
+                return;
+            }}
+            annotateLessonText = textData.text;
+        }}
+
+        const form = new FormData();
+        form.append('lesson_text', annotateLessonText);
+        form.append('selected_category', selectedCategory);
+        form.append('selected_lesson', selectedDocId);
+        form.append('provider', document.getElementById('provider').value);
+
+        const res = await fetch('/api/pass0b-word-lang-json', {{
+            method: 'POST',
+            body: form,
+        }});
+        const data = await res.json();
+
+        if (data.error) {{
+            showStatus('Error: ' + data.error, true);
+            btn.disabled = false;
+            btn.textContent = 'Annotate';
+            return;
+        }}
+
+        wordAnnotations = data.word_annotations || [];
+        clearStatus();
+
+        const timing = data.cached ? 'cached' : (data.elapsed || '?') + 's';
+        const totalPhrases = wordAnnotations.reduce((n, s) => n + (s.phrases ? s.phrases.length : 0), 0);
+        document.getElementById('progress-bar').textContent =
+            totalPhrases + ' annotations across ' + wordAnnotations.length + ' steps | ' + timing;
+
+        btn.textContent = 'Annotate';
+        btn.disabled = false;
+    }} catch (e) {{
+        showStatus('Error: ' + e.message, true);
+        btn.textContent = 'Annotate';
         btn.disabled = false;
     }}
 }}
