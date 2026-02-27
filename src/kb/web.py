@@ -10102,7 +10102,7 @@ def _load_book_lessons_compat() -> dict:
     try:
         from pipeline_graph import get_book_lessons
     except ImportError:
-        get_book_lessons = None
+        return {}
     if not _db:
         return {}
     lessons = get_book_lessons(_db)
@@ -10169,7 +10169,7 @@ async def book_page(request: Request):
     try:
         from pipeline_graph import get_book_lessons
     except ImportError:
-        get_book_lessons = None
+        get_book_lessons = lambda db: []
 
     vl_ids = sorted(VL_BOOKLET_INTROS.keys())  # VL-1 .. VL-5
 
@@ -10756,7 +10756,7 @@ async def toggle_pipeline_node(node_name: str):
     try:
         from pipeline import PipelineStateStore
     except ImportError:
-        PipelineStateStore = None
+        return JSONResponse({"error": "Pipeline not available"}, status_code=503)
     store = PipelineStateStore(_db)
     store.initialize()
     current = store.is_enabled(node_name)
@@ -10772,7 +10772,7 @@ async def rebuild_pipeline_node(node_name: str):
     try:
         from pipeline import PipelineStateStore
     except ImportError:
-        PipelineStateStore = None
+        return JSONResponse({"error": "Pipeline not available"}, status_code=503)
 
     store = PipelineStateStore(_db)
     store.initialize()
@@ -10804,7 +10804,7 @@ async def add_book_lesson(request: Request):
     try:
         from pipeline_graph import get_book_lessons, set_book_lessons
     except ImportError:
-        get_book_lessons = set_book_lessons = None
+        return JSONResponse({"error": "Pipeline not available"}, status_code=503)
 
     body = await request.json()
     lesson_id = body.get("lesson_id")
@@ -10830,7 +10830,7 @@ async def remove_book_lesson(request: Request):
     try:
         from pipeline_graph import get_book_lessons, set_book_lessons
     except ImportError:
-        get_book_lessons = set_book_lessons = None
+        return JSONResponse({"error": "Pipeline not available"}, status_code=503)
 
     body = await request.json()
     lesson_id = body.get("lesson_id")
@@ -10851,7 +10851,7 @@ async def list_book_lessons():
     try:
         from pipeline_graph import get_book_lessons
     except ImportError:
-        get_book_lessons = None
+        return JSONResponse({"error": "Pipeline not available"}, status_code=503)
 
     lessons = get_book_lessons(_db)
     return JSONResponse({"lessons": lessons})
