@@ -1,46 +1,36 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Pass0bWordLangResult",
-  "description": "Word-level language annotations: verbatim phrases tagged by category with micro-commentary",
+  "description": "Word-level language annotations: flat array of tagged phrases with step numbers",
   "type": "object",
   "properties": {
-    "steps": {
+    "annotations": {
       "type": "array",
-      "description": "One entry per step, in order, matching input step numbers",
+      "description": "All annotated phrases across all steps. Steps with no interesting language are simply omitted.",
       "items": {
         "type": "object",
         "properties": {
           "step_number": {
             "type": "integer",
-            "description": "Step number matching the input step"
+            "description": "Step number this phrase belongs to"
           },
-          "phrases": {
-            "type": "array",
-            "description": "Annotated phrases from this step's transcript text. Empty array if no interesting language.",
-            "items": {
-              "type": "object",
-              "properties": {
-                "text": {
-                  "type": "string",
-                  "description": "Verbatim substring from the step's transcript segments"
-                },
-                "category": {
-                  "type": "string",
-                  "enum": ["attention", "effort", "image", "explanatory", "distinctive"],
-                  "description": "Language function category"
-                },
-                "note": {
-                  "type": "string",
-                  "description": "5-15 word explanation of the pedagogical function"
-                }
-              },
-              "required": ["text", "category", "note"]
-            }
+          "text": {
+            "type": "string",
+            "description": "Verbatim substring from the step's transcript segments"
+          },
+          "category": {
+            "type": "string",
+            "enum": ["attention", "effort", "image", "explanatory", "distinctive"],
+            "description": "Language function category"
+          },
+          "note": {
+            "type": "string",
+            "description": "5-15 word explanation of the pedagogical function"
           }
         },
-        "required": ["step_number", "phrases"]
+        "required": ["step_number", "text", "category", "note"]
       }
     }
   },
-  "required": ["steps"]
+  "required": ["annotations"]
 }

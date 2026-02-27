@@ -1068,20 +1068,24 @@ def run_pass_0b_word_lang(lesson_text: str, provider_key: str | None = None, deb
             debug_log[-1]["output"] = json.dumps(result, indent=2)
             debug_log[-1]["elapsed"] = elapsed
 
-        word_annotations = result.get("steps", [])
+        # Regroup flat annotations into per-step format for the client
+        flat_annotations = result.get("annotations", [])
+        from collections import defaultdict
+        by_step = defaultdict(list)
+        for ann in flat_annotations:
+            sn = ann.get("step_number")
+            if sn is not None:
+                by_step[sn].append({
+                    "text": ann.get("text", ""),
+                    "category": ann.get("category", ""),
+                    "note": ann.get("note", ""),
+                })
+        word_annotations = [
+            {"step_number": sn, "phrases": phrases}
+            for sn, phrases in sorted(by_step.items())
+        ]
 
-        # Validate step count
-        expected_count = len(pass_a_result.get("steps", []))
-        actual_count = len(word_annotations)
         truncation_warning = None
-        if actual_count < expected_count:
-            truncation_warning = (
-                f"LLM returned {actual_count} of {expected_count} steps "
-                f"(missing steps {actual_count + 1}-{expected_count}). "
-                f"Output was likely truncated due to token limits."
-            )
-            import logging
-            logging.warning(f"Pass 0b word-lang truncation: {truncation_warning}")
 
         # Capture token usage
         usage = llm.last_usage if llm.last_usage else {}

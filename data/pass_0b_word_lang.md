@@ -15,9 +15,12 @@ Your job is to **anchor** those findings precisely to the transcript text and ad
 
 ## Output Format
 
-For each step, produce an array of **phrase annotations**. Each annotation has:
+Produce a **flat array** of phrase annotations across all steps. Each annotation includes the `step_number` it belongs to. Steps with no interesting language simply have no entries in the array.
 
-- **text**: A verbatim substring from the step's transcript segments. Must match exactly — same words in the same order as they appear in the transcript. Include enough words to capture the complete linguistic unit.
+Each annotation has:
+
+- **step_number**: Which step this phrase comes from.
+- **text**: A verbatim substring from that step's transcript segments. Must match exactly — same words in the same order as they appear in the transcript. Include enough words to capture the complete linguistic unit.
 - **category**: One of: `attention`, `effort`, `image`, `explanatory`, `distinctive`
 - **note**: 5-15 words explaining the pedagogical function of this phrase. What is the teacher doing with this language? Be specific and practical.
 
@@ -32,12 +35,12 @@ For each step, produce an array of **phrase annotations**. Each annotation has:
 ## Constraints
 
 - **Verbatim only**: `text` must be a contiguous substring of the step's transcript. Do not paraphrase or rearrange words.
-- **Many steps will have empty `phrases`**: Simple movement commands ("bend your knees") have no interesting language. Return an empty array for those steps.
+- **Many steps will have no annotations**: Simple movement commands ("bend your knees") have no interesting language. Simply omit them from the output.
 - **Do not force annotations**: Only annotate phrases that genuinely serve a pedagogical language function. Quality over quantity.
 - **Use the prior analysis as a guide**: The language analysis has already identified interesting phrases. Your job is to locate them precisely in the text and explain their function. You may also find additional phrases the prior analysis missed.
 - **One phrase, one category**: If a phrase serves multiple functions, choose the primary one.
 - **Keep notes practical**: Write for a trainee teacher who wants to learn this technique. "proprioceptive direction — 'feel' as attentional verb" is better than "directs attention."
-- **Process every step**: Output must include every step number, even if its phrases array is empty.
+- **Cover all steps**: Scan every step for interesting language, but only include annotations for steps that have it.
 
 ## Lesson Steps
 
