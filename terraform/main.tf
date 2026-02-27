@@ -673,6 +673,11 @@ data "archive_file" "web_lambda" {
     content  = file("${path.module}/../src/kb/database.py")
     filename = "database.py"
   }
+  # Storage module
+  source {
+    content  = file("${path.module}/../src/kb/storage.py")
+    filename = "storage.py"
+  }
   # Exploration agent
   source {
     content  = file("${path.module}/../data/explore_init.md")
