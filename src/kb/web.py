@@ -89,12 +89,8 @@ def _run_pipeline_for_lesson(lesson_id: str):
         print(f"[pipeline] skipping run for {lesson_id[:8]}... — global lock held")
         return
 
-    try:
-        from pipeline import PipelineStateStore, PipelineExecutor
-        from pipeline_graph import build_lesson_pipeline, get_book_lessons
-    except ImportError:
-        from .pipeline import PipelineStateStore, PipelineExecutor
-        from .pipeline_graph import build_lesson_pipeline, get_book_lessons
+    from pipeline import PipelineStateStore, PipelineExecutor
+    from pipeline_graph import build_lesson_pipeline, get_book_lessons
 
     # Find title from registry
     lessons = get_book_lessons(_db)
@@ -388,10 +384,7 @@ def build_pass_a_schema(framework_version: str | None = None) -> dict:
 _db = None
 DATABASE_URL = os.environ.get("DATABASE_URL")
 if DATABASE_URL:
-    try:
-        from database import Database
-    except ImportError:
-        from .database import Database
+    from database import Database
     _db = Database(DATABASE_URL)
     _db.initialize()
 
@@ -3681,12 +3674,8 @@ async def analyze(
 
 def _build_book_pipeline_section() -> str:
     """Build the Book Pipeline status section for the dashboard."""
-    try:
-        from pipeline_graph import build_book_pipeline, get_book_lessons
-        from pipeline import PipelineStateStore, PipelineExecutor, NodeStatus
-    except ImportError:
-        from .pipeline_graph import build_book_pipeline, get_book_lessons
-        from .pipeline import PipelineStateStore, PipelineExecutor, NodeStatus
+    from pipeline_graph import build_book_pipeline, get_book_lessons
+    from pipeline import PipelineStateStore, PipelineExecutor, NodeStatus
 
     lessons = get_book_lessons(_db)
     graph = build_book_pipeline(_db, lesson_entries=lessons)
@@ -10085,10 +10074,7 @@ async def booklet_page(category: str = "", lesson: str = "", fill: str = "", fra
     # Optionally fill query blocks via QueryAgent
     if fill.lower() in ("true", "1", "yes"):
         import asyncio
-        try:
-            from query_agent import QueryAgent
-        except ImportError:
-            from .query_agent import QueryAgent
+        from query_agent import QueryAgent
         agent = QueryAgent(
             llm=get_llm(DEFAULT_LLM),
             max_review_cycles=0,  # skip review for web; use CLI for iteration
@@ -10116,7 +10102,7 @@ def _load_book_lessons_compat() -> dict:
     try:
         from pipeline_graph import get_book_lessons
     except ImportError:
-        from .pipeline_graph import get_book_lessons
+        get_book_lessons = None
     if not _db:
         return {}
     lessons = get_book_lessons(_db)
@@ -10183,7 +10169,7 @@ async def book_page(request: Request):
     try:
         from pipeline_graph import get_book_lessons
     except ImportError:
-        from .pipeline_graph import get_book_lessons
+        get_book_lessons = None
 
     vl_ids = sorted(VL_BOOKLET_INTROS.keys())  # VL-1 .. VL-5
 
@@ -10770,7 +10756,7 @@ async def toggle_pipeline_node(node_name: str):
     try:
         from pipeline import PipelineStateStore
     except ImportError:
-        from .pipeline import PipelineStateStore
+        PipelineStateStore = None
     store = PipelineStateStore(_db)
     store.initialize()
     current = store.is_enabled(node_name)
@@ -10786,7 +10772,7 @@ async def rebuild_pipeline_node(node_name: str):
     try:
         from pipeline import PipelineStateStore
     except ImportError:
-        from .pipeline import PipelineStateStore
+        PipelineStateStore = None
 
     store = PipelineStateStore(_db)
     store.initialize()
@@ -10818,7 +10804,7 @@ async def add_book_lesson(request: Request):
     try:
         from pipeline_graph import get_book_lessons, set_book_lessons
     except ImportError:
-        from .pipeline_graph import get_book_lessons, set_book_lessons
+        get_book_lessons = set_book_lessons = None
 
     body = await request.json()
     lesson_id = body.get("lesson_id")
@@ -10844,7 +10830,7 @@ async def remove_book_lesson(request: Request):
     try:
         from pipeline_graph import get_book_lessons, set_book_lessons
     except ImportError:
-        from .pipeline_graph import get_book_lessons, set_book_lessons
+        get_book_lessons = set_book_lessons = None
 
     body = await request.json()
     lesson_id = body.get("lesson_id")
@@ -10865,7 +10851,7 @@ async def list_book_lessons():
     try:
         from pipeline_graph import get_book_lessons
     except ImportError:
-        from .pipeline_graph import get_book_lessons
+        get_book_lessons = None
 
     lessons = get_book_lessons(_db)
     return JSONResponse({"lessons": lessons})
