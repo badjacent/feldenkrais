@@ -7067,20 +7067,54 @@ function getAnnotationsForStep(stepNumber) {{
     return step ? (step.phrases || []) : [];
 }}
 
-function matchPhrasesToWords(rangeWords, phrases) {{
-    // For each phrase, find consecutive words that match
-    // Returns a map: wordIndex -> {{ category, note }}
-    const wordMap = {{}};
-    if (!phrases || !phrases.length) return wordMap;
+// Cache: step_number -> Map(wordStartTime -> annotation)
+let _stepAnnotationCache = {{}};
 
-    // Build a lowercase word array for matching
-    const lcWords = rangeWords.map(w => w.word.toLowerCase().replace(/[.,!?;:'"]/g, ''));
+function buildStepAnnotationMap(stepNumber) {{
+    // Build annotation map for an entire step's whisper words (keyed by word start time)
+    if (_stepAnnotationCache[stepNumber]) return _stepAnnotationCache[stepNumber];
+
+    const phrases = getAnnotationsForStep(stepNumber);
+    const annMap = {{}};
+    if (!phrases.length || !whisperWords || !analysisData) {{
+        _stepAnnotationCache[stepNumber] = annMap;
+        return annMap;
+    }}
+
+    // Get all whisper words for this step's full time range
+    const step = analysisData.steps.find(s => s.step_number === stepNumber);
+    if (!step || !step.segments || !step.segments.length) {{
+        _stepAnnotationCache[stepNumber] = annMap;
+        return annMap;
+    }}
+
+    let stepStart = Infinity, stepEnd = -Infinity;
+    for (const seg of step.segments) {{
+        if (seg.time_start != null && seg.time_start < stepStart) stepStart = seg.time_start;
+        if (seg.time_end != null && seg.time_end > stepEnd) stepEnd = seg.time_end;
+    }}
+
+    const stepWords = [];
+    for (const w of whisperWords) {{
+        if (w.start >= (stepStart - 0.5) && w.end <= (stepEnd + 0.5)) {{
+            stepWords.push(w);
+        }}
+        if (w.start > stepEnd + 1) break;
+    }}
+
+    if (!stepWords.length) {{
+        _stepAnnotationCache[stepNumber] = annMap;
+        return annMap;
+    }}
+
+    // Build lowercase word array for matching
+    const lcWords = stepWords.map(w => w.word.toLowerCase().replace(/[.,!?;:'"]/g, ''));
 
     for (const phrase of phrases) {{
         const phraseTokens = phrase.text.toLowerCase().replace(/[.,!?;:'"]/g, '').split(/\s+/).filter(t => t);
         if (!phraseTokens.length) continue;
 
-        // Sliding window search
+        // Sliding window search across all step words
         for (let i = 0; i <= lcWords.length - phraseTokens.length; i++) {{
             let match = true;
             for (let j = 0; j < phraseTokens.length; j++) {{
@@ -7091,13 +7125,16 @@ function matchPhrasesToWords(rangeWords, phrases) {{
             }}
             if (match) {{
                 for (let j = 0; j < phraseTokens.length; j++) {{
-                    wordMap[i + j] = {{ category: phrase.category, note: phrase.note, text: phrase.text }};
+                    // Key by word start time (unique per word)
+                    annMap[stepWords[i + j].start] = {{ category: phrase.category, note: phrase.note, text: phrase.text }};
                 }}
                 break;  // first match wins
             }}
         }}
     }}
-    return wordMap;
+
+    _stepAnnotationCache[stepNumber] = annMap;
+    return annMap;
 }}
 
 function renderTextWithWordHighlight(text, t, timeStart, timeEnd, stepNumber) {{
@@ -7115,9 +7152,8 @@ function renderTextWithWordHighlight(text, t, timeStart, timeEnd, stepNumber) {{
 
     if (!rangeWords.length) return escHtml(text);
 
-    // Get phrase annotations for this step
-    const phrases = stepNumber != null ? getAnnotationsForStep(stepNumber) : [];
-    const wordMap = matchPhrasesToWords(rangeWords, phrases);
+    // Get step-level annotation map (keyed by word start time)
+    const annMap = stepNumber != null ? buildStepAnnotationMap(stepNumber) : {{}};
 
     // Build HTML with bold on current word + colored annotation spans
     let html = '';
@@ -7125,7 +7161,7 @@ function renderTextWithWordHighlight(text, t, timeStart, timeEnd, stepNumber) {{
     for (let i = 0; i < rangeWords.length; i++) {{
         const w = rangeWords[i];
         const isCurrent = (t >= w.start - 0.05 && t <= w.end + 0.05);
-        const ann = wordMap[i];
+        const ann = annMap[w.start];
         if (i > 0) html += ' ';
 
         let wordHtml = escHtml(w.word);
@@ -7256,6 +7292,7 @@ function resetPlayer() {{
     whisperWords = null;
     analysisData = null;
     wordAnnotations = null;
+    _stepAnnotationCache = {{}};
     currentStepIdx = 0;
     audioReady = false;
     audio.src = '';
@@ -7391,6 +7428,7 @@ async function runAnnotate() {{
         }}
 
         wordAnnotations = data.word_annotations || [];
+        _stepAnnotationCache = {{}};  // clear match cache
         clearStatus();
 
         const timing = data.cached ? 'cached' : (data.elapsed || '?') + 's';
