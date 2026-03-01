@@ -1031,7 +1031,7 @@ def run_pass_0b_word_lang(lesson_text: str, provider_key: str | None = None, deb
     )
 
     # Check cache
-    cache_suffix = ":pass_0b_word_lang_v1"
+    cache_suffix = ":pass_0b_word_lang_v3"
     if provider_key and provider_key != DEFAULT_LLM:
         cache_suffix += f":{provider_key}"
     cache_key = get_cache_key(lesson_text.strip() + cache_suffix)
@@ -1824,6 +1824,10 @@ def get_available_lessons() -> tuple[dict[str, list[tuple[str, str]]], dict[str,
                 source_bucket = []     # docs without override
 
                 for doc in _db.get_source_lessons(src["source_id"]):
+                    # Only show ATM lessons for FELDENKRAIS_MANHATTAN
+                    lesson_type = doc.get("lesson_type")
+                    if src["source_id"] == 3 and lesson_type and lesson_type != "ATM":
+                        continue
                     title = doc["title"]
                     instructor = doc.get("instructor")
                     display = f"{title} ({instructor})" if instructor else title
@@ -4677,6 +4681,28 @@ th {{ background: #f0f0f0; }}
 
 # --- Pass 0b Experiment ---
 
+@app.post("/api/search")
+async def api_search(query: str = Form("")):
+    """Semantic search over lesson embeddings."""
+    query = query.strip()
+    if not query:
+        return JSONResponse({"error": "Empty query"}, status_code=400)
+    if not _db:
+        return JSONResponse({"error": "No database connection"}, status_code=500)
+    try:
+        from llm import get_embeddings
+        embeddings, _ = get_embeddings([query])
+        results = _db.search_lessons(embeddings[0], limit=10)
+        for r in results:
+            r["similarity"] = round(r["similarity"], 4)
+            if r.get("summary_text"):
+                r["snippet"] = r["summary_text"][:200]
+            del r["summary_text"]
+        return JSONResponse({"results": results})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 @app.get("/pass0b", response_class=HTMLResponse)
 async def pass0b_page():
     """Pass 0b experiment page."""
@@ -5028,6 +5054,7 @@ async def api_pass0b_combined_json(
 async def api_pass0b_condensed(
     lesson_text: str = Form(""),
     provider: str = Form(""),
+    condensed_provider: str = Form(""),
     skip_cache: str = Form(""),
     hint: str = Form(""),
 ):
@@ -5037,6 +5064,7 @@ async def api_pass0b_condensed(
         return JSONResponse({"error": "Please enter or select lesson text."}, status_code=400)
 
     prov = provider if provider else None
+    cond_prov = condensed_provider if condensed_provider else prov
     no_cache = skip_cache == "1"
     user_hint = hint.strip()
 
@@ -5050,9 +5078,9 @@ async def api_pass0b_condensed(
             timeout=ANALYSIS_TIMEOUT,
         )
 
-        # Run condensed synthesis
+        # Run condensed synthesis (optionally with a different provider)
         condensed_result = await asyncio.wait_for(
-            asyncio.to_thread(run_pass_0b_condensed, somatic_result, lang_result, text, prov, skip_cache=no_cache, hint=user_hint),
+            asyncio.to_thread(run_pass_0b_condensed, somatic_result, lang_result, text, cond_prov, skip_cache=no_cache, hint=user_hint),
             timeout=ANALYSIS_TIMEOUT,
         )
 
@@ -6172,6 +6200,40 @@ def build_pass0b_html() -> str:
         @keyframes spin {{
             to {{ transform: rotate(360deg); }}
         }}
+        .search-box {{
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+        }}
+        .search-box input {{
+            flex: 1;
+            padding: 10px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }}
+        .search-box button {{
+            margin-top: 0;
+            white-space: nowrap;
+        }}
+        .search-result {{
+            padding: 8px 12px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+        }}
+        .search-result:hover {{
+            background: #f0f7ff;
+        }}
+        #search-results {{
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 16px;
+        }}
+        #search-results:empty {{
+            border: none;
+        }}
     </style>
     <script>
         const lessonsData = {lessons_json};
@@ -6306,6 +6368,65 @@ def build_pass0b_html() -> str:
             document.getElementById('loading-spinner').style.display = 'none';
         }}
 
+        async function searchLessons() {{
+            const query = document.getElementById('search-query').value.trim();
+            if (!query) return;
+            const btn = document.getElementById('search-btn');
+            const resultsDiv = document.getElementById('search-results');
+            btn.disabled = true;
+            btn.textContent = 'Searching...';
+            resultsDiv.innerHTML = '';
+            try {{
+                const fd = new FormData();
+                fd.append('query', query);
+                const response = await fetch('/api/search', {{ method: 'POST', body: fd }});
+                const data = await response.json();
+                if (data.error) {{
+                    resultsDiv.innerHTML = '<div style="color: #999; padding: 8px;">Error: ' + data.error + '</div>';
+                }} else if (data.results && data.results.length > 0) {{
+                    let html = '';
+                    data.results.forEach(r => {{
+                        const pct = Math.round(r.similarity * 100);
+                        const snippet = (r.snippet || '').replace(/</g, '&lt;').replace(/\\n/g, ' ');
+                        html += '<div class="search-result" data-doc-id="' + r.document_id + '" onclick="selectSearchResult(this)">';
+                        html += '<div style="display: flex; justify-content: space-between; align-items: baseline;">';
+                        html += '<strong style="flex: 1;">' + (r.title || '').replace(/</g, '&lt;') + '</strong>';
+                        html += '<span style="color: #28a745; font-size: 0.85em; margin-left: 12px; white-space: nowrap;">' + pct + '% match</span>';
+                        html += '</div>';
+                        if (snippet) html += '<div style="color: #666; font-size: 0.85em; margin-top: 2px;">' + snippet + '</div>';
+                        html += '</div>';
+                    }});
+                    resultsDiv.innerHTML = html;
+                }} else {{
+                    resultsDiv.innerHTML = '<div style="color: #999; padding: 8px;">No results found.</div>';
+                }}
+            }} catch (error) {{
+                resultsDiv.innerHTML = '<div style="color: red; padding: 8px;">Search failed: ' + error.message + '</div>';
+            }}
+            btn.disabled = false;
+            btn.textContent = 'Search';
+        }}
+
+        function selectSearchResult(el) {{
+            const docId = el.dataset.docId;
+            for (const [cat, lessons] of Object.entries(lessonsData)) {{
+                for (const [lessonKey, display, sourceUrl] of lessons) {{
+                    if (lessonKey === docId) {{
+                        const catSelect = document.getElementById('selected_category');
+                        catSelect.value = cat;
+                        onCategoryChange(catSelect);
+                        setTimeout(() => {{
+                            const lessonSelect = document.getElementById('selected_lesson');
+                            lessonSelect.value = docId;
+                            onLessonSelect(lessonSelect);
+                        }}, 50);
+                        document.getElementById('search-results').innerHTML = '';
+                        return;
+                    }}
+                }}
+            }}
+        }}
+
         async function clearCache() {{
             const btn = document.getElementById('clear-cache-btn');
             btn.disabled = true;
@@ -6335,6 +6456,15 @@ def build_pass0b_html() -> str:
            <a href="/analyzer" style="color: #007bff; text-decoration: none;">&larr; Main Analyzer</a>
        </span>
     </p>
+
+    <div class="form-group">
+        <label>Search lessons:</label>
+        <div class="search-box">
+            <input type="text" id="search-query" placeholder="e.g. rolling pelvis, eyes and head..." onkeydown="if(event.key==='Enter'){{event.preventDefault();searchLessons();}}">
+            <button type="button" id="search-btn" onclick="searchLessons()">Search</button>
+        </div>
+        <div id="search-results"></div>
+    </div>
 
     <form id="pass0b-form" onsubmit="submitForm(event)">
         <div class="form-group">
@@ -6449,12 +6579,17 @@ def build_pass0b_player_html() -> str:
         .btn-annotate:hover {{ background: #7b1fa2; }}
         .btn-annotate:disabled {{ background: #ccc; cursor: not-allowed; }}
 
-        /* Word-level annotation colors */
-        .word-attention {{ background: rgba(255, 152, 0, 0.25); border-radius: 2px; padding: 0 1px; }}
-        .word-effort {{ background: rgba(76, 175, 80, 0.25); border-radius: 2px; padding: 0 1px; }}
-        .word-image {{ background: rgba(156, 39, 176, 0.25); border-radius: 2px; padding: 0 1px; }}
-        .word-explanatory {{ background: rgba(33, 150, 243, 0.25); border-radius: 2px; padding: 0 1px; }}
-        .word-distinctive {{ background: rgba(233, 30, 99, 0.25); border-radius: 2px; padding: 0 1px; }}
+        /* Word-level annotation colors — muted underline by default, lit up when active */
+        .word-directive {{ border-bottom: 2px solid rgba(97, 97, 97, 0.3); }}
+        .word-directive.word-active {{ background: rgba(97, 97, 97, 0.18); border-bottom-color: #616161; }}
+        .word-attention {{ border-bottom: 2px solid rgba(255, 152, 0, 0.3); }}
+        .word-attention.word-active {{ background: rgba(255, 152, 0, 0.18); border-bottom-color: #ff9800; }}
+        .word-imagery {{ border-bottom: 2px solid rgba(156, 39, 176, 0.3); }}
+        .word-imagery.word-active {{ background: rgba(156, 39, 176, 0.18); border-bottom-color: #9c27b0; }}
+        .word-inquiry {{ border-bottom: 2px solid rgba(33, 150, 243, 0.3); }}
+        .word-inquiry.word-active {{ background: rgba(33, 150, 243, 0.18); border-bottom-color: #2196f3; }}
+        .word-distinctive {{ border-bottom: 2px solid rgba(233, 30, 99, 0.3); }}
+        .word-distinctive.word-active {{ background: rgba(233, 30, 99, 0.18); border-bottom-color: #e91e63; }}
         .note-line {{
             font-size: 0.82em; color: #555; min-height: 1.4em;
             padding: 4px 8px; margin-top: 4px;
@@ -6465,10 +6600,10 @@ def build_pass0b_player_html() -> str:
             font-weight: 600; font-style: normal; font-size: 0.85em;
             text-transform: uppercase; letter-spacing: 0.3px; margin-right: 4px;
         }}
+        .note-cat-directive {{ color: #616161; }}
         .note-cat-attention {{ color: #e65100; }}
-        .note-cat-effort {{ color: #2e7d32; }}
-        .note-cat-image {{ color: #7b1fa2; }}
-        .note-cat-explanatory {{ color: #1565c0; }}
+        .note-cat-imagery {{ color: #7b1fa2; }}
+        .note-cat-inquiry {{ color: #1565c0; }}
         .note-cat-distinctive {{ color: #c2185b; }}
 
         /* Condensed cards */
@@ -6699,6 +6834,15 @@ def build_pass0b_player_html() -> str:
                 <option value="gemini">Gemini 3 Flash</option>
                 <option value="openai">OpenAI (GPT-5)</option>
                 <option value="anthropic">Sonnet 4.6</option>
+            </select>
+        </div>
+        <div class="field" style="flex: 0.5;">
+            <label>Condensed</label>
+            <select id="condensed-provider">
+                <option value="">Same</option>
+                <option value="anthropic">Sonnet 4.6</option>
+                <option value="gemini">Gemini 3 Flash</option>
+                <option value="openai">OpenAI (GPT-5)</option>
             </select>
         </div>
         <button class="btn-run" id="run-btn" onclick="runAnalysis()" disabled>Run</button>
@@ -7155,6 +7299,17 @@ function renderTextWithWordHighlight(text, t, timeStart, timeEnd, stepNumber) {{
     // Get step-level annotation map (keyed by word start time)
     const annMap = stepNumber != null ? buildStepAnnotationMap(stepNumber) : {{}};
 
+    // Find which annotation phrase (if any) contains the current spoken word
+    let activePhrase = null;
+    for (let i = 0; i < rangeWords.length; i++) {{
+        const w = rangeWords[i];
+        if (t >= w.start - 0.05 && t <= w.end + 0.05) {{
+            const ann = annMap[w.start];
+            if (ann) activePhrase = ann.text;
+            break;
+        }}
+    }}
+
     // Build HTML with bold on current word + colored annotation spans
     let html = '';
     let currentNote = null;
@@ -7170,7 +7325,10 @@ function renderTextWithWordHighlight(text, t, timeStart, timeEnd, stepNumber) {{
             if (ann) currentNote = ann;
         }}
         if (ann) {{
-            wordHtml = '<span class="word-' + ann.category + '">' + wordHtml + '</span>';
+            // Light up the whole phrase when the speaker is inside it
+            const isActive = activePhrase && ann.text === activePhrase;
+            const cls = 'word-' + ann.category + (isActive ? ' word-active' : '');
+            wordHtml = '<span class="' + cls + '">' + wordHtml + '</span>';
         }}
         html += wordHtml;
     }}
@@ -7345,6 +7503,8 @@ async function runCondensed() {{
         const form = new FormData();
         form.append('lesson_text', condensedLessonText);
         form.append('provider', document.getElementById('provider').value);
+        const condensedProv = document.getElementById('condensed-provider').value;
+        if (condensedProv) form.append('condensed_provider', condensedProv);
         const hintVal = document.getElementById('condensed-hint').value.trim();
         if (hintVal) form.append('hint', hintVal);
         if (document.getElementById('skip-cache-cb').checked) {{
@@ -7463,11 +7623,27 @@ function renderSettingCard(s, label) {{
     return html;
 }}
 
+function getGroupTimeRange(groupNumber) {{
+    // Compute time range for a group from analysisData steps
+    if (!analysisData || !analysisData.steps) return null;
+    let minStart = Infinity, maxEnd = -Infinity;
+    for (const s of analysisData.steps) {{
+        if (s.group_number === groupNumber && s.time_start != null && s.time_end != null) {{
+            if (s.time_start < minStart) minStart = s.time_start;
+            if (s.time_end > maxEnd) maxEnd = s.time_end;
+        }}
+    }}
+    if (minStart === Infinity) return null;
+    return {{ start: minStart, end: maxEnd }};
+}}
+
 function renderGroupCards(cards) {{
     let html = '';
     cards.forEach(card => {{
         html += '<div class="condensed-card">';
-        html += '<div class="group-tag">Group ' + card.group_number + ': ' + escHtml(card.group_label || '') + '</div>';
+        const tr = getGroupTimeRange(card.group_number);
+        const timeStr = tr ? ' <span style="font-weight:normal;color:#888;">(' + fmtTime(tr.start) + '\u2013' + fmtTime(tr.end) + ')</span>' : '';
+        html += '<div class="group-tag">Group ' + card.group_number + ': ' + escHtml(card.group_label || '') + timeStr + '</div>';
         html += '<h3>' + escHtml(card.title || '') + '</h3>';
 
         if (card.the_action) {{
@@ -7514,8 +7690,18 @@ function renderCondensedCards(data) {{
                 settingHtml += renderSettingCard(seg.setting, segLabel);
             }}
             if (seg.group_cards) {{
+                // Compute segment time range from its group cards
+                let segTimeStr = '';
+                if (seg.group_cards.length && analysisData) {{
+                    let sMin = Infinity, sMax = -Infinity;
+                    seg.group_cards.forEach(c => {{
+                        const tr = getGroupTimeRange(c.group_number);
+                        if (tr) {{ if (tr.start < sMin) sMin = tr.start; if (tr.end > sMax) sMax = tr.end; }}
+                    }});
+                    if (sMin !== Infinity) segTimeStr = ' (' + fmtTime(sMin) + '\u2013' + fmtTime(sMax) + ')';
+                }}
                 groupHtml += '<div class="segment-divider" style="margin:18px 0 8px 0;padding:6px 10px;background:#f0f4ff;border-left:3px solid #4a6fa5;font-size:0.9em;color:#4a6fa5;font-weight:600;">'
-                    + escHtml(segLabel)
+                    + escHtml(segLabel) + '<span style="font-weight:normal;color:#888;margin-left:6px;">' + segTimeStr + '</span>'
                     + (seg.transition_note ? '<span style="font-weight:normal;color:#666;margin-left:10px;">' + escHtml(seg.transition_note) + '</span>' : '')
                     + '</div>';
                 groupHtml += renderGroupCards(seg.group_cards);

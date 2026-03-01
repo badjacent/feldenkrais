@@ -12,6 +12,7 @@ from psycopg2.extras import RealDictCursor
 # Schema for initialization (PostgreSQL)
 SCHEMA = """
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS vector;
 
 CREATE TABLE IF NOT EXISTS document_source (
     id SERIAL PRIMARY KEY,
@@ -123,6 +124,15 @@ CREATE TABLE IF NOT EXISTS pipeline_node_state (
     metadata JSONB,
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS lesson_embedding (
+    document_id UUID PRIMARY KEY REFERENCES document(id) ON DELETE CASCADE,
+    embedding vector(768),
+    summary_text TEXT,
+    summary_hash TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
 """
 
 INDEXES = """
@@ -142,6 +152,7 @@ CREATE INDEX IF NOT EXISTS idx_document_lesson_date ON document(lesson_date);
 CREATE INDEX IF NOT EXISTS idx_pipeline_log_event ON pipeline_log(event);
 CREATE INDEX IF NOT EXISTS idx_pipeline_log_created ON pipeline_log(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_pipeline_log_document ON pipeline_log(document_id);
+CREATE INDEX IF NOT EXISTS idx_lesson_embedding_hnsw ON lesson_embedding USING hnsw (embedding vector_cosine_ops);
 """
 
 SEED_DATA = """
@@ -795,6 +806,7 @@ class Database:
                 SELECT d.id, d.title, d.category_name,
                        d.lesson_date, d.lesson_index, d.created_at,
                        d.metadata->'scraper'->>'instructor' as instructor,
+                       d.metadata->>'lesson_type' as lesson_type,
                        d.source_url
                 FROM document d
                 JOIN analysis a ON a.document_id = d.id AND a.type_id = 1
@@ -1030,3 +1042,45 @@ class Database:
                 if text:
                     result[row["doc_id"]] = hashlib.sha256(text.encode()).hexdigest()[:16]
             return result
+
+    # Lesson embedding operations
+
+    def upsert_embedding(self, document_id: str, embedding: list[float],
+                         summary_text: str, summary_hash: str):
+        """Insert or update a lesson embedding."""
+        with self.get_cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO lesson_embedding (document_id, embedding, summary_text, summary_hash, updated_at)
+                VALUES (%s, %s::vector, %s, %s, NOW())
+                ON CONFLICT (document_id) DO UPDATE SET
+                    embedding = EXCLUDED.embedding,
+                    summary_text = EXCLUDED.summary_text,
+                    summary_hash = EXCLUDED.summary_hash,
+                    updated_at = NOW()
+                """,
+                (document_id, str(embedding), summary_text, summary_hash),
+            )
+
+    def search_lessons(self, query_embedding: list[float], limit: int = 10) -> list[dict]:
+        """Search lessons by cosine similarity. Returns list of {document_id, title, similarity, summary_text}."""
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute(
+                """
+                SELECT le.document_id::text, d.title,
+                       1 - (le.embedding <=> %s::vector) as similarity,
+                       le.summary_text
+                FROM lesson_embedding le
+                JOIN document d ON d.id = le.document_id
+                ORDER BY le.embedding <=> %s::vector
+                LIMIT %s
+                """,
+                (str(query_embedding), str(query_embedding), limit),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_embedding_hashes(self) -> dict[str, str]:
+        """Return {document_id: summary_hash} for all embedded lessons."""
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute("SELECT document_id::text, summary_hash FROM lesson_embedding")
+            return {row["document_id"]: row["summary_hash"] for row in cursor.fetchall()}

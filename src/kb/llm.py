@@ -65,6 +65,25 @@ def get_genai():
 Provider = Literal["anthropic", "openai", "gemini"]
 
 
+def get_embeddings(texts: list[str], model: str = "gemini-embedding-001",
+                    dimensions: int = 768) -> tuple[list[list[float]], dict]:
+    """Get embeddings from Gemini. Always uses Gemini regardless of app LLM provider.
+
+    Returns (embeddings, usage) where usage has token counts when available.
+    """
+    mod = get_genai()
+    client = mod.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
+    result = client.models.embed_content(
+        model=model,
+        contents=texts,
+        config={"output_dimensionality": dimensions},
+    )
+    usage = {}
+    if hasattr(result, "metadata") and result.metadata:
+        usage = {"billable_characters": getattr(result.metadata, "billable_character_count", 0)}
+    return [e.values for e in result.embeddings], usage
+
+
 @dataclass
 class LLM:
     """
@@ -195,7 +214,8 @@ class LLM:
         if temperature > 0:
             kwargs["temperature"] = temperature
 
-        response = self.client.messages.create(**kwargs)
+        with self.client.messages.stream(**kwargs) as stream:
+            response = stream.get_final_message()
         return response.content[0].text
 
     def _chat_openai(
@@ -369,7 +389,8 @@ class LLM:
         if temperature > 0:
             kwargs["temperature"] = temperature
 
-        response = self.client.messages.create(**kwargs)
+        with self.client.messages.stream(**kwargs) as stream:
+            response = stream.get_final_message()
 
         # Extract tool use input
         for block in response.content:
@@ -492,7 +513,8 @@ class LLM:
         if temperature > 0:
             kwargs["temperature"] = temperature
 
-        response = self.client.messages.create(**kwargs)
+        with self.client.messages.stream(**kwargs) as stream:
+            response = stream.get_final_message()
 
         self.last_usage = {
             "tokens_in": getattr(response.usage, "input_tokens", None),
