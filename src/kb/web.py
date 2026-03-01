@@ -2031,18 +2031,22 @@ def build_html(lesson_text: str = "", selected_category: str = "", selected_less
                 Pass A provider:
                 <select name="pass_a_provider" style="margin-left: 4px; padding: 2px 6px;">
                     <option value="">Default (Gemini)</option>
-                    <option value="gemini">Gemini</option>
+                    <option value="gemini">Gemini 3 Flash</option>
                     <option value="openai">OpenAI (GPT-5)</option>
-                    <option value="anthropic">Anthropic (Claude)</option>
+                    <option value="anthropic">Sonnet 4.6</option>
+                    <option value="anthropic-sonnet-4.5">Sonnet 4.5</option>
+                    <option value="anthropic-haiku">Haiku 4.5</option>
                 </select>
             </label>
             <label style="font-size: 0.9em;">
                 Pass B provider:
                 <select name="pass_b_provider" style="margin-left: 4px; padding: 2px 6px;">
                     <option value="">Default (Gemini)</option>
-                    <option value="gemini">Gemini</option>
+                    <option value="gemini">Gemini 3 Flash</option>
                     <option value="openai">OpenAI (GPT-5)</option>
-                    <option value="anthropic">Anthropic (Claude)</option>
+                    <option value="anthropic">Sonnet 4.6</option>
+                    <option value="anthropic-sonnet-4.5">Sonnet 4.5</option>
+                    <option value="anthropic-haiku">Haiku 4.5</option>
                 </select>
             </label>
         </div>
@@ -5482,6 +5486,8 @@ def build_pass0b_player_html() -> str:
                 <option value="gemini">Gemini 3 Flash</option>
                 <option value="openai">OpenAI (GPT-5)</option>
                 <option value="anthropic">Sonnet 4.6</option>
+                <option value="anthropic-sonnet-4.5">Sonnet 4.5</option>
+                <option value="anthropic-haiku">Haiku 4.5</option>
             </select>
         </div>
         <div class="field" style="flex: 0.5;">
@@ -5489,6 +5495,8 @@ def build_pass0b_player_html() -> str:
             <select id="condensed-provider">
                 <option value="">Same</option>
                 <option value="anthropic">Sonnet 4.6</option>
+                <option value="anthropic-sonnet-4.5">Sonnet 4.5</option>
+                <option value="anthropic-haiku">Haiku 4.5</option>
                 <option value="gemini">Gemini 3 Flash</option>
                 <option value="openai">OpenAI (GPT-5)</option>
             </select>
