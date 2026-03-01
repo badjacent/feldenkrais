@@ -17,8 +17,21 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-# Force unbuffered output
-print = functools.partial(print, flush=True)
+# Force unbuffered output + tee to log file
+_log_file = None
+
+def _init_logging(path="/tmp/pipeline-batch-overnight.log"):
+    global _log_file
+    _log_file = open(path, "a")
+
+_orig_print = print
+def print(*args, **kwargs):
+    kwargs["flush"] = True
+    _orig_print(*args, **kwargs)
+    if _log_file:
+        kwargs.pop("file", None)
+        _orig_print(*args, **kwargs, file=_log_file)
+        _log_file.flush()
 
 from dotenv import load_dotenv
 
@@ -148,6 +161,7 @@ def main():
     parser.add_argument("--workers", type=int, default=3, help="Parallel workers for pipeline (default: 3)")
     parser.add_argument("--skip-pipeline", action="store_true", help="Skip pipeline, only embed already-condensed lessons")
     args = parser.parse_args()
+    _init_logging()
 
     if not DATABASE_URL:
         print("ERROR: DATABASE_URL not set", file=sys.stderr)

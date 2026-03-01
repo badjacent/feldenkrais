@@ -2751,6 +2751,13 @@ def _build_ingestion_html() -> str:
     events = _db.get_pipeline_log(limit=50)
     documents = _db.get_document_pipeline_view(limit=50)
 
+    # Check for permanent failures
+    perm_failures = _db.get_pipeline_log(limit=20, event="permanent_failure")
+
+    # Count analyzed / embedded from pipeline_stage
+    analyzed_count = sum(1 for d in documents if d.get("pipeline_stage") in ("analyzed", "embedded"))
+    embedded_count = sum(1 for d in documents if d.get("pipeline_stage") == "embedded")
+
     # Summary cards
     doc_total = summary.get("documents", {}).get("total", 0)
     transcribed = summary.get("transcribed", 0)
@@ -2780,6 +2787,13 @@ def _build_ingestion_html() -> str:
             "transcription_failed": "#dc3545",
             "duplicate_skipped": "#6c757d",
             "load_error": "#dc3545",
+            "analysis_complete": "#28a745",
+            "analysis_error": "#dc3545",
+            "embedding_complete": "#17a2b8",
+            "permanent_failure": "#dc3545",
+            "load_retry": "#ffc107",
+            "transcription_retry": "#ffc107",
+            "temp_cleanup": "#6c757d",
         }
         color = color_map.get(event_type, "#333")
 
@@ -2805,14 +2819,18 @@ def _build_ingestion_html() -> str:
         latest_job = doc.get("latest_job_status", "")
         latest_error = doc.get("latest_error", "")
 
-        if has_tx:
-            status_badge = '<span style="padding: 2px 8px; border-radius: 10px; font-size: 0.8em; background: #d4edda; color: #155724;">Transcribed</span>'
-        elif latest_job == "pending":
-            status_badge = '<span style="padding: 2px 8px; border-radius: 10px; font-size: 0.8em; background: #fff3cd; color: #856404;">Pending</span>'
-        elif latest_job == "failed":
-            status_badge = f'<span style="padding: 2px 8px; border-radius: 10px; font-size: 0.8em; background: #f8d7da; color: #721c24;" title="{latest_error or ""}">Failed</span>'
-        else:
-            status_badge = '<span style="padding: 2px 8px; border-radius: 10px; font-size: 0.8em; background: #e2e3e5; color: #383d41;">New</span>'
+        stage = doc.get("pipeline_stage", "")
+        stage_styles = {
+            "embedded": ("Embedded", "#d4edda", "#155724"),
+            "analyzed": ("Analyzed", "#cce5ff", "#004085"),
+            "transcribed": ("Transcribed", "#d1ecf1", "#0c5460"),
+            "transcribing": ("Transcribing", "#fff3cd", "#856404"),
+            "failed": ("Failed", "#f8d7da", "#721c24"),
+            "awaiting_transcription": ("New", "#e2e3e5", "#383d41"),
+        }
+        label, bg, fg = stage_styles.get(stage, ("Unknown", "#e2e3e5", "#383d41"))
+        title_attr = f' title="{latest_error}"' if latest_error and stage == "failed" else ""
+        status_badge = f'<span style="padding: 2px 8px; border-radius: 10px; font-size: 0.8em; background: {bg}; color: {fg};"{title_attr}>{label}</span>'
 
         doc_rows.append(f"""
             <tr>
@@ -2827,9 +2845,31 @@ def _build_ingestion_html() -> str:
     events_html = "\n".join(event_rows) if event_rows else '<tr><td colspan="5" style="text-align: center; color: #999;">No events yet</td></tr>'
     docs_html = "\n".join(doc_rows) if doc_rows else '<tr><td colspan="5" style="text-align: center; color: #999;">No documents yet</td></tr>'
 
+    # Permanent failure banner
+    pf_banner = ""
+    if perm_failures:
+        pf_items = []
+        seen = set()
+        for pf in perm_failures:
+            title = pf.get("title", "Unknown")
+            if title in seen:
+                continue
+            seen.add(title)
+            stage = (pf.get("detail") or {}).get("stage", "unknown")
+            created = str(pf.get("created_at", ""))[:19]
+            pf_items.append(f"<li><strong>{title}</strong> — {stage} (failed {created})</li>")
+        pf_banner = f"""
+        <div style="background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 6px; padding: 12px 16px; margin-bottom: 15px; color: #721c24;">
+            <strong>Permanent Failures ({len(seen)})</strong> — these documents exceeded retry limits:
+            <ul style="margin: 8px 0 0 0; padding-left: 20px;">{"".join(pf_items)}</ul>
+        </div>
+        """
+
     return f"""
+        {pf_banner}
         <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
             <button id="refresh-ingestion" style="padding: 4px 12px; border: 1px solid #007bff; background: white; color: #007bff; border-radius: 4px; cursor: pointer; font-size: 0.85em;">Refresh</button>
+            <button id="auto-analyze-btn" style="padding: 4px 12px; border: 1px solid #28a745; background: white; color: #28a745; border-radius: 4px; cursor: pointer; font-size: 0.85em;">Auto-Analyze</button>
             <span id="refresh-status" style="font-size: 0.8em; color: #999;"></span>
         </div>
         <div class="cards">
@@ -2842,8 +2882,12 @@ def _build_ingestion_html() -> str:
                 <div class="label">Transcribed</div>
             </div>
             <div class="card">
-                <div class="value">{pending_docs}</div>
-                <div class="label">Pending Docs</div>
+                <div class="value">{analyzed_count}</div>
+                <div class="label">Analyzed</div>
+            </div>
+            <div class="card">
+                <div class="value">{embedded_count}</div>
+                <div class="label">Embedded</div>
             </div>
             <div class="card">
                 <div class="value">{pending_jobs}</div>
@@ -3192,7 +3236,7 @@ def build_pipeline_html() -> str:
             }});
         }})();
 
-        // Ingestion tab refresh button
+        // Ingestion tab refresh button + auto-analyze button
         document.addEventListener('click', function(e) {{
             if (e.target && e.target.id === 'refresh-ingestion') {{
                 var btn = e.target;
@@ -3209,6 +3253,28 @@ def build_pipeline_html() -> str:
                         if (statusEl) statusEl.textContent = 'Error: ' + err;
                         btn.disabled = false;
                         btn.textContent = 'Refresh';
+                    }});
+            }}
+            if (e.target && e.target.id === 'auto-analyze-btn') {{
+                var btn = e.target;
+                var statusEl = document.getElementById('refresh-status');
+                btn.disabled = true;
+                btn.textContent = 'Starting...';
+                if (statusEl) statusEl.textContent = '';
+                fetch('/api/pipeline/auto-analyze', {{ method: 'POST' }})
+                    .then(function(r) {{ return r.json(); }})
+                    .then(function(data) {{
+                        btn.textContent = data.status === 'started' ? 'Running...' : (data.status || 'Done');
+                        if (statusEl) statusEl.textContent = data.status === 'already_running' ? 'Already running' : 'Analysis started in background';
+                        setTimeout(function() {{
+                            btn.disabled = false;
+                            btn.textContent = 'Auto-Analyze';
+                        }}, 5000);
+                    }})
+                    .catch(function(err) {{
+                        if (statusEl) statusEl.textContent = 'Error: ' + err;
+                        btn.disabled = false;
+                        btn.textContent = 'Auto-Analyze';
                     }});
             }}
         }});
@@ -9984,6 +10050,112 @@ async def pipeline_ingestion():
         return HTMLResponse(html)
     except Exception as e:
         return HTMLResponse(f"<p style='color: red;'>Error: {e}</p>", status_code=500)
+
+
+_auto_analyze_lock = asyncio.Lock()
+
+
+def _auto_analyze_worker(max_docs: int = 3) -> dict:
+    """Find transcribed docs without condensed analysis, run pass 0b + embeddings.
+
+    Runs synchronously (called from thread). Returns summary dict.
+    """
+    import hashlib
+    from llm import get_embeddings
+
+    # Check LLM kill switch
+    settings = _db.get_cache("settings:llm_enabled")
+    if not settings or not settings.get("enabled", False):
+        return {"status": "skipped", "reason": "LLM disabled"}
+
+    # Find candidates: transcribed docs without condensed analysis
+    cache_suffix = ":pass_0b_condensed_v4"
+    all_keys = _db.get_cache_keys()
+
+    # Get all docs with transcriptions
+    tx_hashes = _db.get_all_transcription_hashes()  # {doc_id: hash}
+    candidates = []
+    for doc_id, text_hash in tx_hashes.items():
+        condensed_key = hashlib.sha256(
+            (_db.get_document_transcription(doc_id).strip() + cache_suffix).encode()
+        ).hexdigest()[:16]
+        if condensed_key not in all_keys:
+            candidates.append(doc_id)
+        if len(candidates) >= max_docs:
+            break
+
+    if not candidates:
+        return {"status": "complete", "message": "All transcribed docs already analyzed", "processed": 0}
+
+    processed = []
+    errors = []
+
+    for doc_id in candidates:
+        try:
+            transcript = _db.get_document_transcription(doc_id)
+            if not transcript or not transcript.strip():
+                continue
+
+            doc = _db.get_document(doc_id)
+            title = doc.get("title", doc_id) if doc else doc_id
+
+            # Run pass 0b somatic + language
+            somatic_result = run_pass_0b(transcript)
+            lang_result = run_pass_0b_lang(transcript)
+
+            # Run condensed synthesis
+            condensed_result = run_pass_0b_condensed(somatic_result, lang_result, transcript)
+
+            _db.log_event("analysis_complete", title=title, document_id=doc_id,
+                          detail={"segments": len(condensed_result.get("segments", []))})
+
+            # Build embeddings
+            summary_text = build_summary_from_condensed(condensed_result, title)
+            summary_hash = hashlib.sha256(summary_text.encode()).hexdigest()[:16]
+
+            embeddings, _ = get_embeddings([summary_text], task_type="RETRIEVAL_DOCUMENT")
+            _db.upsert_embedding(doc_id, embeddings[0], summary_text, summary_hash)
+
+            _db.log_event("embedding_complete", title=title, document_id=doc_id,
+                          detail={"summary_length": len(summary_text)})
+
+            processed.append({"doc_id": doc_id, "title": title})
+
+        except Exception as e:
+            err_title = title if 'title' in locals() else doc_id
+            _db.log_event("analysis_error", title=err_title,
+                          document_id=doc_id, detail={"error": str(e)})
+            errors.append({"doc_id": doc_id, "error": str(e)})
+
+    result = {
+        "status": "complete",
+        "processed": len(processed),
+        "errors": len(errors),
+        "details": processed,
+    }
+    _db.set_cache("pipeline:auto_analyze_last_result", result)
+    return result
+
+
+@app.post("/api/pipeline/auto-analyze")
+async def auto_analyze(request: Request):
+    """Run analysis + embeddings for transcribed docs missing condensed analysis."""
+    if not _db:
+        return JSONResponse({"error": "Database not configured"}, status_code=500)
+
+    if _auto_analyze_lock.locked():
+        return JSONResponse({"status": "already_running"})
+
+    async def run_in_background():
+        async with _auto_analyze_lock:
+            try:
+                result = await asyncio.to_thread(_auto_analyze_worker)
+                return result
+            except Exception as e:
+                return {"status": "error", "error": str(e)}
+
+    asyncio.create_task(run_in_background())
+    return JSONResponse({"status": "started"})
 
 
 @app.post("/api/pipeline/toggle/{node_name:path}")

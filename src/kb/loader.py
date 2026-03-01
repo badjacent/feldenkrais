@@ -25,6 +25,8 @@ except ImportError:
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+MAX_LOAD_RETRIES = 5
+
 
 def get_file_extension(key: str) -> str:
     """Extract file extension from S3 key."""
@@ -180,6 +182,65 @@ def process_file(
             return {"status": "error", "reason": str(e)}
 
 
+def retry_from_errors(storage: Storage, db: Database) -> list[dict]:
+    """Move eligible files from errors/ back to staging/ for retry.
+
+    Checks each file's load_error count in pipeline_log. If under
+    MAX_LOAD_RETRIES, moves back to staging/. Otherwise logs permanent_failure.
+
+    Returns list of retry/failure results.
+    """
+    error_objects = storage.list_objects("errors/")
+    # Only main files (skip sidecars)
+    main_files = [obj for obj in error_objects if not obj["key"].endswith(".json")]
+
+    if not main_files:
+        return []
+
+    results = []
+    for obj in main_files:
+        error_key = obj["key"]
+        filename = Path(error_key).name
+
+        error_count = db.count_events_for_filename("load_error", filename)
+
+        if error_count >= MAX_LOAD_RETRIES:
+            # Check if we already logged permanent_failure for this file
+            pf_count = db.count_events_for_filename("permanent_failure", filename)
+            if pf_count == 0:
+                db.log_event("permanent_failure", title=filename,
+                             detail={"filename": filename, "stage": "loader",
+                                     "error_count": error_count})
+                logger.warning(f"Permanent failure for {filename} ({error_count} errors)")
+            results.append({"filename": filename, "status": "permanent_failure"})
+            continue
+
+        # Move back to staging/
+        staging_key = error_key.replace("errors/", "staging/", 1)
+        sidecar_error_key = f"{error_key}.json"
+        sidecar_staging_key = f"{staging_key}.json"
+
+        try:
+            storage.copy_object(error_key, staging_key)
+            storage.delete_object(error_key)
+            # Move sidecar if it exists
+            if storage.object_exists(sidecar_error_key):
+                storage.copy_object(sidecar_error_key, sidecar_staging_key)
+                storage.delete_object(sidecar_error_key)
+
+            db.log_event("load_retry", title=filename,
+                         detail={"filename": filename, "attempt": error_count + 1,
+                                 "max_retries": MAX_LOAD_RETRIES})
+            logger.info(f"Retrying {filename} (attempt {error_count + 1}/{MAX_LOAD_RETRIES})")
+            results.append({"filename": filename, "status": "retried", "attempt": error_count + 1})
+
+        except Exception as e:
+            logger.error(f"Failed to move {error_key} back to staging: {e}")
+            results.append({"filename": filename, "status": "error", "reason": str(e)})
+
+    return results
+
+
 def handler(event, context):
     """Lambda handler for S3 events on staging/."""
     logger.info(f"Received event: {json.dumps(event)}")
@@ -200,6 +261,11 @@ def handler(event, context):
     logger.info("Acquired loader lock")
 
     try:
+        # Retry eligible files from errors/ before processing staging/
+        retry_results = retry_from_errors(storage, db)
+        if retry_results:
+            logger.info(f"Error retry results: {len(retry_results)} files checked")
+
         # List ALL files in staging/ (not just from the event)
         # This ensures we process everything
         staging_objects = storage.list_objects("staging/")

@@ -606,6 +606,35 @@ class TranscriptionService:
             except Exception as e:
                 logger.warning(f"Failed to clean up temp chunks for {doc_id}: {e}")
 
+    def cleanup_orphaned_temp_files(self, max_age_seconds: int = 86400) -> int:
+        """Delete temp/transcription/ files older than max_age_seconds.
+
+        Returns count of files deleted.
+        """
+        temp_objects = self.storage.list_objects("temp/transcription/")
+        if not temp_objects:
+            return 0
+
+        deleted = 0
+        for obj in temp_objects:
+            age = self.storage.get_object_age_seconds(obj["key"])
+            if age is not None and age > max_age_seconds:
+                try:
+                    self.storage.delete_object(obj["key"])
+                    deleted += 1
+                    logger.info(f"Deleted orphaned temp file: {obj['key']} (age: {age:.0f}s)")
+                except Exception as e:
+                    logger.warning(f"Failed to delete {obj['key']}: {e}")
+
+        if deleted:
+            self.db.log_event("temp_cleanup", detail={
+                "files_deleted": deleted,
+                "max_age_seconds": max_age_seconds,
+            })
+            logger.info(f"Cleaned up {deleted} orphaned temp files")
+
+        return deleted
+
     def poll_and_process(self, batch_id: str, timeout: int = 3600, interval: int = 30) -> dict:
         """
         Poll a batch until completion and process results.
@@ -672,6 +701,33 @@ class TranscriptionService:
 
         Returns list of restaged documents.
         """
+        # Log permanent_failure for docs that have exceeded retries
+        perm_failed = self.db.get_permanently_failed_documents(
+            max_retries=self.config.max_retries
+        )
+        for doc in perm_failed:
+            # Only log once — check if we already logged for this doc
+            existing = self.db.get_pipeline_log(limit=1, event="permanent_failure")
+            already_logged = any(
+                e.get("document_id") and str(e["document_id"]) == str(doc["id"])
+                for e in self.db.get_pipeline_log(limit=100, event="permanent_failure")
+            )
+            if not already_logged:
+                self.db.log_event(
+                    "permanent_failure",
+                    title=doc["title"],
+                    document_id=str(doc["id"]),
+                    detail={
+                        "stage": "transcription",
+                        "retry_count": doc["retry_count"],
+                        "max_retries": self.config.max_retries,
+                    },
+                )
+                logger.warning(
+                    f"Permanent transcription failure: {doc['title']} "
+                    f"({doc['retry_count']} retries)"
+                )
+
         failed_docs = self.db.get_failed_documents_for_retry(
             max_retries=self.config.max_retries
         )
@@ -840,6 +896,15 @@ def handler(event, context):
 
     try:
         service = TranscriptionService(db=db, storage=storage)
+
+        # Clean up orphaned temp files on scheduled runs
+        if is_scheduled:
+            try:
+                cleaned = service.cleanup_orphaned_temp_files()
+                if cleaned:
+                    logger.info(f"Cleaned up {cleaned} orphaned temp files")
+            except Exception as e:
+                logger.warning(f"Temp cleanup failed: {e}")
 
         if action == "create_batch":
             # First, process any completed batches

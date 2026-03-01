@@ -949,6 +949,38 @@ class Database:
                 )
             return [dict(row) for row in cursor.fetchall()]
 
+    def count_events_for_filename(self, event: str, filename: str) -> int:
+        """Count pipeline_log events matching event type and filename in detail."""
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute(
+                """
+                SELECT COUNT(*) as count FROM pipeline_log
+                WHERE event = %s AND detail->>'filename' = %s
+                """,
+                (event, filename),
+            )
+            return cursor.fetchone()["count"]
+
+    def get_permanently_failed_documents(self, max_retries: int = 5) -> list[dict]:
+        """Get documents that exceeded transcription retry limit with no transcription."""
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute(
+                """
+                SELECT d.id, d.title, COALESCE(d.transcription_retries, 0) as retry_count,
+                       d.created_at
+                FROM document d
+                WHERE d.type_id IN (2, 3)
+                AND NOT EXISTS (
+                    SELECT 1 FROM analysis a
+                    WHERE a.document_id = d.id AND a.type_id = 1
+                )
+                AND COALESCE(d.transcription_retries, 0) >= %s
+                ORDER BY d.created_at DESC
+                """,
+                (max_retries,),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
     def get_pipeline_summary(self) -> dict:
         """Get pipeline status counts."""
         with self.get_cursor(commit=False) as cursor:
@@ -1000,13 +1032,53 @@ class Database:
                         WHERE j.document_id = d.id AND j.status = 'failed'
                         ORDER BY j.updated_at DESC LIMIT 1) as latest_error,
                        EXISTS(SELECT 1 FROM analysis a
-                              WHERE a.document_id = d.id AND a.type_id = 1) as has_transcription
+                              WHERE a.document_id = d.id AND a.type_id = 1) as has_transcription,
+                       EXISTS(SELECT 1 FROM lesson_embedding le
+                              WHERE le.document_id = d.id) as has_embedding,
+                       COALESCE(d.transcription_retries, 0) as retry_count
                 FROM document d
                 JOIN document_source ds ON ds.id = d.source_id
                 ORDER BY d.updated_at DESC
                 LIMIT %s
             """, (limit,))
-            return [dict(row) for row in cursor.fetchall()]
+            rows = [dict(row) for row in cursor.fetchall()]
+
+        # Check which docs have condensed analysis cached
+        condensed_doc_ids = set()
+        try:
+            for entry in self.get_docs_with_condensed():
+                condensed_doc_ids.add(entry["doc_id"])
+        except Exception:
+            pass
+
+        # Compute pipeline_stage for each document
+        for row in rows:
+            doc_id = str(row["id"])
+            has_tx = row.get("has_transcription", False)
+            has_embedding = row.get("has_embedding", False)
+            has_condensed = doc_id in condensed_doc_ids
+            latest_job = row.get("latest_job_status", "")
+            retry_count = row.get("retry_count", 0)
+
+            if has_embedding:
+                stage = "embedded"
+            elif has_condensed:
+                stage = "analyzed"
+            elif has_tx:
+                stage = "transcribed"
+            elif latest_job == "pending":
+                stage = "transcribing"
+            elif latest_job == "failed" or retry_count >= 5:
+                stage = "failed"
+            elif row.get("job_count", 0) > 0:
+                stage = "transcribing"
+            else:
+                stage = "awaiting_transcription"
+
+            row["has_condensed"] = has_condensed
+            row["pipeline_stage"] = stage
+
+        return rows
 
     # Cache operations
 
