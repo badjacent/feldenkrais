@@ -2,7 +2,7 @@
 Build lesson embeddings for semantic search.
 
 Reads condensed analysis cards from the cache, builds summary text,
-embeds via OpenAI, and stores in the lesson_embedding table (pgvector).
+embeds via Gemini, and stores in the lesson_embedding table (pgvector).
 
 Usage:
     .venv/bin/python src/kb/build_embeddings.py --dry-run
@@ -22,11 +22,6 @@ load_dotenv()
 
 from database import Database
 from llm import get_embeddings
-
-
-def get_cache_key(text: str) -> str:
-    """Generate a cache key from lesson text (matches web.py)."""
-    return hashlib.sha256(text.encode()).hexdigest()[:16]
 
 
 def build_summary_from_condensed(condensed: dict, title: str) -> str:
@@ -54,8 +49,6 @@ def build_summary_from_condensed(condensed: dict, title: str) -> str:
     return "\n".join(parts)
 
 
-
-
 def main():
     parser = argparse.ArgumentParser(description="Build lesson embeddings for semantic search")
     group = parser.add_mutually_exclusive_group(required=True)
@@ -70,58 +63,44 @@ def main():
         print("ERROR: DATABASE_URL not set in environment", file=sys.stderr)
         sys.exit(1)
 
-    if args.apply and not os.environ.get("OPENAI_API_KEY"):
-        print("ERROR: OPENAI_API_KEY not set in environment", file=sys.stderr)
+    if args.apply and not os.environ.get("GOOGLE_API_KEY"):
+        print("ERROR: GOOGLE_API_KEY not set in environment", file=sys.stderr)
         sys.exit(1)
 
     db = Database(database_url)
     db.initialize()
 
-    # Get all transcribed docs: {doc_id: text_hash}
-    text_hashes = db.get_all_transcription_hashes()
-    print(f"Found {len(text_hashes)} transcribed documents")
+    # Find docs with condensed analysis (2 DB queries, no per-doc loading)
+    docs_with_condensed = db.get_docs_with_condensed()
+    print(f"Found {len(docs_with_condensed)} documents with condensed analysis")
 
     # Get existing embedding hashes: {doc_id: summary_hash}
     existing_hashes = db.get_embedding_hashes()
     print(f"Found {len(existing_hashes)} existing embeddings")
 
-    # Build summaries for each document
-    to_embed = []  # list of (doc_id, summary_text, summary_hash)
+    # Build summaries from condensed cache data
+    to_embed = []  # list of (doc_id, summary_text, summary_hash, title)
     skipped = 0
-    no_condensed = 0
 
-    for doc_id, text_hash in text_hashes.items():
-        # Load transcript to compute condensed cache key (matches web.py's get_cache_key)
-        transcript = db.get_document_transcription(doc_id)
-        if not transcript or not transcript.strip():
+    for doc_info in docs_with_condensed:
+        condensed = db.get_cache(doc_info["cache_key"])
+        if not condensed or not condensed.get("segments"):
             continue
 
-        condensed_cache_key = get_cache_key(transcript.strip() + ":pass_0b_condensed_v4")
-        condensed = db.get_cache(condensed_cache_key)
-
-        # Get document title
-        doc = db.get_document(doc_id)
-        title = doc["title"] if doc else "Unknown"
-
-        if condensed and condensed.get("segments"):
-            summary = build_summary_from_condensed(condensed, title)
-        else:
-            no_condensed += 1
-            continue
-
+        summary = build_summary_from_condensed(condensed, doc_info["title"])
         summary_hash = hashlib.sha256(summary.encode()).hexdigest()[:16]
 
         # Skip if unchanged
-        if not args.force and existing_hashes.get(doc_id) == summary_hash:
+        if not args.force and existing_hashes.get(doc_info["doc_id"]) == summary_hash:
             skipped += 1
             continue
 
-        to_embed.append((doc_id, summary, summary_hash, title))
+        to_embed.append((doc_info["doc_id"], summary, summary_hash, doc_info["title"]))
 
     if args.limit:
         to_embed = to_embed[:args.limit]
 
-    print(f"\nTo embed: {len(to_embed)}, skipped (unchanged): {skipped}, no condensed (using transcript): {no_condensed}")
+    print(f"\nTo embed: {len(to_embed)}, skipped (unchanged): {skipped}")
 
     if not to_embed:
         print("Nothing to do.")
@@ -173,10 +152,6 @@ def main():
 
     print(f"\nDone: {embedded} embedded, {skipped} skipped, {errors} errors")
     print(f"Input chars: {total_input_chars:,}, billable chars: {total_chars:,}")
-    # Gemini embedding: free tier up to 1500 RPM; paid at ~$0.00001/1K chars
-    if embedded > 0 and len(text_hashes) > embedded:
-        projected_chars = total_chars * len(text_hashes) / embedded
-        print(f"Projected for all {len(text_hashes)} docs: ~{int(projected_chars):,} billable chars")
     db.close()
 
 

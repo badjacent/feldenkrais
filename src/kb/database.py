@@ -127,7 +127,7 @@ CREATE TABLE IF NOT EXISTS pipeline_node_state (
 
 CREATE TABLE IF NOT EXISTS lesson_embedding (
     document_id UUID PRIMARY KEY REFERENCES document(id) ON DELETE CASCADE,
-    embedding vector(768),
+    embedding vector(1536),
     summary_text TEXT,
     summary_hash TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -1084,3 +1084,43 @@ class Database:
         with self.get_cursor(commit=False) as cursor:
             cursor.execute("SELECT document_id::text, summary_hash FROM lesson_embedding")
             return {row["document_id"]: row["summary_hash"] for row in cursor.fetchall()}
+
+    def get_docs_with_condensed(self, cache_suffix: str = ":pass_0b_condensed_v4") -> list[dict]:
+        """Find docs that have condensed analysis cached.
+
+        Single SQL query to get all transcripts + titles, compute cache keys in
+        Python, then bulk-check against cache keys. Returns list of
+        {doc_id, title, cache_key} for docs with condensed data.
+        """
+        import hashlib
+
+        # One query: get all transcript texts and doc titles
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute("""
+                SELECT a.document_id::text as doc_id,
+                       d.title,
+                       a.data->>'text' as text
+                FROM analysis a
+                JOIN document d ON d.id = a.document_id
+                WHERE a.type_id = 1 AND a.data->>'text' IS NOT NULL
+            """)
+            doc_keys = {}
+            for row in cursor.fetchall():
+                text = (row["text"] or "").strip()
+                if text:
+                    cache_key = hashlib.sha256(
+                        (text + cache_suffix).encode()
+                    ).hexdigest()[:16]
+                    doc_keys[cache_key] = {
+                        "doc_id": row["doc_id"],
+                        "title": row["title"],
+                    }
+
+        # One query: get all cache keys
+        all_keys = self.get_cache_keys()
+        condensed_keys = set(doc_keys.keys()) & all_keys
+
+        return [
+            {**doc_keys[key], "cache_key": key}
+            for key in condensed_keys
+        ]

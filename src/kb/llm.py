@@ -66,8 +66,13 @@ Provider = Literal["anthropic", "openai", "gemini"]
 
 
 def get_embeddings(texts: list[str], model: str = "gemini-embedding-001",
-                    dimensions: int = 768) -> tuple[list[list[float]], dict]:
+                    task_type: str = "RETRIEVAL_DOCUMENT") -> tuple[list[list[float]], dict]:
     """Get embeddings from Gemini. Always uses Gemini regardless of app LLM provider.
+
+    Args:
+        texts: List of strings to embed.
+        model: Gemini embedding model name.
+        task_type: One of RETRIEVAL_DOCUMENT, RETRIEVAL_QUERY, SEMANTIC_SIMILARITY, etc.
 
     Returns (embeddings, usage) where usage has token counts when available.
     """
@@ -76,7 +81,7 @@ def get_embeddings(texts: list[str], model: str = "gemini-embedding-001",
     result = client.models.embed_content(
         model=model,
         contents=texts,
-        config={"output_dimensionality": dimensions},
+        config={"task_type": task_type, "output_dimensionality": 1536},
     )
     usage = {}
     if hasattr(result, "metadata") and result.metadata:
