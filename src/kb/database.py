@@ -247,6 +247,7 @@ class Database:
                 ("document_source", "category_name", "TEXT"),
                 ("document_source", "visible", "BOOLEAN NOT NULL DEFAULT TRUE"),
                 ("document", "category_name", "TEXT"),
+                ("document", "transcription_retries", "INTEGER DEFAULT 0"),
             ]:
                 cursor.execute(
                     """SELECT 1 FROM information_schema.columns
@@ -356,15 +357,15 @@ class Database:
             cursor.execute("SELECT * FROM document ORDER BY created_at DESC")
             return [dict(row) for row in cursor.fetchall()]
 
-    def get_untranscribed_documents(self, max_retries: int = 3) -> list[dict]:
+    def get_untranscribed_documents(self, max_retries: int = 5) -> list[dict]:
         """
         Get audio/video documents that need transcription.
 
         Returns documents that:
         - Are audio (type_id=2) or video (type_id=3)
         - Have no successful transcription analysis
-        - Are not currently pending
-        - Have not permanently failed (< max_retries attempts)
+        - Are not currently pending or failed (auto-retry handles failed docs separately)
+        - Have not exceeded the document-level retry limit
         """
         with self.get_cursor(commit=False) as cursor:
             cursor.execute(
@@ -376,18 +377,13 @@ class Database:
                     SELECT 1 FROM analysis a
                     WHERE a.document_id = d.id AND a.type_id = 1
                 )
-                -- Not currently pending
+                -- No pending or failed jobs (auto-retry cleans up failed jobs first)
                 AND NOT EXISTS (
                     SELECT 1 FROM transcription_job j
-                    WHERE j.document_id = d.id AND j.status = 'pending'
+                    WHERE j.document_id = d.id AND j.status IN ('pending', 'failed')
                 )
-                -- Not permanently failed (under max retries)
-                AND NOT EXISTS (
-                    SELECT 1 FROM transcription_job j
-                    WHERE j.document_id = d.id
-                    AND j.status = 'failed'
-                    AND j.attempts >= %s
-                )
+                -- Under document-level retry limit
+                AND COALESCE(d.transcription_retries, 0) < %s
                 ORDER BY d.created_at
                 """,
                 (max_retries,),
@@ -531,6 +527,65 @@ class Database:
             )
             row = cursor.fetchone()
             return dict(row) if row else None
+
+    def get_failed_documents_for_retry(self, max_retries: int = 5) -> list[dict]:
+        """
+        Get documents whose transcription failed and are eligible for retry.
+
+        Returns documents that:
+        - Have at least one failed transcription job
+        - Have no pending jobs (not currently in progress)
+        - Have no successful transcription
+        - Have not exceeded the document-level retry limit
+        """
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute(
+                """
+                SELECT DISTINCT d.id, d.title,
+                       COALESCE(d.transcription_retries, 0) as transcription_retries
+                FROM document d
+                JOIN transcription_job j ON j.document_id = d.id
+                WHERE j.status = 'failed'
+                -- No pending jobs
+                AND NOT EXISTS (
+                    SELECT 1 FROM transcription_job j2
+                    WHERE j2.document_id = d.id AND j2.status = 'pending'
+                )
+                -- No successful transcription
+                AND NOT EXISTS (
+                    SELECT 1 FROM analysis a
+                    WHERE a.document_id = d.id AND a.type_id = 1
+                )
+                -- Under retry limit
+                AND COALESCE(d.transcription_retries, 0) < %s
+                ORDER BY d.title
+                """,
+                (max_retries,),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def restage_document_for_retry(self, document_id: str) -> int:
+        """
+        Delete all transcription jobs for a document and increment its retry counter.
+
+        Returns the number of jobs deleted.
+        """
+        with self.get_cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM transcription_job WHERE document_id = %s",
+                (document_id,),
+            )
+            deleted = cursor.rowcount
+            cursor.execute(
+                """
+                UPDATE document
+                SET transcription_retries = COALESCE(transcription_retries, 0) + 1,
+                    updated_at = NOW()
+                WHERE id = %s
+                """,
+                (document_id,),
+            )
+            return deleted
 
     def create_analysis(
         self,
@@ -1063,13 +1118,15 @@ class Database:
             )
 
     def search_lessons(self, query_embedding: list[float], limit: int = 10) -> list[dict]:
-        """Search lessons by cosine similarity. Returns list of {document_id, title, similarity, summary_text}."""
+        """Search lessons by cosine similarity. Returns list of {document_id, title, similarity, summary_text, source_id, category_name}."""
         with self.get_cursor(commit=False) as cursor:
             cursor.execute(
                 """
                 SELECT le.document_id::text, d.title,
                        1 - (le.embedding <=> %s::vector) as similarity,
-                       le.summary_text
+                       le.summary_text,
+                       d.source_id,
+                       d.category_name
                 FROM lesson_embedding le
                 JOIN document d ON d.id = le.document_id
                 ORDER BY le.embedding <=> %s::vector

@@ -9,7 +9,7 @@ Lambda Actions (via event["action"]):
   - "create_batch": Create a new transcription batch
   - "check_status": Check status of a batch (requires batch_id)
   - "process_results": Process results of a completed batch (requires batch_id)
-  - "retry_failed": Reset failed jobs to pending for retry (max 3 attempts)
+  - "retry_failed": Reset failed jobs to pending for retry
   - "transcribe_single": Sync transcribe one document (requires document_id, for testing)
 
 Example invocations:
@@ -53,7 +53,7 @@ TRANSCRIPTION_TYPE_ID = 1
 
 # Default configuration
 DEFAULT_MODEL = "whisper-large-v3-turbo"
-DEFAULT_MAX_RETRIES = 3
+DEFAULT_MAX_RETRIES = 5
 DEFAULT_COMPLETION_WINDOW = "24h"
 DEFAULT_PRESIGNED_URL_EXPIRY = 86400  # 24 hours
 
@@ -406,6 +406,7 @@ class TranscriptionService:
                         job_id=job_id,
                         status="failed",
                         error=error_msg,
+                        increment_attempts=True,
                     )
 
                     # Log transcription failure
@@ -447,6 +448,7 @@ class TranscriptionService:
                         job_id=job_id,
                         status="failed",
                         error=error_msg,
+                        increment_attempts=True,
                     )
                     results["jobs_failed"].append({
                         "job_id": job_id,
@@ -660,6 +662,56 @@ class TranscriptionService:
 
         return results
 
+    def auto_retry_failed(self) -> list[dict]:
+        """
+        Automatically restage failed documents for retry.
+
+        Finds documents with only failed transcription jobs that haven't exceeded
+        the retry limit, deletes their jobs, and increments the document retry counter.
+        The documents will then be picked up by create_batch() on the next run.
+
+        Returns list of restaged documents.
+        """
+        failed_docs = self.db.get_failed_documents_for_retry(
+            max_retries=self.config.max_retries
+        )
+
+        if not failed_docs:
+            return []
+
+        restaged = []
+        for doc in failed_docs:
+            doc_id = str(doc["id"])
+            retries = doc["transcription_retries"]
+            deleted = self.db.restage_document_for_retry(doc_id)
+
+            logger.info(
+                f"Restaged document {doc['title']} for retry "
+                f"(attempt {retries + 1}/{self.config.max_retries}, "
+                f"deleted {deleted} failed jobs)"
+            )
+
+            self.db.log_event(
+                "transcription_retry",
+                title=doc["title"],
+                document_id=doc_id,
+                detail={
+                    "attempt": retries + 1,
+                    "max_retries": self.config.max_retries,
+                    "jobs_deleted": deleted,
+                },
+            )
+
+            restaged.append({
+                "document_id": doc_id,
+                "title": doc["title"],
+                "attempt": retries + 1,
+                "jobs_deleted": deleted,
+            })
+
+        logger.info(f"Restaged {len(restaged)} documents for retry")
+        return restaged
+
     def transcribe_single(self, document_id: str) -> dict:
         """
         Transcribe a single document synchronously (for testing).
@@ -793,12 +845,16 @@ def handler(event, context):
             # First, process any completed batches
             completed_results = service.process_completed_batches()
 
+            # Auto-retry failed documents before creating new batch
+            retried = service.auto_retry_failed()
+
             # Then create a new batch if there are untranscribed documents
             batch_id = service.create_batch()
             result = {
                 "action": "create_batch",
                 "batch_id": batch_id,
                 "completed_batches": completed_results,
+                "retried_documents": retried,
             }
 
         elif action == "check_status":
@@ -820,14 +876,13 @@ def handler(event, context):
             result = service.transcribe_single(document_id)
 
         elif action == "retry_failed":
-            max_attempts = event.get("max_attempts", 3)
-            reset_jobs = db.reset_failed_jobs_for_retry(max_attempts)
+            retried = service.auto_retry_failed()
             result = {
                 "action": "retry_failed",
-                "jobs_reset": len(reset_jobs),
-                "jobs": reset_jobs,
+                "documents_restaged": len(retried),
+                "documents": retried,
             }
-            logger.info(f"Reset {len(reset_jobs)} failed jobs for retry")
+            logger.info(f"Restaged {len(retried)} documents for retry")
 
         else:
             # Default action for scheduled events: use batch API
@@ -835,12 +890,16 @@ def handler(event, context):
                 # First, process any completed batches
                 completed_results = service.process_completed_batches()
 
+                # Auto-retry failed documents before creating new batch
+                retried = service.auto_retry_failed()
+
                 # Then create a new batch if there are untranscribed documents
                 batch_id = service.create_batch()
                 result = {
                     "action": "scheduled_batch",
                     "batch_id": batch_id,
                     "completed_batches": completed_results,
+                    "retried_documents": retried,
                 }
             else:
                 return {"statusCode": 400, "body": json.dumps({"error": f"Unknown action: {action}"})}

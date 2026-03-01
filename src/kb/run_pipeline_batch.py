@@ -15,6 +15,7 @@ import os
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 
 # Force unbuffered output
 print = functools.partial(print, flush=True)
@@ -23,20 +24,27 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# web.py functions expect to be imported from the src/kb directory
 from database import Database
 from llm import get_embeddings
 
-# We need web.py's pipeline functions. Import after dotenv so env vars are set.
-import web
+# ── Initialize extracted modules (replaces `import web`) ──────────────────
+import cache_helpers
+import llm_config
+import analysis
 
-# Ensure LLM is enabled for the batch run
 DATABASE_URL = os.environ.get("DATABASE_URL")
+DATA_DIR = Path(__file__).parent.parent.parent / "data"
 
+_db = Database(DATABASE_URL) if DATABASE_URL else None
+if _db:
+    _db.initialize()
 
-def get_cache_key(text: str) -> str:
-    """Match web.py's cache key computation."""
-    return hashlib.sha256(text.encode()).hexdigest()[:16]
+cache_helpers.init(_db)
+llm_config.init(_db)
+analysis.init(_db, DATA_DIR, llm_config.get_llm)
+
+from cache_helpers import get_cache_key, build_summary_from_condensed
+from analysis import run_pass_0b, run_pass_0b_lang, run_pass_0b_condensed
 
 
 def pick_lessons(db: Database, limit: int) -> list[dict]:
@@ -106,16 +114,16 @@ def run_one_lesson(doc_id: str, title: str, transcript: str) -> dict:
 
     try:
         # Phase 1: somatic + lang (these share the same Pass A cache)
-        somatic_result = web.run_pass_0b(transcript)
+        somatic_result = run_pass_0b(transcript)
         if somatic_result.get("cached"):
             result["cached_stages"].append("somatic")
 
-        lang_result = web.run_pass_0b_lang(transcript)
+        lang_result = run_pass_0b_lang(transcript)
         if lang_result.get("cached"):
             result["cached_stages"].append("lang")
 
         # Phase 2: condensed synthesis
-        condensed = web.run_pass_0b_condensed(somatic_result, lang_result, transcript)
+        condensed = run_pass_0b_condensed(somatic_result, lang_result, transcript)
         if condensed.get("cached"):
             result["cached_stages"].append("condensed")
 
@@ -129,28 +137,6 @@ def run_one_lesson(doc_id: str, title: str, transcript: str) -> dict:
         result["elapsed"] = round(time.time() - t0, 1)
 
     return result
-
-
-def build_summary_from_condensed(condensed: dict, title: str) -> str:
-    """Build a summary string from condensed card data for embedding."""
-    parts = [title]
-    for seg in condensed.get("segments", []):
-        setting = seg.get("setting", {})
-        if setting:
-            if setting.get("title"):
-                parts.append(f"Setting: {setting['title']}")
-            if setting.get("somatic_intent"):
-                parts.append(setting["somatic_intent"])
-        for card in seg.get("group_cards", []):
-            label = card.get("group_label", "")
-            card_title = card.get("title", "")
-            if label or card_title:
-                parts.append(f"{label}: {card_title}".strip(": "))
-            if card.get("the_action"):
-                parts.append(card["the_action"])
-            if card.get("the_body"):
-                parts.append(card["the_body"])
-    return "\n".join(parts)
 
 
 def main():
@@ -167,8 +153,7 @@ def main():
         print("ERROR: DATABASE_URL not set", file=sys.stderr)
         sys.exit(1)
 
-    db = Database(DATABASE_URL)
-    db.initialize()
+    db = _db
 
     # Enable LLM kill switch for batch run
     if args.apply and not args.skip_pipeline:

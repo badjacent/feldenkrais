@@ -22,31 +22,7 @@ load_dotenv()
 
 from database import Database
 from llm import get_embeddings
-
-
-def build_summary_from_condensed(condensed: dict, title: str) -> str:
-    """Build a summary string from condensed card data for embedding."""
-    parts = [title]
-
-    for seg in condensed.get("segments", []):
-        setting = seg.get("setting", {})
-        if setting:
-            if setting.get("title"):
-                parts.append(f"Setting: {setting['title']}")
-            if setting.get("somatic_intent"):
-                parts.append(setting["somatic_intent"])
-
-        for card in seg.get("group_cards", []):
-            label = card.get("group_label", "")
-            card_title = card.get("title", "")
-            if label or card_title:
-                parts.append(f"{label}: {card_title}".strip(": "))
-            if card.get("the_action"):
-                parts.append(card["the_action"])
-            if card.get("the_body"):
-                parts.append(card["the_body"])
-
-    return "\n".join(parts)
+from cache_helpers import build_summary_from_condensed
 
 
 def main():
