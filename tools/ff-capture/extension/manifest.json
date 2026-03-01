@@ -5,7 +5,10 @@
   "description": "Captures audio from Feldenkrais First and Feldenkrais Project lesson pages",
   "permissions": [
     "webRequest",
-    "storage"
+    "storage",
+    "activeTab",
+    "scripting",
+    "tabs"
   ],
   "host_permissions": [
     "*://*.sndcdn.com/*",
@@ -22,14 +25,6 @@
     {
       "matches": ["*://app.feldenkraisfirst.com/*"],
       "js": ["content.js"],
-      "run_at": "document_idle"
-    },
-    {
-      "matches": [
-        "*://feldenkraisproject.com/*",
-        "*://www.feldenkraisproject.com/*"
-      ],
-      "js": ["content-fp.js"],
       "run_at": "document_idle"
     }
   ],

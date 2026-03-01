@@ -84,10 +84,23 @@ def build_title(lesson_date, lesson_index: str, lesson_type: str, llm_name: str)
     return llm_name
 
 
+def sample_transcript(transcript: str) -> str:
+    """Pick the most informative 10K-char window from the transcript.
+
+    Long transcripts often start with logistics/greetings before the actual
+    lesson begins. Sending chars 10K-20K catches the core content. For short
+    transcripts, send the whole thing.
+    """
+    if len(transcript) <= TRANSCRIPT_CHAR_LIMIT:
+        return transcript
+    start = min(TRANSCRIPT_CHAR_LIMIT, len(transcript) - TRANSCRIPT_CHAR_LIMIT)
+    return transcript[start:start + TRANSCRIPT_CHAR_LIMIT]
+
+
 def name_lesson(llm: LLM, transcript: str) -> tuple[str, str]:
     """Send transcript to LLM and get a type and descriptive name."""
-    truncated = transcript[:TRANSCRIPT_CHAR_LIMIT]
-    response = llm.complete(truncated, system=NAMING_PROMPT, max_tokens=80)
+    sample = sample_transcript(transcript)
+    response = llm.complete(sample, system=NAMING_PROMPT, max_tokens=80)
 
     lines = [l.strip() for l in response.strip().splitlines() if l.strip()]
 
@@ -182,6 +195,7 @@ def main():
             # Preserve the very first original title (don't overwrite on --force re-runs)
             if not metadata.get("original_title"):
                 metadata["original_title"] = old_title
+            metadata["lesson_type"] = lesson_type
             with db.get_cursor() as cursor:
                 cursor.execute(
                     """

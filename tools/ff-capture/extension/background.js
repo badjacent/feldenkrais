@@ -78,6 +78,70 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 
+// --- Auto-capture for feldenkraisproject.com ---
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status !== "complete") return;
+  if (!tab.url || !tab.url.includes("feldenkraisproject.com/lesson/")) return;
+
+  handleFPAutoCapture(tabId, tab.url);
+});
+
+async function handleFPAutoCapture(tabId, pageUrl) {
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => {
+        // Extract audio URL from Podlove player config
+        const html = document.documentElement.innerHTML;
+        const match = html.match(/"audio"\s*:\s*\[\s*\{\s*"url"\s*:\s*"([^"]+)"/);
+        const audioUrl = match ? match[1].replace(/\\?\//g, "/") : null;
+
+        // Extract title
+        const h1 = document.querySelector("h1.entry-title");
+        const ogTitle = document.querySelector('meta[property="og:title"]');
+        const title = h1 ? h1.textContent.trim().replace(/\s*\(Patrons\)\s*$/, "")
+          : ogTitle ? ogTitle.content.trim()
+          : document.title.trim() || "Untitled";
+
+        // Extract description
+        const el = document.querySelector(".entry-content") || document.querySelector("article");
+        let description = null;
+        if (el) {
+          const clone = el.cloneNode(true);
+          clone.querySelectorAll("iframe, embed, object, script, style, .podlove-web-player").forEach(n => n.remove());
+          const text = clone.textContent.trim();
+          description = text ? text.slice(0, 500) : null;
+        }
+
+        return { audioUrl, title, description };
+      },
+    });
+
+    const data = results[0]?.result;
+    if (!data || !data.audioUrl) {
+      console.log("[Feldenkrais Capture] No audio found on FP page:", pageUrl);
+      return;
+    }
+
+    if (isDuplicate(data.audioUrl)) return;
+
+    console.log("[Feldenkrais Capture] FP audio auto-detected:", data.audioUrl);
+
+    const payload = {
+      audio_url: data.audioUrl,
+      metadata: {
+        page_url: pageUrl,
+        title: data.title,
+        description: data.description,
+      },
+    };
+    await sendToServer(payload, data.audioUrl, payload.metadata, "fp");
+  } catch (err) {
+    console.warn("[Feldenkrais Capture] FP auto-capture failed:", err.message);
+  }
+}
+
 // --- Shared helpers ---
 
 function isDuplicate(key) {
