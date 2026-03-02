@@ -55,7 +55,7 @@ jobs:
           terraform apply -auto-approve \
             -var="environment=prod" \
             -var="domain_name=aionyourside.net" \
-            -var="search_domain_name=search.aionyourside.com" \
+            -var="search_domain_name=search.aionyourside.net" \
             -var="deploy_sha=${{ github.sha }}"
         env:
           TF_VAR_groq_api_key: ${{ secrets.GROQ_API_KEY }}
