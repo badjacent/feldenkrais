@@ -674,6 +674,76 @@ data "archive_file" "web_lambda" {
     content  = file("${path.module}/../src/kb/storage.py")
     filename = "storage.py"
   }
+  # Extracted modules (required by web.py)
+  source {
+    content  = file("${path.module}/../src/kb/cache_helpers.py")
+    filename = "cache_helpers.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/llm_config.py")
+    filename = "llm_config.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/analysis.py")
+    filename = "analysis.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/config.py")
+    filename = "config.py"
+  }
+  # Pass 0b data files (prompts and schemas)
+  source {
+    content  = file("${path.module}/../data/pass_0b.md")
+    filename = "data/pass_0b.md"
+  }
+  source {
+    content  = file("${path.module}/../data/pass_0b.schema.json")
+    filename = "data/pass_0b.schema.json"
+  }
+  source {
+    content  = file("${path.module}/../data/pass_0b_condensed.md")
+    filename = "data/pass_0b_condensed.md"
+  }
+  source {
+    content  = file("${path.module}/../data/pass_0b_condensed.schema.json")
+    filename = "data/pass_0b_condensed.schema.json"
+  }
+  source {
+    content  = file("${path.module}/../data/pass_0b_condensed_instruction.md")
+    filename = "data/pass_0b_condensed_instruction.md"
+  }
+  source {
+    content  = file("${path.module}/../data/pass_0b_condensed_segment.md")
+    filename = "data/pass_0b_condensed_segment.md"
+  }
+  source {
+    content  = file("${path.module}/../data/pass_0b_lang.md")
+    filename = "data/pass_0b_lang.md"
+  }
+  source {
+    content  = file("${path.module}/../data/pass_0b_lang.schema.json")
+    filename = "data/pass_0b_lang.schema.json"
+  }
+  source {
+    content  = file("${path.module}/../data/pass_0b_segmentation.md")
+    filename = "data/pass_0b_segmentation.md"
+  }
+  source {
+    content  = file("${path.module}/../data/pass_0b_segmentation.schema.json")
+    filename = "data/pass_0b_segmentation.schema.json"
+  }
+  source {
+    content  = file("${path.module}/../data/pass_0b_word_lang.md")
+    filename = "data/pass_0b_word_lang.md"
+  }
+  source {
+    content  = file("${path.module}/../data/pass_0b_word_lang.schema.json")
+    filename = "data/pass_0b_word_lang.schema.json"
+  }
+  source {
+    content  = file("${path.module}/../data/pass_0.schema.json")
+    filename = "data/pass_0.schema.json"
+  }
   # Exploration agent (from terraform/data/ deployment copy)
   source {
     content  = file("${path.module}/data/explore_init.md")
