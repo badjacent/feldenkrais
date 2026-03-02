@@ -621,51 +621,51 @@ data "archive_file" "web_lambda" {
     content  = file("${path.module}/../src/kb/schemas.py")
     filename = "schemas.py"
   }
-  # Framework version pointer
+  # Framework version pointer (from private submodule)
   source {
-    content  = file("${path.module}/../data/frameworks.json")
+    content  = file("${path.module}/../private/data/frameworks/v1/frameworks.json")
     filename = "data/frameworks.json"
   }
-  # Schemas (shared, unversioned)
+  # Schemas (pass_a from public, pass_b from private)
   source {
     content  = file("${path.module}/../data/pass_a.schema.json")
     filename = "data/pass_a.schema.json"
   }
   source {
-    content  = file("${path.module}/../data/pass_b.schema.json")
+    content  = file("${path.module}/../private/data/pass_b.schema.json")
     filename = "data/pass_b.schema.json"
   }
-  # Versioned framework prompts (v1)
+  # Versioned framework prompts (v1) - from private submodule
   source {
-    content  = file("${path.module}/../data/frameworks/v1/frameworks.json")
+    content  = file("${path.module}/../private/data/frameworks/v1/frameworks.json")
     filename = "data/frameworks/v1/frameworks.json"
   }
   source {
-    content  = file("${path.module}/../data/frameworks/v1/pass_a.md")
+    content  = file("${path.module}/../private/data/frameworks/v1/pass_a.md")
     filename = "data/frameworks/v1/pass_a.md"
   }
   source {
-    content  = file("${path.module}/../data/frameworks/v1/pass_b.md")
+    content  = file("${path.module}/../private/data/frameworks/v1/pass_b.md")
     filename = "data/frameworks/v1/pass_b.md"
   }
   source {
-    content  = file("${path.module}/../data/archive/prompt_files_from_v1/vl1.md")
+    content  = file("${path.module}/../private/data/archive/prompt_files_from_v1/vl1.md")
     filename = "data/frameworks/v1/vl1.md"
   }
   source {
-    content  = file("${path.module}/../data/archive/prompt_files_from_v1/vl2.md")
+    content  = file("${path.module}/../private/data/archive/prompt_files_from_v1/vl2.md")
     filename = "data/frameworks/v1/vl2.md"
   }
   source {
-    content  = file("${path.module}/../data/archive/prompt_files_from_v1/vl3.md")
+    content  = file("${path.module}/../private/data/archive/prompt_files_from_v1/vl3.md")
     filename = "data/frameworks/v1/vl3.md"
   }
   source {
-    content  = file("${path.module}/../data/archive/prompt_files_from_v1/vl4.md")
+    content  = file("${path.module}/../private/data/archive/prompt_files_from_v1/vl4.md")
     filename = "data/frameworks/v1/vl4.md"
   }
   source {
-    content  = file("${path.module}/../data/archive/prompt_files_from_v1/vl5.md")
+    content  = file("${path.module}/../private/data/archive/prompt_files_from_v1/vl5.md")
     filename = "data/frameworks/v1/vl5.md"
   }
   # Database module
@@ -678,17 +678,17 @@ data "archive_file" "web_lambda" {
     content  = file("${path.module}/../src/kb/storage.py")
     filename = "storage.py"
   }
-  # Exploration agent
+  # Exploration agent (from private submodule)
   source {
-    content  = file("${path.module}/../data/explore_init.md")
+    content  = file("${path.module}/../private/data/explore_init.md")
     filename = "data/explore_init.md"
   }
   source {
-    content  = file("${path.module}/../data/explore_round.md")
+    content  = file("${path.module}/../private/data/explore_round.md")
     filename = "data/explore_round.md"
   }
   source {
-    content  = file("${path.module}/../data/explore.schema.json")
+    content  = file("${path.module}/../private/data/explore.schema.json")
     filename = "data/explore.schema.json"
   }
   # Note: Lesson files are loaded dynamically from S3 or user input

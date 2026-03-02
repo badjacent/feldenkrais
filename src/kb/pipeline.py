@@ -936,6 +936,11 @@ def main():
     if kb_dir not in sys.path:
         sys.path.insert(0, kb_dir)
 
+    # Add private/src/ to sys.path for submodule imports
+    _private_src = Path(__file__).parent.parent.parent / "private" / "src"
+    if _private_src.exists():
+        sys.path.insert(0, str(_private_src))
+
     load_dotenv()
 
     try:

@@ -249,28 +249,39 @@ def main():
         db.close()
         return
 
-    texts = [summary for _, summary, _, _ in to_embed]
-    total_chars = sum(len(t) for t in texts)
-    print(f"Embedding {len(to_embed)} lessons ({total_chars:,} chars)...", end=" ", flush=True)
+    total_chars = sum(len(s) for _, s, _, _ in to_embed)
+    print(f"Embedding {len(to_embed)} lessons ({total_chars:,} chars) in chunks of 100...")
 
-    try:
-        embeddings, usage = get_embeddings(texts)
-        billable = usage.get("billable_characters", total_chars)
-    except Exception as e:
-        print(f"\nERROR embedding: {e}", file=sys.stderr)
-        db.close()
-        sys.exit(1)
-
+    CHUNK_SIZE = 100
     embedded = 0
-    for (doc_id, summary, summary_hash, title), embedding in zip(to_embed, embeddings):
-        try:
-            db.upsert_embedding(doc_id, embedding, summary, summary_hash)
-            embedded += 1
-        except Exception as e:
-            print(f"\n  ERROR upserting {title}: {e}", file=sys.stderr)
+    errors = 0
+    billable = 0
 
-    print(f"done")
-    print(f"\nEmbedded: {embedded}, billable chars: {billable:,}")
+    for i in range(0, len(to_embed), CHUNK_SIZE):
+        chunk = to_embed[i:i + CHUNK_SIZE]
+        texts = [summary for _, summary, _, _ in chunk]
+        batch_chars = sum(len(t) for t in texts)
+        print(f"  Batch {i // CHUNK_SIZE + 1} ({len(chunk)} texts, {batch_chars:,} chars)...", end=" ", flush=True)
+
+        try:
+            embeddings, usage = get_embeddings(texts)
+            billable += usage.get("billable_characters", batch_chars)
+        except Exception as e:
+            print(f"ERROR: {e}", file=sys.stderr)
+            errors += len(chunk)
+            continue
+
+        for (doc_id, summary, summary_hash, title), embedding in zip(chunk, embeddings):
+            try:
+                db.upsert_embedding(doc_id, embedding, summary, summary_hash)
+                embedded += 1
+            except Exception as e:
+                print(f"\n    ERROR upserting {title}: {e}", file=sys.stderr)
+                errors += 1
+
+        print("done")
+
+    print(f"\nEmbedded: {embedded}, errors: {errors}, billable chars: {billable:,}")
     db.close()
 
 

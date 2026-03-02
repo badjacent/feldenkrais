@@ -104,11 +104,3 @@ terraform/**/*.tfstate.*
 # Commit lock file for CI reproducibility
 # terraform/.terraform.lock.hcl
 terraform/*.zip
-# Data directory (lessons may be copyrighted)
-data/lessons/
-data/washing-archive/
-
-# But track protocol documentation
-!data/washing.md
-!data/washing.schema.json
-!data/PROTOCOL_SCHEMA_GUIDE.md

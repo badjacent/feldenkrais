@@ -42,15 +42,30 @@ def init(db, data_dir: Path, get_llm_fn):
 # ── Framework helpers ──────────────────────────────────────────────────────
 
 
+def _resolve_data_path(relative_path: str) -> Path:
+    """Resolve a data file path, checking private/data/ submodule first, then public data/.
+
+    This supports the public/private repo split where some data files live in
+    the private submodule at <project_root>/private/data/.
+    """
+    # Check private submodule data dir first
+    private_data = _data_dir.parent / "private" / "data"
+    candidate = private_data / relative_path
+    if candidate.exists():
+        return candidate
+    return _data_dir / relative_path
+
+
 def _resolve_prompts_dir(version: str | None = None) -> tuple[Path, str]:
     """Resolve the versioned prompts directory. If version is None, read from pointer."""
     if version is None:
-        pointer = _data_dir / "frameworks.json"
+        pointer = _resolve_data_path("frameworks.json")
         if pointer.exists():
             version = json.loads(pointer.read_text())["current_version"]
         else:
             version = "v1"
-    return _data_dir / "frameworks" / version, version
+    prompts = _resolve_data_path(f"frameworks/{version}")
+    return prompts, version
 
 
 def _framework_version_suffix(framework_version: str | None = None) -> str:

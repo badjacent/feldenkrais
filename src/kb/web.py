@@ -15,8 +15,14 @@ import asyncio
 from datetime import datetime, timezone
 import json
 import os
+import sys
 import uuid
 from pathlib import Path
+
+# Add private/src/ to sys.path so we can import modules from the submodule
+_private_src = Path(__file__).parent.parent.parent / "private" / "src"
+if _private_src.exists():
+    sys.path.insert(0, str(_private_src))
 
 from dotenv import load_dotenv
 
@@ -4710,9 +4716,11 @@ async def version():
 # --- Conditional book router mount ---
 
 _book_available = False
+_private_data = Path(__file__).parent.parent.parent / "private" / "data"
+_book_data_dir = _private_data if _private_data.exists() else DATA_DIR
 try:
     from web_book import create_book_router
-    _book_router = create_book_router(db=_db, data_dir=DATA_DIR)
+    _book_router = create_book_router(db=_db, data_dir=_book_data_dir)
     app.include_router(_book_router)
     # Expose the book pipeline section builder for build_pipeline_html()
     from web_book import _build_book_pipeline_section
