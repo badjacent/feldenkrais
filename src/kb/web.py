@@ -3466,7 +3466,7 @@ def build_lesson_page_html(document_id: str) -> str:
     </div>
 
     <div class="tab-bar" id="tab-bar">
-        <button class="active" onclick="switchTab('steps')">Steps</button>
+        <button class="active" onclick="switchTab('steps')">Step by Step (Cards)</button>
         <button onclick="switchTab('condensed')">Condensed</button>
         <button onclick="switchTab('annotated')">Annotated</button>
     </div>
