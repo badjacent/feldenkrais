@@ -74,3 +74,9 @@ variable "deploy_sha" {
   type        = string
   default     = "local"
 }
+
+variable "search_domain_name" {
+  description = "Subdomain for the pass0b search demo site"
+  type        = string
+  default     = ""
+}

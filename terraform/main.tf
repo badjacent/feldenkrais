@@ -149,10 +149,10 @@ resource "aws_lambda_function" "loader" {
 
   environment {
     variables = {
-      KB_BUCKET         = aws_s3_bucket.main.id
-      KB_ENV            = var.environment
-      KB_GRACE_PERIOD   = var.grace_period_seconds
-      DATABASE_URL      = var.database_url
+      KB_BUCKET       = aws_s3_bucket.main.id
+      KB_ENV          = var.environment
+      KB_GRACE_PERIOD = var.grace_period_seconds
+      DATABASE_URL    = var.database_url
     }
   }
 }
@@ -282,11 +282,11 @@ resource "aws_lambda_function" "transcription" {
   handler          = "transcribe.handler"
   source_code_hash = data.archive_file.transcription_lambda.output_base64sha256
   runtime          = "python3.12"
-  timeout          = 900  # 15 minutes max for long transcriptions
+  timeout          = 900 # 15 minutes max for long transcriptions
   memory_size      = 1024
 
   ephemeral_storage {
-    size = 2048  # 2GB for downloading and chunking multiple audio files
+    size = 2048 # 2GB for downloading and chunking multiple audio files
   }
 
   # Note: reserved_concurrent_executions = 1 would prevent race conditions,
@@ -300,11 +300,11 @@ resource "aws_lambda_function" "transcription" {
 
   environment {
     variables = {
-      KB_BUCKET     = aws_s3_bucket.main.id
-      KB_ENV        = var.environment
-      GROQ_API_KEY  = var.groq_api_key
-      DATABASE_URL  = var.database_url
-      PATH          = "/opt/bin:/var/lang/bin:/usr/local/bin:/usr/bin:/bin"
+      KB_BUCKET    = aws_s3_bucket.main.id
+      KB_ENV       = var.environment
+      GROQ_API_KEY = var.groq_api_key
+      DATABASE_URL = var.database_url
+      PATH         = "/opt/bin:/var/lang/bin:/usr/local/bin:/usr/bin:/bin"
     }
   }
 }
@@ -396,7 +396,7 @@ resource "aws_lambda_function" "scraper" {
   source_code_hash = data.archive_file.scraper_lambda.output_base64sha256
   runtime          = "python3.12"
   timeout          = 600  # 10 minutes for large downloads + chunking
-  memory_size      = 1024  # More memory for ffmpeg chunking
+  memory_size      = 1024 # More memory for ffmpeg chunking
 
   # Use Python deps layer (requests, beautifulsoup4) and ffmpeg for chunking
   layers = compact([
@@ -471,7 +471,7 @@ data "archive_file" "youtube_lambda" {
 }
 
 resource "aws_lambda_function" "youtube" {
-  count = var.groq_api_key != "" ? 1 : 0  # Reuse same condition as transcription
+  count = var.groq_api_key != "" ? 1 : 0 # Reuse same condition as transcription
 
   filename         = data.archive_file.youtube_lambda.output_path
   function_name    = "feldenkrais-youtube-${var.environment}"
@@ -479,7 +479,7 @@ resource "aws_lambda_function" "youtube" {
   handler          = "youtube.handler"
   source_code_hash = data.archive_file.youtube_lambda.output_base64sha256
   runtime          = "python3.12"
-  timeout          = 900  # 15 minutes max for large video downloads
+  timeout          = 900 # 15 minutes max for large video downloads
   memory_size      = 1024
 
   # Use Python deps layer (includes yt-dlp) and ffmpeg for audio extraction
@@ -767,7 +767,7 @@ resource "aws_lambda_function" "web" {
   handler          = "web.handler"
   source_code_hash = data.archive_file.web_lambda.output_base64sha256
   runtime          = "python3.12"
-  timeout          = 900  # 15 minutes for LLM calls
+  timeout          = 900 # 15 minutes for LLM calls
   memory_size      = 512
 
   layers = compact([
@@ -776,13 +776,14 @@ resource "aws_lambda_function" "web" {
 
   environment {
     variables = {
-      GOOGLE_API_KEY    = var.google_api_key
-      ANTHROPIC_API_KEY = var.anthropic_api_key
-      OPENAI_API_KEY    = var.openai_api_key
-      DATABASE_URL      = var.database_url
-      KB_BUCKET         = aws_s3_bucket.main.id
+      GOOGLE_API_KEY                = var.google_api_key
+      ANTHROPIC_API_KEY             = var.anthropic_api_key
+      OPENAI_API_KEY                = var.openai_api_key
+      DATABASE_URL                  = var.database_url
+      KB_BUCKET                     = aws_s3_bucket.main.id
       AWS_LAMBDA_FUNCTION_NAME_SELF = "feldenkrais-web-${var.environment}"
-      DEPLOY_SHA        = var.deploy_sha
+      DEPLOY_SHA                    = var.deploy_sha
+      SEARCH_DOMAIN                 = var.search_domain_name
     }
   }
 }
@@ -879,6 +880,84 @@ resource "aws_route53_record" "web" {
   alias {
     name                   = aws_apigatewayv2_domain_name.web[0].domain_name_configuration[0].target_domain_name
     zone_id                = aws_apigatewayv2_domain_name.web[0].domain_name_configuration[0].hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+# -----------------------------------------------------------------------------
+# Search Subdomain (Route 53 + ACM + API Gateway) — same Lambda, different host
+# -----------------------------------------------------------------------------
+
+locals {
+  search_parent_domain = var.search_domain_name != "" ? join(".", slice(split(".", var.search_domain_name), 1, length(split(".", var.search_domain_name)))) : ""
+}
+
+data "aws_route53_zone" "search" {
+  count = var.search_domain_name != "" ? 1 : 0
+  name  = local.search_parent_domain
+}
+
+resource "aws_acm_certificate" "search" {
+  count             = var.search_domain_name != "" ? 1 : 0
+  domain_name       = var.search_domain_name
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_route53_record" "search_cert_validation" {
+  for_each = var.search_domain_name != "" ? {
+    for dvo in aws_acm_certificate.search[0].domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      record = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
+  } : {}
+
+  zone_id = data.aws_route53_zone.search[0].zone_id
+  name    = each.value.name
+  type    = each.value.type
+  records = [each.value.record]
+  ttl     = 60
+
+  allow_overwrite = true
+}
+
+resource "aws_acm_certificate_validation" "search" {
+  count                   = var.search_domain_name != "" ? 1 : 0
+  certificate_arn         = aws_acm_certificate.search[0].arn
+  validation_record_fqdns = [for record in aws_route53_record.search_cert_validation : record.fqdn]
+}
+
+resource "aws_apigatewayv2_domain_name" "search" {
+  count       = var.search_domain_name != "" ? 1 : 0
+  domain_name = var.search_domain_name
+
+  domain_name_configuration {
+    certificate_arn = aws_acm_certificate_validation.search[0].certificate_arn
+    endpoint_type   = "REGIONAL"
+    security_policy = "TLS_1_2"
+  }
+}
+
+resource "aws_apigatewayv2_api_mapping" "search" {
+  count       = var.search_domain_name != "" ? 1 : 0
+  api_id      = aws_apigatewayv2_api.web.id
+  domain_name = aws_apigatewayv2_domain_name.search[0].domain_name
+  stage       = "$default"
+}
+
+resource "aws_route53_record" "search" {
+  count   = var.search_domain_name != "" ? 1 : 0
+  zone_id = data.aws_route53_zone.search[0].zone_id
+  name    = var.search_domain_name
+  type    = "A"
+
+  alias {
+    name                   = aws_apigatewayv2_domain_name.search[0].domain_name_configuration[0].target_domain_name
+    zone_id                = aws_apigatewayv2_domain_name.search[0].domain_name_configuration[0].hosted_zone_id
     evaluate_target_health = false
   }
 }

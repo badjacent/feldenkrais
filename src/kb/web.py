@@ -37,6 +37,17 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from llm import LLM
 from storage import Storage
 
+# ── Search subdomain detection ────────────────────────────────────────
+SEARCH_DOMAIN = os.environ.get("SEARCH_DOMAIN", "")
+
+
+def _is_search_site(request: Request) -> bool:
+    """True when served from the search subdomain."""
+    if not SEARCH_DOMAIN:
+        return False
+    host = request.headers.get("host", "")
+    return host == SEARCH_DOMAIN or host.startswith(SEARCH_DOMAIN + ":")
+
 
 # ── Pipeline lock (DB-based, 5-minute expiry) ───────────────────────────
 
@@ -130,6 +141,21 @@ async def _lifespan(app):
 
 app = FastAPI(title="Feldenkrais Lesson Analyzer", lifespan=_lifespan)
 
+
+@app.middleware("http")
+async def search_site_guard(request: Request, call_next):
+    """On the search subdomain, only allow pass0b pages and API endpoints."""
+    if _is_search_site(request):
+        path = request.url.path
+        allowed = (
+            path in ("/", "/pass0b", "/pass0b-player", "/pass0b-lang")
+            or path.startswith("/api/")
+        )
+        if not allowed:
+            return RedirectResponse("/")
+    return await call_next(request)
+
+
 # Paths - handle both local development and Lambda environment
 IS_LAMBDA = bool(os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
 if IS_LAMBDA:
@@ -156,6 +182,7 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 if DATABASE_URL:
     from database import Database
     _db = Database(DATABASE_URL)
+    _db.public_only = IS_LAMBDA
     _db.initialize()
 
 # ── Initialize extracted modules ──────────────────────────────────────────
@@ -1136,6 +1163,17 @@ async def api_search(query: str = Form("")):
         from llm import get_embeddings
         embeddings, _ = get_embeddings([query], task_type="RETRIEVAL_QUERY")
         results = _db.search_lessons(embeddings[0], limit=10)
+        sims = [r["similarity"] for r in results]
+        gap = round(sims[0] - sims[4], 4) if len(sims) >= 5 else 0
+        # Specificity band based on similarity spread (see run_search_eval.py docstring)
+        if gap < 0.0167:
+            band = "low"
+        elif gap < 0.0215:
+            band = "mid"
+        elif gap < 0.0297:
+            band = "mid-high"
+        else:
+            band = "high"
         for r in results:
             r["similarity"] = round(r["similarity"], 4)
             if r.get("summary_text"):
@@ -1148,15 +1186,15 @@ async def api_search(query: str = Form("")):
                 r["category"] = f"db:{src_id}:{cat_name}"
             elif src_id:
                 r["category"] = f"db:{src_id}"
-        return JSONResponse({"results": results})
+        return JSONResponse({"results": results, "specificity": {"gap": gap, "band": band}})
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
 @app.get("/pass0b", response_class=HTMLResponse)
-async def pass0b_page():
+async def pass0b_page(request: Request):
     """Pass 0b experiment page."""
-    return build_pass0b_html()
+    return build_pass0b_html(search_mode=_is_search_site(request))
 
 
 @app.post("/api/pass0b/clear-cache")
@@ -1732,17 +1770,17 @@ async def api_lesson_chat(request: Request):
 
 
 @app.get("/pass0b-player", response_class=HTMLResponse)
-async def pass0b_player_page():
+async def pass0b_player_page(request: Request):
     """Pass 0b audio player page."""
-    return build_pass0b_player_html()
+    return build_pass0b_player_html(search_mode=_is_search_site(request))
 
 
 # --- Pass 0b-lang: Language Analysis ---
 
 @app.get("/pass0b-lang", response_class=HTMLResponse)
-async def pass0b_lang_page():
+async def pass0b_lang_page(request: Request):
     """Pass 0b-lang language analysis page."""
-    return build_pass0b_lang_html()
+    return build_pass0b_lang_html(search_mode=_is_search_site(request))
 
 
 @app.post("/api/pass0b-lang/clear-cache")
@@ -2566,7 +2604,7 @@ def render_pass0b_combined_result(somatic_result: dict, lang_result: dict) -> st
     return "\n".join(out)
 
 
-def build_pass0b_html() -> str:
+def build_pass0b_html(search_mode: bool = False) -> str:
     """Build the Pass 0b experiment page HTML."""
     categories, display_names = get_available_lessons()
 
@@ -2835,6 +2873,21 @@ def build_pass0b_html() -> str:
                     resultsDiv.innerHTML = '<div style="color: #999; padding: 8px;">Error: ' + data.error + '</div>';
                 }} else if (data.results && data.results.length > 0) {{
                     let html = '';
+                    if (data.specificity) {{
+                        const s = data.specificity;
+                        const bandColors = {{low: '#dc3545', mid: '#fd7e14', 'mid-high': '#28a745', high: '#007bff'}};
+                        const bandLabels = {{low: 'Low', mid: 'Mid', 'mid-high': 'Mid-High', high: 'High'}};
+                        const bandExplainers = {{
+                            low: 'Many lessons match equally well \u2014 results may all be relevant.',
+                            mid: 'Several good matches \u2014 the top results are somewhat differentiated.',
+                            'mid-high': 'The top results stand out \u2014 your query is fairly specific.',
+                            high: 'Your query strongly targets a few lessons \u2014 the top result is a clear match.'
+                        }};
+                        const color = bandColors[s.band] || '#666';
+                        const label = bandLabels[s.band] || s.band;
+                        const explainer = bandExplainers[s.band] || '';
+                        html += '<div style="font-size: 0.8em; color: #888; margin-bottom: 6px;">Specificity: <span style="color: ' + color + '; font-weight: 600;">' + label + '</span> \u2014 ' + explainer + '</div>';
+                    }}
                     data.results.forEach(r => {{
                         const pct = Math.round(r.similarity * 100);
                         const snippet = (r.snippet || '').replace(/</g, '&lt;').replace(/\\n/g, ' ');
@@ -2905,7 +2958,7 @@ def build_pass0b_html() -> str:
     <p>Runs Pass A (decomposition) then somatic enrichment and language analysis in parallel.
        <span style="float: right; font-size: 0.9em;">
            <a id="player-link" href="/pass0b-player" style="color: #007bff; text-decoration: none; margin-right: 12px;">Audio Player &rarr;</a>
-           <a href="/analyzer" style="color: #007bff; text-decoration: none;">&larr; Main Analyzer</a>
+           {'<a href="/analyzer" style="color: #007bff; text-decoration: none;">&larr; Main Analyzer</a>' if not search_mode else ''}
        </span>
     </p>
 
@@ -2972,7 +3025,7 @@ def build_pass0b_html() -> str:
 """
 
 
-def build_pass0b_player_html() -> str:
+def build_pass0b_player_html(search_mode: bool = False) -> str:
     """Build the Pass 0b audio player page HTML."""
     categories, display_names = get_available_lessons()
 
@@ -3263,7 +3316,7 @@ def build_pass0b_player_html() -> str:
     <h1>Pass 0b: Audio Player</h1>
     <div class="nav-links">
         <a href="/pass0b">&larr; Back to Pass 0b</a>
-        <a href="/analyzer">Main Analyzer</a>
+        {'<a href="/analyzer">Main Analyzer</a>' if not search_mode else ''}
     </div>
 
     <div class="controls">
@@ -4288,7 +4341,7 @@ async function sendChat() {{
 """
 
 
-def build_pass0b_lang_html() -> str:
+def build_pass0b_lang_html(search_mode: bool = False) -> str:
     """Build the Pass 0b-lang language analysis page HTML."""
     categories, display_names = get_available_lessons()
 
@@ -4502,7 +4555,7 @@ def build_pass0b_lang_html() -> str:
     <h1>Pass 0b: Language Analysis</h1>
     <p>Analyzes the teacher's word choice, sensory framing, effort language, and pedagogical stance at each step.
        <a href="/pass0b" style="float: right; color: #007bff; text-decoration: none; font-size: 0.9em; margin-left: 15px;">Somatic Enrichment &rarr;</a>
-       <a href="/analyzer" style="float: right; color: #007bff; text-decoration: none; font-size: 0.9em;">&larr; Main Analyzer</a>
+       {'<a href="/analyzer" style="float: right; color: #007bff; text-decoration: none; font-size: 0.9em;">&larr; Main Analyzer</a>' if not search_mode else ''}
     </p>
 
     <form id="pass0b-lang-form" onsubmit="submitForm(event)">
@@ -4733,23 +4786,26 @@ except ImportError:
 # --- Landing page ---
 
 @app.get("/", response_class=HTMLResponse)
-async def landing_page():
+async def landing_page(request: Request):
     """Simple landing page with links to available sections."""
+    search_mode = _is_search_site(request)
     links = []
-    if _book_available:
-        links.append('<li><a href="/book"><strong>Book</strong></a></li>')
-        links.append('<li><a href="/analyzer">Analyzer</a></li>')
-        links.append('<li><a href="/explore">Explore</a></li>')
-    links.append('<li><a href="/pipeline">Pipeline Dashboard</a></li>')
+    if not search_mode:
+        if _book_available:
+            links.append('<li><a href="/book"><strong>Book</strong></a></li>')
+            links.append('<li><a href="/analyzer">Analyzer</a></li>')
+            links.append('<li><a href="/explore">Explore</a></li>')
+        links.append('<li><a href="/pipeline">Pipeline Dashboard</a></li>')
     links.append('<li><a href="/pass0b">Pass 0b Analysis</a></li>')
     links.append('<li><a href="/pass0b-player">Pass 0b Player</a></li>')
     links.append('<li><a href="/pass0b-lang">Pass 0b Language</a></li>')
-    return f"""<!DOCTYPE html><html><head><title>Feldenkrais</title>
+    title = "Feldenkrais Search" if search_mode else "Feldenkrais Lesson Analysis"
+    return f"""<!DOCTYPE html><html><head><title>{title}</title>
 <style>body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 max-width: 800px; margin: 0 auto; padding: 40px; line-height: 1.6; }}
 h1 {{ color: #333; }} a {{ color: #007bff; text-decoration: none; }}
 a:hover {{ text-decoration: underline; }} li {{ margin: 8px 0; }}</style>
-</head><body><h1>Feldenkrais Lesson Analysis</h1>
+</head><body><h1>{title}</h1>
 <ul>{"".join(links)}</ul></body></html>"""
 
 

@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS document_source (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
     category_name TEXT,
-    visible BOOLEAN NOT NULL DEFAULT TRUE
+    visible BOOLEAN NOT NULL DEFAULT TRUE,
+    public BOOLEAN NOT NULL DEFAULT TRUE
 );
 
 CREATE TABLE IF NOT EXISTS document_type (
@@ -170,6 +171,7 @@ class Database:
         self._pool: Optional[pool.ThreadedConnectionPool] = None
         self._min_connections = min_connections
         self._max_connections = max_connections
+        self.public_only = False
 
     def _get_pool(self) -> pool.ThreadedConnectionPool:
         """Get or create the connection pool."""
@@ -246,6 +248,7 @@ class Database:
             for table, column, col_type in [
                 ("document_source", "category_name", "TEXT"),
                 ("document_source", "visible", "BOOLEAN NOT NULL DEFAULT TRUE"),
+                ("document_source", "public", "BOOLEAN NOT NULL DEFAULT TRUE"),
                 ("document", "category_name", "TEXT"),
                 ("document", "transcription_retries", "INTEGER DEFAULT 0"),
             ]:
@@ -836,15 +839,16 @@ class Database:
 
         Returns list of dicts with: source_id, source_name, category_name, lesson_count.
         """
+        public_filter = " AND ds.public = TRUE" if self.public_only else ""
         with self.get_cursor(commit=False) as cursor:
-            cursor.execute("""
+            cursor.execute(f"""
                 SELECT ds.id as source_id, ds.name as source_name,
                        ds.category_name as source_category_name,
                        COUNT(DISTINCT d.id) as lesson_count
                 FROM document_source ds
                 JOIN document d ON d.source_id = ds.id
                 JOIN analysis a ON a.document_id = d.id AND a.type_id = 1
-                WHERE ds.visible = TRUE
+                WHERE ds.visible = TRUE{public_filter}
                 GROUP BY ds.id, ds.name, ds.category_name
                 ORDER BY ds.id
             """)
@@ -984,11 +988,20 @@ class Database:
     def get_pipeline_summary(self) -> dict:
         """Get pipeline status counts."""
         with self.get_cursor(commit=False) as cursor:
-            # Document counts by status
-            cursor.execute("""
-                SELECT status, COUNT(*) as count
-                FROM document GROUP BY status
-            """)
+            if self.public_only:
+                # Document counts by status (public sources only)
+                cursor.execute("""
+                    SELECT d.status, COUNT(*) as count
+                    FROM document d
+                    JOIN document_source ds ON ds.id = d.source_id
+                    WHERE ds.public = TRUE
+                    GROUP BY d.status
+                """)
+            else:
+                cursor.execute("""
+                    SELECT status, COUNT(*) as count
+                    FROM document GROUP BY status
+                """)
             doc_counts = {row["status"]: row["count"] for row in cursor.fetchall()}
 
             # Transcription job counts by status
@@ -999,14 +1012,30 @@ class Database:
             job_counts = {row["status"]: row["count"] for row in cursor.fetchall()}
 
             # Total documents
-            cursor.execute("SELECT COUNT(*) as count FROM document")
+            if self.public_only:
+                cursor.execute("""
+                    SELECT COUNT(*) as count FROM document d
+                    JOIN document_source ds ON ds.id = d.source_id
+                    WHERE ds.public = TRUE
+                """)
+            else:
+                cursor.execute("SELECT COUNT(*) as count FROM document")
             doc_total = cursor.fetchone()["count"]
 
             # Total with transcriptions
-            cursor.execute("""
-                SELECT COUNT(DISTINCT document_id) as count
-                FROM analysis WHERE type_id = 1
-            """)
+            if self.public_only:
+                cursor.execute("""
+                    SELECT COUNT(DISTINCT a.document_id) as count
+                    FROM analysis a
+                    JOIN document d ON d.id = a.document_id
+                    JOIN document_source ds ON ds.id = d.source_id
+                    WHERE a.type_id = 1 AND ds.public = TRUE
+                """)
+            else:
+                cursor.execute("""
+                    SELECT COUNT(DISTINCT document_id) as count
+                    FROM analysis WHERE type_id = 1
+                """)
             transcribed_count = cursor.fetchone()["count"]
 
             return {
@@ -1017,8 +1046,9 @@ class Database:
 
     def get_document_pipeline_view(self, limit: int = 50) -> list[dict]:
         """Get documents with their pipeline status for the dashboard."""
+        public_filter = "\nWHERE ds.public = TRUE" if self.public_only else ""
         with self.get_cursor(commit=False) as cursor:
-            cursor.execute("""
+            cursor.execute(f"""
                 SELECT d.id, d.title, d.status, d.created_at, d.updated_at,
                        ds.name as source_name,
                        ds.category_name as source_category,
@@ -1037,7 +1067,7 @@ class Database:
                               WHERE le.document_id = d.id) as has_embedding,
                        COALESCE(d.transcription_retries, 0) as retry_count
                 FROM document d
-                JOIN document_source ds ON ds.id = d.source_id
+                JOIN document_source ds ON ds.id = d.source_id{public_filter}
                 ORDER BY d.updated_at DESC
                 LIMIT %s
             """, (limit,))
@@ -1157,11 +1187,15 @@ class Database:
         Single DB round-trip instead of one per document.
         """
         import hashlib
+        public_join = """
+                JOIN document d ON d.id = a.document_id
+                JOIN document_source ds ON ds.id = d.source_id""" if self.public_only else ""
+        public_filter = " AND ds.public = TRUE" if self.public_only else ""
         with self.get_cursor(commit=False) as cursor:
-            cursor.execute("""
+            cursor.execute(f"""
                 SELECT a.document_id::text as doc_id, a.data->>'text' as text
-                FROM analysis a
-                WHERE a.type_id = 1 AND a.data->>'text' IS NOT NULL
+                FROM analysis a{public_join}
+                WHERE a.type_id = 1 AND a.data->>'text' IS NOT NULL{public_filter}
             """)
             result = {}
             for row in cursor.fetchall():
@@ -1191,16 +1225,18 @@ class Database:
 
     def search_lessons(self, query_embedding: list[float], limit: int = 10) -> list[dict]:
         """Search lessons by cosine similarity. Returns list of {document_id, title, similarity, summary_text, source_id, category_name}."""
+        public_join = "\nJOIN document_source ds ON ds.id = d.source_id" if self.public_only else ""
+        public_filter = "\nWHERE ds.public = TRUE" if self.public_only else ""
         with self.get_cursor(commit=False) as cursor:
             cursor.execute(
-                """
+                f"""
                 SELECT le.document_id::text, d.title,
                        1 - (le.embedding <=> %s::vector) as similarity,
                        le.summary_text,
                        d.source_id,
                        d.category_name
                 FROM lesson_embedding le
-                JOIN document d ON d.id = le.document_id
+                JOIN document d ON d.id = le.document_id{public_join}{public_filter}
                 ORDER BY le.embedding <=> %s::vector
                 LIMIT %s
                 """,
@@ -1210,8 +1246,18 @@ class Database:
 
     def get_embedding_hashes(self) -> dict[str, str]:
         """Return {document_id: summary_hash} for all embedded lessons."""
+        if self.public_only:
+            query = """
+                SELECT le.document_id::text, le.summary_hash
+                FROM lesson_embedding le
+                JOIN document d ON d.id = le.document_id
+                JOIN document_source ds ON ds.id = d.source_id
+                WHERE ds.public = TRUE
+            """
+        else:
+            query = "SELECT document_id::text, summary_hash FROM lesson_embedding"
         with self.get_cursor(commit=False) as cursor:
-            cursor.execute("SELECT document_id::text, summary_hash FROM lesson_embedding")
+            cursor.execute(query)
             return {row["document_id"]: row["summary_hash"] for row in cursor.fetchall()}
 
     def get_docs_with_condensed(self, cache_suffix: str = ":pass_0b_condensed_v4") -> list[dict]:
@@ -1223,15 +1269,18 @@ class Database:
         """
         import hashlib
 
+        public_join = "\nJOIN document_source ds ON ds.id = d.source_id" if self.public_only else ""
+        public_filter = " AND ds.public = TRUE" if self.public_only else ""
+
         # One query: get all transcript texts and doc titles
         with self.get_cursor(commit=False) as cursor:
-            cursor.execute("""
+            cursor.execute(f"""
                 SELECT a.document_id::text as doc_id,
                        d.title,
                        a.data->>'text' as text
                 FROM analysis a
-                JOIN document d ON d.id = a.document_id
-                WHERE a.type_id = 1 AND a.data->>'text' IS NOT NULL
+                JOIN document d ON d.id = a.document_id{public_join}
+                WHERE a.type_id = 1 AND a.data->>'text' IS NOT NULL{public_filter}
             """)
             doc_keys = {}
             for row in cursor.fetchall():
