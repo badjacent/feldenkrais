@@ -134,6 +134,16 @@ CREATE TABLE IF NOT EXISTS lesson_embedding (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS search_query_log (
+    id SERIAL PRIMARY KEY,
+    query TEXT NOT NULL,
+    result_count INTEGER,
+    specificity_band TEXT,
+    specificity_gap REAL,
+    top_results JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
 """
 
 INDEXES = """
@@ -911,6 +921,22 @@ class Database:
                 return row["words"] if isinstance(row["words"], list) else json.loads(row["words"])
             return None
 
+    def get_lesson_info(self, document_id: str) -> Optional[dict]:
+        """Get lesson info for the detail page."""
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute("""
+                SELECT d.id::text as document_id, d.title,
+                       ds.name as source_name, d.source_url,
+                       a.data->>'text' as text,
+                       (d.s3_key IS NOT NULL) as has_audio
+                FROM document d
+                JOIN document_source ds ON ds.id = d.source_id
+                LEFT JOIN analysis a ON a.document_id = d.id AND a.type_id = 1
+                WHERE d.id = %s
+            """, (document_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
     def update_source_category_name(self, source_id: int, category_name: str):
         """Set the display category name for a document source."""
         with self.get_cursor() as cursor:
@@ -920,6 +946,21 @@ class Database:
             )
 
     # Pipeline logging
+
+    def log_search_query(self, query: str, result_count: int = None,
+                         specificity_band: str = None, specificity_gap: float = None,
+                         top_results: list = None):
+        """Log a search query for usage analysis."""
+        top_json = json.dumps(top_results) if top_results else None
+        with self.get_cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO search_query_log
+                    (query, result_count, specificity_band, specificity_gap, top_results)
+                VALUES (%s, %s, %s, %s, %s::jsonb)
+                """,
+                (query, result_count, specificity_band, specificity_gap, top_json),
+            )
 
     def log_event(self, event: str, title: str = None,
                   document_id: str = None, detail: dict = None):

@@ -13,6 +13,7 @@ Usage (local):
 
 import asyncio
 from datetime import datetime, timezone
+import html as html_mod
 import json
 import os
 import sys
@@ -144,11 +145,12 @@ app = FastAPI(title="Feldenkrais Lesson Analyzer", lifespan=_lifespan)
 
 @app.middleware("http")
 async def search_site_guard(request: Request, call_next):
-    """On the search subdomain, only allow pass0b pages and API endpoints."""
+    """On the search subdomain, only allow lesson pages and API endpoints."""
     if _is_search_site(request):
         path = request.url.path
         allowed = (
-            path in ("/", "/pass0b", "/pass0b-player", "/pass0b-lang")
+            path == "/"
+            or path.startswith("/lesson/")
             or path.startswith("/api/")
         )
         if not allowed:
@@ -1186,6 +1188,21 @@ async def api_search(query: str = Form("")):
                 r["category"] = f"db:{src_id}:{cat_name}"
             elif src_id:
                 r["category"] = f"db:{src_id}"
+        # Log query for usage analysis (fire-and-forget)
+        try:
+            top5 = [
+                {"doc_id": r.get("document_id"), "title": r.get("title"), "similarity": r.get("similarity")}
+                for r in results[:5]
+            ]
+            _db.log_search_query(
+                query=query,
+                result_count=len(results),
+                specificity_band=band,
+                specificity_gap=gap,
+                top_results=top5,
+            )
+        except Exception:
+            pass  # never break search for logging
         return JSONResponse({"results": results, "specificity": {"gap": gap, "band": band}})
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
@@ -1408,6 +1425,26 @@ async def api_whisper_words(document_id: str):
     if words is None:
         return JSONResponse({"words": None})
     return JSONResponse({"words": words})
+
+
+@app.get("/api/lesson-info/{document_id}")
+async def api_lesson_info(document_id: str):
+    """Return lesson info for the detail page."""
+    if not _db:
+        return JSONResponse({"error": "Database not configured"}, status_code=500)
+    info = _db.get_lesson_info(document_id)
+    if not info:
+        return JSONResponse({"error": "Lesson not found"}, status_code=404)
+    return JSONResponse(info)
+
+
+@app.get("/api/lesson/{category}/{filename}")
+async def api_lesson_text(category: str, filename: str):
+    """Return lesson text for a given category and lesson key."""
+    text = load_lesson(category, filename)
+    if text:
+        return JSONResponse({"text": text})
+    return JSONResponse({"error": "Lesson not found"}, status_code=404)
 
 
 @app.post("/api/pass0b-combined-json")
@@ -1781,6 +1818,12 @@ async def pass0b_player_page(request: Request):
 async def pass0b_lang_page(request: Request):
     """Pass 0b-lang language analysis page."""
     return build_pass0b_lang_html(search_mode=_is_search_site(request))
+
+
+@app.get("/lesson/{document_id}", response_class=HTMLResponse)
+async def lesson_detail_page(document_id: str):
+    """Unified lesson detail page."""
+    return HTMLResponse(build_lesson_page_html(document_id))
 
 
 @app.post("/api/pass0b-lang/clear-cache")
@@ -3023,6 +3066,1128 @@ def build_pass0b_html(search_mode: bool = False) -> str:
 </body>
 </html>
 """
+
+
+def build_search_home_html() -> str:
+    """Build the search subdomain home page with search box and browse-by-source."""
+    categories, display_names = get_available_lessons()
+
+    # Build browse-by-source HTML
+    browse_html = ""
+    first = True
+    for cat_key, lessons in categories.items():
+        cat_display = html_mod.escape(display_names.get(cat_key, cat_key))
+        open_attr = " open" if first else ""
+        first = False
+        items = ""
+        for lesson in lessons:
+            doc_id, display_name = lesson[0], lesson[1]
+            esc_name = html_mod.escape(display_name)
+            items += f'<li><a href="/lesson/{html_mod.escape(doc_id)}">{esc_name}</a></li>\n'
+        browse_html += f"""<details{open_attr}>
+<summary>{cat_display} <span class="count">({len(lessons)})</span></summary>
+<ul>{items}</ul>
+</details>\n"""
+
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Feldenkrais Lesson Search</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        * {{ box-sizing: border-box; }}
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px; margin: 0 auto; padding: 24px;
+            line-height: 1.6; background: #fafafa; color: #333;
+        }}
+        h1 {{ margin-bottom: 4px; }}
+        .subtitle {{ color: #666; font-size: 0.95em; margin-bottom: 24px; }}
+
+        /* Search */
+        .search-box {{
+            display: flex; gap: 8px; margin-bottom: 16px;
+        }}
+        .search-box input {{
+            flex: 1; padding: 10px 14px; font-size: 15px;
+            border: 1px solid #ccc; border-radius: 6px;
+        }}
+        .search-box input:focus {{ outline: none; border-color: #007bff; box-shadow: 0 0 0 2px rgba(0,123,255,0.15); }}
+        .search-box button {{
+            padding: 10px 20px; font-size: 15px; font-weight: 600;
+            border: none; border-radius: 6px; background: #007bff; color: white; cursor: pointer;
+        }}
+        .search-box button:hover {{ background: #0056b3; }}
+        .search-box button:disabled {{ background: #ccc; cursor: not-allowed; }}
+        #search-results {{ margin-bottom: 24px; }}
+        .search-result {{
+            padding: 10px 12px; border-bottom: 1px solid #eee;
+        }}
+        .search-result:hover {{ background: #f5f5f5; }}
+        .search-result a {{ color: #007bff; text-decoration: none; font-weight: 500; }}
+        .search-result a:hover {{ text-decoration: underline; }}
+        .search-result .snippet {{ color: #666; font-size: 0.85em; margin-top: 2px; }}
+        .search-result .similarity {{ color: #28a745; font-size: 0.85em; white-space: nowrap; }}
+
+        /* Browse */
+        h2 {{ font-size: 1.15em; color: #444; margin-top: 32px; margin-bottom: 12px; }}
+        details {{ margin-bottom: 8px; }}
+        summary {{
+            cursor: pointer; font-weight: 600; font-size: 1em; color: #333;
+            padding: 8px 0;
+        }}
+        summary .count {{ color: #888; font-weight: 400; }}
+        details ul {{ list-style: none; padding: 0; margin: 4px 0 0 0; }}
+        details li {{ padding: 4px 0 4px 16px; }}
+        details li a {{ color: #007bff; text-decoration: none; }}
+        details li a:hover {{ text-decoration: underline; }}
+    </style>
+</head>
+<body>
+    <h1>Feldenkrais Lessons</h1>
+    <p class="subtitle">Search or browse lessons</p>
+
+    <div class="search-box">
+        <input type="text" id="search-query" placeholder="e.g. rolling pelvis, eyes and head..."
+               onkeydown="if(event.key==='Enter'){{event.preventDefault();searchLessons();}}">
+        <button type="button" id="search-btn" onclick="searchLessons()">Search</button>
+    </div>
+    <div id="search-results"></div>
+
+    <h2>Browse by Source</h2>
+    {browse_html}
+
+    <script>
+        async function searchLessons() {{
+            const query = document.getElementById('search-query').value.trim();
+            if (!query) return;
+            const btn = document.getElementById('search-btn');
+            const resultsDiv = document.getElementById('search-results');
+            btn.disabled = true;
+            btn.textContent = 'Searching...';
+            resultsDiv.innerHTML = '';
+            try {{
+                const fd = new FormData();
+                fd.append('query', query);
+                const response = await fetch('/api/search', {{ method: 'POST', body: fd }});
+                const data = await response.json();
+                if (data.error) {{
+                    resultsDiv.innerHTML = '<div style="color:#999;padding:8px;">Error: ' + escHtml(data.error) + '</div>';
+                }} else if (data.results && data.results.length > 0) {{
+                    let html = '';
+                    if (data.specificity) {{
+                        const s = data.specificity;
+                        const bandColors = {{low:'#dc3545',mid:'#fd7e14','mid-high':'#28a745',high:'#007bff'}};
+                        const bandLabels = {{low:'Low',mid:'Mid','mid-high':'Mid-High',high:'High'}};
+                        const bandExplainers = {{
+                            low:'Many lessons match equally well.',
+                            mid:'Several good matches \u2014 top results are somewhat differentiated.',
+                            'mid-high':'Top results stand out \u2014 your query is fairly specific.',
+                            high:'Strong match \u2014 the top result is a clear winner.'
+                        }};
+                        const color = bandColors[s.band] || '#666';
+                        const label = bandLabels[s.band] || s.band;
+                        const explainer = bandExplainers[s.band] || '';
+                        html += '<div style="font-size:0.8em;color:#888;margin-bottom:6px;">Specificity: <span style="color:'+color+';font-weight:600;">'+label+'</span> \u2014 '+explainer+'</div>';
+                    }}
+                    data.results.forEach(r => {{
+                        const pct = Math.round(r.similarity * 100);
+                        const snippet = (r.snippet || '').replace(/</g, '&lt;').replace(/\\n/g, ' ');
+                        html += '<div class="search-result">';
+                        html += '<div style="display:flex;justify-content:space-between;align-items:baseline;">';
+                        html += '<a href="/lesson/'+r.document_id+'">' + escHtml(r.title || '') + '</a>';
+                        html += '<span class="similarity">'+pct+'%</span>';
+                        html += '</div>';
+                        if (snippet) html += '<div class="snippet">'+snippet+'</div>';
+                        html += '</div>';
+                    }});
+                    resultsDiv.innerHTML = html;
+                }} else {{
+                    resultsDiv.innerHTML = '<div style="color:#999;padding:8px;">No results found.</div>';
+                }}
+            }} catch (error) {{
+                resultsDiv.innerHTML = '<div style="color:red;padding:8px;">Search failed: '+error.message+'</div>';
+            }}
+            btn.disabled = false;
+            btn.textContent = 'Search';
+        }}
+
+        function escHtml(str) {{
+            const d = document.createElement('div');
+            d.textContent = str;
+            return d.innerHTML;
+        }}
+    </script>
+</body>
+</html>"""
+
+
+def build_lesson_page_html(document_id: str) -> str:
+    """Build the unified lesson detail page HTML."""
+    esc_id = html_mod.escape(document_id)
+
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Lesson</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        * {{ box-sizing: border-box; }}
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px; margin: 0 auto; padding: 20px;
+            line-height: 1.6; background: #fafafa;
+        }}
+        h1 {{ color: #333; margin-bottom: 2px; font-size: 1.4em; }}
+        .source-line {{ color: #666; font-size: 0.9em; margin-bottom: 16px; }}
+        .source-line a {{ color: #007bff; text-decoration: none; }}
+        .source-line a:hover {{ text-decoration: underline; }}
+        .back-link {{ font-size: 0.9em; margin-bottom: 12px; }}
+        .back-link a {{ color: #007bff; text-decoration: none; }}
+        .back-link a:hover {{ text-decoration: underline; }}
+
+        /* Tabs */
+        .tab-bar {{
+            display: flex; gap: 0; border-bottom: 2px solid #e0e0e0; margin-bottom: 16px;
+        }}
+        .tab-bar button {{
+            padding: 10px 24px; font-size: 14px; font-weight: 600;
+            border: none; background: none; cursor: pointer;
+            color: #666; border-bottom: 2px solid transparent;
+            margin-bottom: -2px; transition: color 0.15s, border-color 0.15s;
+        }}
+        .tab-bar button:hover {{ color: #333; }}
+        .tab-bar button.active {{ color: #007bff; border-bottom-color: #007bff; }}
+
+        /* Word-level annotation colors */
+        .word-directive {{ border-bottom: 2px solid rgba(97, 97, 97, 0.3); }}
+        .word-directive.word-active {{ background: rgba(97, 97, 97, 0.18); border-bottom-color: #616161; }}
+        .word-attention {{ border-bottom: 2px solid rgba(255, 152, 0, 0.3); }}
+        .word-attention.word-active {{ background: rgba(255, 152, 0, 0.18); border-bottom-color: #ff9800; }}
+        .word-imagery {{ border-bottom: 2px solid rgba(156, 39, 176, 0.3); }}
+        .word-imagery.word-active {{ background: rgba(156, 39, 176, 0.18); border-bottom-color: #9c27b0; }}
+        .word-inquiry {{ border-bottom: 2px solid rgba(33, 150, 243, 0.3); }}
+        .word-inquiry.word-active {{ background: rgba(33, 150, 243, 0.18); border-bottom-color: #2196f3; }}
+        .word-distinctive {{ border-bottom: 2px solid rgba(233, 30, 99, 0.3); }}
+        .word-distinctive.word-active {{ background: rgba(233, 30, 99, 0.18); border-bottom-color: #e91e63; }}
+        .note-line {{
+            font-size: 0.82em; color: #555; min-height: 1.4em;
+            padding: 4px 8px; margin-top: 4px;
+            border-top: 1px solid #f0e68c; font-style: italic;
+        }}
+        .note-category {{
+            font-weight: 600; font-style: normal; font-size: 0.85em;
+            text-transform: uppercase; letter-spacing: 0.3px; margin-right: 4px;
+        }}
+        .note-cat-directive {{ color: #616161; }}
+        .note-cat-attention {{ color: #e65100; }}
+        .note-cat-imagery {{ color: #7b1fa2; }}
+        .note-cat-inquiry {{ color: #1565c0; }}
+        .note-cat-distinctive {{ color: #c2185b; }}
+
+        /* Condensed cards */
+        .condensed-card {{
+            background: #fff; border: 1px solid #e0e0e0; border-radius: 10px;
+            padding: 24px; margin-bottom: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        }}
+        .condensed-card h3 {{ margin: 0 0 4px 0; font-size: 1.2em; color: #222; }}
+        .condensed-card .group-tag {{
+            font-size: 0.8em; font-weight: 700; color: #1a73e8;
+            text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;
+        }}
+        .condensed-card .setting-tag {{
+            font-size: 0.8em; font-weight: 700; color: #e65100;
+            text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;
+        }}
+        .pov-section {{
+            margin-bottom: 10px; padding: 10px 14px;
+            border-radius: 6px; border-left: 4px solid;
+            font-size: 0.92em; line-height: 1.55;
+        }}
+        .pov-section .pov-label {{
+            font-size: 0.75em; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.5px; margin-bottom: 4px;
+        }}
+        .pov-action {{ background: #f5f5f5; border-color: #616161; }}
+        .pov-action .pov-label {{ color: #616161; }}
+        .pov-body {{ background: #e8f5e9; border-color: #4caf50; }}
+        .pov-body .pov-label {{ color: #2e7d32; }}
+        .pov-attention {{ background: #fff3e0; border-color: #ff9800; }}
+        .pov-attention .pov-label {{ color: #e65100; }}
+        .pov-intention {{ background: #e3f2fd; border-color: #2196f3; }}
+        .pov-intention .pov-label {{ color: #1565c0; }}
+        .pov-voice {{ background: #f3e5f5; border-color: #9c27b0; }}
+        .pov-voice .pov-label {{ color: #7b1fa2; }}
+        .setting-field {{
+            margin-bottom: 10px; padding: 10px 14px;
+            border-radius: 6px; border-left: 4px solid #e65100;
+            background: #fff8f0; font-size: 0.92em; line-height: 1.55;
+        }}
+        .setting-field .field-label {{
+            font-size: 0.75em; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.5px; margin-bottom: 4px; color: #e65100;
+        }}
+
+        /* Audio player */
+        .audio-container {{
+            margin-bottom: 16px; padding: 12px 16px;
+            background: #fff; border: 1px solid #e0e0e0; border-radius: 8px;
+        }}
+        .audio-container audio {{ width: 100%; }}
+        .audio-hidden {{ display: none; }}
+
+        /* Card */
+        .card {{
+            background: #fff; border: 1px solid #e0e0e0; border-radius: 10px;
+            padding: 24px; margin-bottom: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+            min-height: 300px; display: flex; flex-direction: column;
+        }}
+        .card-placeholder {{
+            color: #999; text-align: center; padding: 60px 20px; font-size: 1.1em;
+        }}
+        .group-label {{
+            font-size: 0.8em; font-weight: 700; color: #1a73e8;
+            text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;
+        }}
+        .step-header {{ font-size: 1.15em; font-weight: 700; color: #222; margin-bottom: 2px; }}
+        .step-time {{ color: #888; font-weight: 400; font-size: 0.85em; }}
+        .step-instruction {{
+            color: #444; font-style: italic; margin-bottom: 12px; font-size: 0.95em;
+        }}
+
+        /* Segment highlight box */
+        .segment-box {{
+            background: #fffde7; border: 2px solid #fdd835;
+            border-radius: 6px; padding: 12px 16px;
+            margin-top: 10px; font-size: 0.95em;
+            line-height: 1.5; color: #555; min-height: 50px;
+        }}
+        .segment-box strong {{ transition: color 0.15s; }}
+
+        /* Analysis sections */
+        .analysis-section {{ margin-bottom: 12px; }}
+        .analysis-section h4 {{
+            font-size: 0.8em; font-weight: 700; color: #666;
+            text-transform: uppercase; letter-spacing: 0.5px;
+            margin: 0 0 6px 0; padding-bottom: 4px; border-bottom: 1px solid #eee;
+        }}
+        .analysis-section ul {{ margin: 0; padding-left: 18px; font-size: 0.9em; color: #444; }}
+        .analysis-section li {{ margin-bottom: 4px; }}
+        .analysis-section strong {{ color: #333; }}
+
+        /* Navigation */
+        .card-nav {{
+            display: flex; justify-content: space-between; align-items: center;
+            margin-top: auto; padding-top: 16px; border-top: 1px solid #eee;
+        }}
+        .card-nav button {{
+            padding: 6px 16px; font-size: 13px; border: 1px solid #ccc;
+            border-radius: 4px; background: #fff; cursor: pointer;
+            color: #333; font-weight: 500;
+        }}
+        .card-nav button:hover {{ background: #f0f0f0; }}
+        .card-nav button:disabled {{ opacity: 0.3; cursor: not-allowed; }}
+        .card-nav .step-counter {{ color: #888; font-size: 0.85em; }}
+
+        /* Progress bar */
+        .progress-bar {{ font-size: 0.85em; color: #888; text-align: center; }}
+
+        /* Loading / status */
+        .status-msg {{ text-align: center; padding: 12px; color: #666; font-size: 0.9em; }}
+        .status-msg.error {{ color: #c62828; background: #ffebee; border-radius: 6px; }}
+        .spinner-inline {{
+            display: inline-block; width: 16px; height: 16px;
+            border: 2px solid #ddd; border-top-color: #007bff;
+            border-radius: 50%; animation: spin 0.8s linear infinite;
+            vertical-align: middle; margin-right: 6px;
+        }}
+        @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
+
+        /* Chat panel */
+        .chat-panel {{
+            margin-top: 24px; border: 1px solid #e0e0e0; border-radius: 10px;
+            background: #fff; overflow: hidden;
+        }}
+        .chat-header {{
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 16px; background: #f5f5f5; border-bottom: 1px solid #e0e0e0;
+            cursor: pointer; user-select: none;
+        }}
+        .chat-header h3 {{ margin: 0; font-size: 0.95em; color: #333; }}
+        .chat-header .toggle {{ font-size: 0.8em; color: #888; }}
+        .chat-body {{ display: none; }}
+        .chat-body.open {{ display: block; }}
+        .chat-context-config {{
+            padding: 8px 16px; background: #fafafa; border-bottom: 1px solid #eee;
+            font-size: 0.8em; color: #555;
+        }}
+        .chat-context-config label {{ margin-right: 12px; cursor: pointer; white-space: nowrap; }}
+        .chat-context-config input[type="checkbox"] {{ margin-right: 3px; }}
+        .chat-messages {{
+            height: 350px; overflow-y: auto; padding: 12px 16px;
+            display: flex; flex-direction: column; gap: 10px;
+        }}
+        .chat-msg {{
+            max-width: 85%; padding: 8px 12px; border-radius: 8px;
+            font-size: 0.9em; line-height: 1.5; white-space: pre-wrap;
+        }}
+        .chat-msg.user {{ align-self: flex-end; background: #e3f2fd; color: #1a237e; }}
+        .chat-msg.assistant {{ align-self: flex-start; background: #f5f5f5; color: #333; }}
+        .chat-msg.error {{ align-self: center; background: #ffebee; color: #c62828; font-size: 0.85em; }}
+        .chat-input-row {{
+            display: flex; gap: 8px; padding: 10px 16px; border-top: 1px solid #eee;
+        }}
+        .chat-input-row input {{
+            flex: 1; padding: 8px 12px; font-size: 0.9em;
+            border: 1px solid #ccc; border-radius: 6px;
+        }}
+        .chat-input-row button {{
+            padding: 8px 16px; font-size: 0.9em; font-weight: 500;
+            border: none; border-radius: 6px; background: #1976d2;
+            color: #fff; cursor: pointer;
+        }}
+        .chat-input-row button:hover {{ background: #1565c0; }}
+        .chat-input-row button:disabled {{ opacity: 0.5; cursor: not-allowed; }}
+    </style>
+</head>
+<body>
+    <div class="back-link"><a href="/">&larr; All lessons</a></div>
+    <h1 id="lesson-title">Loading...</h1>
+    <div class="source-line" id="source-line"></div>
+
+    <div class="audio-container audio-hidden" id="audio-container">
+        <audio id="audio-player" controls preload="auto"></audio>
+        <div class="segment-box" id="segment-box">
+            <div id="segment-text"></div>
+            <div class="note-line" id="annotation-note"></div>
+        </div>
+    </div>
+
+    <div class="tab-bar" id="tab-bar">
+        <button class="active" onclick="switchTab('steps')">Steps</button>
+        <button onclick="switchTab('condensed')">Condensed</button>
+        <button onclick="switchTab('annotated')">Annotated</button>
+    </div>
+
+    <div id="status-area"></div>
+
+    <!-- Steps tab (default) -->
+    <div id="tab-steps">
+        <div class="card" id="card">
+            <div class="card-placeholder" id="card-placeholder">
+                <span class="spinner-inline"></span> Loading analysis...
+            </div>
+            <div id="card-content" style="display:none; flex: 1; flex-direction: column;">
+                <div class="group-label" id="card-group"></div>
+                <div class="step-header">
+                    <span id="card-step-label"></span>
+                    <span class="step-time" id="card-step-time"></span>
+                </div>
+                <div class="step-instruction" id="card-instruction"></div>
+                <div id="analysis-somatic" class="analysis-section" style="display:none;">
+                    <h4>Somatic</h4>
+                    <ul id="somatic-bullets"></ul>
+                </div>
+                <div id="analysis-lang" class="analysis-section" style="display:none;">
+                    <h4>Language</h4>
+                    <ul id="lang-bullets"></ul>
+                </div>
+                <div class="card-nav">
+                    <button id="nav-prev" onclick="navigate(-1)">&larr; Previous</button>
+                    <span class="step-counter" id="step-counter"></span>
+                    <button id="nav-next" onclick="navigate(1)">Next &rarr;</button>
+                </div>
+            </div>
+        </div>
+        <div class="progress-bar" id="progress-bar"></div>
+    </div>
+
+    <!-- Condensed tab -->
+    <div id="tab-condensed" style="display:none;">
+        <div id="condensed-setting-card"></div>
+        <div id="condensed-group-cards"></div>
+        <div class="progress-bar" id="condensed-progress"></div>
+    </div>
+
+    <!-- Annotated tab -->
+    <div id="tab-annotated" style="display:none;">
+        <div class="progress-bar" id="annotated-progress"></div>
+    </div>
+
+    <!-- Lesson Chat panel -->
+    <div class="chat-panel" id="chat-panel">
+        <div class="chat-header" onclick="toggleChat()">
+            <h3>Lesson Chat</h3>
+            <span class="toggle" id="chat-toggle">&#9654; Open</span>
+        </div>
+        <div class="chat-body" id="chat-body">
+            <div class="chat-context-config" id="chat-context-config">
+                <strong>Context:</strong>
+                <label><input type="checkbox" id="ctx-lesson-text" checked> Lesson text</label>
+                <label><input type="checkbox" id="ctx-pass-a" checked> Pass A</label>
+                <label><input type="checkbox" id="ctx-somatic" checked> Somatic</label>
+                <label><input type="checkbox" id="ctx-language" checked> Language</label>
+                <label><input type="checkbox" id="ctx-somatic-summary" checked> Somatic summary</label>
+                <label><input type="checkbox" id="ctx-language-summary" checked> Language summary</label>
+                <label><input type="checkbox" id="ctx-condensed" checked> Condensed cards</label>
+            </div>
+            <div class="chat-messages" id="chat-messages"></div>
+            <div class="chat-input-row">
+                <input type="text" id="chat-input" placeholder="Ask about this lesson..."
+                       onkeydown="if(event.key==='Enter') sendChat()">
+                <button id="chat-send-btn" onclick="sendChat()">Send</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+// ── Constants ──
+const DOCUMENT_ID = '{esc_id}';
+const PROVIDER = new URLSearchParams(window.location.search).get('provider') || '';
+
+// ── State ──
+let whisperSegments = null;
+let whisperWords = null;
+let analysisData = null;
+let wordAnnotations = null;
+let currentStepIdx = 0;
+let audioReady = false;
+let autoAdvance = true;
+let lessonText = null;
+let chatMessages = [];
+let _stepAnnotationCache = {{}};
+let condensedLoaded = false;
+let annotatedLoaded = false;
+let activeTab = 'steps';
+
+const audio = document.getElementById('audio-player');
+const audioContainer = document.getElementById('audio-container');
+
+// ── Tab switching ──
+
+function switchTab(tab) {{
+    activeTab = tab;
+    document.querySelectorAll('.tab-bar button').forEach((b, i) => {{
+        b.classList.toggle('active', ['steps','condensed','annotated'][i] === tab);
+    }});
+    document.getElementById('tab-steps').style.display = tab === 'steps' ? '' : 'none';
+    document.getElementById('tab-condensed').style.display = tab === 'condensed' ? '' : 'none';
+    document.getElementById('tab-annotated').style.display = tab === 'annotated' ? '' : 'none';
+
+    if (tab === 'condensed' && !condensedLoaded) loadCondensed();
+    if (tab === 'annotated' && !annotatedLoaded) loadAnnotated();
+    if (tab === 'steps' && analysisData) renderCard();
+}}
+
+// ── Card rendering ──
+
+function renderCard() {{
+    if (!analysisData || !analysisData.steps.length) return;
+
+    document.getElementById('card-placeholder').style.display = 'none';
+    const content = document.getElementById('card-content');
+    content.style.display = 'flex';
+
+    const step = analysisData.steps[currentStepIdx];
+    const group = analysisData.groups.find(g => g.group_number === step.group_number);
+
+    document.getElementById('card-group').textContent =
+        group ? 'Group ' + group.group_number + ': ' + group.label : '';
+    document.getElementById('card-step-label').textContent = 'Step ' + step.step_number;
+    if (step.time_start != null && step.time_end != null) {{
+        document.getElementById('card-step-time').textContent =
+            '(' + fmtTime(step.time_start) + ' \\u2013 ' + fmtTime(step.time_end) + ')';
+    }} else {{
+        document.getElementById('card-step-time').textContent = '';
+    }}
+    document.getElementById('card-instruction').textContent = step.instruction || '';
+    updateSegmentForTime(audio.currentTime);
+
+    // Somatic bullets
+    const somDiv = document.getElementById('analysis-somatic');
+    const somUl = document.getElementById('somatic-bullets');
+    somUl.innerHTML = '';
+    if (step.somatic) {{
+        const fields = [
+            ['Intent', 'intent'], ['Differentiation', 'differentiation'],
+            ['Activation', 'activation'], ['Inhibition', 'inhibition'],
+            ['Transmission Route', 'transmission_route'], ['Ground Push', 'ground_push'],
+            ['Mechanical Directive', 'mechanical_directive'],
+            ['Attentional Cue', 'attentional_cue'],
+        ];
+        let hasBullets = false;
+        fields.forEach(([label, key]) => {{
+            const val = step.somatic[key];
+            if (val && val.toLowerCase() !== 'none') {{
+                const li = document.createElement('li');
+                li.innerHTML = '<strong>' + label + ':</strong> ' + escHtml(val);
+                somUl.appendChild(li);
+                hasBullets = true;
+            }}
+        }});
+        if (step.somatic.clarified) {{
+            const li = document.createElement('li');
+            li.innerHTML = '<strong>Clarified:</strong> ' + escHtml(step.somatic.clarified);
+            li.style.fontStyle = 'italic';
+            somUl.prepend(li);
+            hasBullets = true;
+        }}
+        somDiv.style.display = hasBullets ? '' : 'none';
+    }} else {{
+        somDiv.style.display = 'none';
+    }}
+
+    // Language bullets
+    const langDiv = document.getElementById('analysis-lang');
+    const langUl = document.getElementById('lang-bullets');
+    langUl.innerHTML = '';
+    if (step.language) {{
+        const fields = [
+            ['Explanatory', 'explanatory_language'], ['Attention Cues', 'attention_cues'],
+            ['Effort', 'effort_language'], ['Imagery', 'image_language'],
+            ['Distinctive', 'distinctive_phrasing'], ['Sensory Inquiry', 'sensory_inquiry'],
+        ];
+        let hasBullets = false;
+        fields.forEach(([label, key]) => {{
+            const val = step.language[key];
+            if (val && val.toLowerCase() !== 'none') {{
+                const li = document.createElement('li');
+                li.innerHTML = '<strong>' + label + ':</strong> ' + escHtml(val);
+                langUl.appendChild(li);
+                hasBullets = true;
+            }}
+        }});
+        langDiv.style.display = hasBullets ? '' : 'none';
+    }} else {{
+        langDiv.style.display = 'none';
+    }}
+
+    // Navigation
+    document.getElementById('nav-prev').disabled = (currentStepIdx === 0);
+    document.getElementById('nav-next').disabled = (currentStepIdx === analysisData.steps.length - 1);
+    document.getElementById('step-counter').textContent =
+        'Step ' + (currentStepIdx + 1) + ' of ' + analysisData.steps.length;
+}}
+
+function navigate(delta) {{
+    if (!analysisData) return;
+    const newIdx = currentStepIdx + delta;
+    if (newIdx < 0 || newIdx >= analysisData.steps.length) return;
+    autoAdvance = false;
+    currentStepIdx = newIdx;
+    renderCard();
+    const step = analysisData.steps[currentStepIdx];
+    if (step.time_start != null && audioReady) {{
+        audio.currentTime = step.time_start;
+    }}
+    setTimeout(() => {{ autoAdvance = true; }}, 500);
+}}
+
+// ── Audio sync ──
+
+audio.addEventListener('timeupdate', function() {{
+    const t = audio.currentTime;
+    updateSegmentForTime(t);
+    if (analysisData && autoAdvance) {{
+        const stepIdx = findStepForTime(t);
+        if (stepIdx !== -1 && stepIdx !== currentStepIdx) {{
+            currentStepIdx = stepIdx;
+            renderCard();
+        }}
+    }}
+}});
+
+function getAnnotationsForStep(stepNumber) {{
+    if (!wordAnnotations) return [];
+    const step = wordAnnotations.find(s => s.step_number === stepNumber);
+    return step ? (step.phrases || []) : [];
+}}
+
+function buildStepAnnotationMap(stepNumber) {{
+    if (_stepAnnotationCache[stepNumber]) return _stepAnnotationCache[stepNumber];
+    const phrases = getAnnotationsForStep(stepNumber);
+    const annMap = {{}};
+    if (!phrases.length || !whisperWords || !analysisData) {{
+        _stepAnnotationCache[stepNumber] = annMap;
+        return annMap;
+    }}
+    const step = analysisData.steps.find(s => s.step_number === stepNumber);
+    if (!step || !step.segments || !step.segments.length) {{
+        _stepAnnotationCache[stepNumber] = annMap;
+        return annMap;
+    }}
+    let stepStart = Infinity, stepEnd = -Infinity;
+    for (const seg of step.segments) {{
+        if (seg.time_start != null && seg.time_start < stepStart) stepStart = seg.time_start;
+        if (seg.time_end != null && seg.time_end > stepEnd) stepEnd = seg.time_end;
+    }}
+    const stepWords = [];
+    for (const w of whisperWords) {{
+        if (w.start >= (stepStart - 0.5) && w.end <= (stepEnd + 0.5)) stepWords.push(w);
+        if (w.start > stepEnd + 1) break;
+    }}
+    if (!stepWords.length) {{
+        _stepAnnotationCache[stepNumber] = annMap;
+        return annMap;
+    }}
+    const lcWords = stepWords.map(w => w.word.toLowerCase().replace(/[.,!?;:'"]/g, ''));
+    for (const phrase of phrases) {{
+        const phraseTokens = phrase.text.toLowerCase().replace(/[.,!?;:'"]/g, '').split(/\\s+/).filter(t => t);
+        if (!phraseTokens.length) continue;
+        for (let i = 0; i <= lcWords.length - phraseTokens.length; i++) {{
+            let match = true;
+            for (let j = 0; j < phraseTokens.length; j++) {{
+                if (lcWords[i + j] !== phraseTokens[j]) {{ match = false; break; }}
+            }}
+            if (match) {{
+                for (let j = 0; j < phraseTokens.length; j++) {{
+                    annMap[stepWords[i + j].start] = {{ category: phrase.category, note: phrase.note, text: phrase.text }};
+                }}
+                break;
+            }}
+        }}
+    }}
+    _stepAnnotationCache[stepNumber] = annMap;
+    return annMap;
+}}
+
+function renderTextWithWordHighlight(text, t, timeStart, timeEnd, stepNumber) {{
+    if (!whisperWords || !whisperWords.length) return escHtml(text);
+    const rangeWords = [];
+    for (const w of whisperWords) {{
+        if (w.start >= (timeStart - 0.5) && w.end <= (timeEnd + 0.5)) rangeWords.push(w);
+        if (w.start > timeEnd + 1) break;
+    }}
+    if (!rangeWords.length) return escHtml(text);
+    const annMap = stepNumber != null ? buildStepAnnotationMap(stepNumber) : {{}};
+    let activePhrase = null;
+    for (let i = 0; i < rangeWords.length; i++) {{
+        const w = rangeWords[i];
+        if (t >= w.start - 0.05 && t <= w.end + 0.05) {{
+            const ann = annMap[w.start];
+            if (ann) activePhrase = ann.text;
+            break;
+        }}
+    }}
+    let html = '';
+    let currentNote = null;
+    for (let i = 0; i < rangeWords.length; i++) {{
+        const w = rangeWords[i];
+        const isCurrent = (t >= w.start - 0.05 && t <= w.end + 0.05);
+        const ann = annMap[w.start];
+        if (i > 0) html += ' ';
+        let wordHtml = escHtml(w.word);
+        if (isCurrent) {{
+            wordHtml = '<strong style="color:#1a237e;font-size:1.05em;">' + wordHtml + '</strong>';
+            if (ann) currentNote = ann;
+        }}
+        if (ann) {{
+            const isActive = activePhrase && ann.text === activePhrase;
+            const cls = 'word-' + ann.category + (isActive ? ' word-active' : '');
+            wordHtml = '<span class="' + cls + '">' + wordHtml + '</span>';
+        }}
+        html += wordHtml;
+    }}
+    const noteLine = document.getElementById('annotation-note');
+    if (noteLine) {{
+        if (currentNote) {{
+            noteLine.innerHTML = '<span class="note-category note-cat-' + currentNote.category + '">'
+                + currentNote.category + '</span> ' + escHtml(currentNote.note);
+        }} else {{
+            noteLine.innerHTML = '';
+        }}
+    }}
+    return html;
+}}
+
+function updateSegmentForTime(t) {{
+    const segBox = document.getElementById('segment-text');
+    if (!segBox) return;
+    if (analysisData) {{
+        const step = analysisData.steps[currentStepIdx];
+        const stepNum = step ? step.step_number : null;
+        if (step && step.segments) {{
+            for (const seg of step.segments) {{
+                if (seg.time_start != null && t >= seg.time_start && t <= seg.time_end) {{
+                    segBox.innerHTML = renderTextWithWordHighlight(seg.text, t, seg.time_start, seg.time_end, stepNum);
+                    return;
+                }}
+            }}
+            if (step.segments.length > 0) {{
+                let closest = step.segments[0];
+                let minDist = Infinity;
+                for (const seg of step.segments) {{
+                    if (seg.time_start != null) {{
+                        const dist = Math.abs(seg.time_start - t);
+                        if (dist < minDist) {{ minDist = dist; closest = seg; }}
+                    }}
+                }}
+                segBox.innerHTML = renderTextWithWordHighlight(
+                    closest.text || '', t, closest.time_start || 0, closest.time_end || 0, stepNum);
+            }}
+            return;
+        }}
+    }}
+    if (whisperSegments) {{
+        for (const ws of whisperSegments) {{
+            if (t >= ws.start && t <= ws.end) {{
+                segBox.innerHTML = renderTextWithWordHighlight(ws.text, t, ws.start, ws.end, null);
+                return;
+            }}
+        }}
+    }}
+}}
+
+function findStepForTime(t) {{
+    if (!analysisData) return -1;
+    for (let i = 0; i < analysisData.steps.length; i++) {{
+        const s = analysisData.steps[i];
+        if (s.time_start != null && s.time_end != null) {{
+            if (t >= s.time_start && t <= s.time_end) return i;
+        }}
+    }}
+    return -1;
+}}
+
+// ── Condensed view ──
+
+function renderSettingCard(s, label) {{
+    let html = '<div class="condensed-card">';
+    html += '<div class="setting-tag">' + escHtml(label) + '</div>';
+    html += '<h3>' + escHtml(s.title || '') + '</h3>';
+    if (s.somatic_intent) {{
+        html += '<p style="font-style:italic;margin:8px 0 12px 0;color:#444;">' + escHtml(s.somatic_intent) + '</p>';
+    }}
+    const settingAttrs = [];
+    if (s.space) settingAttrs.push('<li><strong>Space:</strong> ' + escHtml(s.space) + '</li>');
+    if (s.teacher_presence) settingAttrs.push('<li><strong>Teacher Presence:</strong> ' + escHtml(s.teacher_presence) + '</li>');
+    if (s.arc) settingAttrs.push('<li><strong>Arc:</strong> ' + escHtml(s.arc) + '</li>');
+    if (settingAttrs.length) {{
+        html += '<ul style="margin:0;padding-left:20px;color:#444;font-size:0.95em;">' + settingAttrs.join('') + '</ul>';
+    }}
+    html += '</div>';
+    return html;
+}}
+
+function getGroupTimeRange(groupNumber) {{
+    if (!analysisData || !analysisData.steps) return null;
+    let minStart = Infinity, maxEnd = -Infinity;
+    for (const s of analysisData.steps) {{
+        if (s.group_number === groupNumber && s.time_start != null && s.time_end != null) {{
+            if (s.time_start < minStart) minStart = s.time_start;
+            if (s.time_end > maxEnd) maxEnd = s.time_end;
+        }}
+    }}
+    if (minStart === Infinity) return null;
+    return {{ start: minStart, end: maxEnd }};
+}}
+
+function renderGroupCards(cards) {{
+    let html = '';
+    cards.forEach(card => {{
+        html += '<div class="condensed-card">';
+        const tr = getGroupTimeRange(card.group_number);
+        const timeStr = tr ? ' <span style="font-weight:normal;color:#888;">(' + fmtTime(tr.start) + '\\u2013' + fmtTime(tr.end) + ')</span>' : '';
+        html += '<div class="group-tag">Group ' + card.group_number + ': ' + escHtml(card.group_label || '') + timeStr + '</div>';
+        html += '<h3>' + escHtml(card.title || '') + '</h3>';
+        if (card.the_action) {{
+            html += '<p style="margin:8px 0 12px 0;color:#444;">' + escHtml(card.the_action) + '</p>';
+        }}
+        const groupAttrs = [];
+        if (card.the_body) groupAttrs.push('<li><strong>Body:</strong> ' + escHtml(card.the_body) + '</li>');
+        if (card.the_attention) groupAttrs.push('<li><strong>Attention:</strong> ' + escHtml(card.the_attention) + '</li>');
+        if (card.the_intention) groupAttrs.push('<li><strong>Intention:</strong> ' + escHtml(card.the_intention) + '</li>');
+        if (card.the_voice && card.the_voice.toLowerCase() !== 'none') groupAttrs.push('<li><strong>Voice:</strong> ' + escHtml(card.the_voice) + '</li>');
+        if (groupAttrs.length) {{
+            html += '<ul style="margin:0;padding-left:20px;color:#444;font-size:0.95em;">' + groupAttrs.join('') + '</ul>';
+        }}
+        html += '</div>';
+    }});
+    return html;
+}}
+
+function renderCondensedCards(data) {{
+    const settingDiv = document.getElementById('condensed-setting-card');
+    const groupsDiv = document.getElementById('condensed-group-cards');
+    settingDiv.innerHTML = '';
+    groupsDiv.innerHTML = '';
+    const segments = data.segments || [];
+    if (segments.length <= 1) {{
+        const seg = segments[0] || {{}};
+        if (seg.setting) settingDiv.innerHTML = renderSettingCard(seg.setting, 'Lesson Setting');
+        if (seg.group_cards) groupsDiv.innerHTML = renderGroupCards(seg.group_cards);
+    }} else {{
+        let settingHtml = '';
+        let groupHtml = '';
+        segments.forEach(seg => {{
+            const segLabel = 'Segment ' + seg.segment_number + ': ' + (seg.theme || '');
+            if (seg.setting) settingHtml += renderSettingCard(seg.setting, segLabel);
+            if (seg.group_cards) {{
+                let segTimeStr = '';
+                if (seg.group_cards.length && analysisData) {{
+                    let sMin = Infinity, sMax = -Infinity;
+                    seg.group_cards.forEach(c => {{
+                        const tr = getGroupTimeRange(c.group_number);
+                        if (tr) {{ if (tr.start < sMin) sMin = tr.start; if (tr.end > sMax) sMax = tr.end; }}
+                    }});
+                    if (sMin !== Infinity) segTimeStr = ' (' + fmtTime(sMin) + '\\u2013' + fmtTime(sMax) + ')';
+                }}
+                groupHtml += '<div style="margin:18px 0 8px 0;padding:6px 10px;background:#f0f4ff;border-left:3px solid #4a6fa5;font-size:0.9em;color:#4a6fa5;font-weight:600;">'
+                    + escHtml(segLabel) + '<span style="font-weight:normal;color:#888;margin-left:6px;">' + segTimeStr + '</span>'
+                    + (seg.transition_note ? '<span style="font-weight:normal;color:#666;margin-left:10px;">' + escHtml(seg.transition_note) + '</span>' : '')
+                    + '</div>';
+                groupHtml += renderGroupCards(seg.group_cards);
+            }}
+        }});
+        settingDiv.innerHTML = settingHtml;
+        groupsDiv.innerHTML = groupHtml;
+    }}
+}}
+
+async function loadCondensed() {{
+    condensedLoaded = true;
+    showStatus('<span class="spinner-inline"></span> Generating condensed lesson cards...');
+    try {{
+        const form = new FormData();
+        form.append('lesson_text', lessonText);
+        form.append('provider', PROVIDER);
+        const res = await fetch('/api/pass0b-condensed', {{ method: 'POST', body: form }});
+        const data = await res.json();
+        if (data.error) {{ showStatus('Error: ' + data.error, true); return; }}
+        renderCondensedCards(data);
+        clearStatus();
+        const timing = data.cached ? 'cached' : (data.elapsed || '?') + 's';
+        const segs = data.segments || [];
+        const totalCards = segs.reduce((n, seg) => n + (seg.group_cards ? seg.group_cards.length : 0), 0);
+        const segLabel = segs.length > 1 ? ' | ' + segs.length + ' segments' : '';
+        document.getElementById('condensed-progress').textContent =
+            totalCards + ' group cards' + segLabel + ' | ' + timing;
+    }} catch (e) {{
+        showStatus('Error: ' + e.message, true);
+    }}
+}}
+
+async function loadAnnotated() {{
+    annotatedLoaded = true;
+    showStatus('<span class="spinner-inline"></span> Generating word-level language annotations...');
+    try {{
+        const form = new FormData();
+        form.append('lesson_text', lessonText);
+        form.append('selected_category', 'db:0');
+        form.append('selected_lesson', DOCUMENT_ID);
+        form.append('provider', PROVIDER);
+        const res = await fetch('/api/pass0b-word-lang-json', {{ method: 'POST', body: form }});
+        const data = await res.json();
+        if (data.error) {{ showStatus('Error: ' + data.error, true); return; }}
+        wordAnnotations = data.word_annotations || [];
+        _stepAnnotationCache = {{}};
+        clearStatus();
+        const timing = data.cached ? 'cached' : (data.elapsed || '?') + 's';
+        const totalPhrases = wordAnnotations.reduce((n, s) => n + (s.phrases ? s.phrases.length : 0), 0);
+        document.getElementById('annotated-progress').textContent =
+            totalPhrases + ' annotations across ' + wordAnnotations.length + ' steps | ' + timing;
+        // Switch back to steps view to see annotations in context
+        switchTab('steps');
+    }} catch (e) {{
+        showStatus('Error: ' + e.message, true);
+    }}
+}}
+
+// ── Keyboard nav ──
+
+document.addEventListener('keydown', function(e) {{
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+    if (e.key === 'ArrowLeft') {{ navigate(-1); e.preventDefault(); }}
+    if (e.key === 'ArrowRight') {{ navigate(1); e.preventDefault(); }}
+    if (e.key === ' ') {{
+        if (audioReady) {{
+            if (audio.paused) audio.play(); else audio.pause();
+            e.preventDefault();
+        }}
+    }}
+}});
+
+// ── Helpers ──
+
+function fmtTime(seconds) {{
+    if (seconds == null) return '';
+    const s = Math.floor(seconds);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    if (h > 0) return h + ':' + String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+    return m + ':' + String(sec).padStart(2, '0');
+}}
+
+function escHtml(str) {{
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}}
+
+function showStatus(msg, isError) {{
+    const el = document.getElementById('status-area');
+    el.innerHTML = '<div class="status-msg' + (isError ? ' error' : '') + '">' + msg + '</div>';
+}}
+
+function clearStatus() {{
+    document.getElementById('status-area').innerHTML = '';
+}}
+
+// ── Chat ──
+
+function toggleChat() {{
+    const body = document.getElementById('chat-body');
+    const toggle = document.getElementById('chat-toggle');
+    if (body.classList.contains('open')) {{
+        body.classList.remove('open');
+        toggle.innerHTML = '&#9654; Open';
+    }} else {{
+        body.classList.add('open');
+        toggle.innerHTML = '&#9660; Close';
+        document.getElementById('chat-input').focus();
+    }}
+}}
+
+function getChatContextConfig() {{
+    return {{
+        lesson_text: document.getElementById('ctx-lesson-text').checked,
+        pass_a: document.getElementById('ctx-pass-a').checked,
+        somatic: document.getElementById('ctx-somatic').checked,
+        language: document.getElementById('ctx-language').checked,
+        somatic_summary: document.getElementById('ctx-somatic-summary').checked,
+        language_summary: document.getElementById('ctx-language-summary').checked,
+        condensed: document.getElementById('ctx-condensed').checked,
+    }};
+}}
+
+function renderChatMessages() {{
+    const container = document.getElementById('chat-messages');
+    container.innerHTML = chatMessages.map(m => {{
+        const cls = m.role === 'user' ? 'user' : (m.role === 'error' ? 'error' : 'assistant');
+        return '<div class="chat-msg ' + cls + '">' + escHtml(m.content) + '</div>';
+    }}).join('');
+    container.scrollTop = container.scrollHeight;
+}}
+
+async function sendChat() {{
+    const input = document.getElementById('chat-input');
+    const text = input.value.trim();
+    if (!text) return;
+    if (!lessonText) {{
+        chatMessages.push({{role: 'error', content: 'No lesson text available.'}});
+        renderChatMessages();
+        return;
+    }}
+    chatMessages.push({{role: 'user', content: text}});
+    input.value = '';
+    renderChatMessages();
+    const btn = document.getElementById('chat-send-btn');
+    btn.disabled = true;
+    btn.textContent = '...';
+    try {{
+        const apiMessages = chatMessages.filter(m => m.role === 'user' || m.role === 'assistant');
+        const res = await fetch('/api/lesson-chat', {{
+            method: 'POST',
+            headers: {{'Content-Type': 'application/json'}},
+            body: JSON.stringify({{
+                messages: apiMessages,
+                provider: PROVIDER,
+                context_config: getChatContextConfig(),
+                lesson_text: lessonText,
+            }}),
+        }});
+        const data = await res.json();
+        if (data.error) {{
+            chatMessages.push({{role: 'error', content: data.error}});
+        }} else {{
+            chatMessages.push({{role: 'assistant', content: data.response}});
+        }}
+    }} catch (e) {{
+        chatMessages.push({{role: 'error', content: 'Request failed: ' + e.message}});
+    }}
+    btn.disabled = false;
+    btn.textContent = 'Send';
+    renderChatMessages();
+}}
+
+// ── Page init ──
+
+(async function init() {{
+    try {{
+        // 1. Fetch lesson info
+        const infoRes = await fetch('/api/lesson-info/' + encodeURIComponent(DOCUMENT_ID));
+        const info = await infoRes.json();
+        if (info.error) {{
+            showStatus('Lesson not found.', true);
+            document.getElementById('card-placeholder').innerHTML = 'Lesson not found.';
+            return;
+        }}
+        document.title = info.title || 'Lesson';
+        document.getElementById('lesson-title').textContent = info.title || 'Untitled Lesson';
+        let sourceLine = info.source_name || '';
+        if (info.source_url) {{
+            sourceLine = '<a href="' + escHtml(info.source_url) + '" target="_blank">' + escHtml(sourceLine || 'Source') + '</a>';
+        }}
+        document.getElementById('source-line').innerHTML = sourceLine;
+        lessonText = info.text || '';
+
+        // 2. Load audio + whisper (parallel) if has_audio
+        if (info.has_audio) {{
+            const [audioRes, segRes, wordRes] = await Promise.all([
+                fetch('/api/audio-url/' + encodeURIComponent(DOCUMENT_ID)),
+                fetch('/api/whisper-segments/' + encodeURIComponent(DOCUMENT_ID)),
+                fetch('/api/whisper-words/' + encodeURIComponent(DOCUMENT_ID)),
+            ]);
+            const audioData = await audioRes.json();
+            const segData = await segRes.json();
+            const wordData = await wordRes.json();
+            if (audioData.audio_url) {{
+                audio.src = audioData.audio_url;
+                audioContainer.classList.remove('audio-hidden');
+                audioReady = true;
+            }}
+            if (segData.segments) whisperSegments = segData.segments;
+            if (wordData.words) whisperWords = wordData.words;
+        }}
+
+        // 3. Auto-run analysis
+        if (!lessonText) {{
+            document.getElementById('card-placeholder').innerHTML = 'No lesson text available.';
+            return;
+        }}
+        showStatus('<span class="spinner-inline"></span> Running analysis...');
+        const form = new FormData();
+        form.append('lesson_text', lessonText);
+        form.append('selected_category', 'db:0');
+        form.append('selected_lesson', DOCUMENT_ID);
+        form.append('provider', PROVIDER);
+        const res = await fetch('/api/pass0b-combined-json', {{ method: 'POST', body: form }});
+        const data = await res.json();
+        if (data.error) {{
+            showStatus('Error: ' + data.error, true);
+            document.getElementById('card-placeholder').innerHTML = 'Analysis failed.';
+            return;
+        }}
+        analysisData = data;
+        currentStepIdx = 0;
+        renderCard();
+        clearStatus();
+        const somTime = data.cached_somatic ? 'cached' : (data.elapsed_somatic || '?') + 's';
+        const langTime = data.cached_lang ? 'cached' : (data.elapsed_lang || '?') + 's';
+        document.getElementById('progress-bar').textContent =
+            data.steps.length + ' steps | Somatic: ' + somTime + ', Language: ' + langTime;
+    }} catch (e) {{
+        showStatus('Error loading lesson: ' + e.message, true);
+        document.getElementById('card-placeholder').innerHTML = 'Failed to load lesson.';
+    }}
+}})();
+
+</script>
+</body>
+</html>"""
 
 
 def build_pass0b_player_html(search_mode: bool = False) -> str:
@@ -4789,17 +5954,18 @@ except ImportError:
 async def landing_page(request: Request):
     """Simple landing page with links to available sections."""
     search_mode = _is_search_site(request)
+    if search_mode:
+        return HTMLResponse(build_search_home_html())
     links = []
-    if not search_mode:
-        if _book_available:
-            links.append('<li><a href="/book"><strong>Book</strong></a></li>')
-            links.append('<li><a href="/analyzer">Analyzer</a></li>')
-            links.append('<li><a href="/explore">Explore</a></li>')
-        links.append('<li><a href="/pipeline">Pipeline Dashboard</a></li>')
+    if _book_available:
+        links.append('<li><a href="/book"><strong>Book</strong></a></li>')
+        links.append('<li><a href="/analyzer">Analyzer</a></li>')
+        links.append('<li><a href="/explore">Explore</a></li>')
+    links.append('<li><a href="/pipeline">Pipeline Dashboard</a></li>')
     links.append('<li><a href="/pass0b">Pass 0b Analysis</a></li>')
     links.append('<li><a href="/pass0b-player">Pass 0b Player</a></li>')
     links.append('<li><a href="/pass0b-lang">Pass 0b Language</a></li>')
-    title = "Feldenkrais Search" if search_mode else "Feldenkrais Lesson Analysis"
+    title = "Feldenkrais Lesson Analysis"
     return f"""<!DOCTYPE html><html><head><title>{title}</title>
 <style>body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 max-width: 800px; margin: 0 auto; padding: 40px; line-height: 1.6; }}
