@@ -617,10 +617,6 @@ data "archive_file" "web_lambda" {
     content  = file("${path.module}/../src/kb/llm.py")
     filename = "llm.py"
   }
-  source {
-    content  = file("${path.module}/../src/kb/schemas.py")
-    filename = "schemas.py"
-  }
   # Framework version pointer (from private submodule)
   source {
     content  = file("${path.module}/../private/data/frameworks/v1/frameworks.json")
