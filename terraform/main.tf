@@ -582,6 +582,11 @@ resource "aws_iam_role_policy" "web_lambda_s3" {
           "s3:DeleteObject"
         ]
         Resource = "${aws_s3_bucket.main.arn}/web-jobs/*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = "${aws_s3_bucket.main.arn}/archive/*"
       }
     ]
   })

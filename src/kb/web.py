@@ -1520,6 +1520,7 @@ async def api_pass0b_combined_json(
                 "group_number": gn,
                 "instruction": instruction,
                 "tags": tags,
+                "starting_position": pa_step.get("starting_position", ""),
                 "time_start": min(time_starts) if time_starts else None,
                 "time_end": max(time_ends) if time_ends else None,
                 "segments": segments_data,
@@ -1558,7 +1559,8 @@ async def api_pass0b_combined_json(
         return JSONResponse({
             "groups": [
                 {"group_number": g.get("group_number"), "label": g.get("label", ""),
-                 "description": g.get("description", ""), "steps": g.get("steps", [])}
+                 "description": g.get("description", ""), "starting_position": g.get("starting_position", ""),
+                 "steps": g.get("steps", [])}
                 for g in groups
             ],
             "steps": steps_json,
@@ -3353,6 +3355,10 @@ def build_lesson_page_html(document_id: str) -> str:
         }}
         .step-header {{ font-size: 1.15em; font-weight: 700; color: #222; margin-bottom: 2px; }}
         .step-time {{ color: #888; font-weight: 400; font-size: 0.85em; }}
+        .step-position {{
+            color: #888; font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.3px;
+            margin-bottom: 4px;
+        }}
         .step-instruction {{
             color: #444; font-style: italic; margin-bottom: 12px; font-size: 0.95em;
         }}
@@ -3376,6 +3382,18 @@ def build_lesson_page_html(document_id: str) -> str:
         .analysis-section ul {{ margin: 0; padding-left: 18px; font-size: 0.9em; color: #444; }}
         .analysis-section li {{ margin-bottom: 4px; }}
         .analysis-section strong {{ color: #333; }}
+
+        /* Transcript segments */
+        .segment-details {{ margin-bottom: 12px; }}
+        .segment-details summary {{
+            font-size: 0.8em; font-weight: 700; color: #666;
+            text-transform: uppercase; letter-spacing: 0.5px;
+            cursor: pointer; padding-bottom: 4px; border-bottom: 1px solid #eee;
+        }}
+        .segment-details .seg-text {{
+            font-size: 0.88em; color: #555; line-height: 1.5;
+            margin-top: 8px; padding: 8px; background: #fafafa; border-radius: 4px;
+        }}
 
         /* Navigation */
         .card-nav {{
@@ -3466,14 +3484,21 @@ def build_lesson_page_html(document_id: str) -> str:
     </div>
 
     <div class="tab-bar" id="tab-bar">
-        <button class="active" onclick="switchTab('steps')">Step by Step (Cards)</button>
-        <button onclick="switchTab('condensed')">Condensed</button>
+        <button class="active" onclick="switchTab('condensed')">Outline</button>
+        <button onclick="switchTab('steps')">Cards</button>
     </div>
 
     <div id="status-area"></div>
 
-    <!-- Steps tab (default) -->
-    <div id="tab-steps">
+    <!-- Condensed/Outline tab (default) -->
+    <div id="tab-condensed">
+        <div id="condensed-setting-card"></div>
+        <div id="condensed-group-cards"></div>
+        <div class="progress-bar" id="condensed-progress"></div>
+    </div>
+
+    <!-- Steps/Cards tab -->
+    <div id="tab-steps" style="display:none;">
         <div class="card" id="card">
             <div class="card-placeholder" id="card-placeholder">
                 <span class="spinner-inline"></span> Loading analysis...
@@ -3484,6 +3509,7 @@ def build_lesson_page_html(document_id: str) -> str:
                     <span id="card-step-label"></span>
                     <span class="step-time" id="card-step-time"></span>
                 </div>
+                <div class="step-position" id="card-position" style="display:none;"></div>
                 <div class="step-instruction" id="card-instruction"></div>
                 <div id="analysis-somatic" class="analysis-section" style="display:none;">
                     <h4>Somatic</h4>
@@ -3493,6 +3519,10 @@ def build_lesson_page_html(document_id: str) -> str:
                     <h4>Language</h4>
                     <ul id="lang-bullets"></ul>
                 </div>
+                <details id="segment-details" class="segment-details" style="display:none;">
+                    <summary>Transcript segments</summary>
+                    <div id="segment-list"></div>
+                </details>
                 <div class="card-nav">
                     <button id="nav-prev" onclick="navigate(-1)">&larr; Previous</button>
                     <span class="step-counter" id="step-counter"></span>
@@ -3501,13 +3531,6 @@ def build_lesson_page_html(document_id: str) -> str:
             </div>
         </div>
         <div class="progress-bar" id="progress-bar"></div>
-    </div>
-
-    <!-- Condensed tab -->
-    <div id="tab-condensed" style="display:none;">
-        <div id="condensed-setting-card"></div>
-        <div id="condensed-group-cards"></div>
-        <div class="progress-bar" id="condensed-progress"></div>
     </div>
 
     <!-- Annotated tab -->
@@ -3559,7 +3582,7 @@ let chatMessages = [];
 let _stepAnnotationCache = {{}};
 let condensedLoaded = false;
 let annotatedLoaded = false;
-let activeTab = 'steps';
+let activeTab = 'condensed';
 
 const audio = document.getElementById('audio-player');
 const audioContainer = document.getElementById('audio-container');
@@ -3569,7 +3592,7 @@ const audioContainer = document.getElementById('audio-container');
 function switchTab(tab) {{
     activeTab = tab;
     document.querySelectorAll('.tab-bar button').forEach((b, i) => {{
-        b.classList.toggle('active', ['steps','condensed','annotated'][i] === tab);
+        b.classList.toggle('active', ['condensed','steps','annotated'][i] === tab);
     }});
     document.getElementById('tab-steps').style.display = tab === 'steps' ? '' : 'none';
     document.getElementById('tab-condensed').style.display = tab === 'condensed' ? '' : 'none';
@@ -3592,8 +3615,9 @@ function renderCard() {{
     const step = analysisData.steps[currentStepIdx];
     const group = analysisData.groups.find(g => g.group_number === step.group_number);
 
+    const groupPos = group && group.starting_position ? ' (' + group.starting_position + ')' : '';
     document.getElementById('card-group').textContent =
-        group ? 'Group ' + group.group_number + ': ' + group.label : '';
+        group ? 'Group ' + group.group_number + ': ' + group.label + groupPos : '';
     document.getElementById('card-step-label').textContent = 'Step ' + step.step_number;
     if (step.time_start != null && step.time_end != null) {{
         document.getElementById('card-step-time').textContent =
@@ -3602,6 +3626,13 @@ function renderCard() {{
         document.getElementById('card-step-time').textContent = '';
     }}
     document.getElementById('card-instruction').textContent = step.instruction || '';
+    const posEl = document.getElementById('card-position');
+    if (step.starting_position) {{
+        posEl.textContent = step.starting_position;
+        posEl.style.display = '';
+    }} else {{
+        posEl.style.display = 'none';
+    }}
     updateSegmentForTime(audio.currentTime);
 
     // Somatic bullets
@@ -3661,6 +3692,22 @@ function renderCard() {{
         langDiv.style.display = hasBullets ? '' : 'none';
     }} else {{
         langDiv.style.display = 'none';
+    }}
+
+    // Transcript segments
+    const segDetails = document.getElementById('segment-details');
+    const segList = document.getElementById('segment-list');
+    segList.innerHTML = '';
+    if (step.segments && step.segments.length) {{
+        const text = step.segments.map(s => s.text).join(' ');
+        const div = document.createElement('div');
+        div.className = 'seg-text';
+        div.textContent = text;
+        segList.appendChild(div);
+        segDetails.style.display = '';
+        segDetails.removeAttribute('open');
+    }} else {{
+        segDetails.style.display = 'none';
     }}
 
     // Navigation
@@ -4178,6 +4225,8 @@ async function sendChat() {{
         const langTime = data.cached_lang ? 'cached' : (data.elapsed_lang || '?') + 's';
         document.getElementById('progress-bar').textContent =
             data.steps.length + ' steps | Somatic: ' + somTime + ', Language: ' + langTime;
+        // Outline is the default tab — load it now
+        if (!condensedLoaded) loadCondensed();
     }} catch (e) {{
         showStatus('Error loading lesson: ' + e.message, true);
         document.getElementById('card-placeholder').innerHTML = 'Failed to load lesson.';

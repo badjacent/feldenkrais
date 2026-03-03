@@ -46,6 +46,7 @@ For each step, provide:
 - Segment IDs from the source text (e.g., `[45, 46, 47]` if the step covers segments 45-47)
 - Brief note on the pedagogical purpose (optional)
 - Whether this step is a **return to home position** (`is_home: true`)
+- **Starting position**: the body position at the start of this step. Use plain language like "lying on back", "lying on back with knees standing", "lying on left side", "sitting", "standing", "hands and knees". Track position changes throughout the lesson — when the teacher says "roll onto your side" or "come to sitting", subsequent steps have the new position.
 
 ### Home Position
 
@@ -66,6 +67,7 @@ Guidelines:
 - Give each group a short label describing the exploration (e.g., "Pelvic clock 12-6", "Bilateral push-pull with heels")
 - Aim for roughly 5-8 groups. Fewer than 4 loses lesson structure; more than 10 is too granular.
 - Rest/pause steps can be folded into the preceding group or stand alone if they mark a significant transition
+- **Starting position**: the body position at the start of this group (e.g., "lying on back", "lying on back with knees standing", "sitting"). Use the position of the first step in the group.
 
 ---
 
@@ -77,5 +79,5 @@ Provide your analysis in the structured format with:
 3. `secondary_frameworks` - VLs scoring >= 0.3
 4. `rationale` - brief explanation of classification
 5. `home_position` - description of the base configuration the student returns to
-6. `steps` - the SPIFFER-Q decomposed lesson, each with `segments` array referencing source text and `is_home` flag for return-to-home steps
-7. `groups` - clustered step groups for the analytical table, each with `label`, `steps` (step numbers), and `description`
+6. `steps` - the SPIFFER-Q decomposed lesson, each with `segments` array referencing source text, `is_home` flag for return-to-home steps, and `starting_position`
+7. `groups` - clustered step groups for the analytical table, each with `label`, `steps` (step numbers), `description`, and `starting_position`

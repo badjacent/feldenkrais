@@ -64,9 +64,13 @@
           "is_home": {
             "type": "boolean",
             "description": "True if this step is a return to the home position"
+          },
+          "starting_position": {
+            "type": "string",
+            "description": "The body position at the start of this step (e.g., 'lying on back', 'lying on back with knees standing', 'lying on side', 'sitting', 'standing')"
           }
         },
-        "required": ["step_number", "instruction", "tags", "segments"]
+        "required": ["step_number", "instruction", "tags", "segments", "starting_position"]
       }
     },
     "groups": {
@@ -93,9 +97,13 @@
           "description": {
             "type": "string",
             "description": "Brief description of the movement exploration in this group"
+          },
+          "starting_position": {
+            "type": "string",
+            "description": "The body position at the start of this group (e.g., 'lying on back', 'lying on back with knees standing', 'lying on side', 'sitting', 'standing')"
           }
         },
-        "required": ["group_number", "label", "steps"]
+        "required": ["group_number", "label", "steps", "starting_position"]
       }
     }
   },
