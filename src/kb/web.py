@@ -3336,14 +3336,14 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None) -> st
                     }}
                     data.results.forEach(r => {{
                         const pct = Math.round(r.similarity * 100);
-                        const snippet = (r.snippet || '').replace(/</g, '&lt;').replace(/\\n/g, ' ');
+                        let snippet = (r.snippet || '').replace(/</g, '&lt;').replace(/\\n/g, ' ');
+                        snippet = snippet.replace(/^Setting:\s*/i, '');
                         html += '<div class="search-result">';
                         html += '<div style="display:flex;justify-content:space-between;align-items:baseline;">';
                         html += '<a href="/lesson/'+r.document_id+'">' + escHtml(r.title || '') + '</a>';
                         html += '<span class="similarity">'+pct+'%</span>';
                         html += '</div>';
                         if (snippet) html += '<div class="snippet">'+snippet+'</div>';
-                        html += '<a class="view-link" href="/lesson/'+r.document_id+'">View lesson &rarr;</a>';
                         html += '</div>';
                     }});
                     resultsDiv.innerHTML = html;
