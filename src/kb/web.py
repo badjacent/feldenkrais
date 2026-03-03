@@ -3412,6 +3412,33 @@ def build_lesson_page_html(document_id: str) -> str:
         /* Progress bar */
         .progress-bar {{ font-size: 0.85em; color: #888; text-align: center; }}
 
+        /* Detailed view */
+        .detailed-group-header {{
+            margin-top: 24px; margin-bottom: 8px; padding: 8px 12px;
+            background: #e8f0fe; border-left: 4px solid #1a73e8; border-radius: 4px;
+        }}
+        .detailed-group-header strong {{ color: #1a73e8; }}
+        .detailed-group-desc {{ color: #555; font-size: 0.85em; margin-top: 4px; }}
+        .detailed-group-position {{ color: #888; font-size: 0.8em; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.3px; }}
+        .detailed-step {{
+            margin: 12px 0 4px 0; padding: 8px 12px;
+            background: #f8f9fa; border-radius: 4px; border: 1px solid #e0e0e0;
+        }}
+        .detailed-step-header {{ margin-bottom: 4px; }}
+        .detailed-step-header strong {{ color: #333; }}
+        .detailed-step-time {{ color: #888; font-size: 0.85em; }}
+        .detailed-step-position {{ color: #888; font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 2px; }}
+        .detailed-step em {{ color: #444; }}
+        .detailed-clarified {{ margin-bottom: 6px; color: #333; }}
+        .detailed-bullets {{ margin: 4px 0 0 0; padding-left: 20px; font-size: 0.9em; color: #444; }}
+        .detailed-bullets li {{ margin-bottom: 3px; }}
+        .detailed-bullets strong {{ color: #333; }}
+        .detailed-section-label {{
+            font-size: 0.75em; font-weight: 700; color: #888;
+            text-transform: uppercase; letter-spacing: 0.5px;
+            margin: 8px 0 4px 0;
+        }}
+
         /* Loading / status */
         .status-msg {{ text-align: center; padding: 12px; color: #666; font-size: 0.9em; }}
         .status-msg.error {{ color: #c62828; background: #ffebee; border-radius: 6px; }}
@@ -3486,6 +3513,7 @@ def build_lesson_page_html(document_id: str) -> str:
     <div class="tab-bar" id="tab-bar">
         <button class="active" onclick="switchTab('condensed')">Outline</button>
         <button onclick="switchTab('steps')">Cards</button>
+        <button onclick="switchTab('detailed')">Detailed</button>
     </div>
 
     <div id="status-area"></div>
@@ -3538,6 +3566,11 @@ def build_lesson_page_html(document_id: str) -> str:
         <div class="progress-bar" id="annotated-progress"></div>
     </div>
 
+    <!-- Detailed tab -->
+    <div id="tab-detailed" style="display:none;">
+        <div id="detailed-content"></div>
+    </div>
+
     <!-- Lesson Chat panel -->
     <div class="chat-panel" id="chat-panel">
         <div class="chat-header" onclick="toggleChat()">
@@ -3582,6 +3615,7 @@ let chatMessages = [];
 let _stepAnnotationCache = {{}};
 let condensedLoaded = false;
 let annotatedLoaded = false;
+let detailedRendered = false;
 let activeTab = 'condensed';
 
 const audio = document.getElementById('audio-player');
@@ -3592,14 +3626,16 @@ const audioContainer = document.getElementById('audio-container');
 function switchTab(tab) {{
     activeTab = tab;
     document.querySelectorAll('.tab-bar button').forEach((b, i) => {{
-        b.classList.toggle('active', ['condensed','steps','annotated'][i] === tab);
+        b.classList.toggle('active', ['condensed','steps','detailed'][i] === tab);
     }});
     document.getElementById('tab-steps').style.display = tab === 'steps' ? '' : 'none';
     document.getElementById('tab-condensed').style.display = tab === 'condensed' ? '' : 'none';
     document.getElementById('tab-annotated').style.display = tab === 'annotated' ? '' : 'none';
+    document.getElementById('tab-detailed').style.display = tab === 'detailed' ? '' : 'none';
 
     if (tab === 'condensed' && !condensedLoaded) loadCondensed();
     if (tab === 'annotated' && !annotatedLoaded) loadAnnotated();
+    if (tab === 'detailed' && !detailedRendered && analysisData) renderDetailed();
     if (tab === 'steps' && analysisData) renderCard();
 }}
 
@@ -4047,6 +4083,132 @@ async function loadAnnotated() {{
     }} catch (e) {{
         showStatus('Error: ' + e.message, true);
     }}
+}}
+
+// ── Detailed view ──
+
+function renderDetailed() {{
+    if (!analysisData) return;
+    detailedRendered = true;
+    const groups = analysisData.groups || [];
+    const steps = analysisData.steps || [];
+    const stepLookup = {{}};
+    steps.forEach(s => {{ stepLookup[s.step_number] = s; }});
+
+    function fmtTimeRange(step) {{
+        if (step.time_start == null || step.time_end == null) return '';
+        return ' (' + fmtTime(step.time_start) + ' \u2013 ' + fmtTime(step.time_end) + ')';
+    }}
+
+    function renderBullets(obj, fields) {{
+        let items = '';
+        fields.forEach(([label, key]) => {{
+            const val = obj[key];
+            if (val && val.toLowerCase() !== 'none') {{
+                items += '<li><strong>' + label + ':</strong> ' + escHtml(val) + '</li>';
+            }}
+        }});
+        return items ? '<ul class="detailed-bullets">' + items + '</ul>' : '';
+    }}
+
+    function renderSegments(step) {{
+        const segs = (step.segments || []).filter(s => s.text);
+        if (!segs.length) return '';
+        const n = segs.length;
+        const label = 'Original text (' + n + ' segment' + (n !== 1 ? 's' : '') + ')';
+        let lines = '';
+        segs.forEach(s => {{
+            lines += '<div style="margin: 2px 0;"><span style="color: #999; font-size: 0.85em;">[' + s.id + ']</span> ' + escHtml(s.text) + '</div>';
+        }});
+        return '<details style="margin-top: 6px;">' +
+            '<summary style="cursor: pointer; font-size: 0.85em; color: #888;">' + label + '</summary>' +
+            '<div style="margin-top: 4px; padding: 6px 10px; background: #fafafa; border-radius: 4px; font-size: 0.85em; color: #555;">' + lines + '</div>' +
+            '</details>';
+    }}
+
+    function renderStep(step) {{
+        if (step.relevance === false) return '';
+        const timeStr = fmtTimeRange(step);
+        let html = '<div class="detailed-step">';
+        if (step.starting_position) {{
+            html += '<div class="detailed-step-position">' + escHtml(step.starting_position) + '</div>';
+        }}
+        html += '<div class="detailed-step-header"><strong>Step ' + step.step_number + '</strong>';
+        html += '<span class="detailed-step-time">' + escHtml(timeStr) + '</span>';
+        html += ' &mdash; <em>' + escHtml(step.instruction || '') + '</em></div>';
+        if (step.somatic) {{
+            if (step.somatic.clarified) {{
+                html += '<div class="detailed-clarified">' + escHtml(step.somatic.clarified) + '</div>';
+            }}
+            const somBullets = renderBullets(step.somatic, [
+                ['Intent', 'intent'], ['Differentiation', 'differentiation'],
+                ['Activation', 'activation'], ['Inhibition', 'inhibition'],
+                ['Transmission Route', 'transmission_route'], ['Ground Push', 'ground_push'],
+                ['Mechanical Directive', 'mechanical_directive'],
+                ['Attentional Cue', 'attentional_cue'],
+            ]);
+            if (somBullets) {{
+                html += '<div class="detailed-section-label">Somatic</div>' + somBullets;
+            }}
+        }}
+        if (step.language) {{
+            const langBullets = renderBullets(step.language, [
+                ['Explanatory', 'explanatory_language'], ['Attention Cues', 'attention_cues'],
+                ['Effort', 'effort_language'], ['Imagery', 'image_language'],
+                ['Distinctive', 'distinctive_phrasing'], ['Sensory Inquiry', 'sensory_inquiry'],
+            ]);
+            if (langBullets) {{
+                html += '<div class="detailed-section-label">Language</div>' + langBullets;
+            }}
+        }}
+        html += renderSegments(step);
+        html += '</div>';
+        return html;
+    }}
+
+    let html = '';
+    const renderedSteps = new Set();
+    const totalSteps = steps.length;
+    const relevant = steps.filter(s => s.relevance !== false).length;
+    const irrelevant = totalSteps - relevant;
+    html += '<p style="color: #666; font-size: 0.9em;">' + totalSteps + ' steps across ' +
+        groups.length + ' groups, ' + relevant + ' lesson-relevant' +
+        (irrelevant ? ', ' + irrelevant + ' omitted' : '') + '</p>';
+
+    groups.forEach(g => {{
+        const groupStepNums = g.steps || [];
+        const groupRelevant = groupStepNums.filter(sn => {{
+            const s = stepLookup[sn];
+            return s && s.relevance !== false;
+        }});
+        if (!groupRelevant.length) {{
+            groupStepNums.forEach(sn => renderedSteps.add(sn));
+            return;
+        }}
+        html += '<div class="detailed-group-header">';
+        html += '<strong>Group ' + g.group_number + ': ' + escHtml(g.label || '') + '</strong>';
+        if (g.starting_position) {{
+            html += '<div class="detailed-group-position">' + escHtml(g.starting_position) + '</div>';
+        }}
+        if (g.description) {{
+            html += '<div class="detailed-group-desc">' + escHtml(g.description) + '</div>';
+        }}
+        html += '</div>';
+        groupStepNums.forEach(sn => {{
+            renderedSteps.add(sn);
+            const step = stepLookup[sn];
+            if (step) html += renderStep(step);
+        }});
+    }});
+
+    const ungrouped = steps.filter(s => !renderedSteps.has(s.step_number) && s.relevance !== false);
+    if (ungrouped.length) {{
+        html += '<div class="detailed-group-header" style="background: #fff3cd; border-left-color: #ffc107;">';
+        html += '<strong style="color: #856404;">Ungrouped Steps</strong></div>';
+        ungrouped.forEach(step => {{ html += renderStep(step); }});
+    }}
+
+    document.getElementById('detailed-content').innerHTML = html;
 }}
 
 // ── Keyboard nav ──
