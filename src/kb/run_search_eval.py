@@ -75,6 +75,119 @@ def classify_band(gap: float) -> str:
     return "high"  # edge case: gap exactly at boundary
 
 
+def run_eval(db: Database, questions_path: str | None = None, top_k: int = 10,
+             quiet: bool = False) -> dict:
+    """Run search evaluation and return structured results.
+
+    Callable from the iteration loop or standalone. Does NOT close the db.
+
+    Args:
+        db: Initialized Database instance.
+        questions_path: Path to question JSON file. Defaults to DEFAULT_QUESTIONS.
+        top_k: Number of search results to retrieve per query.
+        quiet: If True, suppress progress output.
+
+    Returns:
+        Dict with keys: metrics, results, missing_from_index, embed_time, search_time, qfile.
+    """
+    questions_path = os.path.normpath(questions_path or DEFAULT_QUESTIONS)
+    if not os.path.exists(questions_path):
+        raise FileNotFoundError(f"Question file not found: {questions_path}")
+
+    with open(questions_path) as f:
+        qfile = json.load(f)
+
+    questions = qfile["questions"]
+    if not quiet:
+        print(f"Loaded {len(questions)} questions (version {qfile.get('version', '?')})")
+
+    embedded_ids = set(db.get_embedding_hashes().keys())
+    if not quiet:
+        print(f"Embedding index has {len(embedded_ids)} lessons")
+
+    searchable = []
+    missing_from_index = []
+    for q in questions:
+        if q["expected_doc_id"] in embedded_ids:
+            searchable.append(q)
+        else:
+            missing_from_index.append(q)
+
+    if missing_from_index and not quiet:
+        unique_missing = {q["expected_doc_id"] for q in missing_from_index}
+        print(f"WARNING: {len(missing_from_index)} questions ({len(unique_missing)} lessons) not in index")
+
+    if not searchable:
+        raise RuntimeError("No searchable questions — all expected docs missing from index.")
+
+    # Batch embed all queries
+    if not quiet:
+        print(f"Embedding {len(searchable)} queries...", end=" ", flush=True)
+    t0 = time.time()
+    query_texts = [q["query"] for q in searchable]
+
+    CHUNK_SIZE = 100
+    all_embeddings = []
+    for i in range(0, len(query_texts), CHUNK_SIZE):
+        chunk = query_texts[i:i + CHUNK_SIZE]
+        embeddings, _ = get_embeddings(chunk, task_type="RETRIEVAL_QUERY")
+        all_embeddings.extend(embeddings)
+
+    embed_time = time.time() - t0
+    if not quiet:
+        print(f"done ({embed_time:.1f}s)")
+
+    # Search
+    if not quiet:
+        print(f"Searching (top-{top_k})...", flush=True)
+    t0 = time.time()
+    results = []
+
+    for q, embedding in zip(searchable, all_embeddings):
+        hits = db.search_lessons(embedding, limit=top_k)
+        hit_ids = [h["document_id"] for h in hits]
+        sims = [h["similarity"] for h in hits]
+
+        rank = None
+        if q["expected_doc_id"] in hit_ids:
+            rank = hit_ids.index(q["expected_doc_id"]) + 1
+
+        gap = sims[0] - sims[4] if len(sims) >= 5 else 0
+        band = classify_band(gap)
+
+        result = {
+            "id": q["id"],
+            "query": q["query"],
+            "category": q["category"],
+            "expected_doc_id": q["expected_doc_id"],
+            "expected_title": q["expected_title"],
+            "rank": rank,
+            "band": band,
+            "gap": round(gap, 4),
+            "top_hits": [
+                {"title": h["title"], "similarity": round(h["similarity"], 4), "doc_id": h["document_id"]}
+                for h in hits[:5]
+            ],
+        }
+        results.append(result)
+
+    search_time = time.time() - t0
+    if not quiet:
+        print(f"done ({search_time:.1f}s)")
+
+    categories = sorted(set(r["category"] for r in results))
+    metrics = compute_metrics(results, categories, top_k)
+
+    return {
+        "metrics": metrics,
+        "results": results,
+        "missing_from_index": missing_from_index,
+        "embed_time": embed_time,
+        "search_time": search_time,
+        "qfile": qfile,
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description="Evaluate search quality against test questions")
     parser.add_argument("--questions", type=str, default=DEFAULT_QUESTIONS, help="Path to question file")
@@ -104,95 +217,14 @@ def main():
         print("ERROR: GOOGLE_API_KEY not set in environment", file=sys.stderr)
         sys.exit(1)
 
-    # Load questions
-    questions_path = os.path.normpath(args.questions)
-    if not os.path.exists(questions_path):
-        print(f"ERROR: Question file not found: {questions_path}", file=sys.stderr)
-        sys.exit(1)
-
-    with open(questions_path) as f:
-        qfile = json.load(f)
-
-    questions = qfile["questions"]
-    print(f"Loaded {len(questions)} questions (version {qfile.get('version', '?')}, generated {qfile.get('generated_at', '?')})")
-
     db = Database(database_url)
     db.initialize()
 
-    # Check which docs are in the embedding index
-    embedded_ids = set(db.get_embedding_hashes().keys())
-    print(f"Embedding index has {len(embedded_ids)} lessons")
-
-    # Separate questions into searchable vs missing-from-index
-    searchable = []
-    missing_from_index = []
-    for q in questions:
-        if q["expected_doc_id"] in embedded_ids:
-            searchable.append(q)
-        else:
-            missing_from_index.append(q)
-
-    if missing_from_index:
-        unique_missing = {q["expected_doc_id"] for q in missing_from_index}
-        print(f"\nWARNING: {len(missing_from_index)} questions ({len(unique_missing)} lessons) have expected docs NOT in embedding index")
-        print("  These will be reported separately and not counted as search failures.")
-
-    if not searchable:
-        print("No searchable questions. All expected docs are missing from index.")
-        db.close()
-        return
-
-    # Batch embed all queries
-    print(f"\nEmbedding {len(searchable)} queries...", end=" ", flush=True)
-    t0 = time.time()
-    query_texts = [q["query"] for q in searchable]
-
-    # Embed in chunks (API limit)
-    CHUNK_SIZE = 100
-    all_embeddings = []
-    for i in range(0, len(query_texts), CHUNK_SIZE):
-        chunk = query_texts[i:i + CHUNK_SIZE]
-        embeddings, _ = get_embeddings(chunk, task_type="RETRIEVAL_QUERY")
-        all_embeddings.extend(embeddings)
-
-    embed_time = time.time() - t0
-    print(f"done ({embed_time:.1f}s)")
-
-    # Search for each query and compute specificity band
-    print(f"Searching (top-{args.top_k})...", flush=True)
-    t0 = time.time()
-    results = []
-
-    for q, embedding in zip(searchable, all_embeddings):
-        hits = db.search_lessons(embedding, limit=args.top_k)
-        hit_ids = [h["document_id"] for h in hits]
-        sims = [h["similarity"] for h in hits]
-
-        rank = None
-        if q["expected_doc_id"] in hit_ids:
-            rank = hit_ids.index(q["expected_doc_id"]) + 1  # 1-indexed
-
-        gap = sims[0] - sims[4] if len(sims) >= 5 else 0
-        band = classify_band(gap)
-
-        result = {
-            "id": q["id"],
-            "query": q["query"],
-            "category": q["category"],
-            "expected_doc_id": q["expected_doc_id"],
-            "expected_title": q["expected_title"],
-            "rank": rank,
-            "band": band,
-            "gap": round(gap, 4),
-            "top_hits": [
-                {"title": h["title"], "similarity": round(h["similarity"], 4), "doc_id": h["document_id"]}
-                for h in hits[:5]
-            ],
-        }
-        results.append(result)
-
-    search_time = time.time() - t0
-    print(f"done ({search_time:.1f}s)")
+    eval_result = run_eval(db, questions_path=args.questions, top_k=args.top_k)
+    metrics = eval_result["metrics"]
+    results = eval_result["results"]
+    missing_from_index = eval_result["missing_from_index"]
+    qfile = eval_result["qfile"]
 
     # Apply band filter if requested
     if band_filter:
@@ -203,19 +235,19 @@ def main():
             print("No queries remain after band filter.")
             db.close()
             return
-
-    # Compute metrics
-    categories = sorted(set(r["category"] for r in results))
-    metrics = compute_metrics(results, categories, args.top_k)
+        # Recompute metrics for filtered set
+        categories = sorted(set(r["category"] for r in results))
+        metrics = compute_metrics(results, categories, args.top_k)
 
     # Print report
-    print_report(metrics, results, missing_from_index, args, qfile, embed_time, search_time, band_filter)
+    print_report(metrics, results, missing_from_index, args, qfile,
+                 eval_result["embed_time"], eval_result["search_time"], band_filter)
 
     # Optionally write JSON output
     if args.output:
         output = {
             "generated_at": datetime.now(timezone.utc).isoformat(),
-            "questions_file": questions_path,
+            "questions_file": os.path.normpath(args.questions),
             "top_k": args.top_k,
             "band_filter": list(band_filter) if band_filter else None,
             "metrics": metrics,
