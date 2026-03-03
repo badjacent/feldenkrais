@@ -1261,7 +1261,11 @@ async def docs_page(request: Request, slug: str):
         return HTMLResponse("Not found", status_code=404)
     md_content = md_path.read_text()
     user = _auth_mod.get_current_user(request) if _auth_mod else None
-    auth_bar = _auth_bar_html(user)
+    if user:
+        login = html_mod.escape(user.get("login", ""))
+        auth_bar = f'<div class="auth-bar">{login} &middot; <a href="/auth/logout">Log out</a> &middot; <a href="/">Search</a></div>'
+    else:
+        auth_bar = ''
     return HTMLResponse(f"""<!DOCTYPE html>
 <html><head>
 <meta charset="utf-8">
