@@ -3658,16 +3658,16 @@ def build_lesson_page_html(document_id: str, user: dict | None = None) -> str:
     <div id="no-audio-msg" style="display:none; color: #888; font-size: 0.9em; font-style: italic; margin-bottom: 12px;">Audio unavailable for this lesson.</div>
 
     <div class="tab-bar" id="tab-bar">
-        <button class="active" onclick="switchTab('steps')">Cards</button>
-        <button onclick="switchTab('condensed')">Outline</button>
+        <button class="active" onclick="switchTab('steps')">Step by Step</button>
+        <button onclick="switchTab('condensed')">Overview</button>
         <button onclick="switchTab('chat')">Chat</button>
-        <button onclick="switchTab('detailed')">Detailed</button>
+        <button onclick="switchTab('detailed')">All Details</button>
     </div>
     <div id="status-area"></div>
 
     <!-- Steps/Cards tab (default) -->
     <div id="tab-steps">
-        <div class="tab-intro">Walk through the lesson one step at a time, with biomechanical and language analysis for each movement. The active card syncs with the transcript as you scroll or listen.</div>
+        <div class="tab-intro">Follow along with the lesson one movement at a time. Each card shows what's happening biomechanically and linguistically, synced with the transcript and audio.</div>
         <div class="card" id="card">
             <div class="card-placeholder" id="card-placeholder">
                 <span class="spinner-inline"></span> Loading analysis...
@@ -3704,7 +3704,7 @@ def build_lesson_page_html(document_id: str, user: dict | None = None) -> str:
 
     <!-- Condensed/Outline tab -->
     <div id="tab-condensed" style="display:none;">
-        <div class="tab-intro">A condensed overview of the lesson's arc, themes, and movement groups at a glance.</div>
+        <div class="tab-intro">The lesson at a glance &mdash; its overall arc, then each movement sequence summarized with body focus, attention, and intention.</div>
         <div id="condensed-setting-card"></div>
         <div id="condensed-group-cards"></div>
         <div class="progress-bar" id="condensed-progress"></div>
@@ -4134,7 +4134,7 @@ function renderGroupCards(cards) {{
         html += '<div class="condensed-card">';
         const tr = getGroupTimeRange(card.group_number);
         const timeStr = tr ? ' <span style="font-weight:normal;color:#888;">(' + fmtTime(tr.start) + '\\u2013' + fmtTime(tr.end) + ')</span>' : '';
-        html += '<div class="group-tag">Group ' + card.group_number + ': ' + escHtml(card.group_label || '') + timeStr + '</div>';
+        html += '<div class="group-tag">' + escHtml(card.group_label || ('Group ' + card.group_number)) + timeStr + '</div>';
         html += '<h3>' + escHtml(card.title || '') + '</h3>';
         if (card.the_action) {{
             html += '<p style="margin:8px 0 12px 0;color:#444;">' + escHtml(card.the_action) + '</p>';
@@ -4169,7 +4169,7 @@ function renderCondensedCards(data) {{
         let settingHtml = '';
         let groupHtml = '';
         segments.forEach(seg => {{
-            const segLabel = 'Segment ' + seg.segment_number + ': ' + (seg.theme || '');
+            const segLabel = 'Phase ' + seg.segment_number + ': ' + (seg.theme || '');
             if (seg.setting) settingHtml += renderSettingCard(seg.setting, segLabel);
             if (seg.group_cards) {{
                 let segTimeStr = '';
@@ -4208,9 +4208,9 @@ async function loadCondensed() {{
         const timing = data.cached ? 'cached' : (data.elapsed || '?') + 's';
         const segs = data.segments || [];
         const totalCards = segs.reduce((n, seg) => n + (seg.group_cards ? seg.group_cards.length : 0), 0);
-        const segLabel = segs.length > 1 ? ' | ' + segs.length + ' segments' : '';
+        const segLabel = segs.length > 1 ? ' | ' + segs.length + ' phases' : '';
         document.getElementById('condensed-progress').textContent =
-            totalCards + ' group cards' + segLabel + ' | ' + timing;
+            totalCards + ' movement sequences' + segLabel + ' | ' + timing;
     }} catch (e) {{
         showStatus('Error: ' + e.message, true);
     }}
@@ -5577,9 +5577,9 @@ async function runCondensed() {{
         const timing = data.cached ? 'cached' : (data.elapsed || '?') + 's';
         const segs = data.segments || [];
         const totalCards = segs.reduce((n, seg) => n + (seg.group_cards ? seg.group_cards.length : 0), 0);
-        const segLabel = segs.length > 1 ? ' | ' + segs.length + ' segments' : '';
+        const segLabel = segs.length > 1 ? ' | ' + segs.length + ' phases' : '';
         document.getElementById('progress-bar').textContent =
-            totalCards + ' group cards' + segLabel + ' | ' + timing;
+            totalCards + ' movement sequences' + segLabel + ' | ' + timing;
 
         btn.textContent = 'Condensed';
         btn.disabled = false;
@@ -5690,7 +5690,7 @@ function renderGroupCards(cards) {{
         html += '<div class="condensed-card">';
         const tr = getGroupTimeRange(card.group_number);
         const timeStr = tr ? ' <span style="font-weight:normal;color:#888;">(' + fmtTime(tr.start) + '\u2013' + fmtTime(tr.end) + ')</span>' : '';
-        html += '<div class="group-tag">Group ' + card.group_number + ': ' + escHtml(card.group_label || '') + timeStr + '</div>';
+        html += '<div class="group-tag">' + escHtml(card.group_label || ('Group ' + card.group_number)) + timeStr + '</div>';
         html += '<h3>' + escHtml(card.title || '') + '</h3>';
 
         if (card.the_action) {{
@@ -5735,7 +5735,7 @@ function renderCondensedCards(data) {{
         let settingHtml = '';
         let groupHtml = '';
         segments.forEach(seg => {{
-            const segLabel = 'Segment ' + seg.segment_number + ': ' + (seg.theme || '');
+            const segLabel = 'Phase ' + seg.segment_number + ': ' + (seg.theme || '');
             if (seg.setting) {{
                 settingHtml += renderSettingCard(seg.setting, segLabel);
             }}
