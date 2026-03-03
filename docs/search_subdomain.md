@@ -1,213 +1,148 @@
-# search.aionyourside.net — Technical Summary
+# How Search Ranking Works
 
-## Overview
+## The Problem
 
-Public semantic search interface for Feldenkrais lessons. Same Lambda as the main site (`aionyourside.net`), differentiated by Host header middleware. Only lessons from sources marked `public=TRUE` are visible.
+Feldenkrais lessons are hard to search. They all use the same vocabulary — "lie on your back," "notice the weight," "roll to one side" — and a naive text search returns everything with roughly equal confidence. A lesson about pelvic clocks and a lesson about shoulder differentiation can look nearly identical to a keyword matcher, or even to a basic embedding search, because the somatic language overlaps so heavily.
 
-Currently: **67 lessons** from FELDENKRAIS_PROJECT_FREE (source ID 12).
+The core challenge: how do you rank lessons when the vocabulary is shared but the *content* is distinct?
 
-## Architecture
+## What Each Lesson Knows
 
-```
-User → Route 53 (search.aionyourside.net)
-     → API Gateway custom domain
-     → Same Lambda as main site
-     → Middleware detects Host header, sets public_only=True
-     → Two pages: search home (/) and lesson detail (/lesson/{id})
-```
+Before search happens, each lesson goes through an analysis pipeline that produces structured data at multiple levels:
 
-Single Lambda, single database, multiple embedding indexes. No separate deployment.
+**Structural analysis** breaks the transcript into movement steps grouped into phases — what position the student is in, what they're asked to do, how the lesson progresses.
 
-## Pages
+**Somatic analysis** tags each step with body mechanics: muscle activation, differentiation, force transmission, attention direction.
 
-### Home (`/`)
-- Semantic search box → `POST /api/search`
-- Three featured lesson cards (hardcoded document IDs)
-- Browse section: all public lessons listed by source, linked to `/lesson/{id}`
-- Example queries as clickable links
+**Language analysis** captures the teaching voice: imagery, attention cues, inquiry patterns.
 
-### Lesson Detail (`/lesson/{document_id}`)
-- Server-rendered HTML shell, client JS loads data from APIs
-- Three tabs: **Outline** (condensed cards), **Cards** (step-by-step navigator), **Detailed** (full grouped view)
-- Audio player with word-level transcript highlighting (Whisper alignment)
-- Collapsible chat panel with context checkboxes
-- Auto-loads all analysis on page open (no Run button)
+**Concept extraction** reads the full analysis and produces two things:
+- A **distinctive report** (200-400 words): position inventory, movement sequences, key body connections, and what makes this lesson different from others. This is the lesson's primary search document.
+- **Concept tags**: structured labels for body regions, movement patterns, positions, and teaching strategies.
 
-## Search Pipeline
+The concept extraction step is the key to search quality. It takes the shared somatic vocabulary and distills it into what's *specific* to each lesson.
 
-### Indexing (offline)
+## Four Ranking Strategies
 
-Two embedding indexes coexist in the `lesson_embedding` table, distinguished by a `method` column:
+We built and evaluated four approaches:
 
-**Default index** (`method='default'`) — all lessons:
-1. Pass0b condensed analysis flattened to plain text: title + settings + group labels/actions/body descriptions
-2. Text → Gemini `text-embedding-004` (1536-dim, task_type=`RETRIEVAL_DOCUMENT`)
+### Standard embedding search
 
-```bash
-.venv/bin/python src/kb/build_embeddings.py --apply
-```
+Embed a summary of each lesson's structural analysis (titles, settings, group labels, action descriptions). Embed the user's query. Rank by cosine similarity.
 
-**Concepts index** (`method='concepts'`) — lessons with concept extraction:
-1. Concept extraction pass (`pass_0b_concepts`) produces a 200-400 word distinctive report: position inventory, movement sequences, key body connections, what makes the lesson unique
-2. Also extracts structured concept tags (body regions, movement patterns, positions, teaching strategies) and search terms
-3. Distinctive report → Gemini embedding
-4. Concept tags stored in `lesson_concept` table for direct text matching
+This is the simplest approach and covers the full corpus. It works when the query closely matches the structural language of the lesson, but struggles with lessons that are structurally similar — the top results often look interchangeable.
 
-```bash
-.venv/bin/python src/kb/search/run_concept_extraction.py --apply   # LLM extraction
-.venv/bin/python src/kb/search/build_concept_index.py --apply       # embed + populate tags
-```
+### Distinctive embedding search
 
-Both indexes use SHA-256 hashes for incremental rebuilds.
+Embed the distinctive report from concept extraction instead. This document is specifically written to differentiate lessons, so the embeddings capture what's unique rather than what's generic.
 
-### Query (real-time) — Cascade Search
+Much better precision than standard, but only available for lessons that have gone through concept extraction.
 
-The default search method is **Combined**, a cascade that uses multiple signals:
+### Tag matching
 
-1. User query → Gemini embedding (task_type=`RETRIEVAL_QUERY`)
-2. Run both default and concepts embedding searches (top 20 each)
-3. Compute confidence gate: similarity gap (rank 1 - rank 5) from concepts results
-4. **If gap ≥ 0.07** ("confident"): the concepts index has a clear best match — use its results directly
-5. **If gap < 0.07** ("blended"): results are ambiguous — merge default + concepts via Reciprocal Rank Fusion (RRF) with 3x concepts weight
-6. Specificity band calculated from concepts similarity gap:
-   - **low** (gap < 0.0167): many equally-good matches
-   - **mid** (0.0167–0.0215): several good matches
-   - **mid-high** (0.0215–0.0297): top result stands out
-   - **high** (≥ 0.0297): clear best answer
-7. Query logged to `search_query_log`
+Match query words directly against concept tag values in the database. Rank by number of matching tags. No embeddings involved — pure text overlap.
 
-The cascade parameters (gate threshold, RRF weights) were optimized via grid search over 129 eval queries. The optimizer (`optimize_combined.py`) is re-run when the lesson set or eval questions change.
+Works for very specific queries ("pelvic clock") but fails for natural language ("lesson where you feel your spine lengthen").
 
-### Search Methods Available
+### Combined (cascade)
 
-Users can select from four methods via a dropdown:
+The approach we settled on, which outperforms all individual methods.
 
-| Method | How it works |
-|--------|-------------|
-| **Combined** (default) | Cascade: confident → concepts alone, ambiguous → RRF blend |
-| **Standard** | Cosine search against default embeddings (all lessons) |
-| **Distinctive** | Cosine search against concept embeddings (extracted lessons) |
-| **Tag Match** | Direct text matching on concept tags, ranked by match count |
+## The Cascade Approach
 
-### Evaluation
+The insight: when the distinctive search is confident in its top result, it's almost always right. When it's not confident, blending in the standard search helps. The question is how to know when it's confident.
 
-Search quality is measured with `run_search_eval.py` against curated question sets. Current results on the 43-lesson FP Free reference set (129 queries):
+We measure confidence using the **similarity gap** — the difference in cosine similarity between the #1 and #5 results from the distinctive search. A large gap means one lesson stands out clearly. A small gap means several lessons matched about equally well.
 
-| Method | P@1 | P@5 | MRR | Found |
-|--------|-----|-----|-----|-------|
+The cascade works in two modes:
+
+**Confident mode** — When the similarity gap exceeds a threshold (0.07), the distinctive search found a clear winner. Use its results directly.
+
+**Blended mode** — When the gap is below threshold, results are ambiguous. Merge the standard and distinctive results using Reciprocal Rank Fusion (RRF), weighting the distinctive results 3x higher than standard.
+
+### Why not always blend?
+
+We tried pure linear fusion first (RRF across all methods with various weights). It performed *worse* than distinctive alone. The problem: the standard index contains hundreds of lessons that aren't in the distinctive index, and these act as distractors. When the distinctive search has a strong signal, blending dilutes it with noise from the larger corpus.
+
+The cascade avoids this by only blending when it needs to — when the distinctive search itself indicates uncertainty.
+
+## Tuning the Parameters
+
+The cascade has three parameters: the confidence gate threshold, the RRF constant, and the concepts weight in blended mode. Rather than hand-tuning these, we built a grid search optimizer.
+
+### Evaluation set
+
+An LLM generates search queries from lesson analysis cards — three per lesson covering different query types (action, body region, sensation). Each query has a known correct answer. The current set is 129 queries across 43 diverse lessons selected for maximum variety.
+
+### Grid search
+
+The optimizer (`optimize_combined.py`) pre-computes all search results once, then simulates hundreds of parameter combinations at near-zero cost. For each combination, it scores precision (is the right lesson ranked #1?), recall (does it appear in the top 10?), and mean reciprocal rank.
+
+This is reusable — when the lesson library or evaluation set changes, re-running the optimizer takes about a minute and produces updated parameters.
+
+### Current results
+
+| Method | P@1 | P@5 | MRR | Found in top 10 |
+|--------|-----|-----|-----|-----------------|
 | Standard | 34.1% | 58.9% | 0.451 | 72.9% |
 | Distinctive | 41.9% | 78.3% | 0.565 | 86.8% |
 | **Combined (cascade)** | **44.2%** | **81.4%** | **0.601** | **90.7%** |
 
-```bash
-.venv/bin/python src/kb/search/run_search_eval.py --questions data/search_eval_fp_free.json --method combined
-.venv/bin/python src/kb/search/optimize_combined.py --output data/combined_optimization.json
-```
+The cascade finds the right lesson in the top 5 over 80% of the time, and somewhere in the top 10 over 90% of the time.
 
-## Routing & Middleware
+### Specificity bands
 
-**Detection** (`web.py`):
-```python
-SEARCH_DOMAIN = os.environ.get("SEARCH_DOMAIN", "")  # "search.aionyourside.net"
+The similarity gap also serves as a user-facing signal. We calibrated four bands from the gap distribution:
 
-def _is_search_site(request):
-    return host == SEARCH_DOMAIN or host.startswith(SEARCH_DOMAIN + ":")
-```
+| Band | Gap range | What it means |
+|------|-----------|---------------|
+| Low | < 0.017 | Many lessons match equally — results are all relevant |
+| Mid | 0.017–0.022 | Several good matches, somewhat differentiated |
+| Mid-High | 0.022–0.030 | Top results stand out, query is fairly specific |
+| High | ≥ 0.030 | Clear best answer |
 
-**Guard middleware** — on search subdomain, only allows:
-- `/` (home)
-- `/lesson/*` (detail pages)
-- `/api/*` (all API endpoints)
+Search results display the band so users can calibrate their expectations.
 
-Everything else redirects to `/`. Main site routes (pass0b, book, analyzer, explore) are inaccessible.
+## What Improves It
 
-**Data filtering** — `Database.public_only` flag gates all queries:
-- `search_lessons()`: joins `document_source`, filters `WHERE ds.public = TRUE`
-- `get_embedding_hashes()`: same filter
-- `get_docs_with_condensed()`: same filter
-- `get_available_lessons()`: same filter
+The system is designed to get better with more data:
 
-## Database Schema
-
-```sql
--- Embedding storage (pgvector) — multi-method via composite PK
-CREATE TABLE lesson_embedding (
-    document_id UUID NOT NULL REFERENCES document(id) ON DELETE CASCADE,
-    method TEXT NOT NULL DEFAULT 'default',
-    embedding vector(1536),
-    summary_text TEXT,
-    summary_hash TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    PRIMARY KEY (document_id, method)
-);
-CREATE INDEX idx_lesson_embedding_hnsw ON lesson_embedding
-    USING hnsw (embedding vector_cosine_ops);
-
--- Concept tags for tag-based search
-CREATE TABLE lesson_concept (
-    document_id UUID NOT NULL REFERENCES document(id) ON DELETE CASCADE,
-    category TEXT NOT NULL,
-    value TEXT NOT NULL,
-    PRIMARY KEY (document_id, category, value)
-);
-CREATE INDEX idx_lesson_concept_value ON lesson_concept (value);
-CREATE INDEX idx_lesson_concept_category ON lesson_concept (category, value);
-
--- Query analytics
-CREATE TABLE search_query_log (
-    id SERIAL PRIMARY KEY,
-    query TEXT NOT NULL,
-    result_count INTEGER,
-    specificity_band TEXT,
-    specificity_gap REAL,
-    top_results JSONB,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Source visibility
-ALTER TABLE document_source ADD COLUMN public BOOLEAN NOT NULL DEFAULT TRUE;
-```
-
-## Infrastructure (Terraform)
-
-All conditional on `var.search_domain_name != ""`:
-
-| Resource | Purpose |
-|----------|---------|
-| `aws_acm_certificate.search` | TLS cert for search subdomain |
-| `aws_route53_record.search_cert_validation` | DNS validation |
-| `aws_apigatewayv2_domain_name.search` | Custom domain → API Gateway |
-| `aws_apigatewayv2_api_mapping.search` | Maps domain to existing web API |
-| `aws_route53_record.search` | A record alias to API Gateway |
-
-Lambda env var: `SEARCH_DOMAIN=search.aionyourside.net`
-
-## Key API Endpoints
-
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/search` | POST | Semantic search (form field: `query`) |
-| `/api/lesson-info/{id}` | GET | Title, source, has_audio, transcript |
-| `/api/audio-url/{id}` | GET | Presigned S3 URL (2hr TTL) |
-| `/api/whisper-segments/{id}` | GET | Transcript segments with timestamps |
-| `/api/whisper-words/{id}` | GET | Word-level timestamps for highlighting |
-| `/api/pass0b-combined-json` | POST | Step-level biomechanical analysis |
-| `/api/pass0b-condensed` | POST | Condensed card view |
-| `/api/pass0b-word-lang-json` | POST | Word-level language annotations |
+- **More lessons with concept extraction** — currently 43 of 700+ lessons have distinctive reports. Expanding coverage means the confident mode fires more often and the blended mode has a richer concepts index to draw from.
+- **More evaluation queries** — the grid search is only as good as its test set. Real user queries, once collected, replace synthetic ones and better reflect actual search behavior.
+- **Prompt iteration** — the distinctive report prompt can be refined. Longer, more physically specific reports produced measurably better embeddings (we saw this when expanding from 2-3 sentences to 200-400 words).
 
 ## Key Files
 
 | File | Role |
 |------|------|
-| `src/kb/web.py` | FastAPI app, all routes, cascade search, page builders |
-| `src/kb/database.py` | DB layer, `search_lessons()`, `search_by_concepts()`, `public_only` filtering |
-| `src/kb/analysis.py` | Analysis engine including `run_pass_0b_concepts()` |
-| `src/kb/build_embeddings.py` | Default embedding builder CLI |
+| `src/kb/search/optimize_combined.py` | Grid search optimizer for cascade parameters |
+| `src/kb/search/run_search_eval.py` | Evaluation harness (P@1, MRR, per-band breakdown) |
+| `src/kb/search/generate_search_eval.py` | LLM-generated eval questions from lesson cards |
 | `src/kb/search/run_concept_extraction.py` | Batch concept extraction (LLM pass) |
 | `src/kb/search/build_concept_index.py` | Concept embedding + tag table builder |
-| `src/kb/search/run_search_eval.py` | Search quality evaluation harness |
-| `src/kb/search/generate_search_eval.py` | LLM-generated eval questions from condensed cards |
-| `src/kb/search/optimize_combined.py` | Grid search optimizer for cascade parameters |
-| `src/kb/llm.py` | `get_embeddings()` — Gemini embedding API |
-| `terraform/main.tf` | Infrastructure (Route 53, ACM, API Gateway) |
+| `src/kb/build_embeddings.py` | Standard embedding builder |
+| `src/kb/web.py` | Cascade search implementation (`_combined_search`) |
+| `src/kb/analysis.py` | Concept extraction pass (`run_pass_0b_concepts`) |
+| `data/pass_0b_concepts.md` | LLM prompt for distinctive reports |
+
+## Rebuilding the Index
+
+```bash
+# 1. Run concept extraction on new lessons (requires GOOGLE_API_KEY)
+.venv/bin/python src/kb/search/run_concept_extraction.py --apply
+
+# 2. Build/update concept embeddings and tag table
+.venv/bin/python src/kb/search/build_concept_index.py --apply
+
+# 3. Build/update standard embeddings
+.venv/bin/python src/kb/build_embeddings.py --apply
+
+# 4. Generate eval questions (if lesson set changed)
+.venv/bin/python src/kb/search/generate_search_eval.py --apply --source 12
+
+# 5. Re-optimize cascade parameters
+.venv/bin/python src/kb/search/optimize_combined.py --output data/combined_optimization.json
+
+# 6. Run eval to verify
+.venv/bin/python src/kb/search/run_search_eval.py --questions data/search_eval_fp_free.json --method combined
+```
