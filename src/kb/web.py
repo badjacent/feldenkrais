@@ -3800,7 +3800,18 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
 
     <!-- Search Specifics tab -->
     <div id="tab-concepts" style="display:none;">
-        <div class="tab-intro">How this lesson is indexed for search &mdash; the concepts, distinctive summary, and search terms extracted by analysis.</div>
+        <div class="tab-intro">How this lesson is indexed for search &mdash; what makes it distinctive, and how different search methods find it.</div>
+        <div style="background:#f8f9fa;border:1px solid #e9ecef;border-radius:8px;padding:14px 18px;margin-bottom:16px;font-size:0.88em;line-height:1.6;color:#555;">
+            <div style="font-weight:600;color:#333;margin-bottom:6px;">How search works</div>
+            All Feldenkrais lessons share common vocabulary &mdash; &ldquo;lie on your back,&rdquo; &ldquo;notice the difference&rdquo; &mdash;
+            which makes them hard to distinguish by text similarity alone. To improve search, each lesson goes through a concept extraction pass
+            that identifies what is <em>specific and distinctive</em> about it. This produces three things used by three search methods:
+            <ul style="margin:8px 0 4px 0;padding-left:20px;">
+                <li><strong>Standard</strong> &mdash; Embedding similarity against the full lesson analysis. Broadest coverage (all lessons), but generic language can make results muddy.</li>
+                <li><strong>Distinctive</strong> &mdash; Embedding similarity against a short summary of what makes this lesson unique. Finds thematically similar lessons even when they use different words.</li>
+                <li><strong>Tag Match</strong> &mdash; Direct text matching against concept tags and search terms. Best for specific queries like body parts or named movement patterns.</li>
+            </ul>
+        </div>
         <div id="concepts-content">
             <div style="color:#999; padding:16px;"><span class="spinner-inline"></span> Loading concept data...</div>
         </div>
