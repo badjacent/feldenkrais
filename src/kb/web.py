@@ -3434,9 +3434,9 @@ def build_lesson_page_html(document_id: str) -> str:
         .detailed-bullets li {{ margin-bottom: 3px; }}
         .detailed-bullets strong {{ color: #333; }}
         .detailed-section-label {{
-            font-size: 0.75em; font-weight: 700; color: #888;
+            font-size: 0.8em; font-weight: 700; color: #666;
             text-transform: uppercase; letter-spacing: 0.5px;
-            margin: 8px 0 4px 0;
+            margin: 8px 0 6px 0; padding-bottom: 4px; border-bottom: 1px solid #eee;
         }}
 
         /* Loading / status */
