@@ -1926,7 +1926,7 @@ async def pass0b_lang_page(request: Request):
 async def lesson_detail_page(request: Request, document_id: str):
     """Unified lesson detail page."""
     user = _auth_mod.get_current_user(request)
-    return HTMLResponse(build_lesson_page_html(document_id, user=user))
+    return HTMLResponse(build_lesson_page_html(document_id, user=user, search_mode=_is_search_site(request)))
 
 
 @app.post("/api/pass0b-lang/clear-cache")
@@ -3374,7 +3374,7 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None) -> st
 </html>"""
 
 
-def build_lesson_page_html(document_id: str, user: dict | None = None) -> str:
+def build_lesson_page_html(document_id: str, user: dict | None = None, search_mode: bool = False) -> str:
     """Build the unified lesson detail page HTML."""
     esc_id = html_mod.escape(document_id)
 
@@ -3444,18 +3444,26 @@ def build_lesson_page_html(document_id: str, user: dict | None = None) -> str:
         /* Condensed cards */
         .condensed-card {{
             background: #fff; border: 1px solid #e0e0e0; border-radius: 10px;
-            padding: 24px; margin-bottom: 16px;
+            padding: 20px; margin-bottom: 12px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.06);
         }}
-        .condensed-card h3 {{ margin: 0 0 4px 0; font-size: 1.2em; color: #222; }}
+        .condensed-card.group-card {{ margin-left: 24px; }}
+        .condensed-card h3 {{ margin: 0 0 4px 0; font-size: 1.1em; color: #222; }}
         .condensed-card .group-tag {{
             font-size: 0.8em; font-weight: 700; color: #1a73e8;
-            text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;
+            text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;
         }}
         .condensed-card .setting-tag {{
             font-size: 0.8em; font-weight: 700; color: #e65100;
-            text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;
+            text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;
         }}
+        .phase-header {{
+            margin: 20px 0 10px 0; padding: 8px 12px;
+            background: #f0f4ff; border-left: 3px solid #4a6fa5;
+            font-size: 0.9em; color: #4a6fa5; font-weight: 600;
+        }}
+        .phase-header .phase-time {{ font-weight: normal; color: #888; margin-left: 6px; }}
+        .phase-header .phase-note {{ font-weight: normal; color: #666; margin-left: 10px; }}
         .pov-section {{
             margin-bottom: 10px; padding: 10px 14px;
             border-radius: 6px; border-left: 4px solid;
@@ -3640,6 +3648,13 @@ def build_lesson_page_html(document_id: str, user: dict | None = None) -> str:
         }}
         .chat-input-row button:hover {{ background: #1565c0; }}
         .chat-input-row button:disabled {{ opacity: 0.5; cursor: not-allowed; }}
+        .chat-suggestions {{ display: flex; flex-wrap: wrap; gap: 8px; }}
+        .chat-suggestion {{
+            padding: 8px 14px; font-size: 0.85em; border: 1px solid #d0d7de;
+            border-radius: 18px; background: #f6f8fa; color: #333;
+            cursor: pointer; transition: background 0.15s;
+        }}
+        .chat-suggestion:hover {{ background: #e3f2fd; border-color: #90caf9; }}
     </style>
 </head>
 <body>
@@ -3660,7 +3675,7 @@ def build_lesson_page_html(document_id: str, user: dict | None = None) -> str:
     <div class="tab-bar" id="tab-bar">
         <button class="active" onclick="switchTab('steps')">Step by Step</button>
         <button onclick="switchTab('condensed')">Overview</button>
-        <button onclick="switchTab('chat')">Chat</button>
+        <button onclick="switchTab('chat')">Q&amp;A</button>
         <button onclick="switchTab('detailed')">All Details</button>
     </div>
     <div id="status-area"></div>
@@ -3710,11 +3725,11 @@ def build_lesson_page_html(document_id: str, user: dict | None = None) -> str:
         <div class="progress-bar" id="condensed-progress"></div>
     </div>
 
-    <!-- Chat tab -->
+    <!-- Q&A tab -->
     <div id="tab-chat" style="display:none;">
-        <div class="tab-intro">Ask questions about the lesson and get answers grounded in the transcript and analysis.</div>
+        <div class="tab-intro">Ask any question about this lesson. Answers draw from the transcript and all analyses.</div>
         <div class="chat-panel">
-            <div class="chat-context-config" id="chat-context-config">
+            <div class="chat-context-config" id="chat-context-config" {'style="display:none;"' if search_mode else ''}>
                 <strong>Context:</strong>
                 <label><input type="checkbox" id="ctx-lesson-text" checked> Lesson text</label>
                 <label><input type="checkbox" id="ctx-pass-a" checked> Pass A</label>
@@ -3725,7 +3740,15 @@ def build_lesson_page_html(document_id: str, user: dict | None = None) -> str:
                 <label><input type="checkbox" id="ctx-condensed" checked> Condensed cards</label>
             </div>
             <div class="chat-messages" id="chat-messages">
-                <div class="chat-hint" id="chat-hint" style="color:#999; font-size:0.85em; font-style:italic; padding:8px 0;">Try: &ldquo;What muscles are activated in step 3?&rdquo; or &ldquo;How does the teacher use imagery?&rdquo;</div>
+                <div class="chat-hint" id="chat-hint">
+                    <div style="color:#666; font-size:0.9em; margin-bottom:10px;">Try one of these, or type your own question:</div>
+                    <div class="chat-suggestions">
+                        <button class="chat-suggestion" onclick="askSuggestion(this)">What is the main movement pattern in this lesson?</button>
+                        <button class="chat-suggestion" onclick="askSuggestion(this)">How does the teacher use imagery?</button>
+                        <button class="chat-suggestion" onclick="askSuggestion(this)">What body parts are involved?</button>
+                        <button class="chat-suggestion" onclick="askSuggestion(this)">Summarize this lesson in simple terms</button>
+                    </div>
+                </div>
             </div>
             <div class="chat-input-row">
                 <input type="text" id="chat-input" placeholder="Ask about this lesson..."
@@ -4131,10 +4154,10 @@ function getGroupTimeRange(groupNumber) {{
 function renderGroupCards(cards) {{
     let html = '';
     cards.forEach(card => {{
-        html += '<div class="condensed-card">';
+        html += '<div class="condensed-card group-card">';
         const tr = getGroupTimeRange(card.group_number);
         const timeStr = tr ? ' <span style="font-weight:normal;color:#888;">(' + fmtTime(tr.start) + '\\u2013' + fmtTime(tr.end) + ')</span>' : '';
-        html += '<div class="group-tag">' + escHtml(card.group_label || ('Group ' + card.group_number)) + timeStr + '</div>';
+        html += '<div class="group-tag">Group ' + card.group_number + ': ' + escHtml(card.group_label || '') + timeStr + '</div>';
         html += '<h3>' + escHtml(card.title || '') + '</h3>';
         if (card.the_action) {{
             html += '<p style="margin:8px 0 12px 0;color:#444;">' + escHtml(card.the_action) + '</p>';
@@ -4166,30 +4189,30 @@ function renderCondensedCards(data) {{
         if (seg.setting) settingDiv.innerHTML = renderSettingCard(seg.setting, 'Lesson Setting');
         if (seg.group_cards) groupsDiv.innerHTML = renderGroupCards(seg.group_cards);
     }} else {{
-        let settingHtml = '';
-        let groupHtml = '';
+        // Depth-first: each phase's setting + groups together
+        let allHtml = '';
         segments.forEach(seg => {{
             const segLabel = 'Phase ' + seg.segment_number + ': ' + (seg.theme || '');
-            if (seg.setting) settingHtml += renderSettingCard(seg.setting, segLabel);
-            if (seg.group_cards) {{
-                let segTimeStr = '';
-                if (seg.group_cards.length && analysisData) {{
-                    let sMin = Infinity, sMax = -Infinity;
-                    seg.group_cards.forEach(c => {{
-                        const tr = getGroupTimeRange(c.group_number);
-                        if (tr) {{ if (tr.start < sMin) sMin = tr.start; if (tr.end > sMax) sMax = tr.end; }}
-                    }});
-                    if (sMin !== Infinity) segTimeStr = ' (' + fmtTime(sMin) + '\\u2013' + fmtTime(sMax) + ')';
-                }}
-                groupHtml += '<div style="margin:18px 0 8px 0;padding:6px 10px;background:#f0f4ff;border-left:3px solid #4a6fa5;font-size:0.9em;color:#4a6fa5;font-weight:600;">'
-                    + escHtml(segLabel) + '<span style="font-weight:normal;color:#888;margin-left:6px;">' + segTimeStr + '</span>'
-                    + (seg.transition_note ? '<span style="font-weight:normal;color:#666;margin-left:10px;">' + escHtml(seg.transition_note) + '</span>' : '')
-                    + '</div>';
-                groupHtml += renderGroupCards(seg.group_cards);
+            // Phase header with time range
+            let segTimeStr = '';
+            if (seg.group_cards && seg.group_cards.length && analysisData) {{
+                let sMin = Infinity, sMax = -Infinity;
+                seg.group_cards.forEach(c => {{
+                    const tr = getGroupTimeRange(c.group_number);
+                    if (tr) {{ if (tr.start < sMin) sMin = tr.start; if (tr.end > sMax) sMax = tr.end; }}
+                }});
+                if (sMin !== Infinity) segTimeStr = ' (' + fmtTime(sMin) + '\\u2013' + fmtTime(sMax) + ')';
             }}
+            allHtml += '<div class="phase-header">'
+                + escHtml(segLabel) + '<span class="phase-time">' + segTimeStr + '</span>'
+                + (seg.transition_note ? '<span class="phase-note">' + escHtml(seg.transition_note) + '</span>' : '')
+                + '</div>';
+            // Setting card for this phase
+            if (seg.setting) allHtml += renderSettingCard(seg.setting, segLabel + ' Setting');
+            // Group cards for this phase
+            if (seg.group_cards) allHtml += renderGroupCards(seg.group_cards);
         }});
-        settingDiv.innerHTML = settingHtml;
-        groupsDiv.innerHTML = groupHtml;
+        groupsDiv.innerHTML = allHtml;
     }}
 }}
 
@@ -4430,6 +4453,11 @@ function renderChatMessages() {{
         return '<div class="chat-msg ' + cls + '">' + escHtml(m.content) + '</div>';
     }}).join('');
     container.scrollTop = container.scrollHeight;
+}}
+
+function askSuggestion(btn) {{
+    document.getElementById('chat-input').value = btn.textContent;
+    sendChat();
 }}
 
 async function sendChat() {{
@@ -4941,14 +4969,14 @@ def build_pass0b_player_html(search_mode: bool = False) -> str:
         <div id="condensed-group-cards"></div>
     </div>
 
-    <!-- Lesson Chat panel -->
+    <!-- Lesson Q&A panel -->
     <div class="chat-panel" id="chat-panel">
         <div class="chat-header" onclick="toggleChat()">
-            <h3>Lesson Chat</h3>
+            <h3>Lesson Q&amp;A</h3>
             <span class="toggle" id="chat-toggle">&#9654; Open</span>
         </div>
         <div class="chat-body" id="chat-body">
-            <div class="chat-context-config" id="chat-context-config">
+            <div class="chat-context-config" id="chat-context-config" {'style="display:none;"' if search_mode else ''}>
                 <strong>Context:</strong>
                 <label><input type="checkbox" id="ctx-lesson-text" checked> Lesson text</label>
                 <label><input type="checkbox" id="ctx-pass-a" checked> Pass A</label>
@@ -5687,10 +5715,10 @@ function getGroupTimeRange(groupNumber) {{
 function renderGroupCards(cards) {{
     let html = '';
     cards.forEach(card => {{
-        html += '<div class="condensed-card">';
+        html += '<div class="condensed-card group-card">';
         const tr = getGroupTimeRange(card.group_number);
         const timeStr = tr ? ' <span style="font-weight:normal;color:#888;">(' + fmtTime(tr.start) + '\u2013' + fmtTime(tr.end) + ')</span>' : '';
-        html += '<div class="group-tag">' + escHtml(card.group_label || ('Group ' + card.group_number)) + timeStr + '</div>';
+        html += '<div class="group-tag">Group ' + card.group_number + ': ' + escHtml(card.group_label || '') + timeStr + '</div>';
         html += '<h3>' + escHtml(card.title || '') + '</h3>';
 
         if (card.the_action) {{
@@ -5731,34 +5759,30 @@ function renderCondensedCards(data) {{
             groupsDiv.innerHTML = renderGroupCards(seg.group_cards);
         }}
     }} else {{
-        // Multiple segments — render per-segment setting + group cards
-        let settingHtml = '';
-        let groupHtml = '';
+        // Depth-first: each phase's setting + groups together
+        let allHtml = '';
         segments.forEach(seg => {{
             const segLabel = 'Phase ' + seg.segment_number + ': ' + (seg.theme || '');
-            if (seg.setting) {{
-                settingHtml += renderSettingCard(seg.setting, segLabel);
+            // Phase header with time range
+            let segTimeStr = '';
+            if (seg.group_cards && seg.group_cards.length && analysisData) {{
+                let sMin = Infinity, sMax = -Infinity;
+                seg.group_cards.forEach(c => {{
+                    const tr = getGroupTimeRange(c.group_number);
+                    if (tr) {{ if (tr.start < sMin) sMin = tr.start; if (tr.end > sMax) sMax = tr.end; }}
+                }});
+                if (sMin !== Infinity) segTimeStr = ' (' + fmtTime(sMin) + '\u2013' + fmtTime(sMax) + ')';
             }}
-            if (seg.group_cards) {{
-                // Compute segment time range from its group cards
-                let segTimeStr = '';
-                if (seg.group_cards.length && analysisData) {{
-                    let sMin = Infinity, sMax = -Infinity;
-                    seg.group_cards.forEach(c => {{
-                        const tr = getGroupTimeRange(c.group_number);
-                        if (tr) {{ if (tr.start < sMin) sMin = tr.start; if (tr.end > sMax) sMax = tr.end; }}
-                    }});
-                    if (sMin !== Infinity) segTimeStr = ' (' + fmtTime(sMin) + '\u2013' + fmtTime(sMax) + ')';
-                }}
-                groupHtml += '<div class="segment-divider" style="margin:18px 0 8px 0;padding:6px 10px;background:#f0f4ff;border-left:3px solid #4a6fa5;font-size:0.9em;color:#4a6fa5;font-weight:600;">'
-                    + escHtml(segLabel) + '<span style="font-weight:normal;color:#888;margin-left:6px;">' + segTimeStr + '</span>'
-                    + (seg.transition_note ? '<span style="font-weight:normal;color:#666;margin-left:10px;">' + escHtml(seg.transition_note) + '</span>' : '')
-                    + '</div>';
-                groupHtml += renderGroupCards(seg.group_cards);
-            }}
+            allHtml += '<div class="phase-header">'
+                + escHtml(segLabel) + '<span class="phase-time">' + segTimeStr + '</span>'
+                + (seg.transition_note ? '<span class="phase-note">' + escHtml(seg.transition_note) + '</span>' : '')
+                + '</div>';
+            // Setting card for this phase
+            if (seg.setting) allHtml += renderSettingCard(seg.setting, segLabel + ' Setting');
+            // Group cards for this phase
+            if (seg.group_cards) allHtml += renderGroupCards(seg.group_cards);
         }});
-        settingDiv.innerHTML = settingHtml;
-        groupsDiv.innerHTML = groupHtml;
+        groupsDiv.innerHTML = allHtml;
     }}
 }}
 
@@ -5805,6 +5829,11 @@ function renderChatMessages() {{
         return '<div class="chat-msg ' + cls + '">' + escHtml(m.content) + '</div>';
     }}).join('');
     container.scrollTop = container.scrollHeight;
+}}
+
+function askSuggestion(btn) {{
+    document.getElementById('chat-input').value = btn.textContent;
+    sendChat();
 }}
 
 async function sendChat() {{
