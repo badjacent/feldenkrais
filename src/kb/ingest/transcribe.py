@@ -691,6 +691,25 @@ class TranscriptionService:
 
         return results
 
+    def expire_stale_jobs(self, max_age_hours: int = 24) -> int:
+        """
+        Expire pending transcription jobs that have been stuck too long.
+
+        Presigned URLs expire after 24h, so any pending job older than that
+        cannot succeed. Marking them as failed lets auto_retry_failed() pick
+        them up on the next cycle.
+
+        Returns the number of jobs expired.
+        """
+        expired = self.db.expire_stale_pending_jobs(max_age_hours=max_age_hours)
+        if expired:
+            logger.info(f"Expired {expired} stale pending jobs (older than {max_age_hours}h)")
+            self.db.log_event("stale_jobs_expired", detail={
+                "jobs_expired": expired,
+                "max_age_hours": max_age_hours,
+            })
+        return expired
+
     def auto_retry_failed(self) -> list[dict]:
         """
         Automatically restage failed documents for retry.
@@ -910,6 +929,9 @@ def handler(event, context):
             # First, process any completed batches
             completed_results = service.process_completed_batches()
 
+            # Expire stale pending jobs so retry can pick them up
+            stale_expired = service.expire_stale_jobs()
+
             # Auto-retry failed documents before creating new batch
             retried = service.auto_retry_failed()
 
@@ -919,6 +941,7 @@ def handler(event, context):
                 "action": "create_batch",
                 "batch_id": batch_id,
                 "completed_batches": completed_results,
+                "stale_jobs_expired": stale_expired,
                 "retried_documents": retried,
             }
 
@@ -955,6 +978,9 @@ def handler(event, context):
                 # First, process any completed batches
                 completed_results = service.process_completed_batches()
 
+                # Expire stale pending jobs so retry can pick them up
+                stale_expired = service.expire_stale_jobs()
+
                 # Auto-retry failed documents before creating new batch
                 retried = service.auto_retry_failed()
 
@@ -964,6 +990,7 @@ def handler(event, context):
                     "action": "scheduled_batch",
                     "batch_id": batch_id,
                     "completed_batches": completed_results,
+                    "stale_jobs_expired": stale_expired,
                     "retried_documents": retried,
                 }
             else:

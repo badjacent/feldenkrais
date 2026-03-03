@@ -621,6 +621,29 @@ class Database:
             )
             return [dict(row) for row in cursor.fetchall()]
 
+    def expire_stale_pending_jobs(self, max_age_hours: int = 24) -> int:
+        """
+        Mark pending transcription jobs older than max_age_hours as failed.
+
+        Prevents jobs from being stuck in 'pending' forever when Groq batches
+        become unreachable or expire without being polled.
+
+        Returns the number of jobs expired.
+        """
+        with self.get_cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE transcription_job
+                SET status = 'failed',
+                    error = 'Expired: pending longer than ' || %s || ' hours',
+                    updated_at = NOW()
+                WHERE status = 'pending'
+                AND created_at < NOW() - INTERVAL '1 hour' * %s
+                """,
+                (max_age_hours, max_age_hours),
+            )
+            return cursor.rowcount
+
     def restage_document_for_retry(self, document_id: str) -> int:
         """
         Delete all transcription jobs for a document and increment its retry counter.
