@@ -761,6 +761,15 @@ data "archive_file" "web_lambda" {
     content  = file("${path.module}/../data/pass_0.schema.json")
     filename = "data/pass_0.schema.json"
   }
+  # Docs (rendered at /docs/{slug})
+  source {
+    content  = file("${path.module}/../docs/demo_overview.md")
+    filename = "docs/demo_overview.md"
+  }
+  source {
+    content  = file("${path.module}/../docs/search_subdomain.md")
+    filename = "docs/search_subdomain.md"
+  }
   # Exploration agent (from terraform/data/ deployment copy)
   source {
     content  = file("${path.module}/data/explore_init.md")
