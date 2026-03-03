@@ -3160,7 +3160,7 @@ def build_pass0b_html(search_mode: bool = False) -> str:
             <input type="text" id="search-query" placeholder="e.g. rolling pelvis, eyes and head..." onkeydown="if(event.key==='Enter'){{event.preventDefault();searchLessons();}}">
             <select id="search-method" style="padding:6px 8px;font-size:13px;border:1px solid #ccc;border-radius:4px;">
                 <option value="default">Standard</option>
-                <option value="concepts">Concept</option>
+                <option value="concepts">Distinctive</option>
                 <option value="tags">Tag Match</option>
             </select>
             <button type="button" id="search-btn" onclick="searchLessons()">Search</button>
@@ -3339,7 +3339,7 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None) -> st
                onkeydown="if(event.key==='Enter'){{event.preventDefault();searchLessons();}}">
         <select id="search-method" style="padding:8px 10px;font-size:14px;border:1px solid #ccc;border-radius:6px;background:#fff;">
             <option value="default">Standard</option>
-            <option value="concepts">Concept</option>
+            <option value="concepts">Distinctive</option>
             <option value="tags">Tag Match</option>
         </select>
         <button type="button" id="search-btn" onclick="searchLessons()">Search</button>
@@ -3378,7 +3378,7 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None) -> st
                 }} else if (data.results && data.results.length > 0) {{
                     let html = '';
                     if (data.method) {{
-                        const methodLabels = {{default:'Standard',concepts:'Concept',tags:'Tag Match'}};
+                        const methodLabels = {{default:'Standard',concepts:'Distinctive',tags:'Tag Match'}};
                         html += '<div style="font-size:0.8em;color:#888;margin-bottom:4px;">Method: <strong>' + (methodLabels[data.method] || data.method) + '</strong></div>';
                     }}
                     if (data.specificity) {{

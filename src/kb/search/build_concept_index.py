@@ -31,10 +31,10 @@ from cache_helpers import get_cache_key
 
 
 def build_concept_summary(concepts_result: dict, title: str) -> str:
-    """Build embedding text from concept extraction results.
+    """Build embedding text from the distinctive summary only.
 
-    Combines distinctive_summary + search_terms into a compact text
-    optimized for embedding-based retrieval.
+    Keeps the embedding focused on what makes this lesson unique,
+    without diluting with generic concept tags.
     """
     parts = [title]
 
@@ -42,20 +42,18 @@ def build_concept_summary(concepts_result: dict, title: str) -> str:
     if summary:
         parts.append(summary)
 
-    search_terms = concepts_result.get("search_terms", [])
-    if search_terms:
-        parts.append("Search terms: " + "; ".join(search_terms))
-
-    # Add concept values grouped by category for additional signal
-    concepts = concepts_result.get("concepts", [])
-    by_category = {}
-    for c in concepts:
-        cat = c.get("category", "other")
-        by_category.setdefault(cat, []).append(c["value"])
-    for cat, values in sorted(by_category.items()):
-        parts.append(f"{cat}: {', '.join(values)}")
-
     return "\n".join(parts)
+
+
+def build_concept_rows(concepts_result: dict) -> list[dict]:
+    """Build concept rows including search_terms as a category.
+
+    Returns list of {category, value} dicts for lesson_concept table.
+    """
+    rows = list(concepts_result.get("concepts", []))
+    for term in concepts_result.get("search_terms", []):
+        rows.append({"category": "search_term", "value": term})
+    return rows
 
 
 def find_docs_with_concepts(db: Database) -> list[dict]:
@@ -167,8 +165,9 @@ def main():
             print(f"    hash: {summary_hash}")
             continue
 
-        # Upsert concepts to lesson_concept table
-        db.upsert_concepts(doc["doc_id"], concepts)
+        # Upsert concepts + search terms to lesson_concept table
+        all_rows = build_concept_rows(concepts_data)
+        db.upsert_concepts(doc["doc_id"], all_rows)
         concepts_updated += 1
 
         # Check if embedding needs update
