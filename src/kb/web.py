@@ -1312,10 +1312,11 @@ def _combined_search(query: str, embedding, limit: int = 1000):
                 result_data[doc_id] = hit
 
         ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:limit]
+        max_score = ranked[0][1] if ranked else 1.0
         results = []
         for doc_id, score in ranked:
             r = dict(result_data[doc_id])
-            r["similarity"] = round(score, 6)
+            r["similarity"] = round(score / max_score, 4)
             r.setdefault("summary_text", "")
             results.append(r)
 
