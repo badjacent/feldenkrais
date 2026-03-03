@@ -3279,7 +3279,8 @@ def build_pass0b_html(search_mode: bool = False) -> str:
                         const label = bandLabels[s.band] || s.band;
                         const explainer = bandExplainers[s.band] || '';
                         let specHtml = 'Specificity: <span style="color: ' + color + '; font-weight: 600;">' + label + '</span> \u2014 ' + explainer;
-                        if (cascadeMode) specHtml += ' <span style="color: #666;">(' + cascadeMode + ')</span>';
+                        if (cascadeMode === 'confident') specHtml += '<br><span style="color: #555; font-size: 0.95em;">Ranked by distinctive movement patterns unique to each lesson.</span>';
+                        else if (cascadeMode === 'blended') specHtml += '<br><span style="color: #555; font-size: 0.95em;">Blended ranking: combining semantic meaning with distinctive movement patterns.</span>';
                         html += '<div style="font-size: 0.8em; color: #888; margin-bottom: 6px;">' + specHtml + '</div>';
                     }}
                     data.results.forEach(r => {{
@@ -3622,7 +3623,8 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None, super
                         const explainer = bandExplainers[s.band] || '';
                         const cascadeMode = data.cascade_mode || '';
                         let specHtml = 'Specificity: <span style="color:'+color+';font-weight:600;">'+label+'</span> \u2014 '+explainer;
-                        if (cascadeMode) specHtml += ' <span style="color:#666;">('+cascadeMode+')</span>';
+                        if (cascadeMode === 'confident') specHtml += '<br><span style="color:#555;font-size:0.95em;">Ranked by distinctive movement patterns unique to each lesson.</span>';
+                        else if (cascadeMode === 'blended') specHtml += '<br><span style="color:#555;font-size:0.95em;">Blended ranking: combining semantic meaning with distinctive movement patterns.</span>';
                         html += '<div style="font-size:0.8em;color:#888;margin-bottom:6px;">'+specHtml+'</div>';
                     }}
                     const isTagSearch = data.method === 'tags';
