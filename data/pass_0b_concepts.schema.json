@@ -24,7 +24,7 @@
     },
     "distinctive_summary": {
       "type": "string",
-      "description": "2-3 sentences describing what makes this lesson distinctive"
+      "description": "Detailed physical description of the lesson (200-400 words) covering position inventory, movement sequences, key connections, and what makes it distinctive"
     },
     "search_terms": {
       "type": "array",

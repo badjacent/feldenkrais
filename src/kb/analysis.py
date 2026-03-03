@@ -1404,7 +1404,7 @@ def run_pass_0b_concepts(
     )
 
     # Check cache
-    cache_suffix = ":pass_0b_concepts_v1"
+    cache_suffix = ":pass_0b_concepts_v2"
     if provider_key and provider_key != DEFAULT_LLM:
         cache_suffix += f":{provider_key}"
     cache_key = get_cache_key(lesson_text.strip() + cache_suffix)

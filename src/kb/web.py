@@ -1245,7 +1245,93 @@ async def pipeline_dashboard(request: Request):
     return build_pipeline_html()
 
 
-# --- Pass 0b Experiment ---
+# --- Search ---
+
+def _single_method_search(embedding, method: str, limit: int = 1000):
+    """Run embedding search for a single method. Returns (results, band, gap)."""
+    results = _db.search_lessons(embedding, limit=limit, method=method)
+    sims = [r["similarity"] for r in results]
+    gap = round(sims[0] - sims[4], 4) if len(sims) >= 5 else 0
+    if gap < 0.0167:
+        band = "low"
+    elif gap < 0.0215:
+        band = "mid"
+    elif gap < 0.0297:
+        band = "mid-high"
+    else:
+        band = "high"
+    return results, band, gap
+
+
+def _combined_search(query: str, embedding, limit: int = 1000):
+    """Cascade search: trust distinctive when confident, RRF fallback otherwise.
+
+    Optimized via grid search (optimize_combined.py, 2026-03-03):
+        gate_threshold=0.07, fallback=rrf, concepts_weight=3.0, tag_boost=0.0
+        P@1=44.2%, MRR=0.590 vs always-distinctive P@1=41.9%, MRR=0.565
+
+    Logic:
+        1. Run concepts (distinctive) search, compute similarity gap
+        2. If gap >= GATE_THRESHOLD: distinctive is confident, use it directly
+        3. Otherwise: RRF merge of default + concepts (3x weight)
+    """
+    GATE_THRESHOLD = 0.07
+    RRF_K = 60
+    CONCEPTS_WEIGHT = 3.0
+
+    # Always run both searches (need concepts for gate check, both for RRF)
+    default_hits = _db.search_lessons(embedding, limit=1000, method="default")
+    concepts_hits = _db.search_lessons(embedding, limit=1000, method="concepts")
+
+    # Compute concepts gap for confidence gate
+    concepts_sims = [h["similarity"] for h in concepts_hits]
+    concepts_gap = concepts_sims[0] - concepts_sims[4] if len(concepts_sims) >= 5 else 0
+
+    if concepts_gap >= GATE_THRESHOLD:
+        # Confident — use concepts results directly
+        cascade_mode = "confident"
+        results = concepts_hits[:limit]
+        for r in results:
+            r.setdefault("summary_text", "")
+    else:
+        # Ambiguous — RRF merge of default + concepts (no tag boost)
+        cascade_mode = "blended"
+        scores = {}
+        result_data = {}
+
+        for rank, hit in enumerate(default_hits, 1):
+            doc_id = hit["document_id"]
+            scores[doc_id] = scores.get(doc_id, 0) + 1.0 / (RRF_K + rank)
+            if doc_id not in result_data:
+                result_data[doc_id] = hit
+
+        for rank, hit in enumerate(concepts_hits, 1):
+            doc_id = hit["document_id"]
+            scores[doc_id] = scores.get(doc_id, 0) + CONCEPTS_WEIGHT / (RRF_K + rank)
+            if doc_id not in result_data:
+                result_data[doc_id] = hit
+
+        ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:limit]
+        results = []
+        for doc_id, score in ranked:
+            r = dict(result_data[doc_id])
+            r["similarity"] = round(score, 6)
+            r.setdefault("summary_text", "")
+            results.append(r)
+
+    # Band from concepts gap
+    gap = round(concepts_gap, 4)
+    if gap < 0.0167:
+        band = "low"
+    elif gap < 0.0215:
+        band = "mid"
+    elif gap < 0.0297:
+        band = "mid-high"
+    else:
+        band = "high"
+
+    return results, band, gap, cascade_mode
+
 
 @app.post("/api/search")
 async def api_search(request: Request, query: str = Form(""), method: str = Form("default")):
@@ -1255,7 +1341,7 @@ async def api_search(request: Request, query: str = Form(""), method: str = Form
         return JSONResponse({"error": "Empty query"}, status_code=400)
     if not _db:
         return JSONResponse({"error": "No database connection"}, status_code=500)
-    if method not in ("default", "concepts", "tags"):
+    if method not in ("default", "concepts", "tags", "combined"):
         return JSONResponse({"error": f"Unknown method: {method}"}, status_code=400)
     prev_public = _db.public_only
     try:
@@ -1278,27 +1364,23 @@ async def api_search(request: Request, query: str = Form(""), method: str = Form
                     r["category"] = f"db:{src_id}"
             return JSONResponse({"results": results, "method": "tags"})
 
-        # Embedding-based search (default or concepts)
+        # Embedding-based search
         from llm import get_embeddings
         embeddings, _ = get_embeddings([query], task_type="RETRIEVAL_QUERY")
-        results = _db.search_lessons(embeddings[0], limit=10, method=method)
-        sims = [r["similarity"] for r in results]
-        gap = round(sims[0] - sims[4], 4) if len(sims) >= 5 else 0
-        # Specificity band based on similarity spread (see run_search_eval.py docstring)
-        if gap < 0.0167:
-            band = "low"
-        elif gap < 0.0215:
-            band = "mid"
-        elif gap < 0.0297:
-            band = "mid-high"
+
+        cascade_mode = None
+        if method == "combined":
+            results, band, gap, cascade_mode = _combined_search(query, embeddings[0])
         else:
-            band = "high"
-        for r in results:
+            results, band, gap = _single_method_search(embeddings[0], method)
+
+        for i, r in enumerate(results):
             r["similarity"] = round(r["similarity"], 4)
-            if r.get("summary_text"):
+            if i < 10 and r.get("summary_text"):
                 r["snippet"] = r["summary_text"][:400]
-            del r["summary_text"]
-            # Build category key for player link (matches get_available_lessons format)
+            elif i >= 10:
+                r.pop("snippet", None)
+            r.pop("summary_text", None)
             src_id = r.pop("source_id", None)
             cat_name = r.pop("category_name", None)
             if src_id and cat_name:
@@ -1322,7 +1404,10 @@ async def api_search(request: Request, query: str = Form(""), method: str = Form
             )
         except Exception:
             pass  # never break search for logging
-        return JSONResponse({"results": results, "specificity": {"gap": gap, "band": band}, "method": method})
+        resp = {"results": results, "specificity": {"gap": gap, "band": band}, "method": method}
+        if cascade_mode:
+            resp["cascade_mode"] = cascade_mode
+        return JSONResponse(resp)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
     finally:
@@ -1571,7 +1656,7 @@ async def api_lesson_concepts(document_id: str):
         extra = {}
         if text:
             from cache_helpers import get_cache_key
-            cache_key = get_cache_key(text.strip() + ":pass_0b_concepts_v1")
+            cache_key = get_cache_key(text.strip() + ":pass_0b_concepts_v2")
             cached = _db.get_cache(cache_key)
             if cached:
                 extra["distinctive_summary"] = cached.get("distinctive_summary", "")
@@ -3065,6 +3150,8 @@ def build_pass0b_html(search_mode: bool = False) -> str:
                 }} else if (data.results && data.results.length > 0) {{
                     let html = '';
                     const isTagSearch = data.method === 'tags';
+                    const isCombined = data.method === 'combined';
+                    const cascadeMode = data.cascade_mode || '';
                     if (data.specificity) {{
                         const s = data.specificity;
                         const bandColors = {{low: '#dc3545', mid: '#fd7e14', 'mid-high': '#28a745', high: '#007bff'}};
@@ -3078,10 +3165,14 @@ def build_pass0b_html(search_mode: bool = False) -> str:
                         const color = bandColors[s.band] || '#666';
                         const label = bandLabels[s.band] || s.band;
                         const explainer = bandExplainers[s.band] || '';
-                        html += '<div style="font-size: 0.8em; color: #888; margin-bottom: 6px;">Specificity: <span style="color: ' + color + '; font-weight: 600;">' + label + '</span> \u2014 ' + explainer + '</div>';
+                        let specHtml = 'Specificity: <span style="color: ' + color + '; font-weight: 600;">' + label + '</span> \u2014 ' + explainer;
+                        if (cascadeMode) specHtml += ' <span style="color: #666;">(' + cascadeMode + ')</span>';
+                        html += '<div style="font-size: 0.8em; color: #888; margin-bottom: 6px;">' + specHtml + '</div>';
                     }}
                     data.results.forEach(r => {{
-                        const scoreDisplay = isTagSearch ? (r.similarity + ' matches') : (Math.round(r.similarity * 100) + '%');
+                        let scoreDisplay;
+                        if (isTagSearch) scoreDisplay = r.similarity + ' matches';
+                        else scoreDisplay = Math.round(r.similarity * 100) + '%';
                         const snippet = (r.snippet || '').replace(/</g, '&lt;').replace(/\\n/g, ' ');
                         const playerUrl = r.category ? '/pass0b-player?category=' + encodeURIComponent(r.category) + '&lesson=' + encodeURIComponent(r.document_id) : '';
                         html += '<div class="search-result" data-doc-id="' + r.document_id + '">';
@@ -3159,6 +3250,7 @@ def build_pass0b_html(search_mode: bool = False) -> str:
         <div class="search-box">
             <input type="text" id="search-query" placeholder="e.g. rolling pelvis, eyes and head..." onkeydown="if(event.key==='Enter'){{event.preventDefault();searchLessons();}}">
             <select id="search-method" style="padding:6px 8px;font-size:13px;border:1px solid #ccc;border-radius:4px;">
+                <option value="combined">Combined</option>
                 <option value="default">Standard</option>
                 <option value="concepts">Distinctive</option>
                 <option value="tags">Tag Match</option>
@@ -3324,6 +3416,16 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None) -> st
         .lesson-list li {{ padding: 4px 0 4px 16px; }}
         .lesson-list li a {{ color: #007bff; text-decoration: none; }}
         .lesson-list li a:hover {{ text-decoration: underline; }}
+        /* Scored lesson list (after search) */
+        .scored-lesson-list {{ list-style: none; padding: 0; margin: 4px 0 0 0; }}
+        .scored-lesson-list li {{
+            padding: 4px 16px; display: flex; justify-content: space-between; align-items: baseline;
+        }}
+        .scored-lesson-list li a {{ color: #007bff; text-decoration: none; }}
+        .scored-lesson-list li a:hover {{ text-decoration: underline; }}
+        .scored-lesson-list .score {{ color: #28a745; font-size: 0.82em; white-space: nowrap; margin-left: 12px; }}
+        .clear-search {{ font-size: 0.85em; color: #007bff; cursor: pointer; text-decoration: none; margin-left: 12px; }}
+        .clear-search:hover {{ text-decoration: underline; }}
 {_AUTH_BAR_CSS}
     </style>
 </head>
@@ -3338,6 +3440,7 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None) -> st
         <input type="text" id="search-query" placeholder="e.g. rolling pelvis, eyes and head..."
                onkeydown="if(event.key==='Enter'){{event.preventDefault();searchLessons();}}">
         <select id="search-method" style="padding:8px 10px;font-size:14px;border:1px solid #ccc;border-radius:6px;background:#fff;">
+            <option value="combined">Combined</option>
             <option value="default">Standard</option>
             <option value="concepts">Distinctive</option>
             <option value="tags">Tag Match</option>
@@ -3354,8 +3457,10 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None) -> st
     </div>
     <div id="search-results"></div>
 
+    <div id="all-lessons">
     <h2>All Lessons ({total_lessons})</h2>
     {lesson_list_html}
+    </div>
 
     <script>
         async function searchLessons() {{
@@ -3378,7 +3483,7 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None) -> st
                 }} else if (data.results && data.results.length > 0) {{
                     let html = '';
                     if (data.method) {{
-                        const methodLabels = {{default:'Standard',concepts:'Distinctive',tags:'Tag Match'}};
+                        const methodLabels = {{combined:'Combined',default:'Standard',concepts:'Distinctive',tags:'Tag Match'}};
                         html += '<div style="font-size:0.8em;color:#888;margin-bottom:4px;">Method: <strong>' + (methodLabels[data.method] || data.method) + '</strong></div>';
                     }}
                     if (data.specificity) {{
@@ -3394,11 +3499,17 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None) -> st
                         const color = bandColors[s.band] || '#666';
                         const label = bandLabels[s.band] || s.band;
                         const explainer = bandExplainers[s.band] || '';
-                        html += '<div style="font-size:0.8em;color:#888;margin-bottom:6px;">Specificity: <span style="color:'+color+';font-weight:600;">'+label+'</span> \u2014 '+explainer+'</div>';
+                        const cascadeMode = data.cascade_mode || '';
+                        let specHtml = 'Specificity: <span style="color:'+color+';font-weight:600;">'+label+'</span> \u2014 '+explainer;
+                        if (cascadeMode) specHtml += ' <span style="color:#666;">('+cascadeMode+')</span>';
+                        html += '<div style="font-size:0.8em;color:#888;margin-bottom:6px;">'+specHtml+'</div>';
                     }}
                     const isTagSearch = data.method === 'tags';
-                    data.results.forEach(r => {{
-                        const scoreDisplay = isTagSearch ? (r.similarity + ' matches') : (Math.round(r.similarity * 100) + '%');
+                    const topResults = data.results.slice(0, 10);
+                    topResults.forEach(r => {{
+                        let scoreDisplay;
+                        if (isTagSearch) scoreDisplay = r.similarity + ' matches';
+                        else scoreDisplay = Math.round(r.similarity * 100) + '%';
                         let snippet = (r.snippet || '').replace(/</g, '&lt;').replace(/\\n/g, ' ');
                         snippet = snippet.replace(/^Setting:\s*/i, '');
                         html += '<div class="search-result">';
@@ -3410,6 +3521,8 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None) -> st
                         html += '</div>';
                     }});
                     resultsDiv.innerHTML = html;
+                    // Update All Lessons section with scored list
+                    updateAllLessons(data.results, data.method);
                 }} else {{
                     resultsDiv.innerHTML = '<div style="color:#999;padding:8px;">No results found.</div>';
                 }}
@@ -3418,6 +3531,33 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None) -> st
             }}
             btn.disabled = false;
             btn.textContent = 'Search';
+        }}
+
+        // Save original All Lessons HTML for restore
+        var originalAllLessons = document.getElementById('all-lessons').innerHTML;
+
+        function updateAllLessons(results, method) {{
+            const container = document.getElementById('all-lessons');
+            const isTagSearch = method === 'tags';
+            let html = '<h2>All Lessons \u2014 sorted by relevance (' + results.length + ') <a class="clear-search" onclick="clearSearch()">Clear search</a></h2>';
+            html += '<ul class="scored-lesson-list">';
+            results.forEach(r => {{
+                let scoreDisplay;
+                if (isTagSearch) scoreDisplay = r.similarity + ' matches';
+                else scoreDisplay = Math.round(r.similarity * 100) + '%';
+                html += '<li>';
+                html += '<a href="/lesson/' + r.document_id + '">' + escHtml(r.title || '') + '</a>';
+                html += '<span class="score">' + scoreDisplay + '</span>';
+                html += '</li>';
+            }});
+            html += '</ul>';
+            container.innerHTML = html;
+        }}
+
+        function clearSearch() {{
+            document.getElementById('all-lessons').innerHTML = originalAllLessons;
+            document.getElementById('search-results').innerHTML = '';
+            document.getElementById('search-query').value = '';
         }}
 
         function tryQuery(el) {{
@@ -3805,10 +3945,11 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
             <div style="font-weight:600;color:#333;margin-bottom:6px;">How search works</div>
             All Feldenkrais lessons share common vocabulary &mdash; &ldquo;lie on your back,&rdquo; &ldquo;notice the difference&rdquo; &mdash;
             which makes them hard to distinguish by text similarity alone. To improve search, each lesson goes through a concept extraction pass
-            that identifies what is <em>specific and distinctive</em> about it. This produces three things used by three search methods:
+            that identifies what is <em>specific and distinctive</em> about it. This produces three things used by four search methods:
             <ul style="margin:8px 0 4px 0;padding-left:20px;">
+                <li><strong>Combined</strong> (default) &mdash; Fuses results from all three methods below using reciprocal rank fusion. Lessons that score well across multiple signals rise to the top.</li>
                 <li><strong>Standard</strong> &mdash; Embedding similarity against the full lesson analysis. Broadest coverage (all lessons), but generic language can make results muddy.</li>
-                <li><strong>Distinctive</strong> &mdash; Embedding similarity against a short summary of what makes this lesson unique. Finds thematically similar lessons even when they use different words.</li>
+                <li><strong>Distinctive</strong> &mdash; Embedding similarity against a detailed physical description of what makes this lesson unique. Captures specific positions, movement sequences, and key connections.</li>
                 <li><strong>Tag Match</strong> &mdash; Direct text matching against concept tags and search terms. Best for specific queries like body parts or named movement patterns.</li>
             </ul>
         </div>

@@ -29,9 +29,21 @@ Tag the lesson with concepts across these categories. Use as many as genuinely a
 
 **Be specific, not generic.** Tag "thoracic spine" not just "spine". Tag "rolling from side to back" not just "rolling". Every lesson involves "attention" and "awareness" — don't tag those unless they are the primary focus.
 
-### 2. Distinctive Summary
+### 2. Distinctive Report
 
-Write 2-3 sentences describing what makes THIS lesson different from other Feldenkrais lessons. What would a practitioner remember about it? What is the central movement exploration? Avoid generic Feldenkrais language — be concrete about what happens.
+Write a detailed physical description of what happens in this lesson. This is the primary search document — someone looking for this lesson will be matching against this text. Be thorough and specific. Aim for 200-400 words.
+
+Include the following sections:
+
+**Position inventory:** List every distinct body configuration the student gets into during the lesson. Be precise — don't say "lying on the side" when you can say "lying on the right side, left knee drawn up toward chest, right arm extended overhead." Include starting position, all working positions, and any transitions. If the student crosses their legs, describe exactly how. If the hands go behind the head, say which hand holds what.
+
+**Movement sequences:** Describe the actual movements the student performs, in the order they are explored. What do the students think they are doing? Use plain physical language: "tilt both knees to the left," "lift the head while pressing the feet into the floor," "roll from the back onto the right side." Capture the specific combinations — what moves WITH what, what is held still while something else moves.
+
+**Key connections:** What body parts does the lesson connect that might not obviously relate? Feldenkrais lessons are fundamentally about discovering how distant parts of the body work together. If the lesson connects eye movement with pelvic rotation, say so. If it links the jaw to the hip joints, say so. These connections are what practitioners search for.
+
+**What makes it distinctive:** What would a practitioner remember about this lesson? What's the "aha" moment or the unusual constraint? Is it the crossed-legs configuration? The way the eyes lead the spine? The comparison between moving the shoulder from the arm versus from the ribs? Name the thing that makes a practitioner say "oh, THAT lesson."
+
+**Do NOT** use generic Feldenkrais language like "the student explores new possibilities" or "increasing awareness through movement." Every Feldenkrais lesson does that. Describe what PHYSICALLY happens.
 
 ### 3. Search Terms
 

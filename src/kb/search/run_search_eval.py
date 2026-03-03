@@ -79,8 +79,55 @@ def classify_band(gap: float) -> str:
     return "high"  # edge case: gap exactly at boundary
 
 
+def _cascade_search(db: Database, query: str, embedding, top_k: int = 10) -> list[dict]:
+    """Cascade search: trust distinctive when confident, RRF fallback otherwise.
+
+    Same logic as web.py _combined_search but for eval context.
+    Optimized via grid search (optimize_combined.py, 2026-03-03):
+        gate_threshold=0.07, fallback=rrf, concepts_weight=3.0, tag_boost=0.0
+
+    Returns list of {document_id, title, similarity} sorted by score.
+    """
+    GATE_THRESHOLD = 0.07
+    RRF_K = 60
+    CONCEPTS_WEIGHT = 3.0
+
+    default_hits = db.search_lessons(embedding, limit=20, method="default")
+    concepts_hits = db.search_lessons(embedding, limit=20, method="concepts")
+
+    concepts_sims = [h["similarity"] for h in concepts_hits]
+    concepts_gap = concepts_sims[0] - concepts_sims[4] if len(concepts_sims) >= 5 else 0
+
+    if concepts_gap >= GATE_THRESHOLD:
+        return concepts_hits[:top_k]
+
+    # RRF fallback
+    scores = {}
+    result_data = {}
+
+    for rank, hit in enumerate(default_hits, 1):
+        doc_id = hit["document_id"]
+        scores[doc_id] = scores.get(doc_id, 0) + 1.0 / (RRF_K + rank)
+        if doc_id not in result_data:
+            result_data[doc_id] = hit
+
+    for rank, hit in enumerate(concepts_hits, 1):
+        doc_id = hit["document_id"]
+        scores[doc_id] = scores.get(doc_id, 0) + CONCEPTS_WEIGHT / (RRF_K + rank)
+        if doc_id not in result_data:
+            result_data[doc_id] = hit
+
+    ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:top_k]
+    results = []
+    for doc_id, score in ranked:
+        r = dict(result_data[doc_id])
+        r["similarity"] = round(score, 6)
+        results.append(r)
+    return results
+
+
 def run_eval(db: Database, questions_path: str | None = None, top_k: int = 10,
-             quiet: bool = False) -> dict:
+             quiet: bool = False, method: str = "default") -> dict:
     """Run search evaluation and return structured results.
 
     Callable from the iteration loop or standalone. Does NOT close the db.
@@ -90,9 +137,10 @@ def run_eval(db: Database, questions_path: str | None = None, top_k: int = 10,
         questions_path: Path to question JSON file. Defaults to DEFAULT_QUESTIONS.
         top_k: Number of search results to retrieve per query.
         quiet: If True, suppress progress output.
+        method: Embedding method to search against ('default' or 'concepts').
 
     Returns:
-        Dict with keys: metrics, results, missing_from_index, embed_time, search_time, qfile.
+        Dict with keys: metrics, results, missing_from_index, embed_time, search_time, qfile, method.
     """
     questions_path = os.path.normpath(questions_path or DEFAULT_QUESTIONS)
     if not os.path.exists(questions_path):
@@ -104,10 +152,20 @@ def run_eval(db: Database, questions_path: str | None = None, top_k: int = 10,
     questions = qfile["questions"]
     if not quiet:
         print(f"Loaded {len(questions)} questions (version {qfile.get('version', '?')})")
+        if method != "default":
+            print(f"Search method: {method}")
 
-    embedded_ids = set(db.get_embedding_hashes().keys())
-    if not quiet:
-        print(f"Embedding index has {len(embedded_ids)} lessons")
+    if method == "combined":
+        # For combined, a question is searchable if expected doc is in either index
+        default_ids = set(db.get_embedding_hashes(method="default").keys())
+        concepts_ids = set(db.get_embedding_hashes(method="concepts").keys())
+        embedded_ids = default_ids | concepts_ids
+        if not quiet:
+            print(f"Embedding index: default={len(default_ids)}, concepts={len(concepts_ids)}, union={len(embedded_ids)}")
+    else:
+        embedded_ids = set(db.get_embedding_hashes(method=method).keys())
+        if not quiet:
+            print(f"Embedding index ({method}) has {len(embedded_ids)} lessons")
 
     searchable = []
     missing_from_index = []
@@ -143,12 +201,15 @@ def run_eval(db: Database, questions_path: str | None = None, top_k: int = 10,
 
     # Search
     if not quiet:
-        print(f"Searching (top-{top_k})...", flush=True)
+        print(f"Searching (top-{top_k}, method={method})...", flush=True)
     t0 = time.time()
     results = []
 
     for q, embedding in zip(searchable, all_embeddings):
-        hits = db.search_lessons(embedding, limit=top_k)
+        if method == "combined":
+            hits = _cascade_search(db, q["query"], embedding, top_k)
+        else:
+            hits = db.search_lessons(embedding, limit=top_k, method=method)
         hit_ids = [h["document_id"] for h in hits]
         sims = [h["similarity"] for h in hits]
 
@@ -156,7 +217,13 @@ def run_eval(db: Database, questions_path: str | None = None, top_k: int = 10,
         if q["expected_doc_id"] in hit_ids:
             rank = hit_ids.index(q["expected_doc_id"]) + 1
 
-        gap = sims[0] - sims[4] if len(sims) >= 5 else 0
+        # For combined, compute gap from concepts results (cascade gate signal)
+        if method == "combined":
+            concepts_hits_for_gap = db.search_lessons(embedding, limit=10, method="concepts")
+            concepts_sims = [h["similarity"] for h in concepts_hits_for_gap]
+            gap = concepts_sims[0] - concepts_sims[4] if len(concepts_sims) >= 5 else 0
+        else:
+            gap = sims[0] - sims[4] if len(sims) >= 5 else 0
         band = classify_band(gap)
 
         result = {
@@ -189,6 +256,7 @@ def run_eval(db: Database, questions_path: str | None = None, top_k: int = 10,
         "embed_time": embed_time,
         "search_time": search_time,
         "qfile": qfile,
+        "method": method,
     }
 
 
@@ -198,6 +266,8 @@ def main():
     parser.add_argument("--top-k", type=int, default=10, help="Number of search results to retrieve")
     parser.add_argument("--band", type=str, default=None,
                         help="Filter to specificity band(s): low, mid, mid-high, high (comma-separated)")
+    parser.add_argument("--method", type=str, default="default",
+                        help="Embedding method: 'default' or 'concepts' (distinctive)")
     parser.add_argument("--verbose", action="store_true", help="Show details for every query")
     parser.add_argument("--failures-only", action="store_true", help="Only show queries where expected doc was not found")
     parser.add_argument("--output", type=str, default=None, help="Write detailed results to JSON file")
@@ -224,7 +294,7 @@ def main():
     db = Database(database_url)
     db.initialize()
 
-    eval_result = run_eval(db, questions_path=args.questions, top_k=args.top_k)
+    eval_result = run_eval(db, questions_path=args.questions, top_k=args.top_k, method=args.method)
     metrics = eval_result["metrics"]
     results = eval_result["results"]
     missing_from_index = eval_result["missing_from_index"]
@@ -298,7 +368,8 @@ def compute_metrics(results: list[dict], categories: list[str], top_k: int) -> d
 def print_report(metrics, results, missing_from_index, args, qfile, embed_time, search_time, band_filter):
     """Print the evaluation report."""
     print("\n" + "=" * 70)
-    print("SEARCH EVALUATION REPORT")
+    method_label = args.method if hasattr(args, 'method') else "default"
+    print(f"SEARCH EVALUATION REPORT — method: {method_label}")
     print("=" * 70)
     print(f"  Questions file: version {qfile.get('version', '?')}, {len(qfile['questions'])} total queries")
     print(f"  Evaluated: {len(results)} queries, top-{args.top_k}")

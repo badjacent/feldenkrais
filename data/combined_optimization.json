@@ -1,0 +1,2923 @@
+{
+  "generated_at": "2026-03-03T21:41:31.000337+00:00",
+  "questions_file": "/Users/michaelhollander/github/feldenkrais/data/search_eval_fp_free.json",
+  "question_count": 129,
+  "top_k": 10,
+  "grid_results": [
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.07,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.4418604651162791,
+        "p_at_3": 0.7054263565891473,
+        "p_at_5": 0.7984496124031008,
+        "mrr": 0.5895779500430665,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.1,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.4418604651162791,
+        "p_at_3": 0.7054263565891473,
+        "p_at_5": 0.7984496124031008,
+        "mrr": 0.5895779500430665,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.07,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.43410852713178294,
+        "p_at_3": 0.7131782945736435,
+        "p_at_5": 0.7984496124031008,
+        "mrr": 0.5876399655469424,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.1,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.43410852713178294,
+        "p_at_3": 0.7131782945736435,
+        "p_at_5": 0.7984496124031008,
+        "mrr": 0.5876399655469424,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.05,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.43410852713178294,
+        "p_at_3": 0.7054263565891473,
+        "p_at_5": 0.7984496124031008,
+        "mrr": 0.5857019810508184,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.07,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.43410852713178294,
+        "p_at_3": 0.7209302325581395,
+        "p_at_5": 0.7984496124031008,
+        "mrr": 0.5857019810508183,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.1,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.43410852713178294,
+        "p_at_3": 0.7209302325581395,
+        "p_at_5": 0.7984496124031008,
+        "mrr": 0.5857019810508183,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.04,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.43410852713178294,
+        "p_at_3": 0.7054263565891473,
+        "p_at_5": 0.7984496124031008,
+        "mrr": 0.5844099913867357,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.05,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.4263565891472868,
+        "p_at_3": 0.7131782945736435,
+        "p_at_5": 0.7984496124031008,
+        "mrr": 0.5837639965546944,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.025,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.43410852713178294,
+        "p_at_3": 0.7054263565891473,
+        "p_at_5": 0.7984496124031008,
+        "mrr": 0.5835055986218777,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.04,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.4263565891472868,
+        "p_at_3": 0.7131782945736435,
+        "p_at_5": 0.7984496124031008,
+        "mrr": 0.5824720068906116,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.05,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.4263565891472868,
+        "p_at_3": 0.7209302325581395,
+        "p_at_5": 0.7984496124031008,
+        "mrr": 0.5818260120585702,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.025,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.4263565891472868,
+        "p_at_3": 0.7054263565891473,
+        "p_at_5": 0.7984496124031008,
+        "mrr": 0.5809216192937123,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.03,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.4263565891472868,
+        "p_at_3": 0.7054263565891473,
+        "p_at_5": 0.7984496124031008,
+        "mrr": 0.5805340223944876,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.04,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.4263565891472868,
+        "p_at_3": 0.7209302325581395,
+        "p_at_5": 0.7984496124031008,
+        "mrr": 0.5805340223944876,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.025,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.4263565891472868,
+        "p_at_3": 0.7054263565891473,
+        "p_at_5": 0.7984496124031008,
+        "mrr": 0.5796296296296297,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.03,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.7131782945736435,
+        "p_at_5": 0.7984496124031008,
+        "mrr": 0.5785960378983636,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.03,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.7131782945736435,
+        "p_at_5": 0.7984496124031008,
+        "mrr": 0.5773040482342808,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.02,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.43410852713178294,
+        "p_at_3": 0.6744186046511628,
+        "p_at_5": 0.8062015503875969,
+        "mrr": 0.5756244616709734,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.02,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.43410852713178294,
+        "p_at_3": 0.6744186046511628,
+        "p_at_5": 0.8062015503875969,
+        "mrr": 0.5756244616709734,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.02,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.43410852713178294,
+        "p_at_3": 0.6744186046511628,
+        "p_at_5": 0.8062015503875969,
+        "mrr": 0.5743324720068907,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.015,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.4263565891472868,
+        "p_at_3": 0.6666666666666666,
+        "p_at_5": 0.7984496124031008,
+        "mrr": 0.5705211024978467,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.015,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.4263565891472868,
+        "p_at_3": 0.6666666666666666,
+        "p_at_5": 0.7984496124031008,
+        "mrr": 0.5705211024978467,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.015,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.4263565891472868,
+        "p_at_3": 0.6666666666666666,
+        "p_at_5": 0.7984496124031008,
+        "mrr": 0.5692291128337641,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.01,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.4263565891472868,
+        "p_at_3": 0.6511627906976745,
+        "p_at_5": 0.7829457364341085,
+        "mrr": 0.5674203273040485,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.01,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.4263565891472868,
+        "p_at_3": 0.6511627906976745,
+        "p_at_5": 0.7829457364341085,
+        "mrr": 0.5674203273040485,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.01,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.4263565891472868,
+        "p_at_3": 0.6511627906976745,
+        "p_at_5": 0.7829457364341085,
+        "mrr": 0.5674203273040485,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.01,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.4263565891472868,
+        "p_at_3": 0.6511627906976745,
+        "p_at_5": 0.7829457364341085,
+        "mrr": 0.5674203273040483,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.01,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.4263565891472868,
+        "p_at_3": 0.6511627906976745,
+        "p_at_5": 0.7751937984496124,
+        "mrr": 0.5663436692506462,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "always_concepts",
+        "gate_threshold": 0.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6589147286821705,
+        "p_at_5": 0.7829457364341085,
+        "mrr": 0.5654823428079244,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.005,
+        "fallback": "default"
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6589147286821705,
+        "p_at_5": 0.7829457364341085,
+        "mrr": 0.5654823428079244,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.005,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6589147286821705,
+        "p_at_5": 0.7829457364341085,
+        "mrr": 0.5654823428079244,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.005,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6589147286821705,
+        "p_at_5": 0.7829457364341085,
+        "mrr": 0.5654823428079244,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.005,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6589147286821705,
+        "p_at_5": 0.7829457364341085,
+        "mrr": 0.5654823428079244,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.005,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6589147286821705,
+        "p_at_5": 0.7829457364341085,
+        "mrr": 0.5654823428079244,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.005,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6589147286821705,
+        "p_at_5": 0.7829457364341085,
+        "mrr": 0.5654823428079244,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.005,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6589147286821705,
+        "p_at_5": 0.7829457364341085,
+        "mrr": 0.5654823428079244,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.005,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6589147286821705,
+        "p_at_5": 0.7829457364341085,
+        "mrr": 0.5654823428079244,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.005,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6589147286821705,
+        "p_at_5": 0.7829457364341085,
+        "mrr": 0.5654823428079244,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.005,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6589147286821705,
+        "p_at_5": 0.7829457364341085,
+        "mrr": 0.5654823428079244,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.005,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6589147286821705,
+        "p_at_5": 0.7829457364341085,
+        "mrr": 0.5654823428079244,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.005,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6589147286821705,
+        "p_at_5": 0.7829457364341085,
+        "mrr": 0.5654823428079244,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.005,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6589147286821705,
+        "p_at_5": 0.7829457364341085,
+        "mrr": 0.5654823428079244,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.005,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6589147286821705,
+        "p_at_5": 0.7829457364341085,
+        "mrr": 0.5654823428079244,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.005,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6589147286821705,
+        "p_at_5": 0.7829457364341085,
+        "mrr": 0.5654823428079244,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.005,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6589147286821705,
+        "p_at_5": 0.7829457364341085,
+        "mrr": 0.5654823428079244,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.005,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6589147286821705,
+        "p_at_5": 0.7829457364341085,
+        "mrr": 0.5654823428079244,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.015,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.4263565891472868,
+        "p_at_3": 0.6434108527131783,
+        "p_at_5": 0.7906976744186046,
+        "mrr": 0.5649747754398918,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.01,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.4263565891472868,
+        "p_at_3": 0.6434108527131783,
+        "p_at_5": 0.7751937984496124,
+        "mrr": 0.5648363479758831,
+        "found_rate": 0.8604651162790697,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.015,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.4263565891472868,
+        "p_at_3": 0.6434108527131783,
+        "p_at_5": 0.7751937984496124,
+        "mrr": 0.5646425495262706,
+        "found_rate": 0.875968992248062,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.025,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6821705426356589,
+        "p_at_5": 0.7751937984496124,
+        "mrr": 0.5645348837209303,
+        "found_rate": 0.8449612403100775,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.03,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6821705426356589,
+        "p_at_5": 0.751937984496124,
+        "mrr": 0.563639719453673,
+        "found_rate": 0.8449612403100775,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.04,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.4263565891472868,
+        "p_at_3": 0.689922480620155,
+        "p_at_5": 0.751937984496124,
+        "mrr": 0.56312292358804,
+        "found_rate": 0.8217054263565892,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.015,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.4263565891472868,
+        "p_at_3": 0.6356589147286822,
+        "p_at_5": 0.7751937984496124,
+        "mrr": 0.5619939707149011,
+        "found_rate": 0.8604651162790697,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.02,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6511627906976745,
+        "p_at_5": 0.7906976744186046,
+        "mrr": 0.5616709732988804,
+        "found_rate": 0.8604651162790697,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.01,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6434108527131783,
+        "p_at_5": 0.7674418604651163,
+        "mrr": 0.5616063738156764,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.015,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6511627906976745,
+        "p_at_5": 0.7829457364341085,
+        "mrr": 0.561477174849268,
+        "found_rate": 0.8604651162790697,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.05,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.689922480620155,
+        "p_at_5": 0.751937984496124,
+        "mrr": 0.5605389442598745,
+        "found_rate": 0.8217054263565892,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.01,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6434108527131783,
+        "p_at_5": 0.7751937984496124,
+        "mrr": 0.5596683893195523,
+        "found_rate": 0.8604651162790697,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.02,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6511627906976745,
+        "p_at_5": 0.7906976744186046,
+        "mrr": 0.5592992494155287,
+        "found_rate": 0.8682170542635659,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.07,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.689922480620155,
+        "p_at_5": 0.751937984496124,
+        "mrr": 0.5592469545957919,
+        "found_rate": 0.8217054263565892,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.1,
+        "fallback": "rrf",
+        "tag_boost": 0.0,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.689922480620155,
+        "p_at_5": 0.751937984496124,
+        "mrr": 0.5592469545957919,
+        "found_rate": 0.8217054263565892,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.02,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6511627906976745,
+        "p_at_5": 0.7674418604651163,
+        "mrr": 0.5590962224683158,
+        "found_rate": 0.8837209302325582,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.01,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6356589147286822,
+        "p_at_5": 0.7751937984496124,
+        "mrr": 0.5590223944875109,
+        "found_rate": 0.8604651162790697,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.01,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6356589147286822,
+        "p_at_5": 0.7674418604651163,
+        "mrr": 0.5583763996554696,
+        "found_rate": 0.8604651162790697,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.01,
+        "fallback": "default"
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6434108527131783,
+        "p_at_5": 0.7674418604651163,
+        "mrr": 0.5577304048234283,
+        "found_rate": 0.8527131782945736,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.01,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6356589147286822,
+        "p_at_5": 0.7674418604651163,
+        "mrr": 0.5570844099913869,
+        "found_rate": 0.8527131782945736,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.01,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6356589147286822,
+        "p_at_5": 0.7674418604651163,
+        "mrr": 0.5570844099913869,
+        "found_rate": 0.8527131782945736,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.01,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6356589147286822,
+        "p_at_5": 0.7674418604651163,
+        "mrr": 0.5570844099913869,
+        "found_rate": 0.8527131782945736,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.02,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6356589147286822,
+        "p_at_5": 0.7751937984496124,
+        "mrr": 0.5567614125753662,
+        "found_rate": 0.8604651162790697,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.01,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6356589147286822,
+        "p_at_5": 0.7674418604651163,
+        "mrr": 0.5566968130921621,
+        "found_rate": 0.8527131782945736,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.01,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6356589147286822,
+        "p_at_5": 0.7674418604651163,
+        "mrr": 0.5566968130921621,
+        "found_rate": 0.8527131782945736,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.01,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6356589147286822,
+        "p_at_5": 0.7674418604651163,
+        "mrr": 0.5566968130921621,
+        "found_rate": 0.8527131782945736,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.015,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.627906976744186,
+        "p_at_5": 0.7596899224806202,
+        "mrr": 0.5530238710471269,
+        "found_rate": 0.8449612403100775,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.015,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6356589147286822,
+        "p_at_5": 0.7596899224806202,
+        "mrr": 0.5523778762150855,
+        "found_rate": 0.8449612403100775,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.015,
+        "fallback": "default"
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.6356589147286822,
+        "p_at_5": 0.751937984496124,
+        "mrr": 0.5513873508059556,
+        "found_rate": 0.8372093023255814,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.015,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.627906976744186,
+        "p_at_5": 0.751937984496124,
+        "mrr": 0.5492032730404824,
+        "found_rate": 0.8294573643410853,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.015,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.627906976744186,
+        "p_at_5": 0.7596899224806202,
+        "mrr": 0.5481696813092162,
+        "found_rate": 0.8217054263565892,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.015,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.627906976744186,
+        "p_at_5": 0.751937984496124,
+        "mrr": 0.5479112833763997,
+        "found_rate": 0.8217054263565892,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.015,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.627906976744186,
+        "p_at_5": 0.751937984496124,
+        "mrr": 0.5479112833763997,
+        "found_rate": 0.8217054263565892,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.015,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.627906976744186,
+        "p_at_5": 0.751937984496124,
+        "mrr": 0.5479112833763997,
+        "found_rate": 0.8217054263565892,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.015,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.627906976744186,
+        "p_at_5": 0.751937984496124,
+        "mrr": 0.547523686477175,
+        "found_rate": 0.8217054263565892,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.015,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.4186046511627907,
+        "p_at_3": 0.627906976744186,
+        "p_at_5": 0.751937984496124,
+        "mrr": 0.547523686477175,
+        "found_rate": 0.8217054263565892,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.02,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.4108527131782946,
+        "p_at_3": 0.6201550387596899,
+        "p_at_5": 0.751937984496124,
+        "mrr": 0.544819736680202,
+        "found_rate": 0.8372093023255814,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.02,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.4108527131782946,
+        "p_at_3": 0.627906976744186,
+        "p_at_5": 0.7441860465116279,
+        "mrr": 0.5439153439153439,
+        "found_rate": 0.8372093023255814,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.025,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.3953488372093023,
+        "p_at_3": 0.6356589147286822,
+        "p_at_5": 0.7674418604651163,
+        "mrr": 0.542675649070998,
+        "found_rate": 0.8527131782945736,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.02,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.4108527131782946,
+        "p_at_3": 0.6201550387596899,
+        "p_at_5": 0.7364341085271318,
+        "mrr": 0.5390180878552973,
+        "found_rate": 0.813953488372093,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.02,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.4108527131782946,
+        "p_at_3": 0.6201550387596899,
+        "p_at_5": 0.7364341085271318,
+        "mrr": 0.5376399655469424,
+        "found_rate": 0.7984496124031008,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.02,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.4108527131782946,
+        "p_at_3": 0.6201550387596899,
+        "p_at_5": 0.7364341085271318,
+        "mrr": 0.5372523686477175,
+        "found_rate": 0.7984496124031008,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.02,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.40310077519379844,
+        "p_at_3": 0.6356589147286822,
+        "p_at_5": 0.7441860465116279,
+        "mrr": 0.5366063738156762,
+        "found_rate": 0.7984496124031008,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.02,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.40310077519379844,
+        "p_at_3": 0.6356589147286822,
+        "p_at_5": 0.7364341085271318,
+        "mrr": 0.5363479758828597,
+        "found_rate": 0.7984496124031008,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.02,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.40310077519379844,
+        "p_at_3": 0.6356589147286822,
+        "p_at_5": 0.7364341085271318,
+        "mrr": 0.5359603789836349,
+        "found_rate": 0.7984496124031008,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.025,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.3953488372093023,
+        "p_at_3": 0.6201550387596899,
+        "p_at_5": 0.7286821705426356,
+        "mrr": 0.5353543743078629,
+        "found_rate": 0.8527131782945736,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.02,
+        "fallback": "default"
+      },
+      "metrics": {
+        "p_at_1": 0.40310077519379844,
+        "p_at_3": 0.6201550387596899,
+        "p_at_5": 0.7209302325581395,
+        "mrr": 0.5345914851728806,
+        "found_rate": 0.8294573643410853,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.02,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.40310077519379844,
+        "p_at_3": 0.6201550387596899,
+        "p_at_5": 0.7364341085271318,
+        "mrr": 0.5329888027562447,
+        "found_rate": 0.7984496124031008,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.025,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.3953488372093023,
+        "p_at_3": 0.6046511627906976,
+        "p_at_5": 0.7286821705426356,
+        "mrr": 0.5308785529715763,
+        "found_rate": 0.813953488372093,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.025,
+        "fallback": "default"
+      },
+      "metrics": {
+        "p_at_1": 0.3953488372093023,
+        "p_at_3": 0.6124031007751938,
+        "p_at_5": 0.6744186046511628,
+        "mrr": 0.5216715885320536,
+        "found_rate": 0.7984496124031008,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.025,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.3875968992248062,
+        "p_at_3": 0.5891472868217055,
+        "p_at_5": 0.689922480620155,
+        "mrr": 0.515965300849022,
+        "found_rate": 0.7829457364341085,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.025,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.3875968992248062,
+        "p_at_3": 0.5968992248062015,
+        "p_at_5": 0.689922480620155,
+        "mrr": 0.5153193060169805,
+        "found_rate": 0.7829457364341085,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.03,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.37209302325581395,
+        "p_at_3": 0.5891472868217055,
+        "p_at_5": 0.7209302325581395,
+        "mrr": 0.5120554940322384,
+        "found_rate": 0.8062015503875969,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.025,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.3875968992248062,
+        "p_at_3": 0.5891472868217055,
+        "p_at_5": 0.6666666666666666,
+        "mrr": 0.5075889011935525,
+        "found_rate": 0.751937984496124,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.025,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.3875968992248062,
+        "p_at_3": 0.5891472868217055,
+        "p_at_5": 0.6666666666666666,
+        "mrr": 0.5047157622739018,
+        "found_rate": 0.7209302325581395,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.025,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.3875968992248062,
+        "p_at_3": 0.5891472868217055,
+        "p_at_5": 0.6666666666666666,
+        "mrr": 0.5042204995693369,
+        "found_rate": 0.7209302325581395,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.03,
+        "fallback": "default"
+      },
+      "metrics": {
+        "p_at_1": 0.3875968992248062,
+        "p_at_3": 0.5891472868217055,
+        "p_at_5": 0.6201550387596899,
+        "mrr": 0.5038421311677127,
+        "found_rate": 0.7674418604651163,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.03,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.37209302325581395,
+        "p_at_3": 0.5736434108527132,
+        "p_at_5": 0.6666666666666666,
+        "mrr": 0.5036452565522336,
+        "found_rate": 0.8062015503875969,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.025,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.3798449612403101,
+        "p_at_3": 0.6046511627906976,
+        "p_at_5": 0.6666666666666666,
+        "mrr": 0.5024547803617572,
+        "found_rate": 0.7131782945736435,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.025,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.3798449612403101,
+        "p_at_3": 0.6046511627906976,
+        "p_at_5": 0.6666666666666666,
+        "mrr": 0.5020671834625323,
+        "found_rate": 0.7131782945736435,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.025,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.3798449612403101,
+        "p_at_3": 0.5891472868217055,
+        "p_at_5": 0.6666666666666666,
+        "mrr": 0.5002030269472131,
+        "found_rate": 0.7209302325581395,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.025,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.3798449612403101,
+        "p_at_3": 0.5968992248062015,
+        "p_at_5": 0.6666666666666666,
+        "mrr": 0.5001291989664083,
+        "found_rate": 0.7131782945736435,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.03,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.37209302325581395,
+        "p_at_3": 0.5503875968992248,
+        "p_at_5": 0.6666666666666666,
+        "mrr": 0.49612403100775204,
+        "found_rate": 0.751937984496124,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.04,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.3643410852713178,
+        "p_at_3": 0.5581395348837209,
+        "p_at_5": 0.7054263565891473,
+        "mrr": 0.4919312169312171,
+        "found_rate": 0.7751937984496124,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.04,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.3643410852713178,
+        "p_at_3": 0.5426356589147286,
+        "p_at_5": 0.6511627906976745,
+        "mrr": 0.4835209794512123,
+        "found_rate": 0.7751937984496124,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.04,
+        "fallback": "default"
+      },
+      "metrics": {
+        "p_at_1": 0.37209302325581395,
+        "p_at_3": 0.5581395348837209,
+        "p_at_5": 0.6124031007751938,
+        "mrr": 0.48019872031499955,
+        "found_rate": 0.7364341085271318,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.03,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.3643410852713178,
+        "p_at_3": 0.5348837209302325,
+        "p_at_5": 0.6046511627906976,
+        "mrr": 0.4790882244370617,
+        "found_rate": 0.7209302325581395,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.03,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.3643410852713178,
+        "p_at_3": 0.5426356589147286,
+        "p_at_5": 0.6046511627906976,
+        "mrr": 0.4784422296050204,
+        "found_rate": 0.7209302325581395,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.04,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.3643410852713178,
+        "p_at_3": 0.5193798449612403,
+        "p_at_5": 0.6434108527131783,
+        "mrr": 0.47488002953119246,
+        "found_rate": 0.7131782945736435,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.05,
+        "fallback": "default"
+      },
+      "metrics": {
+        "p_at_1": 0.3643410852713178,
+        "p_at_3": 0.5426356589147286,
+        "p_at_5": 0.6124031007751938,
+        "mrr": 0.47335117509536134,
+        "found_rate": 0.7364341085271318,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.03,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.3643410852713178,
+        "p_at_3": 0.5348837209302325,
+        "p_at_5": 0.5813953488372093,
+        "mrr": 0.46788175218407785,
+        "found_rate": 0.6744186046511628,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.03,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.35658914728682173,
+        "p_at_3": 0.5503875968992248,
+        "p_at_5": 0.5813953488372093,
+        "mrr": 0.46274763135228264,
+        "found_rate": 0.6356589147286822,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.05,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.3333333333333333,
+        "p_at_3": 0.5271317829457365,
+        "p_at_5": 0.6744186046511628,
+        "mrr": 0.4618463147532917,
+        "found_rate": 0.7596899224806202,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.03,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.35658914728682173,
+        "p_at_3": 0.5348837209302325,
+        "p_at_5": 0.5813953488372093,
+        "mrr": 0.46113264427217926,
+        "found_rate": 0.6434108527131783,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.03,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.35658914728682173,
+        "p_at_3": 0.5348837209302325,
+        "p_at_5": 0.5813953488372093,
+        "mrr": 0.4606373815676142,
+        "found_rate": 0.6434108527131783,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.03,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.35658914728682173,
+        "p_at_3": 0.5348837209302325,
+        "p_at_5": 0.5813953488372093,
+        "mrr": 0.4604958779377385,
+        "found_rate": 0.6434108527131783,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.04,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.35658914728682173,
+        "p_at_3": 0.5038759689922481,
+        "p_at_5": 0.5813953488372093,
+        "mrr": 0.45759812969115304,
+        "found_rate": 0.6821705426356589,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.03,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.3488372093023256,
+        "p_at_3": 0.5503875968992248,
+        "p_at_5": 0.5813953488372093,
+        "mrr": 0.45719207579672705,
+        "found_rate": 0.6356589147286822,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.04,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.35658914728682173,
+        "p_at_3": 0.5116279069767442,
+        "p_at_5": 0.5891472868217055,
+        "mrr": 0.4568229358927035,
+        "found_rate": 0.6821705426356589,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.03,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.34108527131782945,
+        "p_at_3": 0.5426356589147286,
+        "p_at_5": 0.5813953488372093,
+        "mrr": 0.45099052540913015,
+        "found_rate": 0.6356589147286822,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "always_default",
+        "gate_threshold": 999.0
+      },
+      "metrics": {
+        "p_at_1": 0.34108527131782945,
+        "p_at_3": 0.5193798449612403,
+        "p_at_5": 0.5891472868217055,
+        "mrr": 0.45095668758459473,
+        "found_rate": 0.7286821705426356,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.07,
+        "fallback": "default"
+      },
+      "metrics": {
+        "p_at_1": 0.34108527131782945,
+        "p_at_3": 0.5193798449612403,
+        "p_at_5": 0.5891472868217055,
+        "mrr": 0.45095668758459473,
+        "found_rate": 0.7286821705426356,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.1,
+        "fallback": "default"
+      },
+      "metrics": {
+        "p_at_1": 0.34108527131782945,
+        "p_at_3": 0.5193798449612403,
+        "p_at_5": 0.5891472868217055,
+        "mrr": 0.45095668758459473,
+        "found_rate": 0.7286821705426356,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.05,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.32558139534883723,
+        "p_at_3": 0.5116279069767442,
+        "p_at_5": 0.6201550387596899,
+        "mrr": 0.44845268856896797,
+        "found_rate": 0.751937984496124,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.07,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.32558139534883723,
+        "p_at_3": 0.49612403100775193,
+        "p_at_5": 0.6666666666666666,
+        "mrr": 0.4478928263811987,
+        "found_rate": 0.751937984496124,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.04,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.35658914728682173,
+        "p_at_3": 0.49612403100775193,
+        "p_at_5": 0.5581395348837209,
+        "mrr": 0.44417374184816055,
+        "found_rate": 0.627906976744186,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.05,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.32558139534883723,
+        "p_at_3": 0.4883720930232558,
+        "p_at_5": 0.6124031007751938,
+        "mrr": 0.4398117386489481,
+        "found_rate": 0.689922480620155,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.1,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.31007751937984496,
+        "p_at_3": 0.4883720930232558,
+        "p_at_5": 0.6589147286821705,
+        "mrr": 0.4362649194044545,
+        "found_rate": 0.7441860465116279,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.04,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.3488372093023256,
+        "p_at_3": 0.49612403100775193,
+        "p_at_5": 0.5426356589147286,
+        "mrr": 0.43588347483696327,
+        "found_rate": 0.5891472868217055,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.04,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.3488372093023256,
+        "p_at_3": 0.5116279069767442,
+        "p_at_5": 0.5426356589147286,
+        "mrr": 0.43587424633936267,
+        "found_rate": 0.5658914728682171,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.04,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.3488372093023256,
+        "p_at_3": 0.49612403100775193,
+        "p_at_5": 0.5426356589147286,
+        "mrr": 0.4352282515073213,
+        "found_rate": 0.5891472868217055,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.07,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.3178294573643411,
+        "p_at_3": 0.4806201550387597,
+        "p_at_5": 0.6124031007751938,
+        "mrr": 0.434499200196875,
+        "found_rate": 0.7441860465116279,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.04,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.3488372093023256,
+        "p_at_3": 0.49612403100775193,
+        "p_at_5": 0.5426356589147286,
+        "mrr": 0.4341946597760552,
+        "found_rate": 0.5891472868217055,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.04,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.34108527131782945,
+        "p_at_3": 0.5116279069767442,
+        "p_at_5": 0.5426356589147286,
+        "mrr": 0.4290267011197244,
+        "found_rate": 0.5658914728682171,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.07,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.3178294573643411,
+        "p_at_3": 0.4573643410852713,
+        "p_at_5": 0.6046511627906976,
+        "mrr": 0.42417866371354757,
+        "found_rate": 0.6821705426356589,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.1,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.3023255813953488,
+        "p_at_3": 0.4728682170542636,
+        "p_at_5": 0.6046511627906976,
+        "mrr": 0.4228712932201308,
+        "found_rate": 0.7364341085271318,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.04,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.3333333333333333,
+        "p_at_3": 0.5038759689922481,
+        "p_at_5": 0.5348837209302325,
+        "mrr": 0.42224375538329034,
+        "found_rate": 0.5658914728682171,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.05,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.3178294573643411,
+        "p_at_3": 0.46511627906976744,
+        "p_at_5": 0.5503875968992248,
+        "mrr": 0.4174172511381815,
+        "found_rate": 0.6434108527131783,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.05,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.31007751937984496,
+        "p_at_3": 0.46511627906976744,
+        "p_at_5": 0.5426356589147286,
+        "mrr": 0.41496247077642434,
+        "found_rate": 0.6434108527131783,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.1,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.3023255813953488,
+        "p_at_3": 0.4496124031007752,
+        "p_at_5": 0.5968992248062015,
+        "mrr": 0.41255075673680336,
+        "found_rate": 0.6744186046511628,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.05,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.3178294573643411,
+        "p_at_3": 0.4496124031007752,
+        "p_at_5": 0.5193798449612403,
+        "mrr": 0.40476805709363856,
+        "found_rate": 0.5891472868217055,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.07,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.31007751937984496,
+        "p_at_3": 0.4263565891472868,
+        "p_at_5": 0.5271317829457365,
+        "mrr": 0.3988125999753908,
+        "found_rate": 0.627906976744186,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.07,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.3023255813953488,
+        "p_at_3": 0.43410852713178294,
+        "p_at_5": 0.5193798449612403,
+        "mrr": 0.39700381444567506,
+        "found_rate": 0.627906976744186,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.05,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.31007751937984496,
+        "p_at_3": 0.4418604651162791,
+        "p_at_5": 0.49612403100775193,
+        "mrr": 0.3950012304663467,
+        "found_rate": 0.5503875968992248,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.05,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.31007751937984496,
+        "p_at_3": 0.4496124031007752,
+        "p_at_5": 0.49612403100775193,
+        "mrr": 0.3949920019687462,
+        "found_rate": 0.5503875968992248,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.05,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.31007751937984496,
+        "p_at_3": 0.4573643410852713,
+        "p_at_5": 0.49612403100775193,
+        "mrr": 0.3938845822566753,
+        "found_rate": 0.5193798449612403,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.05,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.3023255813953488,
+        "p_at_3": 0.4496124031007752,
+        "p_at_5": 0.49612403100775193,
+        "mrr": 0.38975021533161075,
+        "found_rate": 0.5503875968992248,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.1,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.29457364341085274,
+        "p_at_3": 0.4186046511627907,
+        "p_at_5": 0.5193798449612403,
+        "mrr": 0.38718469299864666,
+        "found_rate": 0.6201550387596899,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.05,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.3023255813953488,
+        "p_at_3": 0.4573643410852713,
+        "p_at_5": 0.49612403100775193,
+        "mrr": 0.387037037037037,
+        "found_rate": 0.5193798449612403,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.07,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.31007751937984496,
+        "p_at_3": 0.4108527131782946,
+        "p_at_5": 0.49612403100775193,
+        "mrr": 0.38538821213239827,
+        "found_rate": 0.5658914728682171,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.1,
+        "fallback": "rrf",
+        "tag_boost": 0.003,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.2868217054263566,
+        "p_at_3": 0.4263565891472868,
+        "p_at_5": 0.5116279069767442,
+        "mrr": 0.38537590746893086,
+        "found_rate": 0.6201550387596899,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.07,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.3023255813953488,
+        "p_at_3": 0.4108527131782946,
+        "p_at_5": 0.4728682170542636,
+        "mrr": 0.3756121570075059,
+        "found_rate": 0.5271317829457365,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.1,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.29457364341085274,
+        "p_at_3": 0.40310077519379844,
+        "p_at_5": 0.4883720930232558,
+        "mrr": 0.37376030515565406,
+        "found_rate": 0.5581395348837209,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.05,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.27906976744186046,
+        "p_at_3": 0.4496124031007752,
+        "p_at_5": 0.4883720930232558,
+        "mrr": 0.37250215331610687,
+        "found_rate": 0.5193798449612403,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.07,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.29457364341085274,
+        "p_at_3": 0.40310077519379844,
+        "p_at_5": 0.4728682170542636,
+        "mrr": 0.37174541651285836,
+        "found_rate": 0.5271317829457365,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.07,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.29457364341085274,
+        "p_at_3": 0.4186046511627907,
+        "p_at_5": 0.4728682170542636,
+        "mrr": 0.3706287683031869,
+        "found_rate": 0.49612403100775193,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.07,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.29457364341085274,
+        "p_at_3": 0.4108527131782946,
+        "p_at_5": 0.4728682170542636,
+        "mrr": 0.3703703703703704,
+        "found_rate": 0.5271317829457365,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.1,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.2868217054263566,
+        "p_at_3": 0.40310077519379844,
+        "p_at_5": 0.46511627906976744,
+        "mrr": 0.3639842500307617,
+        "found_rate": 0.5193798449612403,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.07,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.27906976744186046,
+        "p_at_3": 0.4186046511627907,
+        "p_at_5": 0.4728682170542636,
+        "mrr": 0.3599052540913006,
+        "found_rate": 0.49612403100775193,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.1,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 3.0
+      },
+      "metrics": {
+        "p_at_1": 0.2713178294573643,
+        "p_at_3": 0.3953488372093023,
+        "p_at_5": 0.46511627906976744,
+        "mrr": 0.35624154054386614,
+        "found_rate": 0.5193798449612403,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.1,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 2.0
+      },
+      "metrics": {
+        "p_at_1": 0.2713178294573643,
+        "p_at_3": 0.4108527131782946,
+        "p_at_5": 0.46511627906976744,
+        "mrr": 0.35512489233419464,
+        "found_rate": 0.4883720930232558,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.1,
+        "fallback": "rrf",
+        "tag_boost": 0.006,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.2713178294573643,
+        "p_at_3": 0.40310077519379844,
+        "p_at_5": 0.46511627906976744,
+        "mrr": 0.3548664944013782,
+        "found_rate": 0.5193798449612403,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.07,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.2558139534883721,
+        "p_at_3": 0.4108527131782946,
+        "p_at_5": 0.46511627906976744,
+        "mrr": 0.3449827734711456,
+        "found_rate": 0.49612403100775193,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.1,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 1.5
+      },
+      "metrics": {
+        "p_at_1": 0.2558139534883721,
+        "p_at_3": 0.4108527131782946,
+        "p_at_5": 0.46511627906976744,
+        "mrr": 0.34440137812230837,
+        "found_rate": 0.4883720930232558,
+        "count": 129
+      }
+    },
+    {
+      "params": {
+        "strategy": "cascade",
+        "gate_threshold": 0.1,
+        "fallback": "rrf",
+        "tag_boost": 0.01,
+        "concepts_weight": 1.0
+      },
+      "metrics": {
+        "p_at_1": 0.23255813953488372,
+        "p_at_3": 0.40310077519379844,
+        "p_at_5": 0.4573643410852713,
+        "mrr": 0.3294788975021533,
+        "found_rate": 0.4883720930232558,
+        "count": 129
+      }
+    }
+  ],
+  "recommended": {
+    "params": {
+      "strategy": "cascade",
+      "gate_threshold": 0.07,
+      "fallback": "rrf",
+      "tag_boost": 0.0,
+      "concepts_weight": 3.0
+    },
+    "metrics": {
+      "p_at_1": 0.4418604651162791,
+      "p_at_3": 0.7054263565891473,
+      "p_at_5": 0.7984496124031008,
+      "mrr": 0.5895779500430665,
+      "found_rate": 0.8682170542635659,
+      "count": 129
+    }
+  }
+}

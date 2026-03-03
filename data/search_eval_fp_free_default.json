@@ -1,0 +1,4850 @@
+{
+  "generated_at": "2026-03-03T21:03:32.287232+00:00",
+  "questions_file": "data/search_eval_fp_free.json",
+  "top_k": 10,
+  "band_filter": null,
+  "metrics": {
+    "overall": {
+      "count": 129,
+      "p_at_1": 0.34108527131782945,
+      "p_at_3": 0.5193798449612403,
+      "p_at_5": 0.5891472868217055,
+      "mrr": 0.45095668758459473,
+      "found_rate": 0.7286821705426356
+    },
+    "action": {
+      "count": 43,
+      "p_at_1": 0.37209302325581395,
+      "p_at_3": 0.5348837209302325,
+      "p_at_5": 0.6744186046511628,
+      "mrr": 0.49198966408268724,
+      "found_rate": 0.813953488372093
+    },
+    "body": {
+      "count": 43,
+      "p_at_1": 0.27906976744186046,
+      "p_at_3": 0.5116279069767442,
+      "p_at_5": 0.5581395348837209,
+      "mrr": 0.4094592100406054,
+      "found_rate": 0.7209302325581395
+    },
+    "experience": {
+      "count": 43,
+      "p_at_1": 0.37209302325581395,
+      "p_at_3": 0.5116279069767442,
+      "p_at_5": 0.5348837209302325,
+      "mrr": 0.45142118863049085,
+      "found_rate": 0.6511627906976745
+    },
+    "bands": {
+      "low": {
+        "count": 57,
+        "p_at_1": 0.14035087719298245,
+        "p_at_3": 0.38596491228070173,
+        "p_at_5": 0.45614035087719296,
+        "mrr": 0.2842314118629908,
+        "found_rate": 0.631578947368421
+      },
+      "mid": {
+        "count": 23,
+        "p_at_1": 0.30434782608695654,
+        "p_at_3": 0.391304347826087,
+        "p_at_5": 0.43478260869565216,
+        "mrr": 0.3613526570048309,
+        "found_rate": 0.5652173913043478
+      },
+      "mid-high": {
+        "count": 23,
+        "p_at_1": 0.391304347826087,
+        "p_at_3": 0.5652173913043478,
+        "p_at_5": 0.7391304347826086,
+        "mrr": 0.5287439613526569,
+        "found_rate": 0.9130434782608695
+      },
+      "high": {
+        "count": 26,
+        "p_at_1": 0.7692307692307693,
+        "p_at_3": 0.8846153846153846,
+        "p_at_5": 0.8846153846153846,
+        "mrr": 0.8269230769230768,
+        "found_rate": 0.9230769230769231
+      }
+    }
+  },
+  "results": [
+    {
+      "id": "q0001",
+      "query": "feldenkrais lesson lifting pelvis using feet, pressing through outer foot",
+      "category": "action",
+      "expected_doc_id": "b2cee454-6355-4f80-966e-133dfc18f8eb",
+      "expected_title": "Activating the Arches - Feldenkrais Project",
+      "rank": 1,
+      "band": "low",
+      "gap": 0.0105,
+      "top_hits": [
+        {
+          "title": "Activating the Arches - Feldenkrais Project",
+          "similarity": 0.7665,
+          "doc_id": "b2cee454-6355-4f80-966e-133dfc18f8eb"
+        },
+        {
+          "title": "Lifting Up and Through - Feldenkrais Project",
+          "similarity": 0.766,
+          "doc_id": "af3ab002-2dfe-46d6-9e0f-ce3a3013029d"
+        },
+        {
+          "title": "Feet Propelling Into Action (Rock Climbing)",
+          "similarity": 0.7566,
+          "doc_id": "c598b0e4-a68c-45a5-8fa6-e7d01b3c7b58"
+        },
+        {
+          "title": "Are you ready to stand up?",
+          "similarity": 0.7565,
+          "doc_id": "48e06e15-6f2c-4578-8730-960d338f0085"
+        },
+        {
+          "title": "Waking the Feet",
+          "similarity": 0.756,
+          "doc_id": "c2e78ae1-de12-4d91-a237-37fa0509f9c6"
+        }
+      ]
+    },
+    {
+      "id": "q0002",
+      "query": "feldenkrais foot arch activation and connection to spine and pelvis",
+      "category": "body",
+      "expected_doc_id": "b2cee454-6355-4f80-966e-133dfc18f8eb",
+      "expected_title": "Activating the Arches - Feldenkrais Project",
+      "rank": 1,
+      "band": "high",
+      "gap": 0.062,
+      "top_hits": [
+        {
+          "title": "Activating the Arches - Feldenkrais Project",
+          "similarity": 0.8286,
+          "doc_id": "b2cee454-6355-4f80-966e-133dfc18f8eb"
+        },
+        {
+          "title": "The Edges of the Feet",
+          "similarity": 0.7778,
+          "doc_id": "bd1418ee-b26c-496a-aece-46c761464a70"
+        },
+        {
+          "title": "Breath, Belly, Back, and Hips: Connecting to the Earth - Feldenkrais Project",
+          "similarity": 0.7671,
+          "doc_id": "00a0dff0-23d1-48f5-923e-d77b1d6d5d74"
+        },
+        {
+          "title": "Waking the Feet",
+          "similarity": 0.7669,
+          "doc_id": "c2e78ae1-de12-4d91-a237-37fa0509f9c6"
+        },
+        {
+          "title": "Feet Propelling Into Action (Rock Climbing)",
+          "similarity": 0.7666,
+          "doc_id": "c598b0e4-a68c-45a5-8fa6-e7d01b3c7b58"
+        }
+      ]
+    },
+    {
+      "id": "q0003",
+      "query": "feldenkrais lesson feeling connection from foot to spine, buoyant feeling",
+      "category": "experience",
+      "expected_doc_id": "b2cee454-6355-4f80-966e-133dfc18f8eb",
+      "expected_title": "Activating the Arches - Feldenkrais Project",
+      "rank": 1,
+      "band": "mid",
+      "gap": 0.0178,
+      "top_hits": [
+        {
+          "title": "Activating the Arches - Feldenkrais Project",
+          "similarity": 0.7883,
+          "doc_id": "b2cee454-6355-4f80-966e-133dfc18f8eb"
+        },
+        {
+          "title": "Lifting Up and Through - Feldenkrais Project",
+          "similarity": 0.7825,
+          "doc_id": "af3ab002-2dfe-46d6-9e0f-ce3a3013029d"
+        },
+        {
+          "title": "Talk: Feldenkrais for Self Empowerment - Feldenkrais Project",
+          "similarity": 0.7803,
+          "doc_id": "d293737c-d25e-4877-a909-36b8eab8db97"
+        },
+        {
+          "title": "Connecting legs through upper spine",
+          "similarity": 0.7794,
+          "doc_id": "ffc57d8a-b1cd-4c09-8410-bb60988397c1"
+        },
+        {
+          "title": "Length Without Effort - Feldenkrais Project",
+          "similarity": 0.7704,
+          "doc_id": "27f6966f-afb8-4b42-9eac-bbde02408b35"
+        }
+      ]
+    },
+    {
+      "id": "q0004",
+      "query": "feldenkrais lesson tapping heel and forefoot rapidly on floor",
+      "category": "action",
+      "expected_doc_id": "082e2a61-c9ae-4f78-aee0-76344907cb38",
+      "expected_title": "Agile Hips, Knees, and Feet - Feldenkrais Project",
+      "rank": 6,
+      "band": "low",
+      "gap": 0.011,
+      "top_hits": [
+        {
+          "title": "Improving Hopping for Beginners",
+          "similarity": 0.7468,
+          "doc_id": "2d7f305d-5bdd-4e3d-9799-9dd28e61bc9f"
+        },
+        {
+          "title": "One Bell Hand / Two Bell Hands...and Feet (31m + 29m, Patrons) - Feldenkrais Project",
+          "similarity": 0.7448,
+          "doc_id": "3d2a56a3-02b0-40fa-864c-e3b79238a1eb"
+        },
+        {
+          "title": "ATM: Foot Differentiation - 3 August 1973",
+          "similarity": 0.7397,
+          "doc_id": "e48820b8-8036-4bf0-8440-31af59cd25a5"
+        },
+        {
+          "title": "Aligning the Knees",
+          "similarity": 0.7377,
+          "doc_id": "0fa5d2d9-ff32-4088-9704-a44e74d34452"
+        },
+        {
+          "title": "Comfortable with the Unknown",
+          "similarity": 0.7359,
+          "doc_id": "c7ba7d5a-6a87-410d-8ea3-49cb4ba83c53"
+        }
+      ]
+    },
+    {
+      "id": "q0005",
+      "query": "how to release hip flexors and psoas without abdominal bracing",
+      "category": "body",
+      "expected_doc_id": "082e2a61-c9ae-4f78-aee0-76344907cb38",
+      "expected_title": "Agile Hips, Knees, and Feet - Feldenkrais Project",
+      "rank": null,
+      "band": "low",
+      "gap": 0.0098,
+      "top_hits": [
+        {
+          "title": "Freedom in the Pelvis (for Horse Riders)",
+          "similarity": 0.7052,
+          "doc_id": "6d883d0d-d904-4c36-aa5e-1cd3817e5b17"
+        },
+        {
+          "title": "Opening Hip Joints Towards Half-Lotus",
+          "similarity": 0.7042,
+          "doc_id": "45dfe96d-8051-4a03-927e-96f5d24d3ff5"
+        },
+        {
+          "title": "Lifting Back with Knees",
+          "similarity": 0.6979,
+          "doc_id": "8ea9ef85-1251-45f9-8fd7-c6c163aad91f"
+        },
+        {
+          "title": "Hip Joints For Sitting Cross Legged",
+          "similarity": 0.6958,
+          "doc_id": "0e53355f-11e7-4a2a-bc49-4683715b44b4"
+        },
+        {
+          "title": "(variations on) Getting to Know the Hip Joints",
+          "similarity": 0.6954,
+          "doc_id": "08cc779b-3a8c-4505-ae71-089887a44ba5"
+        }
+      ]
+    },
+    {
+      "id": "q0006",
+      "query": "feldenkrais lesson feeling skeletal support from feet to spine",
+      "category": "experience",
+      "expected_doc_id": "082e2a61-c9ae-4f78-aee0-76344907cb38",
+      "expected_title": "Agile Hips, Knees, and Feet - Feldenkrais Project",
+      "rank": null,
+      "band": "low",
+      "gap": 0.0161,
+      "top_hits": [
+        {
+          "title": "Length Without Effort - Feldenkrais Project",
+          "similarity": 0.7967,
+          "doc_id": "27f6966f-afb8-4b42-9eac-bbde02408b35"
+        },
+        {
+          "title": "Connecting legs through upper spine",
+          "similarity": 0.7824,
+          "doc_id": "ffc57d8a-b1cd-4c09-8410-bb60988397c1"
+        },
+        {
+          "title": "Activating the Arches - Feldenkrais Project",
+          "similarity": 0.7823,
+          "doc_id": "b2cee454-6355-4f80-966e-133dfc18f8eb"
+        },
+        {
+          "title": "Talk: Reducing Excess Effort and Sensing the Skeleton - Feldenkrais Project",
+          "similarity": 0.7815,
+          "doc_id": "948d9342-587f-4249-a793-fc00aae0beb8"
+        },
+        {
+          "title": "The Anti-Gravity Lesson - Feldenkrais Project",
+          "similarity": 0.7807,
+          "doc_id": "5f4f4acf-9697-43ec-b961-5fb129fc2408"
+        }
+      ]
+    },
+    {
+      "id": "q0007",
+      "query": "Feldenkrais lesson reaching one arm up while lifting the same hip",
+      "category": "action",
+      "expected_doc_id": "98211ff4-c690-4eb3-9243-9a642ac14d8c",
+      "expected_title": "Arms Like a Skeleton, with a Bias - Feldenkrais Project",
+      "rank": 4,
+      "band": "mid-high",
+      "gap": 0.0271,
+      "top_hits": [
+        {
+          "title": "Reaching Up",
+          "similarity": 0.7797,
+          "doc_id": "44131685-28b8-45ee-a6d6-b3d9c3671a8e"
+        },
+        {
+          "title": "Connecting Shoulders and Hips Part 1 - Feldenkrais Project",
+          "similarity": 0.768,
+          "doc_id": "d490d242-0625-4480-9acf-33a1a78ebe5e"
+        },
+        {
+          "title": "Reaching with a Soft Hand",
+          "similarity": 0.7608,
+          "doc_id": "6ae3205c-909f-4ff4-8914-37af445bfe84"
+        },
+        {
+          "title": "Arms Like a Skeleton, with a Bias - Feldenkrais Project",
+          "similarity": 0.7605,
+          "doc_id": "98211ff4-c690-4eb3-9243-9a642ac14d8c"
+        },
+        {
+          "title": "Lifting Up and Through - Feldenkrais Project",
+          "similarity": 0.7526,
+          "doc_id": "af3ab002-2dfe-46d6-9e0f-ce3a3013029d"
+        }
+      ]
+    },
+    {
+      "id": "q0008",
+      "query": "Feldenkrais lesson finding the easier side of my spine to bend",
+      "category": "body",
+      "expected_doc_id": "98211ff4-c690-4eb3-9243-9a642ac14d8c",
+      "expected_title": "Arms Like a Skeleton, with a Bias - Feldenkrais Project",
+      "rank": 3,
+      "band": "low",
+      "gap": 0.012,
+      "top_hits": [
+        {
+          "title": "Bending Sideways - Feldenkrais Project",
+          "similarity": 0.7646,
+          "doc_id": "da0a6c28-4a78-45e8-b02d-cda28d14886e"
+        },
+        {
+          "title": "Spine and Chest Side-Bending, Lengthening Limbs - Feldenkrais Project",
+          "similarity": 0.7601,
+          "doc_id": "3371e90e-c560-4396-ac84-2bc473d19706"
+        },
+        {
+          "title": "Arms Like a Skeleton, with a Bias - Feldenkrais Project",
+          "similarity": 0.7565,
+          "doc_id": "98211ff4-c690-4eb3-9243-9a642ac14d8c"
+        },
+        {
+          "title": "Bending Left and Right - First Pass",
+          "similarity": 0.7549,
+          "doc_id": "92eb898b-9aef-481d-96df-4c5ca74072f3"
+        },
+        {
+          "title": "Gathering the Spine, Stepping Down - Feldenkrais Project",
+          "similarity": 0.7526,
+          "doc_id": "50fa3469-e889-4250-b531-08dac33c70d8"
+        }
+      ]
+    },
+    {
+      "id": "q0009",
+      "query": "Feldenkrais lesson noticing the difference between the two sides of my spine",
+      "category": "experience",
+      "expected_doc_id": "98211ff4-c690-4eb3-9243-9a642ac14d8c",
+      "expected_title": "Arms Like a Skeleton, with a Bias - Feldenkrais Project",
+      "rank": 1,
+      "band": "mid",
+      "gap": 0.0168,
+      "top_hits": [
+        {
+          "title": "Arms Like a Skeleton, with a Bias - Feldenkrais Project",
+          "similarity": 0.771,
+          "doc_id": "98211ff4-c690-4eb3-9243-9a642ac14d8c"
+        },
+        {
+          "title": "Spine Like a Chain, with a Bias - Feldenkrais Project",
+          "similarity": 0.7603,
+          "doc_id": "ade87dda-4bb5-447a-b412-6203edc0c3b5"
+        },
+        {
+          "title": "Gathering the Spine, Stepping Down - Feldenkrais Project",
+          "similarity": 0.7575,
+          "doc_id": "50fa3469-e889-4250-b531-08dac33c70d8"
+        },
+        {
+          "title": "On the Right IschiumMaking Left Side Long Sitting on the Right Buttock",
+          "similarity": 0.7551,
+          "doc_id": "76239ab2-1194-4bf9-b5e1-0580f9eb27c9"
+        },
+        {
+          "title": "Spine and Chest Side-Bending, Lengthening Limbs - Feldenkrais Project",
+          "similarity": 0.7542,
+          "doc_id": "3371e90e-c560-4396-ac84-2bc473d19706"
+        }
+      ]
+    },
+    {
+      "id": "q0010",
+      "query": "Feldenkrais lesson side bending and twisting while lying on back",
+      "category": "action",
+      "expected_doc_id": "da0a6c28-4a78-45e8-b02d-cda28d14886e",
+      "expected_title": "Bending Sideways - Feldenkrais Project",
+      "rank": 1,
+      "band": "low",
+      "gap": 0.0116,
+      "top_hits": [
+        {
+          "title": "Bending Sideways - Feldenkrais Project",
+          "similarity": 0.7715,
+          "doc_id": "da0a6c28-4a78-45e8-b02d-cda28d14886e"
+        },
+        {
+          "title": "Spine and Chest Side-Bending, Lengthening Limbs - Feldenkrais Project",
+          "similarity": 0.7679,
+          "doc_id": "3371e90e-c560-4396-ac84-2bc473d19706"
+        },
+        {
+          "title": "The Power of Prone: Twisting on Your Belly - Feldenkrais Project",
+          "similarity": 0.7656,
+          "doc_id": "901195d6-8e48-4c01-8ab2-e6641492c1ec"
+        },
+        {
+          "title": "Simple Twisting - Feldenkrais Project",
+          "similarity": 0.7652,
+          "doc_id": "95e68e7a-adae-43d4-b71c-6bb8827284c1"
+        },
+        {
+          "title": "Supple Twisting - Feldenkrais Project",
+          "similarity": 0.7598,
+          "doc_id": "b3a86cf1-faaa-4ee5-be3c-1bb60ed292ea"
+        }
+      ]
+    },
+    {
+      "id": "q0011",
+      "query": "Feldenkrais lesson ribs softening and folding for spinal movement",
+      "category": "body",
+      "expected_doc_id": "da0a6c28-4a78-45e8-b02d-cda28d14886e",
+      "expected_title": "Bending Sideways - Feldenkrais Project",
+      "rank": null,
+      "band": "high",
+      "gap": 0.0387,
+      "top_hits": [
+        {
+          "title": "Softening the Ribs - Feldenkrais Project",
+          "similarity": 0.8135,
+          "doc_id": "124fc281-a2c6-41bf-9a78-e1f2624ccac9"
+        },
+        {
+          "title": "Twisted Lamprey - Feldenkrais Project",
+          "similarity": 0.7876,
+          "doc_id": "a3b0f882-2acd-4dd0-bcab-3714758ca1bc"
+        },
+        {
+          "title": "Supple Twisting - Feldenkrais Project",
+          "similarity": 0.7828,
+          "doc_id": "b3a86cf1-faaa-4ee5-be3c-1bb60ed292ea"
+        },
+        {
+          "title": "Chest and Breastbone Softening for Folding (FI Demo, 7/25/25, Ch 5)",
+          "similarity": 0.7814,
+          "doc_id": "dda4cea7-1f40-4cb4-8446-424a33ab7eb5"
+        },
+        {
+          "title": "Rib Mobility and Spinal Integration (ATM, 3/7/25, Ch 4)",
+          "similarity": 0.7748,
+          "doc_id": "af861ba4-8d5f-4624-a27c-f8a887f26613"
+        }
+      ]
+    },
+    {
+      "id": "q0012",
+      "query": "Feldenkrais lesson feeling the connection between pelvis and head",
+      "category": "experience",
+      "expected_doc_id": "da0a6c28-4a78-45e8-b02d-cda28d14886e",
+      "expected_title": "Bending Sideways - Feldenkrais Project",
+      "rank": null,
+      "band": "mid",
+      "gap": 0.0181,
+      "top_hits": [
+        {
+          "title": "Rolling Head and Circling Coccyx on Knees",
+          "similarity": 0.7966,
+          "doc_id": "0107a9fa-aa8e-4600-b5f9-e7edbeb956bb"
+        },
+        {
+          "title": "Differentiation of Pelvic Movements by Means of an Imaginary Clock (Patrons) - Feldenkrais Project",
+          "similarity": 0.7909,
+          "doc_id": "82edeeb9-b563-4822-9a13-53a18ab60dba"
+        },
+        {
+          "title": "Dynamic Sitting and Chair Clock - Feldenkrais Project",
+          "similarity": 0.788,
+          "doc_id": "8cde4e74-6d1d-461a-a626-0993b26571eb"
+        },
+        {
+          "title": "Head and Pelvis Clock Circles (ATM, 6/1/25, Ch 6)",
+          "similarity": 0.7829,
+          "doc_id": "de4d4796-d14a-4a7f-851f-da531d2522bb"
+        },
+        {
+          "title": "Pelvic Movement and Skeletal Transmission (FI Demo, 5/30/25, Ch 5)",
+          "similarity": 0.7785,
+          "doc_id": "3d4047cc-d60b-4125-ab18-23b22e9194bf"
+        }
+      ]
+    },
+    {
+      "id": "q0013",
+      "query": "Feldenkrais lesson rolling like a log on the floor",
+      "category": "action",
+      "expected_doc_id": "00a0dff0-23d1-48f5-923e-d77b1d6d5d74",
+      "expected_title": "Breath, Belly, Back, and Hips: Connecting to the Earth - Feldenkrais Project",
+      "rank": null,
+      "band": "low",
+      "gap": 0.0151,
+      "top_hits": [
+        {
+          "title": "Rolling to Sitting, and Beyond - Feldenkrais Project",
+          "similarity": 0.7734,
+          "doc_id": "07c970de-d30a-4ecf-8859-c7a6b148e8fd"
+        },
+        {
+          "title": "Rolling with Length - Feldenkrais Project",
+          "similarity": 0.766,
+          "doc_id": "a5b061ee-55a3-43ca-8e0e-d25c59936345"
+        },
+        {
+          "title": "Rolling from Stomach to Back",
+          "similarity": 0.7614,
+          "doc_id": "255cd4e7-ea7f-4dbc-93bb-26087c7e847a"
+        },
+        {
+          "title": "Rolling - the Foundation of Balance",
+          "similarity": 0.7607,
+          "doc_id": "02614559-0d85-45bd-9a7b-49a51f7442f1"
+        },
+        {
+          "title": "Rolling",
+          "similarity": 0.7584,
+          "doc_id": "f959658b-f940-4ca1-8f62-9cd98462c05d"
+        }
+      ]
+    },
+    {
+      "id": "q0014",
+      "query": "Feldenkrais lesson connecting feet to pelvis and lower back",
+      "category": "body",
+      "expected_doc_id": "00a0dff0-23d1-48f5-923e-d77b1d6d5d74",
+      "expected_title": "Breath, Belly, Back, and Hips: Connecting to the Earth - Feldenkrais Project",
+      "rank": 1,
+      "band": "mid",
+      "gap": 0.0169,
+      "top_hits": [
+        {
+          "title": "Breath, Belly, Back, and Hips: Connecting to the Earth - Feldenkrais Project",
+          "similarity": 0.7939,
+          "doc_id": "00a0dff0-23d1-48f5-923e-d77b1d6d5d74"
+        },
+        {
+          "title": "Walking like a Cat (especially for kids)",
+          "similarity": 0.7802,
+          "doc_id": "104ada13-10df-4a2d-a447-edd65f584f9f"
+        },
+        {
+          "title": "Connecting legs through upper spine",
+          "similarity": 0.78,
+          "doc_id": "ffc57d8a-b1cd-4c09-8410-bb60988397c1"
+        },
+        {
+          "title": "Your Navigational Pelvis - Feldenkrais Project",
+          "similarity": 0.7776,
+          "doc_id": "154cde8d-d1c9-4f95-a23c-fd4010713646"
+        },
+        {
+          "title": "Waking the Feet",
+          "similarity": 0.777,
+          "doc_id": "c2e78ae1-de12-4d91-a237-37fa0509f9c6"
+        }
+      ]
+    },
+    {
+      "id": "q0015",
+      "query": "Feldenkrais lesson feeling lighter and more spacious in my abdomen",
+      "category": "experience",
+      "expected_doc_id": "00a0dff0-23d1-48f5-923e-d77b1d6d5d74",
+      "expected_title": "Breath, Belly, Back, and Hips: Connecting to the Earth - Feldenkrais Project",
+      "rank": 6,
+      "band": "low",
+      "gap": 0.0056,
+      "top_hits": [
+        {
+          "title": "Strength Without Excess - Feldenkrais Project",
+          "similarity": 0.7412,
+          "doc_id": "642a5cff-80ce-4b78-bbbd-42d6e00e0660"
+        },
+        {
+          "title": "Talk: We Can Learn to be Better for Ourselves, Moment to Moment - Feldenkrais Project",
+          "similarity": 0.7402,
+          "doc_id": "51edc0e3-9460-4d53-ba63-fbae2020db35"
+        },
+        {
+          "title": "Head Under the Gap Workshop Discussion - Feldenkrais Project",
+          "similarity": 0.7373,
+          "doc_id": "3c445984-d34a-4c37-8a6f-d96aa5550157"
+        },
+        {
+          "title": "Freeing Your Breath and Spine (16m or 37m) - Feldenkrais Project",
+          "similarity": 0.7363,
+          "doc_id": "d4be3b8d-3cbc-42b6-9d23-b97381858157"
+        },
+        {
+          "title": "Folding, Foundation, and Feet - Feldenkrais Project",
+          "similarity": 0.7356,
+          "doc_id": "f53988e0-8eab-4468-9dc1-ecdc478f5141"
+        }
+      ]
+    },
+    {
+      "id": "q0016",
+      "query": "feldenkrais lesson pulsing hand coordinated with head movement",
+      "category": "action",
+      "expected_doc_id": "fdf84091-1b9c-4c33-889c-50eb22d8541c",
+      "expected_title": "Calming Your Nervous System, Integrating Hands and Eyes - Feldenkrais Project",
+      "rank": 1,
+      "band": "high",
+      "gap": 0.0408,
+      "top_hits": [
+        {
+          "title": "Calming Your Nervous System, Integrating Hands and Eyes - Feldenkrais Project",
+          "similarity": 0.7915,
+          "doc_id": "fdf84091-1b9c-4c33-889c-50eb22d8541c"
+        },
+        {
+          "title": "One Bell Hand / Two Bell Hands...and Feet (31m + 29m, Patrons) - Feldenkrais Project",
+          "similarity": 0.7722,
+          "doc_id": "3d2a56a3-02b0-40fa-864c-e3b79238a1eb"
+        },
+        {
+          "title": "Getting Free with a Bell Hand (Patrons) - Feldenkrais Project",
+          "similarity": 0.7636,
+          "doc_id": "2f412dc1-ed5b-47bd-a6fb-2277698ffd08"
+        },
+        {
+          "title": "Hand and Head Coordination Exploration (ATM, 10/5/25, Ch 2)",
+          "similarity": 0.7571,
+          "doc_id": "bd7b1f47-caff-451b-9b65-da677bf843a9"
+        },
+        {
+          "title": "Hand and Head Integration on Side-Lying (ATM, 10/4/25, Ch 7)",
+          "similarity": 0.7507,
+          "doc_id": "dddf2d4c-0882-4fb2-8c6b-ec6d0370011d"
+        }
+      ]
+    },
+    {
+      "id": "q0017",
+      "query": "feldenkrais lesson differentiate eye movement from head and hand",
+      "category": "body",
+      "expected_doc_id": "fdf84091-1b9c-4c33-889c-50eb22d8541c",
+      "expected_title": "Calming Your Nervous System, Integrating Hands and Eyes - Feldenkrais Project",
+      "rank": 2,
+      "band": "low",
+      "gap": 0.0123,
+      "top_hits": [
+        {
+          "title": "Differentiating Eyes and Head: On back and in Sitting",
+          "similarity": 0.7826,
+          "doc_id": "1cf74238-a266-444d-b5b7-3df34d8cf81e"
+        },
+        {
+          "title": "Calming Your Nervous System, Integrating Hands and Eyes - Feldenkrais Project",
+          "similarity": 0.7824,
+          "doc_id": "fdf84091-1b9c-4c33-889c-50eb22d8541c"
+        },
+        {
+          "title": "Every Movement Is A Movement Of The Whole Person",
+          "similarity": 0.7787,
+          "doc_id": "6a52b3c2-8dd9-4a0b-a25a-82528c7d4a7b"
+        },
+        {
+          "title": "Smooth Eye Tracking",
+          "similarity": 0.7719,
+          "doc_id": "4103d1c5-d0f2-4ff2-9a20-b44b3f2ffe34"
+        },
+        {
+          "title": "Head Movement and Sensory Organization (Lecture, 5/11/25, Ch 6)",
+          "similarity": 0.7703,
+          "doc_id": "b19aa193-285e-495e-9502-05fafbcd394d"
+        }
+      ]
+    },
+    {
+      "id": "q0018",
+      "query": "feldenkrais lesson for calming nervous system and feeling lighter",
+      "category": "experience",
+      "expected_doc_id": "fdf84091-1b9c-4c33-889c-50eb22d8541c",
+      "expected_title": "Calming Your Nervous System, Integrating Hands and Eyes - Feldenkrais Project",
+      "rank": 1,
+      "band": "mid-high",
+      "gap": 0.022,
+      "top_hits": [
+        {
+          "title": "Calming Your Nervous System, Integrating Hands and Eyes - Feldenkrais Project",
+          "similarity": 0.7756,
+          "doc_id": "fdf84091-1b9c-4c33-889c-50eb22d8541c"
+        },
+        {
+          "title": "Feeling More Connected",
+          "similarity": 0.7724,
+          "doc_id": "b314d9a5-0119-472c-bbf1-6359916f6b2d"
+        },
+        {
+          "title": "Talk: Feldenkrais for Self Empowerment - Feldenkrais Project",
+          "similarity": 0.7709,
+          "doc_id": "d293737c-d25e-4877-a909-36b8eab8db97"
+        },
+        {
+          "title": "Introductions and Lesson Feedback (Discussion, 1/17/25, Ch 2)",
+          "similarity": 0.7614,
+          "doc_id": "060862e1-ae0e-4f64-845d-cdb52ad9d8b1"
+        },
+        {
+          "title": "Talk: Reducing Excess Effort and Sensing the Skeleton - Feldenkrais Project",
+          "similarity": 0.7536,
+          "doc_id": "948d9342-587f-4249-a793-fc00aae0beb8"
+        }
+      ]
+    },
+    {
+      "id": "q0019",
+      "query": "feldenkrais lesson rotating arms like wringing out a towel",
+      "category": "action",
+      "expected_doc_id": "f54baa93-2bff-4e27-9b2f-29750472a261",
+      "expected_title": "Chanukia, the Candle Holder Lesson - Feldenkrais Project",
+      "rank": 1,
+      "band": "high",
+      "gap": 0.0421,
+      "top_hits": [
+        {
+          "title": "Chanukia, the Candle Holder Lesson - Feldenkrais Project",
+          "similarity": 0.7954,
+          "doc_id": "f54baa93-2bff-4e27-9b2f-29750472a261"
+        },
+        {
+          "title": "Rolling the Fists",
+          "similarity": 0.7547,
+          "doc_id": "8a7bf4a2-7d47-48c4-be95-78577f91980f"
+        },
+        {
+          "title": "Supple Twisting - Feldenkrais Project",
+          "similarity": 0.7546,
+          "doc_id": "b3a86cf1-faaa-4ee5-be3c-1bb60ed292ea"
+        },
+        {
+          "title": "Bending Fingers Backward, Part 1,",
+          "similarity": 0.7546,
+          "doc_id": "ac4083eb-21db-4f0a-b45d-86df7c6fb082"
+        },
+        {
+          "title": "Simple Twisting - Feldenkrais Project",
+          "similarity": 0.7533,
+          "doc_id": "95e68e7a-adae-43d4-b71c-6bb8827284c1"
+        }
+      ]
+    },
+    {
+      "id": "q0020",
+      "query": "feldenkrais lesson shoulder rotation and ribcage movement",
+      "category": "body",
+      "expected_doc_id": "f54baa93-2bff-4e27-9b2f-29750472a261",
+      "expected_title": "Chanukia, the Candle Holder Lesson - Feldenkrais Project",
+      "rank": 6,
+      "band": "mid",
+      "gap": 0.0179,
+      "top_hits": [
+        {
+          "title": "The Periscope - Feldenkrais Project",
+          "similarity": 0.7971,
+          "doc_id": "6819613d-75b4-4cd1-87b2-431daf999c3b"
+        },
+        {
+          "title": "Softening the Ribs - Feldenkrais Project",
+          "similarity": 0.7937,
+          "doc_id": "124fc281-a2c6-41bf-9a78-e1f2624ccac9"
+        },
+        {
+          "title": "Reaching, Rolling, and Ribs - Feldenkrais Project",
+          "similarity": 0.7909,
+          "doc_id": "d3ff9c31-27a4-4af6-90f3-38465ed44d54"
+        },
+        {
+          "title": "Simple Self-Hug - Feldenkrais Project",
+          "similarity": 0.786,
+          "doc_id": "4c768a03-56ef-4ef5-827c-f8694e248f7a"
+        },
+        {
+          "title": "Chest and Shoulder Mobility Exploration (ATM, 10/4/25, Ch 1)",
+          "similarity": 0.7792,
+          "doc_id": "73edb399-127a-4ea7-9d91-c71e368a8d77"
+        }
+      ]
+    },
+    {
+      "id": "q0021",
+      "query": "feldenkrais lesson feeling spine move with head and arms",
+      "category": "experience",
+      "expected_doc_id": "f54baa93-2bff-4e27-9b2f-29750472a261",
+      "expected_title": "Chanukia, the Candle Holder Lesson - Feldenkrais Project",
+      "rank": 2,
+      "band": "low",
+      "gap": 0.0046,
+      "top_hits": [
+        {
+          "title": "Rolling Arms with Spinal Integration (ATM, 5/12/25, Ch 3)",
+          "similarity": 0.7701,
+          "doc_id": "5fbd06cf-d7b0-48fb-b3f6-0b20a5f35a8c"
+        },
+        {
+          "title": "Chanukia, the Candle Holder Lesson - Feldenkrais Project",
+          "similarity": 0.7696,
+          "doc_id": "f54baa93-2bff-4e27-9b2f-29750472a261"
+        },
+        {
+          "title": "Carriage of the Head Revisited - July 24, 2025",
+          "similarity": 0.7676,
+          "doc_id": "da4df18c-b3ae-44c2-9f02-5bf073f45682"
+        },
+        {
+          "title": "Inter-Weaving the Back with the Help of the Hands",
+          "similarity": 0.7673,
+          "doc_id": "5207ea60-1a2d-4fe9-98fa-e4095236b3ec"
+        },
+        {
+          "title": "Arms Like a Skeleton, with a Bias - Feldenkrais Project",
+          "similarity": 0.7655,
+          "doc_id": "98211ff4-c690-4eb3-9243-9a642ac14d8c"
+        }
+      ]
+    },
+    {
+      "id": "q0022",
+      "query": "feldenkrais lesson rolling from side to back with hand reaching chest",
+      "category": "action",
+      "expected_doc_id": "7233897b-431d-4101-9324-753e1f2ca384",
+      "expected_title": "Connecting Arms and Legs, Hinges at Feet and Knees - Feldenkrais Project",
+      "rank": null,
+      "band": "mid",
+      "gap": 0.0207,
+      "top_hits": [
+        {
+          "title": "Reaching, Rolling, and Ribs - Feldenkrais Project",
+          "similarity": 0.7797,
+          "doc_id": "d3ff9c31-27a4-4af6-90f3-38465ed44d54"
+        },
+        {
+          "title": "Rolling with Length - Feldenkrais Project",
+          "similarity": 0.7628,
+          "doc_id": "a5b061ee-55a3-43ca-8e0e-d25c59936345"
+        },
+        {
+          "title": "Rolling to Sitting, and Beyond - Feldenkrais Project",
+          "similarity": 0.7609,
+          "doc_id": "07c970de-d30a-4ecf-8859-c7a6b148e8fd"
+        },
+        {
+          "title": "Transitions Matter",
+          "similarity": 0.7605,
+          "doc_id": "bbd9b8cd-becf-42c9-8f6c-c17fda6d3850"
+        },
+        {
+          "title": "Welcome and Training Format Overview (Discussion, 1/17/25, Ch 1)",
+          "similarity": 0.759,
+          "doc_id": "3c8170c4-8e33-4688-9dc1-2dd4e767cad4"
+        }
+      ]
+    },
+    {
+      "id": "q0023",
+      "query": "improve spinal rotation by connecting movement of hand knee and foot",
+      "category": "body",
+      "expected_doc_id": "7233897b-431d-4101-9324-753e1f2ca384",
+      "expected_title": "Connecting Arms and Legs, Hinges at Feet and Knees - Feldenkrais Project",
+      "rank": 1,
+      "band": "mid-high",
+      "gap": 0.0238,
+      "top_hits": [
+        {
+          "title": "Connecting Arms and Legs, Hinges at Feet and Knees - Feldenkrais Project",
+          "similarity": 0.7669,
+          "doc_id": "7233897b-431d-4101-9324-753e1f2ca384"
+        },
+        {
+          "title": "Turning and the Eyes",
+          "similarity": 0.7531,
+          "doc_id": "e2bec977-c447-4309-a2f0-93bbfe0025bc"
+        },
+        {
+          "title": "Tilting knee on back connecting to arms above",
+          "similarity": 0.7462,
+          "doc_id": "ba30f7e9-84e4-4262-9aeb-f69746512d9f"
+        },
+        {
+          "title": "Spinal Rotation Through Standing Movements (ATM, 3/10/25, Ch 5)",
+          "similarity": 0.7447,
+          "doc_id": "6cf399b2-9e8e-47b0-8ec7-cc6499e992b0"
+        },
+        {
+          "title": "Length Without Effort - Feldenkrais Project",
+          "similarity": 0.7431,
+          "doc_id": "27f6966f-afb8-4b42-9eac-bbde02408b35"
+        }
+      ]
+    },
+    {
+      "id": "q0024",
+      "query": "feldenkrais lesson feeling easier spinal twist and hip movement",
+      "category": "experience",
+      "expected_doc_id": "7233897b-431d-4101-9324-753e1f2ca384",
+      "expected_title": "Connecting Arms and Legs, Hinges at Feet and Knees - Feldenkrais Project",
+      "rank": null,
+      "band": "low",
+      "gap": 0.0161,
+      "top_hits": [
+        {
+          "title": "Supple Twisting - Feldenkrais Project",
+          "similarity": 0.7818,
+          "doc_id": "b3a86cf1-faaa-4ee5-be3c-1bb60ed292ea"
+        },
+        {
+          "title": "Spinal Support and a Powerful Pelvis - Feldenkrais Project",
+          "similarity": 0.7749,
+          "doc_id": "4d61b1bf-a3e6-4869-9da5-518834298e60"
+        },
+        {
+          "title": "Easier Sitting Workshop Lesson 2 - Feldenkrais Project",
+          "similarity": 0.7691,
+          "doc_id": "459578fb-4832-4ac8-9027-0eec471dec96"
+        },
+        {
+          "title": "Simple Twisting - Feldenkrais Project",
+          "similarity": 0.7679,
+          "doc_id": "95e68e7a-adae-43d4-b71c-6bb8827284c1"
+        },
+        {
+          "title": "More Precise Hips and Spine - Feldenkrais Project",
+          "similarity": 0.7658,
+          "doc_id": "be9869b7-38df-4723-b434-9b6542334d25"
+        }
+      ]
+    },
+    {
+      "id": "q0025",
+      "query": "Feldenkrais lesson rolling from side to back reaching arm overhead",
+      "category": "action",
+      "expected_doc_id": "d490d242-0625-4480-9acf-33a1a78ebe5e",
+      "expected_title": "Connecting Shoulders and Hips Part 1 - Feldenkrais Project",
+      "rank": null,
+      "band": "low",
+      "gap": 0.0161,
+      "top_hits": [
+        {
+          "title": "Reaching, Rolling, and Ribs - Feldenkrais Project",
+          "similarity": 0.7793,
+          "doc_id": "d3ff9c31-27a4-4af6-90f3-38465ed44d54"
+        },
+        {
+          "title": "Reaching Up",
+          "similarity": 0.7699,
+          "doc_id": "44131685-28b8-45ee-a6d6-b3d9c3671a8e"
+        },
+        {
+          "title": "Rolling to Sitting, and Beyond - Feldenkrais Project",
+          "similarity": 0.7669,
+          "doc_id": "07c970de-d30a-4ecf-8859-c7a6b148e8fd"
+        },
+        {
+          "title": "Welcome and Training Format Overview (Discussion, 1/17/25, Ch 1)",
+          "similarity": 0.7663,
+          "doc_id": "3c8170c4-8e33-4688-9dc1-2dd4e767cad4"
+        },
+        {
+          "title": "Transitions Matter",
+          "similarity": 0.7631,
+          "doc_id": "bbd9b8cd-becf-42c9-8f6c-c17fda6d3850"
+        }
+      ]
+    },
+    {
+      "id": "q0026",
+      "query": "Feldenkrais lesson differentiating shoulder girdle and pelvic girdle",
+      "category": "body",
+      "expected_doc_id": "d490d242-0625-4480-9acf-33a1a78ebe5e",
+      "expected_title": "Connecting Shoulders and Hips Part 1 - Feldenkrais Project",
+      "rank": 6,
+      "band": "low",
+      "gap": 0.0142,
+      "top_hits": [
+        {
+          "title": "Shoulder/Hip Circles on Sides",
+          "similarity": 0.7934,
+          "doc_id": "05267db1-0e58-4c15-9780-658ed2111435"
+        },
+        {
+          "title": "Stretch Without Strain - Feldenkrais Project",
+          "similarity": 0.7851,
+          "doc_id": "f6135208-f4f4-4c59-bab3-cf740c3e9986"
+        },
+        {
+          "title": "Side Clock: Shoulders (and Intro to Hip) - Feldenkrais Project",
+          "similarity": 0.785,
+          "doc_id": "22cc3119-fba9-4e92-8c4a-a540b8c89e75"
+        },
+        {
+          "title": "Differentiation of the Shoulder Girdle",
+          "similarity": 0.7822,
+          "doc_id": "8e7c0b47-9e68-4c42-b03a-752070bec00f"
+        },
+        {
+          "title": "Shoulder Girdle and Elbow Differentiation (FI Demo, 1/19/26, Ch 4)",
+          "similarity": 0.7792,
+          "doc_id": "7df4c615-db7c-4e4f-a51d-1d7f59c00607"
+        }
+      ]
+    },
+    {
+      "id": "q0027",
+      "query": "Feldenkrais lesson feeling ribcage unglued and spine twisting",
+      "category": "experience",
+      "expected_doc_id": "d490d242-0625-4480-9acf-33a1a78ebe5e",
+      "expected_title": "Connecting Shoulders and Hips Part 1 - Feldenkrais Project",
+      "rank": null,
+      "band": "mid",
+      "gap": 0.0198,
+      "top_hits": [
+        {
+          "title": "Supple Twisting - Feldenkrais Project",
+          "similarity": 0.8005,
+          "doc_id": "b3a86cf1-faaa-4ee5-be3c-1bb60ed292ea"
+        },
+        {
+          "title": "Softening the Ribs - Feldenkrais Project",
+          "similarity": 0.7997,
+          "doc_id": "124fc281-a2c6-41bf-9a78-e1f2624ccac9"
+        },
+        {
+          "title": "Twisted Lamprey - Feldenkrais Project",
+          "similarity": 0.7906,
+          "doc_id": "a3b0f882-2acd-4dd0-bcab-3714758ca1bc"
+        },
+        {
+          "title": "Legs Crossed and Expanding Chest and Abdomen,",
+          "similarity": 0.7834,
+          "doc_id": "5418844f-a459-4b3c-9e5b-e4e0da5c9151"
+        },
+        {
+          "title": "Secrets of the Seated Twist - Feldenkrais Project",
+          "similarity": 0.7807,
+          "doc_id": "aaea18f1-a090-40d0-b719-eff0b52f12e5"
+        }
+      ]
+    },
+    {
+      "id": "q0028",
+      "query": "feldenkrais lesson using feet to drive spinal rotation in sitting",
+      "category": "action",
+      "expected_doc_id": "05f95b68-d8d4-4547-b868-a1a2d8e7baf7",
+      "expected_title": "Driving and Dynamic Sitting - Chair Practice - Feldenkrais Project",
+      "rank": 4,
+      "band": "mid-high",
+      "gap": 0.0276,
+      "top_hits": [
+        {
+          "title": "Sitting and Turning with Length - Feldenkrais Project",
+          "similarity": 0.8082,
+          "doc_id": "d2688638-17f2-4cc2-a66f-33ee1414e07e"
+        },
+        {
+          "title": "Driving and Dynamic Sitting - Floor Practice - Feldenkrais Project",
+          "similarity": 0.7994,
+          "doc_id": "7e8e442e-5dea-4750-8a76-0267a3d9f731"
+        },
+        {
+          "title": "Easier Sitting Workshop Lesson 2 - Feldenkrais Project",
+          "similarity": 0.7929,
+          "doc_id": "459578fb-4832-4ac8-9027-0eec471dec96"
+        },
+        {
+          "title": "Driving and Dynamic Sitting - Chair Practice - Feldenkrais Project",
+          "similarity": 0.7904,
+          "doc_id": "05f95b68-d8d4-4547-b868-a1a2d8e7baf7"
+        },
+        {
+          "title": "Turning and the Eyes",
+          "similarity": 0.7807,
+          "doc_id": "e2bec977-c447-4309-a2f0-93bbfe0025bc"
+        }
+      ]
+    },
+    {
+      "id": "q0029",
+      "query": "feldenkrais lesson differentiating eye movement from pelvic movement",
+      "category": "body",
+      "expected_doc_id": "05f95b68-d8d4-4547-b868-a1a2d8e7baf7",
+      "expected_title": "Driving and Dynamic Sitting - Chair Practice - Feldenkrais Project",
+      "rank": null,
+      "band": "mid",
+      "gap": 0.0199,
+      "top_hits": [
+        {
+          "title": "Balance & Uprightness - Eyes & Pelvis",
+          "similarity": 0.7997,
+          "doc_id": "e787b1bc-0e62-4c99-95ea-2b0b4e1f07f4"
+        },
+        {
+          "title": "Every Movement Is A Movement Of The Whole Person",
+          "similarity": 0.7866,
+          "doc_id": "6a52b3c2-8dd9-4a0b-a25a-82528c7d4a7b"
+        },
+        {
+          "title": "Pelvic Clock with Use of the Eyes",
+          "similarity": 0.7828,
+          "doc_id": "43935371-8486-43b7-a255-1ffcb9888c9f"
+        },
+        {
+          "title": "Differentiation of Pelvic Movements by Means of an Imaginary Clock (Patrons) - Feldenkrais Project",
+          "similarity": 0.7825,
+          "doc_id": "82edeeb9-b563-4822-9a13-53a18ab60dba"
+        },
+        {
+          "title": "The Eyes to the Pelvis: Bridge to Engine-Room!",
+          "similarity": 0.7798,
+          "doc_id": "190468d3-f878-46dc-9965-7fc3678b9e3c"
+        }
+      ]
+    },
+    {
+      "id": "q0030",
+      "query": "feldenkrais lesson feeling sit bones and finding ease in rotation",
+      "category": "experience",
+      "expected_doc_id": "05f95b68-d8d4-4547-b868-a1a2d8e7baf7",
+      "expected_title": "Driving and Dynamic Sitting - Chair Practice - Feldenkrais Project",
+      "rank": 1,
+      "band": "low",
+      "gap": 0.0117,
+      "top_hits": [
+        {
+          "title": "Driving and Dynamic Sitting - Chair Practice - Feldenkrais Project",
+          "similarity": 0.7809,
+          "doc_id": "05f95b68-d8d4-4547-b868-a1a2d8e7baf7"
+        },
+        {
+          "title": "Sitting and Turning with Length - Feldenkrais Project",
+          "similarity": 0.7799,
+          "doc_id": "d2688638-17f2-4cc2-a66f-33ee1414e07e"
+        },
+        {
+          "title": "Easier Sitting Workshop Lesson 1 - Feldenkrais Project",
+          "similarity": 0.7798,
+          "doc_id": "2504991a-441b-45e3-bb98-dc2795c2afd6"
+        },
+        {
+          "title": "Easier Sitting Workshop Lesson 2 - Feldenkrais Project",
+          "similarity": 0.7757,
+          "doc_id": "459578fb-4832-4ac8-9027-0eec471dec96"
+        },
+        {
+          "title": "Easier Sitting Workshop Talk 2 - Feldenkrais Project",
+          "similarity": 0.7693,
+          "doc_id": "cc4de663-da12-4eab-9433-93dac995db59"
+        }
+      ]
+    },
+    {
+      "id": "q0031",
+      "query": "Feldenkrais lesson rocking pelvis forward and back in sitting",
+      "category": "action",
+      "expected_doc_id": "2504991a-441b-45e3-bb98-dc2795c2afd6",
+      "expected_title": "Easier Sitting Workshop Lesson 1 - Feldenkrais Project",
+      "rank": 10,
+      "band": "mid-high",
+      "gap": 0.0224,
+      "top_hits": [
+        {
+          "title": "Dynamic Sitting and Chair Clock - Feldenkrais Project",
+          "similarity": 0.7808,
+          "doc_id": "8cde4e74-6d1d-461a-a626-0993b26571eb"
+        },
+        {
+          "title": "Move From Your Centre... (What's That?!)",
+          "similarity": 0.7719,
+          "doc_id": "e619dcb3-21e1-41f9-bd38-4f4c84806fe5"
+        },
+        {
+          "title": "Driving and Dynamic Sitting - Chair Practice - Feldenkrais Project",
+          "similarity": 0.768,
+          "doc_id": "05f95b68-d8d4-4547-b868-a1a2d8e7baf7"
+        },
+        {
+          "title": "Exploring Balance to Improve Sitting",
+          "similarity": 0.764,
+          "doc_id": "b35c6fe2-3ed4-41f7-958e-2a8beb443dc9"
+        },
+        {
+          "title": "Folding Forward in Cross-Legged Sitting (ATM, 5/31/25, Ch 2)",
+          "similarity": 0.7584,
+          "doc_id": "4f0f86a1-6b14-4f68-82de-64316effe9cc"
+        }
+      ]
+    },
+    {
+      "id": "q0032",
+      "query": "How to find and feel sit bones for better posture",
+      "category": "body",
+      "expected_doc_id": "2504991a-441b-45e3-bb98-dc2795c2afd6",
+      "expected_title": "Easier Sitting Workshop Lesson 1 - Feldenkrais Project",
+      "rank": 6,
+      "band": "high",
+      "gap": 0.0327,
+      "top_hits": [
+        {
+          "title": "Playful Postures & Sit Bones",
+          "similarity": 0.732,
+          "doc_id": "f9cfdde7-781f-48a1-8840-3d8589db704a"
+        },
+        {
+          "title": "Easier Sitting Workshop Talk 2 - Feldenkrais Project",
+          "similarity": 0.7276,
+          "doc_id": "cc4de663-da12-4eab-9433-93dac995db59"
+        },
+        {
+          "title": "Exploring Balance to Improve Sitting",
+          "similarity": 0.7151,
+          "doc_id": "b35c6fe2-3ed4-41f7-958e-2a8beb443dc9"
+        },
+        {
+          "title": "No Bone Unturned (part 1)",
+          "similarity": 0.7053,
+          "doc_id": "75c416e7-8eff-4558-bdad-1c156824e97c"
+        },
+        {
+          "title": "Easier Sitting Workshop Talk 1 - Feldenkrais Project",
+          "similarity": 0.6993,
+          "doc_id": "263997a3-f335-46ae-ace6-9e6a18288c72"
+        }
+      ]
+    },
+    {
+      "id": "q0033",
+      "query": "Feldenkrais lesson feeling the connection between pelvis and head",
+      "category": "experience",
+      "expected_doc_id": "2504991a-441b-45e3-bb98-dc2795c2afd6",
+      "expected_title": "Easier Sitting Workshop Lesson 1 - Feldenkrais Project",
+      "rank": null,
+      "band": "mid",
+      "gap": 0.0181,
+      "top_hits": [
+        {
+          "title": "Rolling Head and Circling Coccyx on Knees",
+          "similarity": 0.7966,
+          "doc_id": "0107a9fa-aa8e-4600-b5f9-e7edbeb956bb"
+        },
+        {
+          "title": "Differentiation of Pelvic Movements by Means of an Imaginary Clock (Patrons) - Feldenkrais Project",
+          "similarity": 0.7909,
+          "doc_id": "82edeeb9-b563-4822-9a13-53a18ab60dba"
+        },
+        {
+          "title": "Dynamic Sitting and Chair Clock - Feldenkrais Project",
+          "similarity": 0.788,
+          "doc_id": "8cde4e74-6d1d-461a-a626-0993b26571eb"
+        },
+        {
+          "title": "Head and Pelvis Clock Circles (ATM, 6/1/25, Ch 6)",
+          "similarity": 0.7829,
+          "doc_id": "de4d4796-d14a-4a7f-851f-da531d2522bb"
+        },
+        {
+          "title": "Pelvic Movement and Skeletal Transmission (FI Demo, 5/30/25, Ch 5)",
+          "similarity": 0.7785,
+          "doc_id": "3d4047cc-d60b-4125-ab18-23b22e9194bf"
+        }
+      ]
+    },
+    {
+      "id": "q0034",
+      "query": "feldenkrais lesson turning head while keeping eyes forward",
+      "category": "action",
+      "expected_doc_id": "459578fb-4832-4ac8-9027-0eec471dec96",
+      "expected_title": "Easier Sitting Workshop Lesson 2 - Feldenkrais Project",
+      "rank": 9,
+      "band": "mid",
+      "gap": 0.0213,
+      "top_hits": [
+        {
+          "title": "Every Movement Is A Movement Of The Whole Person",
+          "similarity": 0.7817,
+          "doc_id": "6a52b3c2-8dd9-4a0b-a25a-82528c7d4a7b"
+        },
+        {
+          "title": "Take a Break from Work",
+          "similarity": 0.7808,
+          "doc_id": "237e8836-7830-4407-a22b-16a2d64ac105"
+        },
+        {
+          "title": "Elements of Turning",
+          "similarity": 0.7725,
+          "doc_id": "3cad8fbf-5577-4595-84cf-2965c2aa9e7e"
+        },
+        {
+          "title": "The Movement of the Eyes Organizes the Movement of the Body (Patrons) - Feldenkrais Project",
+          "similarity": 0.7708,
+          "doc_id": "71a59311-76a2-4e49-be64-a85adeb96eb9"
+        },
+        {
+          "title": "Turning and the Eyes",
+          "similarity": 0.7603,
+          "doc_id": "e2bec977-c447-4309-a2f0-93bbfe0025bc"
+        }
+      ]
+    },
+    {
+      "id": "q0035",
+      "query": "how to connect knees and pelvis for spinal rotation",
+      "category": "body",
+      "expected_doc_id": "459578fb-4832-4ac8-9027-0eec471dec96",
+      "expected_title": "Easier Sitting Workshop Lesson 2 - Feldenkrais Project",
+      "rank": 4,
+      "band": "low",
+      "gap": 0.0156,
+      "top_hits": [
+        {
+          "title": "Spinal Support and a Powerful Pelvis - Feldenkrais Project",
+          "similarity": 0.7615,
+          "doc_id": "4d61b1bf-a3e6-4869-9da5-518834298e60"
+        },
+        {
+          "title": "Turning and the Eyes",
+          "similarity": 0.7567,
+          "doc_id": "e2bec977-c447-4309-a2f0-93bbfe0025bc"
+        },
+        {
+          "title": "Connecting Arms and Legs, Hinges at Feet and Knees - Feldenkrais Project",
+          "similarity": 0.7523,
+          "doc_id": "7233897b-431d-4101-9324-753e1f2ca384"
+        },
+        {
+          "title": "Easier Sitting Workshop Lesson 2 - Feldenkrais Project",
+          "similarity": 0.7517,
+          "doc_id": "459578fb-4832-4ac8-9027-0eec471dec96"
+        },
+        {
+          "title": "Tilting legs in and out on back",
+          "similarity": 0.7459,
+          "doc_id": "5ac1daf1-1986-4c6e-a952-be929e2fc21f"
+        }
+      ]
+    },
+    {
+      "id": "q0036",
+      "query": "feldenkrais lesson feeling sit bones while turning to look behind",
+      "category": "experience",
+      "expected_doc_id": "459578fb-4832-4ac8-9027-0eec471dec96",
+      "expected_title": "Easier Sitting Workshop Lesson 2 - Feldenkrais Project",
+      "rank": 2,
+      "band": "low",
+      "gap": 0.0147,
+      "top_hits": [
+        {
+          "title": "Sitting and Turning with Length - Feldenkrais Project",
+          "similarity": 0.7883,
+          "doc_id": "d2688638-17f2-4cc2-a66f-33ee1414e07e"
+        },
+        {
+          "title": "Easier Sitting Workshop Lesson 2 - Feldenkrais Project",
+          "similarity": 0.7836,
+          "doc_id": "459578fb-4832-4ac8-9027-0eec471dec96"
+        },
+        {
+          "title": "Elements of Turning",
+          "similarity": 0.7745,
+          "doc_id": "3cad8fbf-5577-4595-84cf-2965c2aa9e7e"
+        },
+        {
+          "title": "No Bone Unturned (part 1)",
+          "similarity": 0.7743,
+          "doc_id": "75c416e7-8eff-4558-bdad-1c156824e97c"
+        },
+        {
+          "title": "Driving and Dynamic Sitting - Chair Practice - Feldenkrais Project",
+          "similarity": 0.7736,
+          "doc_id": "05f95b68-d8d4-4547-b868-a1a2d8e7baf7"
+        }
+      ]
+    },
+    {
+      "id": "q0037",
+      "query": "feldenkrais lesson moving head and jaw in opposite directions",
+      "category": "action",
+      "expected_doc_id": "0408d9d6-a353-4a8d-836c-f2884c894acb",
+      "expected_title": "Easing the Jaw, Neck, and Shoulders - Feldenkrais Project",
+      "rank": 1,
+      "band": "high",
+      "gap": 0.0345,
+      "top_hits": [
+        {
+          "title": "Easing the Jaw, Neck, and Shoulders - Feldenkrais Project",
+          "similarity": 0.7919,
+          "doc_id": "0408d9d6-a353-4a8d-836c-f2884c894acb"
+        },
+        {
+          "title": "Ease in the Jaw",
+          "similarity": 0.7876,
+          "doc_id": "95897318-cd6d-49e0-921b-78e30ce30dea"
+        },
+        {
+          "title": "Relaxing Your Neck and Jaw - Feldenkrais Project",
+          "similarity": 0.7793,
+          "doc_id": "7c9a3d70-6416-407d-ba1b-65e8805ed5b4"
+        },
+        {
+          "title": "Primary Movements of the Jaw",
+          "similarity": 0.7707,
+          "doc_id": "55bce119-a805-466b-b238-056b14d7742a"
+        },
+        {
+          "title": "Exploring Your Jaw",
+          "similarity": 0.7574,
+          "doc_id": "c7cd5c9b-c736-4b74-8a34-0c60de633d04"
+        }
+      ]
+    },
+    {
+      "id": "q0038",
+      "query": "release tension between jaw and neck feldenkrais lesson",
+      "category": "body",
+      "expected_doc_id": "0408d9d6-a353-4a8d-836c-f2884c894acb",
+      "expected_title": "Easing the Jaw, Neck, and Shoulders - Feldenkrais Project",
+      "rank": 1,
+      "band": "high",
+      "gap": 0.0371,
+      "top_hits": [
+        {
+          "title": "Easing the Jaw, Neck, and Shoulders - Feldenkrais Project",
+          "similarity": 0.7932,
+          "doc_id": "0408d9d6-a353-4a8d-836c-f2884c894acb"
+        },
+        {
+          "title": "Relaxing Your Neck and Jaw - Feldenkrais Project",
+          "similarity": 0.7899,
+          "doc_id": "7c9a3d70-6416-407d-ba1b-65e8805ed5b4"
+        },
+        {
+          "title": "Ease in the Jaw",
+          "similarity": 0.7761,
+          "doc_id": "95897318-cd6d-49e0-921b-78e30ce30dea"
+        },
+        {
+          "title": "Exploring Your Jaw",
+          "similarity": 0.7601,
+          "doc_id": "c7cd5c9b-c736-4b74-8a34-0c60de633d04"
+        },
+        {
+          "title": "Primary Movements of the Jaw",
+          "similarity": 0.7561,
+          "doc_id": "55bce119-a805-466b-b238-056b14d7742a"
+        }
+      ]
+    },
+    {
+      "id": "q0039",
+      "query": "feldenkrais lesson feeling the weight of my jaw",
+      "category": "experience",
+      "expected_doc_id": "0408d9d6-a353-4a8d-836c-f2884c894acb",
+      "expected_title": "Easing the Jaw, Neck, and Shoulders - Feldenkrais Project",
+      "rank": 1,
+      "band": "mid-high",
+      "gap": 0.0221,
+      "top_hits": [
+        {
+          "title": "Easing the Jaw, Neck, and Shoulders - Feldenkrais Project",
+          "similarity": 0.7823,
+          "doc_id": "0408d9d6-a353-4a8d-836c-f2884c894acb"
+        },
+        {
+          "title": "Ease in the Jaw",
+          "similarity": 0.7714,
+          "doc_id": "95897318-cd6d-49e0-921b-78e30ce30dea"
+        },
+        {
+          "title": "Primary Movements of the Jaw",
+          "similarity": 0.7704,
+          "doc_id": "55bce119-a805-466b-b238-056b14d7742a"
+        },
+        {
+          "title": "Relaxing Your Neck and Jaw - Feldenkrais Project",
+          "similarity": 0.7693,
+          "doc_id": "7c9a3d70-6416-407d-ba1b-65e8805ed5b4"
+        },
+        {
+          "title": "Exploring Your Jaw",
+          "similarity": 0.7602,
+          "doc_id": "c7cd5c9b-c736-4b74-8a34-0c60de633d04"
+        }
+      ]
+    },
+    {
+      "id": "q0040",
+      "query": "feldenkrais lesson lifting pelvis with feet on floor",
+      "category": "action",
+      "expected_doc_id": "5a166415-3e7a-4411-a058-45ad372841d1",
+      "expected_title": "Floating Toward Bridging - Feldenkrais Project",
+      "rank": 9,
+      "band": "low",
+      "gap": 0.0113,
+      "top_hits": [
+        {
+          "title": "On the Elbows with a Hop",
+          "similarity": 0.7677,
+          "doc_id": "e043b2b5-0dbf-4266-b83b-5db67db602e9"
+        },
+        {
+          "title": "Your Navigational Pelvis - Feldenkrais Project",
+          "similarity": 0.766,
+          "doc_id": "154cde8d-d1c9-4f95-a23c-fd4010713646"
+        },
+        {
+          "title": "(variations on) Lifting Pelvis on Standing Feet",
+          "similarity": 0.7597,
+          "doc_id": "8e776f9c-0169-4d1d-9a3b-28b006017a81"
+        },
+        {
+          "title": "Oiling the Hip Joints",
+          "similarity": 0.7575,
+          "doc_id": "631b14ab-c439-4b70-88c3-5175ff3f01a4"
+        },
+        {
+          "title": "Lifting the Feet",
+          "similarity": 0.7564,
+          "doc_id": "048d49ee-c683-40b8-8421-3a76fdf5255a"
+        }
+      ]
+    },
+    {
+      "id": "q0041",
+      "query": "how to engage hamstrings and glutes in pelvic lift",
+      "category": "body",
+      "expected_doc_id": "5a166415-3e7a-4411-a058-45ad372841d1",
+      "expected_title": "Floating Toward Bridging - Feldenkrais Project",
+      "rank": null,
+      "band": "mid-high",
+      "gap": 0.0293,
+      "top_hits": [
+        {
+          "title": "Buttocks",
+          "similarity": 0.7001,
+          "doc_id": "762c3e49-c04c-4382-b990-a20d64e64ed2"
+        },
+        {
+          "title": "The Buttocks - Feldenkrais Project",
+          "similarity": 0.6946,
+          "doc_id": "c0697055-4a0f-4e4a-a1ce-46bb9832363f"
+        },
+        {
+          "title": "Hamstring Lessons",
+          "similarity": 0.6864,
+          "doc_id": "1533e49c-6290-4f40-bc80-704fc4582deb"
+        },
+        {
+          "title": "Straightening Knees While Leaning of Forearms",
+          "similarity": 0.6845,
+          "doc_id": "a316e2c7-83ca-45a2-9cc1-036bac737c50"
+        },
+        {
+          "title": "Pelvic Floor Connections - Feldenkrais Project",
+          "similarity": 0.6708,
+          "doc_id": "80b3c160-1fa0-4903-8254-8136d3c3efe9"
+        }
+      ]
+    },
+    {
+      "id": "q0042",
+      "query": "feldenkrais lesson feeling the connection between feet and pelvis",
+      "category": "experience",
+      "expected_doc_id": "5a166415-3e7a-4411-a058-45ad372841d1",
+      "expected_title": "Floating Toward Bridging - Feldenkrais Project",
+      "rank": null,
+      "band": "low",
+      "gap": 0.0097,
+      "top_hits": [
+        {
+          "title": "Breath, Belly, Back, and Hips: Connecting to the Earth - Feldenkrais Project",
+          "similarity": 0.7884,
+          "doc_id": "00a0dff0-23d1-48f5-923e-d77b1d6d5d74"
+        },
+        {
+          "title": "Waking the Feet",
+          "similarity": 0.7836,
+          "doc_id": "c2e78ae1-de12-4d91-a237-37fa0509f9c6"
+        },
+        {
+          "title": "Your Navigational Pelvis - Feldenkrais Project",
+          "similarity": 0.7833,
+          "doc_id": "154cde8d-d1c9-4f95-a23c-fd4010713646"
+        },
+        {
+          "title": "Connecting legs through upper spine",
+          "similarity": 0.7822,
+          "doc_id": "ffc57d8a-b1cd-4c09-8410-bb60988397c1"
+        },
+        {
+          "title": "Rolling our Feet and Head for Better Balance",
+          "similarity": 0.7787,
+          "doc_id": "e303ed37-a50c-471d-a670-ee1e3309cd03"
+        }
+      ]
+    },
+    {
+      "id": "q0043",
+      "query": "Feldenkrais lesson rolling from side to side in a folded position",
+      "category": "action",
+      "expected_doc_id": "f53988e0-8eab-4468-9dc1-ecdc478f5141",
+      "expected_title": "Folding, Foundation, and Feet - Feldenkrais Project",
+      "rank": 4,
+      "band": "low",
+      "gap": 0.0068,
+      "top_hits": [
+        {
+          "title": "Side-Lying Spinal Flexion and Rotation (ATM, 1/18/25, Ch 1)",
+          "similarity": 0.7699,
+          "doc_id": "d571da87-3981-4dba-bf07-74720ed989cc"
+        },
+        {
+          "title": "Rolling with Length - Feldenkrais Project",
+          "similarity": 0.769,
+          "doc_id": "a5b061ee-55a3-43ca-8e0e-d25c59936345"
+        },
+        {
+          "title": "Rolling to Sitting, and Beyond - Feldenkrais Project",
+          "similarity": 0.7665,
+          "doc_id": "07c970de-d30a-4ecf-8859-c7a6b148e8fd"
+        },
+        {
+          "title": "Folding, Foundation, and Feet - Feldenkrais Project",
+          "similarity": 0.7654,
+          "doc_id": "f53988e0-8eab-4468-9dc1-ecdc478f5141"
+        },
+        {
+          "title": "Transitions Matter",
+          "similarity": 0.7631,
+          "doc_id": "bbd9b8cd-becf-42c9-8f6c-c17fda6d3850"
+        }
+      ]
+    },
+    {
+      "id": "q0044",
+      "query": "How to coordinate heels, spine, and ribs for easier head lifting",
+      "category": "body",
+      "expected_doc_id": "f53988e0-8eab-4468-9dc1-ecdc478f5141",
+      "expected_title": "Folding, Foundation, and Feet - Feldenkrais Project",
+      "rank": null,
+      "band": "low",
+      "gap": 0.0068,
+      "top_hits": [
+        {
+          "title": "Chest and Breastbone Softening for Folding (FI Demo, 7/25/25, Ch 5)",
+          "similarity": 0.7629,
+          "doc_id": "dda4cea7-1f40-4cb4-8446-424a33ab7eb5"
+        },
+        {
+          "title": "Head Lifting and Spinal Flexion Mechanics (FI Demo, 7/24/25, Ch 4)",
+          "similarity": 0.7624,
+          "doc_id": "aa9949cf-1a81-4bd9-853e-22cbb1a69734"
+        },
+        {
+          "title": "Breathing from Head to Heels - Feldenkrais Project",
+          "similarity": 0.7613,
+          "doc_id": "881a7dad-90a9-470e-8fca-22fd0c85c2f7"
+        },
+        {
+          "title": "On back lift hip to lengthen opposite arm",
+          "similarity": 0.7596,
+          "doc_id": "c98e9070-f4c2-4cf6-aab0-c9bab306bee9"
+        },
+        {
+          "title": "In Bed - Pressing the Heels",
+          "similarity": 0.7561,
+          "doc_id": "7942544a-0bf5-4073-a5f0-c5c82128fc91"
+        }
+      ]
+    },
+    {
+      "id": "q0045",
+      "query": "Feldenkrais lesson feeling lighter and longer in the back while folding",
+      "category": "experience",
+      "expected_doc_id": "f53988e0-8eab-4468-9dc1-ecdc478f5141",
+      "expected_title": "Folding, Foundation, and Feet - Feldenkrais Project",
+      "rank": 1,
+      "band": "high",
+      "gap": 0.0324,
+      "top_hits": [
+        {
+          "title": "Folding, Foundation, and Feet - Feldenkrais Project",
+          "similarity": 0.7849,
+          "doc_id": "f53988e0-8eab-4468-9dc1-ecdc478f5141"
+        },
+        {
+          "title": "Strength Without Excess - Feldenkrais Project",
+          "similarity": 0.7722,
+          "doc_id": "642a5cff-80ce-4b78-bbbd-42d6e00e0660"
+        },
+        {
+          "title": "Sliding Along the Length of the Leg,",
+          "similarity": 0.7705,
+          "doc_id": "a144cf0b-9671-4ae8-90d2-4e3c4f012741"
+        },
+        {
+          "title": "Basic Arching and Folding (Patrons) - Feldenkrais Project",
+          "similarity": 0.7613,
+          "doc_id": "36202c43-1a84-4c1f-afa7-4597865f8459"
+        },
+        {
+          "title": "Elbows and Knees Touching",
+          "similarity": 0.7525,
+          "doc_id": "5b5ff80c-c967-43c0-8dd0-b08238a004f9"
+        }
+      ]
+    },
+    {
+      "id": "q0046",
+      "query": "feldenkrais lesson rolling shoulder and hip separately on side",
+      "category": "action",
+      "expected_doc_id": "9b67a689-c1fd-4063-ad1a-fa2aeb7f69dd",
+      "expected_title": "Free Your Torso for Better Posture, Walking, and Running - Feldenkrais Project",
+      "rank": null,
+      "band": "low",
+      "gap": 0.0061,
+      "top_hits": [
+        {
+          "title": "Shoulder/Hip Circles on Sides",
+          "similarity": 0.7767,
+          "doc_id": "05267db1-0e58-4c15-9780-658ed2111435"
+        },
+        {
+          "title": "Connecting Shoulders and Hips Part 1 - Feldenkrais Project",
+          "similarity": 0.7757,
+          "doc_id": "d490d242-0625-4480-9acf-33a1a78ebe5e"
+        },
+        {
+          "title": "Side Clock: Hips (Patrons) - Feldenkrais Project",
+          "similarity": 0.7739,
+          "doc_id": "d4c11394-faad-4137-b4f1-757e5600d5a4"
+        },
+        {
+          "title": "Side Clock: Shoulders (and Intro to Hip) - Feldenkrais Project",
+          "similarity": 0.7724,
+          "doc_id": "22cc3119-fba9-4e92-8c4a-a540b8c89e75"
+        },
+        {
+          "title": "Connecting Shoulders and Hips Part 2 - Feldenkrais Project",
+          "similarity": 0.7705,
+          "doc_id": "ce25c5bd-07f2-4ab1-ac7c-08c80366e11b"
+        }
+      ]
+    },
+    {
+      "id": "q0047",
+      "query": "improve spinal rotation by differentiating shoulder and hip movement",
+      "category": "body",
+      "expected_doc_id": "9b67a689-c1fd-4063-ad1a-fa2aeb7f69dd",
+      "expected_title": "Free Your Torso for Better Posture, Walking, and Running - Feldenkrais Project",
+      "rank": null,
+      "band": "low",
+      "gap": 0.0142,
+      "top_hits": [
+        {
+          "title": "Turning and the Eyes",
+          "similarity": 0.7306,
+          "doc_id": "e2bec977-c447-4309-a2f0-93bbfe0025bc"
+        },
+        {
+          "title": "Connecting Shoulders and Hips Part 2 - Feldenkrais Project",
+          "similarity": 0.724,
+          "doc_id": "ce25c5bd-07f2-4ab1-ac7c-08c80366e11b"
+        },
+        {
+          "title": "On Chair - Differentiated Turning",
+          "similarity": 0.7215,
+          "doc_id": "a980560f-33cc-4f37-a02f-4d50ef69e24c"
+        },
+        {
+          "title": "Connecting Shoulders and Hips Part 1 - Feldenkrais Project",
+          "similarity": 0.7184,
+          "doc_id": "d490d242-0625-4480-9acf-33a1a78ebe5e"
+        },
+        {
+          "title": "Pelvic Rotation and Shoulder Integration (ATM, 5/9/25, Ch 4)",
+          "similarity": 0.7165,
+          "doc_id": "78f4d5a0-cd51-4ff0-b4c9-fb067030d677"
+        }
+      ]
+    },
+    {
+      "id": "q0048",
+      "query": "feldenkrais lesson feeling sternum move while walking and standing",
+      "category": "experience",
+      "expected_doc_id": "9b67a689-c1fd-4063-ad1a-fa2aeb7f69dd",
+      "expected_title": "Free Your Torso for Better Posture, Walking, and Running - Feldenkrais Project",
+      "rank": 1,
+      "band": "high",
+      "gap": 0.0599,
+      "top_hits": [
+        {
+          "title": "Free Your Torso for Better Posture, Walking, and Running - Feldenkrais Project",
+          "similarity": 0.8073,
+          "doc_id": "9b67a689-c1fd-4063-ad1a-fa2aeb7f69dd"
+        },
+        {
+          "title": "Lifting Up and Through - Feldenkrais Project",
+          "similarity": 0.7527,
+          "doc_id": "af3ab002-2dfe-46d6-9e0f-ce3a3013029d"
+        },
+        {
+          "title": "Secrets of the Seated Twist - Feldenkrais Project",
+          "similarity": 0.7509,
+          "doc_id": "aaea18f1-a090-40d0-b719-eff0b52f12e5"
+        },
+        {
+          "title": "Sternum and Rib Cage Anatomy (Lecture, 3/8/25, Ch 6)",
+          "similarity": 0.7493,
+          "doc_id": "a085cfa8-cb7a-4141-9edd-fd10748d1fd7"
+        },
+        {
+          "title": "Softening the Ribs - Feldenkrais Project",
+          "similarity": 0.7474,
+          "doc_id": "124fc281-a2c6-41bf-9a78-e1f2624ccac9"
+        }
+      ]
+    },
+    {
+      "id": "q0049",
+      "query": "Feldenkrais lesson pumping breath between chest and belly",
+      "category": "action",
+      "expected_doc_id": "d4be3b8d-3cbc-42b6-9d23-b97381858157",
+      "expected_title": "Freeing Your Breath and Spine (16m or 37m) - Feldenkrais Project",
+      "rank": 1,
+      "band": "mid-high",
+      "gap": 0.0235,
+      "top_hits": [
+        {
+          "title": "Freeing Your Breath and Spine (16m or 37m) - Feldenkrais Project",
+          "similarity": 0.7581,
+          "doc_id": "d4be3b8d-3cbc-42b6-9d23-b97381858157"
+        },
+        {
+          "title": "Breathing from Head to Heels - Feldenkrais Project",
+          "similarity": 0.7579,
+          "doc_id": "881a7dad-90a9-470e-8fca-22fd0c85c2f7"
+        },
+        {
+          "title": "Not a Breathing Lesson",
+          "similarity": 0.7403,
+          "doc_id": "4d1c3984-d723-41e7-b8c5-64a6645daa18"
+        },
+        {
+          "title": "Self-Image and Perceptual Shifts in Learning (Discussion, 1/20/25, Ch 1)",
+          "similarity": 0.7348,
+          "doc_id": "3b6b913f-02ff-42a9-9a4c-a4d940736e45"
+        },
+        {
+          "title": "04. Differentiation of Parts and Functions in Breathing",
+          "similarity": 0.7347,
+          "doc_id": "17487617-c06f-440a-927d-dbb50ac27390"
+        }
+      ]
+    },
+    {
+      "id": "q0050",
+      "query": "Feldenkrais lesson ribcage and spine movement with breath",
+      "category": "body",
+      "expected_doc_id": "d4be3b8d-3cbc-42b6-9d23-b97381858157",
+      "expected_title": "Freeing Your Breath and Spine (16m or 37m) - Feldenkrais Project",
+      "rank": 1,
+      "band": "mid-high",
+      "gap": 0.025,
+      "top_hits": [
+        {
+          "title": "Freeing Your Breath and Spine (16m or 37m) - Feldenkrais Project",
+          "similarity": 0.798,
+          "doc_id": "d4be3b8d-3cbc-42b6-9d23-b97381858157"
+        },
+        {
+          "title": "Legs Crossed and Expanding Chest and Abdomen,",
+          "similarity": 0.7921,
+          "doc_id": "5418844f-a459-4b3c-9e5b-e4e0da5c9151"
+        },
+        {
+          "title": "Softening the Ribs - Feldenkrais Project",
+          "similarity": 0.7863,
+          "doc_id": "124fc281-a2c6-41bf-9a78-e1f2624ccac9"
+        },
+        {
+          "title": "Rib Mobility and Spinal Integration (ATM, 3/7/25, Ch 4)",
+          "similarity": 0.7764,
+          "doc_id": "af861ba4-8d5f-4624-a27c-f8a887f26613"
+        },
+        {
+          "title": "The Periscope - Feldenkrais Project",
+          "similarity": 0.7731,
+          "doc_id": "6819613d-75b4-4cd1-87b2-431daf999c3b"
+        }
+      ]
+    },
+    {
+      "id": "q0051",
+      "query": "Feldenkrais lesson feeling internal volume shift with breath",
+      "category": "experience",
+      "expected_doc_id": "d4be3b8d-3cbc-42b6-9d23-b97381858157",
+      "expected_title": "Freeing Your Breath and Spine (16m or 37m) - Feldenkrais Project",
+      "rank": 1,
+      "band": "mid-high",
+      "gap": 0.0218,
+      "top_hits": [
+        {
+          "title": "Freeing Your Breath and Spine (16m or 37m) - Feldenkrais Project",
+          "similarity": 0.784,
+          "doc_id": "d4be3b8d-3cbc-42b6-9d23-b97381858157"
+        },
+        {
+          "title": "Self-Image and Perceptual Shifts in Learning (Discussion, 1/20/25, Ch 1)",
+          "similarity": 0.7714,
+          "doc_id": "3b6b913f-02ff-42a9-9a4c-a4d940736e45"
+        },
+        {
+          "title": "Attention to Breath: Slowing your mind",
+          "similarity": 0.7663,
+          "doc_id": "49c7ea60-0f25-47c4-9b96-d1f2cf13473c"
+        },
+        {
+          "title": "12. Thinking and Breathing",
+          "similarity": 0.7625,
+          "doc_id": "caafac36-c300-4953-a672-d1661b376566"
+        },
+        {
+          "title": "04. Differentiation of Parts and Functions in Breathing",
+          "similarity": 0.7622,
+          "doc_id": "17487617-c06f-440a-927d-dbb50ac27390"
+        }
+      ]
+    },
+    {
+      "id": "q0052",
+      "query": "Feldenkrais lesson rocking pelvis and nodding head lying on back",
+      "category": "action",
+      "expected_doc_id": "98a59c2f-10ec-4eff-b49b-17e9db5f4e1c",
+      "expected_title": "Fundamentals of a Healthy Back - Feldenkrais Project",
+      "rank": null,
+      "band": "low",
+      "gap": 0.0139,
+      "top_hits": [
+        {
+          "title": "Differentiation of Pelvic Movements by Means of an Imaginary Clock (Patrons) - Feldenkrais Project",
+          "similarity": 0.7649,
+          "doc_id": "82edeeb9-b563-4822-9a13-53a18ab60dba"
+        },
+        {
+          "title": "Head and Pelvis Rocking with Breath Awareness (ATM, 6/1/25, Ch 2)",
+          "similarity": 0.7587,
+          "doc_id": "196ec29a-c94b-43c9-9651-14368962a1a1"
+        },
+        {
+          "title": "Dynamic Sitting and Chair Clock - Feldenkrais Project",
+          "similarity": 0.7533,
+          "doc_id": "8cde4e74-6d1d-461a-a626-0993b26571eb"
+        },
+        {
+          "title": "Simple Pelvic Clock",
+          "similarity": 0.7523,
+          "doc_id": "1e83814a-3459-4f7a-9a5d-9b8f80de8365"
+        },
+        {
+          "title": "Rolling Head and Circling Coccyx on Knees",
+          "similarity": 0.751,
+          "doc_id": "0107a9fa-aa8e-4600-b5f9-e7edbeb956bb"
+        }
+      ]
+    },
+    {
+      "id": "q0053",
+      "query": "Feldenkrais lesson five curves of the spine sacrum lumbar thoracic",
+      "category": "body",
+      "expected_doc_id": "98a59c2f-10ec-4eff-b49b-17e9db5f4e1c",
+      "expected_title": "Fundamentals of a Healthy Back - Feldenkrais Project",
+      "rank": 1,
+      "band": "high",
+      "gap": 0.048,
+      "top_hits": [
+        {
+          "title": "Fundamentals of a Healthy Back - Feldenkrais Project",
+          "similarity": 0.7922,
+          "doc_id": "98a59c2f-10ec-4eff-b49b-17e9db5f4e1c"
+        },
+        {
+          "title": "Spine Like a Chain, with a Bias - Feldenkrais Project",
+          "similarity": 0.7552,
+          "doc_id": "ade87dda-4bb5-447a-b412-6203edc0c3b5"
+        },
+        {
+          "title": "A Mobile Spine",
+          "similarity": 0.7469,
+          "doc_id": "64eeac3c-32f5-4e84-9fed-c87eb0950069"
+        },
+        {
+          "title": "Spine Like a Chain, Freeing the Shoulder Girdle - Feldenkrais Project",
+          "similarity": 0.7449,
+          "doc_id": "35900777-13cf-48fe-b441-64be29053339"
+        },
+        {
+          "title": "Segment 10 Day 2 2/28/26 Chapter 2 Start - Segment 10 day 2 chapter 2 2:28:26",
+          "similarity": 0.7443,
+          "doc_id": "233fa783-bcf6-4567-b7d2-75ca4dfab259"
+        }
+      ]
+    },
+    {
+      "id": "q0054",
+      "query": "Feldenkrais lesson feeling weight of spine and easy breathing",
+      "category": "experience",
+      "expected_doc_id": "98a59c2f-10ec-4eff-b49b-17e9db5f4e1c",
+      "expected_title": "Fundamentals of a Healthy Back - Feldenkrais Project",
+      "rank": 6,
+      "band": "mid",
+      "gap": 0.0181,
+      "top_hits": [
+        {
+          "title": "Freeing Your Breath and Spine (16m or 37m) - Feldenkrais Project",
+          "similarity": 0.7753,
+          "doc_id": "d4be3b8d-3cbc-42b6-9d23-b97381858157"
+        },
+        {
+          "title": "Introductions and Lesson Feedback (Discussion, 1/17/25, Ch 2)",
+          "similarity": 0.7643,
+          "doc_id": "060862e1-ae0e-4f64-845d-cdb52ad9d8b1"
+        },
+        {
+          "title": "Talk: We Can Learn to be Better for Ourselves, Moment to Moment - Feldenkrais Project",
+          "similarity": 0.759,
+          "doc_id": "51edc0e3-9460-4d53-ba63-fbae2020db35"
+        },
+        {
+          "title": "Gathering the Spine, Stepping Down - Feldenkrais Project",
+          "similarity": 0.7574,
+          "doc_id": "50fa3469-e889-4250-b531-08dac33c70d8"
+        },
+        {
+          "title": "Breathing from Head to Heels - Feldenkrais Project",
+          "similarity": 0.7572,
+          "doc_id": "881a7dad-90a9-470e-8fca-22fd0c85c2f7"
+        }
+      ]
+    },
+    {
+      "id": "q0055",
+      "query": "feldenkrais lesson side bending to lengthen leg",
+      "category": "action",
+      "expected_doc_id": "50fa3469-e889-4250-b531-08dac33c70d8",
+      "expected_title": "Gathering the Spine, Stepping Down - Feldenkrais Project",
+      "rank": 5,
+      "band": "mid-high",
+      "gap": 0.0284,
+      "top_hits": [
+        {
+          "title": "Spine and Chest Side-Bending, Lengthening Limbs - Feldenkrais Project",
+          "similarity": 0.7775,
+          "doc_id": "3371e90e-c560-4396-ac84-2bc473d19706"
+        },
+        {
+          "title": "Bending Sideways - Feldenkrais Project",
+          "similarity": 0.7662,
+          "doc_id": "da0a6c28-4a78-45e8-b02d-cda28d14886e"
+        },
+        {
+          "title": "Legs as Free as a Baby's - Feldenkrais Project",
+          "similarity": 0.7528,
+          "doc_id": "92cb5d50-1e79-46d6-b4e4-e4f367d7a002"
+        },
+        {
+          "title": "Sliding Along the Length of the Leg,",
+          "similarity": 0.7523,
+          "doc_id": "a144cf0b-9671-4ae8-90d2-4e3c4f012741"
+        },
+        {
+          "title": "Gathering the Spine, Stepping Down - Feldenkrais Project",
+          "similarity": 0.7491,
+          "doc_id": "50fa3469-e889-4250-b531-08dac33c70d8"
+        }
+      ]
+    },
+    {
+      "id": "q0056",
+      "query": "how to release lumbar arching for spinal movement",
+      "category": "body",
+      "expected_doc_id": "50fa3469-e889-4250-b531-08dac33c70d8",
+      "expected_title": "Gathering the Spine, Stepping Down - Feldenkrais Project",
+      "rank": null,
+      "band": "mid",
+      "gap": 0.0201,
+      "top_hits": [
+        {
+          "title": "Preparation for a Bridge",
+          "similarity": 0.7316,
+          "doc_id": "e3da0790-6405-4927-a3bf-27d2120bd245"
+        },
+        {
+          "title": "A Mobile Spine",
+          "similarity": 0.7246,
+          "doc_id": "64eeac3c-32f5-4e84-9fed-c87eb0950069"
+        },
+        {
+          "title": "Calibrating Extensors",
+          "similarity": 0.7174,
+          "doc_id": "d170e563-124f-48f7-975a-ef8e12c5a402"
+        },
+        {
+          "title": "Waking the Spine (Chair)",
+          "similarity": 0.7171,
+          "doc_id": "701aad76-6876-4df8-a478-bb0b8ca11db4"
+        },
+        {
+          "title": "Training to sit without leaning on the floor,",
+          "similarity": 0.7115,
+          "doc_id": "910c7847-43dc-4c79-a9b8-56219acf31d2"
+        }
+      ]
+    },
+    {
+      "id": "q0057",
+      "query": "feldenkrais feeling the connection between spine and heel while walking",
+      "category": "experience",
+      "expected_doc_id": "50fa3469-e889-4250-b531-08dac33c70d8",
+      "expected_title": "Gathering the Spine, Stepping Down - Feldenkrais Project",
+      "rank": 3,
+      "band": "mid",
+      "gap": 0.0205,
+      "top_hits": [
+        {
+          "title": "Aligning the Knees",
+          "similarity": 0.7786,
+          "doc_id": "0fa5d2d9-ff32-4088-9704-a44e74d34452"
+        },
+        {
+          "title": "Walking like a Cat (especially for kids)",
+          "similarity": 0.7727,
+          "doc_id": "104ada13-10df-4a2d-a447-edd65f584f9f"
+        },
+        {
+          "title": "Gathering the Spine, Stepping Down - Feldenkrais Project",
+          "similarity": 0.7687,
+          "doc_id": "50fa3469-e889-4250-b531-08dac33c70d8"
+        },
+        {
+          "title": "Connecting legs through upper spine",
+          "similarity": 0.7614,
+          "doc_id": "ffc57d8a-b1cd-4c09-8410-bb60988397c1"
+        },
+        {
+          "title": "Feet Propelling Into Action (Rock Climbing)",
+          "similarity": 0.7581,
+          "doc_id": "c598b0e4-a68c-45a5-8fa6-e7d01b3c7b58"
+        }
+      ]
+    },
+    {
+      "id": "q0058",
+      "query": "Feldenkrais lesson tilting knees side to side while lying on back",
+      "category": "action",
+      "expected_doc_id": "92cb5d50-1e79-46d6-b4e4-e4f367d7a002",
+      "expected_title": "Legs as Free as a Baby's - Feldenkrais Project",
+      "rank": 3,
+      "band": "mid-high",
+      "gap": 0.028,
+      "top_hits": [
+        {
+          "title": "Becoming More Balanced",
+          "similarity": 0.768,
+          "doc_id": "8eee60b1-dcb6-4487-9d5a-7e5a8b33eb0b"
+        },
+        {
+          "title": "Tilting legs in and out on back",
+          "similarity": 0.7628,
+          "doc_id": "5ac1daf1-1986-4c6e-a952-be929e2fc21f"
+        },
+        {
+          "title": "Legs as Free as a Baby's - Feldenkrais Project",
+          "similarity": 0.7517,
+          "doc_id": "92cb5d50-1e79-46d6-b4e4-e4f367d7a002"
+        },
+        {
+          "title": "Tilting knee on back connecting to arms above",
+          "similarity": 0.747,
+          "doc_id": "ba30f7e9-84e4-4262-9aeb-f69746512d9f"
+        },
+        {
+          "title": "Sliding Along the Length of the Leg,",
+          "similarity": 0.74,
+          "doc_id": "a144cf0b-9671-4ae8-90d2-4e3c4f012741"
+        }
+      ]
+    },
+    {
+      "id": "q0059",
+      "query": "how to release hip flexors and use pelvis to move legs",
+      "category": "body",
+      "expected_doc_id": "92cb5d50-1e79-46d6-b4e4-e4f367d7a002",
+      "expected_title": "Legs as Free as a Baby's - Feldenkrais Project",
+      "rank": 5,
+      "band": "low",
+      "gap": 0.0117,
+      "top_hits": [
+        {
+          "title": "Freedom in the Pelvis (for Horse Riders)",
+          "similarity": 0.7316,
+          "doc_id": "6d883d0d-d904-4c36-aa5e-1cd3817e5b17"
+        },
+        {
+          "title": "Oiling the Hip Joints",
+          "similarity": 0.7279,
+          "doc_id": "631b14ab-c439-4b70-88c3-5175ff3f01a4"
+        },
+        {
+          "title": "Leg Rotation and Pelvic Weight Transfer (ATM, 2/27/26, Ch 5)",
+          "similarity": 0.7265,
+          "doc_id": "0fbc6b85-3979-4460-bc85-e306697711e8"
+        },
+        {
+          "title": "Leg Lifting and Circling Explorations (ATM, 2/27/26, Ch 1)",
+          "similarity": 0.7261,
+          "doc_id": "482756c5-f5c9-44fb-b518-cd9bdecb1376"
+        },
+        {
+          "title": "Legs as Free as a Baby's - Feldenkrais Project",
+          "similarity": 0.7198,
+          "doc_id": "92cb5d50-1e79-46d6-b4e4-e4f367d7a002"
+        }
+      ]
+    },
+    {
+      "id": "q0060",
+      "query": "Feldenkrais lesson feeling weight shift in pelvis and ribs",
+      "category": "experience",
+      "expected_doc_id": "92cb5d50-1e79-46d6-b4e4-e4f367d7a002",
+      "expected_title": "Legs as Free as a Baby's - Feldenkrais Project",
+      "rank": null,
+      "band": "low",
+      "gap": 0.0131,
+      "top_hits": [
+        {
+          "title": "Easier Sitting",
+          "similarity": 0.7711,
+          "doc_id": "aa8d579c-f220-416c-8dcf-30a30f78633a"
+        },
+        {
+          "title": "Softening the Ribs - Feldenkrais Project",
+          "similarity": 0.7694,
+          "doc_id": "124fc281-a2c6-41bf-9a78-e1f2624ccac9"
+        },
+        {
+          "title": "Supple Twisting - Feldenkrais Project",
+          "similarity": 0.76,
+          "doc_id": "b3a86cf1-faaa-4ee5-be3c-1bb60ed292ea"
+        },
+        {
+          "title": "Pelvic Movement and Skeletal Transmission (FI Demo, 5/30/25, Ch 5)",
+          "similarity": 0.7595,
+          "doc_id": "3d4047cc-d60b-4125-ab18-23b22e9194bf"
+        },
+        {
+          "title": "Reaching, Rolling, and Ribs - Feldenkrais Project",
+          "similarity": 0.758,
+          "doc_id": "d3ff9c31-27a4-4af6-90f3-38465ed44d54"
+        }
+      ]
+    },
+    {
+      "id": "q0061",
+      "query": "Feldenkrais rolling head with hand, shifting weight on foot",
+      "category": "action",
+      "expected_doc_id": "27f6966f-afb8-4b42-9eac-bbde02408b35",
+      "expected_title": "Length Without Effort - Feldenkrais Project",
+      "rank": 3,
+      "band": "low",
+      "gap": 0.0149,
+      "top_hits": [
+        {
+          "title": "Head Rolling with Hand Contact (ATM, 7/22/25, Ch 4)",
+          "similarity": 0.7603,
+          "doc_id": "2a0d3f24-faf2-4a51-b754-f886e3a39dc7"
+        },
+        {
+          "title": "Rolling our Feet and Head for Better Balance",
+          "similarity": 0.7582,
+          "doc_id": "e303ed37-a50c-471d-a670-ee1e3309cd03"
+        },
+        {
+          "title": "Length Without Effort - Feldenkrais Project",
+          "similarity": 0.7484,
+          "doc_id": "27f6966f-afb8-4b42-9eac-bbde02408b35"
+        },
+        {
+          "title": "Rolling the Head and Balance Integration (ATM, 7/27/25, Ch 4)",
+          "similarity": 0.7466,
+          "doc_id": "32396edd-5300-4d8e-9547-0640da2fa8d2"
+        },
+        {
+          "title": "Head Rolling and Shoulder Integration (Practice, 7/22/25, Ch 5)",
+          "similarity": 0.7453,
+          "doc_id": "d5e26688-d5f0-49b8-bdc9-c90407bdf1e7"
+        }
+      ]
+    },
+    {
+      "id": "q0062",
+      "query": "coordinate head and feet for spinal rotation Feldenkrais",
+      "category": "body",
+      "expected_doc_id": "27f6966f-afb8-4b42-9eac-bbde02408b35",
+      "expected_title": "Length Without Effort - Feldenkrais Project",
+      "rank": 1,
+      "band": "high",
+      "gap": 0.0304,
+      "top_hits": [
+        {
+          "title": "Length Without Effort - Feldenkrais Project",
+          "similarity": 0.8045,
+          "doc_id": "27f6966f-afb8-4b42-9eac-bbde02408b35"
+        },
+        {
+          "title": "Sitting and Turning with Length - Feldenkrais Project",
+          "similarity": 0.7807,
+          "doc_id": "d2688638-17f2-4cc2-a66f-33ee1414e07e"
+        },
+        {
+          "title": "Connecting Arms and Legs, Hinges at Feet and Knees - Feldenkrais Project",
+          "similarity": 0.778,
+          "doc_id": "7233897b-431d-4101-9324-753e1f2ca384"
+        },
+        {
+          "title": "Spinal Rotation Through Standing Movements (ATM, 3/10/25, Ch 5)",
+          "similarity": 0.7752,
+          "doc_id": "6cf399b2-9e8e-47b0-8ec7-cc6499e992b0"
+        },
+        {
+          "title": "The Movement of the Eyes Organizes the Movement of the Body (Patrons) - Feldenkrais Project",
+          "similarity": 0.7741,
+          "doc_id": "71a59311-76a2-4e49-be64-a85adeb96eb9"
+        }
+      ]
+    },
+    {
+      "id": "q0063",
+      "query": "Feldenkrais lesson feeling length and twist in spine",
+      "category": "experience",
+      "expected_doc_id": "27f6966f-afb8-4b42-9eac-bbde02408b35",
+      "expected_title": "Length Without Effort - Feldenkrais Project",
+      "rank": 5,
+      "band": "mid",
+      "gap": 0.0172,
+      "top_hits": [
+        {
+          "title": "Sitting and Turning with Length - Feldenkrais Project",
+          "similarity": 0.7896,
+          "doc_id": "d2688638-17f2-4cc2-a66f-33ee1414e07e"
+        },
+        {
+          "title": "The Power of Prone: Twisting on Your Belly - Feldenkrais Project",
+          "similarity": 0.785,
+          "doc_id": "901195d6-8e48-4c01-8ab2-e6641492c1ec"
+        },
+        {
+          "title": "Supple Twisting - Feldenkrais Project",
+          "similarity": 0.778,
+          "doc_id": "b3a86cf1-faaa-4ee5-be3c-1bb60ed292ea"
+        },
+        {
+          "title": "Simple Twisting - Feldenkrais Project",
+          "similarity": 0.7726,
+          "doc_id": "95e68e7a-adae-43d4-b71c-6bb8827284c1"
+        },
+        {
+          "title": "Length Without Effort - Feldenkrais Project",
+          "similarity": 0.7724,
+          "doc_id": "27f6966f-afb8-4b42-9eac-bbde02408b35"
+        }
+      ]
+    },
+    {
+      "id": "q0064",
+      "query": "Feldenkrais lesson lifting pelvis while keeping knees still",
+      "category": "action",
+      "expected_doc_id": "af3ab002-2dfe-46d6-9e0f-ce3a3013029d",
+      "expected_title": "Lifting Up and Through - Feldenkrais Project",
+      "rank": 10,
+      "band": "low",
+      "gap": 0.0058,
+      "top_hits": [
+        {
+          "title": "Becoming More Balanced",
+          "similarity": 0.764,
+          "doc_id": "8eee60b1-dcb6-4487-9d5a-7e5a8b33eb0b"
+        },
+        {
+          "title": "Legs as Free as a Baby's - Feldenkrais Project",
+          "similarity": 0.762,
+          "doc_id": "92cb5d50-1e79-46d6-b4e4-e4f367d7a002"
+        },
+        {
+          "title": "More Precise Hips and Spine - Feldenkrais Project",
+          "similarity": 0.7608,
+          "doc_id": "be9869b7-38df-4723-b434-9b6542334d25"
+        },
+        {
+          "title": "Standing on the Knees (1st of 3)",
+          "similarity": 0.7585,
+          "doc_id": "4c8070de-e841-43b3-b855-9000712e6679"
+        },
+        {
+          "title": "Kneeling Position and Hip Integration (FI Demo, 3/9/25, Ch 4)",
+          "similarity": 0.7581,
+          "doc_id": "0e93b98d-ffbb-4826-a2db-678104d50479"
+        }
+      ]
+    },
+    {
+      "id": "q0065",
+      "query": "Feldenkrais lesson using shoulder blades to drive spinal movement",
+      "category": "body",
+      "expected_doc_id": "af3ab002-2dfe-46d6-9e0f-ce3a3013029d",
+      "expected_title": "Lifting Up and Through - Feldenkrais Project",
+      "rank": null,
+      "band": "low",
+      "gap": 0.012,
+      "top_hits": [
+        {
+          "title": "Gliding Shoulder Blades",
+          "similarity": 0.7784,
+          "doc_id": "fae0780e-c52d-44fc-a22c-9e156fe365dd"
+        },
+        {
+          "title": "Chanukia, the Candle Holder Lesson - Feldenkrais Project",
+          "similarity": 0.7778,
+          "doc_id": "f54baa93-2bff-4e27-9b2f-29750472a261"
+        },
+        {
+          "title": "Spine Like a Chain, Freeing the Shoulder Girdle - Feldenkrais Project",
+          "similarity": 0.7725,
+          "doc_id": "35900777-13cf-48fe-b441-64be29053339"
+        },
+        {
+          "title": "Simple Self-Hug - Feldenkrais Project",
+          "similarity": 0.7722,
+          "doc_id": "4c768a03-56ef-4ef5-827c-f8694e248f7a"
+        },
+        {
+          "title": "Turning Bad Habits Good",
+          "similarity": 0.7664,
+          "doc_id": "f5925402-d038-4722-a4ae-438c22d82fb7"
+        }
+      ]
+    },
+    {
+      "id": "q0066",
+      "query": "Feldenkrais lesson feeling the floor lift you up through your bones",
+      "category": "experience",
+      "expected_doc_id": "af3ab002-2dfe-46d6-9e0f-ce3a3013029d",
+      "expected_title": "Lifting Up and Through - Feldenkrais Project",
+      "rank": 1,
+      "band": "high",
+      "gap": 0.0355,
+      "top_hits": [
+        {
+          "title": "Lifting Up and Through - Feldenkrais Project",
+          "similarity": 0.7904,
+          "doc_id": "af3ab002-2dfe-46d6-9e0f-ce3a3013029d"
+        },
+        {
+          "title": "The Anti-Gravity Lesson - Feldenkrais Project",
+          "similarity": 0.7816,
+          "doc_id": "5f4f4acf-9697-43ec-b961-5fb129fc2408"
+        },
+        {
+          "title": "Talk: Feldenkrais for Self Empowerment - Feldenkrais Project",
+          "similarity": 0.776,
+          "doc_id": "d293737c-d25e-4877-a909-36b8eab8db97"
+        },
+        {
+          "title": "Bones Do It Better",
+          "similarity": 0.7741,
+          "doc_id": "cd936ead-5a7d-4f62-97db-8b88b9c2caed"
+        },
+        {
+          "title": "Proportional Lifting",
+          "similarity": 0.7549,
+          "doc_id": "9152c442-4b13-492e-933f-811e7ab875f8"
+        }
+      ]
+    },
+    {
+      "id": "q0067",
+      "query": "feldenkrais lesson tilting pelvis to lengthen abdomen",
+      "category": "action",
+      "expected_doc_id": "f5b8cece-4f45-4caf-acfe-4964e561cb10",
+      "expected_title": "Long Belly, Strong Back: Short Version - Feldenkrais Project",
+      "rank": 1,
+      "band": "mid-high",
+      "gap": 0.0229,
+      "top_hits": [
+        {
+          "title": "Long Belly, Strong Back: Short Version - Feldenkrais Project",
+          "similarity": 0.7729,
+          "doc_id": "f5b8cece-4f45-4caf-acfe-4964e561cb10"
+        },
+        {
+          "title": "Rolling with Length - Feldenkrais Project",
+          "similarity": 0.7555,
+          "doc_id": "a5b061ee-55a3-43ca-8e0e-d25c59936345"
+        },
+        {
+          "title": "Your Navigational Pelvis - Feldenkrais Project",
+          "similarity": 0.7514,
+          "doc_id": "154cde8d-d1c9-4f95-a23c-fd4010713646"
+        },
+        {
+          "title": "Move From Your Centre... (What's That?!)",
+          "similarity": 0.7503,
+          "doc_id": "e619dcb3-21e1-41f9-bd38-4f4c84806fe5"
+        },
+        {
+          "title": "Dynamic Sitting and Chair Clock - Feldenkrais Project",
+          "similarity": 0.7501,
+          "doc_id": "8cde4e74-6d1d-461a-a626-0993b26571eb"
+        }
+      ]
+    },
+    {
+      "id": "q0068",
+      "query": "how to coordinate sternum and pubic bone in feldenkrais",
+      "category": "body",
+      "expected_doc_id": "f5b8cece-4f45-4caf-acfe-4964e561cb10",
+      "expected_title": "Long Belly, Strong Back: Short Version - Feldenkrais Project",
+      "rank": 2,
+      "band": "high",
+      "gap": 0.0354,
+      "top_hits": [
+        {
+          "title": "Free Your Torso for Better Posture, Walking, and Running - Feldenkrais Project",
+          "similarity": 0.7799,
+          "doc_id": "9b67a689-c1fd-4063-ad1a-fa2aeb7f69dd"
+        },
+        {
+          "title": "Long Belly, Strong Back: Short Version - Feldenkrais Project",
+          "similarity": 0.7682,
+          "doc_id": "f5b8cece-4f45-4caf-acfe-4964e561cb10"
+        },
+        {
+          "title": "Sternum and Rib Cage Anatomy (Lecture, 3/8/25, Ch 6)",
+          "similarity": 0.7535,
+          "doc_id": "a085cfa8-cb7a-4141-9edd-fd10748d1fd7"
+        },
+        {
+          "title": "No Bone Unturned (part 2)",
+          "similarity": 0.7471,
+          "doc_id": "3e86a548-4a9c-4428-a9c8-acad9634a5cc"
+        },
+        {
+          "title": "Chest and Breastbone Softening for Folding (FI Demo, 7/25/25, Ch 5)",
+          "similarity": 0.7445,
+          "doc_id": "dda4cea7-1f40-4cb4-8446-424a33ab7eb5"
+        }
+      ]
+    },
+    {
+      "id": "q0069",
+      "query": "feldenkrais lesson feeling length in front of body",
+      "category": "experience",
+      "expected_doc_id": "f5b8cece-4f45-4caf-acfe-4964e561cb10",
+      "expected_title": "Long Belly, Strong Back: Short Version - Feldenkrais Project",
+      "rank": 1,
+      "band": "mid",
+      "gap": 0.021,
+      "top_hits": [
+        {
+          "title": "Long Belly, Strong Back: Short Version - Feldenkrais Project",
+          "similarity": 0.7674,
+          "doc_id": "f5b8cece-4f45-4caf-acfe-4964e561cb10"
+        },
+        {
+          "title": "Head Under the Gap Workshop Discussion - Feldenkrais Project",
+          "similarity": 0.7609,
+          "doc_id": "3c445984-d34a-4c37-8a6f-d96aa5550157"
+        },
+        {
+          "title": "Folding, Foundation, and Feet - Feldenkrais Project",
+          "similarity": 0.7496,
+          "doc_id": "f53988e0-8eab-4468-9dc1-ecdc478f5141"
+        },
+        {
+          "title": "Strength Without Excess - Feldenkrais Project",
+          "similarity": 0.7495,
+          "doc_id": "642a5cff-80ce-4b78-bbbd-42d6e00e0660"
+        },
+        {
+          "title": "Length Without Effort - Feldenkrais Project",
+          "similarity": 0.7464,
+          "doc_id": "27f6966f-afb8-4b42-9eac-bbde02408b35"
+        }
+      ]
+    },
+    {
+      "id": "q0070",
+      "query": "Feldenkrais lesson arching back while hugging knee to chest",
+      "category": "action",
+      "expected_doc_id": "be9869b7-38df-4723-b434-9b6542334d25",
+      "expected_title": "More Precise Hips and Spine - Feldenkrais Project",
+      "rank": 1,
+      "band": "mid",
+      "gap": 0.0181,
+      "top_hits": [
+        {
+          "title": "More Precise Hips and Spine - Feldenkrais Project",
+          "similarity": 0.7632,
+          "doc_id": "be9869b7-38df-4723-b434-9b6542334d25"
+        },
+        {
+          "title": "Knee Pulling through Arm",
+          "similarity": 0.7553,
+          "doc_id": "a901f733-c2b4-457f-8074-cea8685f401c"
+        },
+        {
+          "title": "Basic Arching and Folding (Patrons) - Feldenkrais Project",
+          "similarity": 0.7514,
+          "doc_id": "36202c43-1a84-4c1f-afa7-4597865f8459"
+        },
+        {
+          "title": "Calibrating Extensors",
+          "similarity": 0.7453,
+          "doc_id": "d170e563-124f-48f7-975a-ef8e12c5a402"
+        },
+        {
+          "title": "Knee-to-Elbow Folding with Attention (ATM, 1/17/25, Ch 3)",
+          "similarity": 0.745,
+          "doc_id": "6775e3dd-9444-4f24-8c7d-86689709eace"
+        }
+      ]
+    },
+    {
+      "id": "q0071",
+      "query": "differentiating hip joint movement from lower back rounding Feldenkrais",
+      "category": "body",
+      "expected_doc_id": "be9869b7-38df-4723-b434-9b6542334d25",
+      "expected_title": "More Precise Hips and Spine - Feldenkrais Project",
+      "rank": 3,
+      "band": "low",
+      "gap": 0.0162,
+      "top_hits": [
+        {
+          "title": "(variations on) Getting to Know the Hip Joints",
+          "similarity": 0.7605,
+          "doc_id": "08cc779b-3a8c-4505-ae71-089887a44ba5"
+        },
+        {
+          "title": "The Hip Joints: Moving Proximal Around Distal - Feldenkrais Project",
+          "similarity": 0.7583,
+          "doc_id": "88f70d83-c274-41c4-9d43-df630fd2ad52"
+        },
+        {
+          "title": "More Precise Hips and Spine - Feldenkrais Project",
+          "similarity": 0.7523,
+          "doc_id": "be9869b7-38df-4723-b434-9b6542334d25"
+        },
+        {
+          "title": "Releasing the Hips by Holding the Feet",
+          "similarity": 0.7444,
+          "doc_id": "c67b936b-69fa-42f9-9701-9549287b2066"
+        },
+        {
+          "title": "Finding Your Hip Joints",
+          "similarity": 0.7443,
+          "doc_id": "294ac574-8c09-405a-b2de-1fdb7df4a652"
+        }
+      ]
+    },
+    {
+      "id": "q0072",
+      "query": "Feldenkrais lesson feeling spine grow out of legs standing",
+      "category": "experience",
+      "expected_doc_id": "be9869b7-38df-4723-b434-9b6542334d25",
+      "expected_title": "More Precise Hips and Spine - Feldenkrais Project",
+      "rank": null,
+      "band": "low",
+      "gap": 0.0071,
+      "top_hits": [
+        {
+          "title": "Sprightly Standing",
+          "similarity": 0.755,
+          "doc_id": "af7a97e3-eacc-4bb5-bbbc-da9c76dad772"
+        },
+        {
+          "title": "Lifting Up and Through - Feldenkrais Project",
+          "similarity": 0.7514,
+          "doc_id": "af3ab002-2dfe-46d6-9e0f-ce3a3013029d"
+        },
+        {
+          "title": "Talk: The Why and How of Growing Taller - Feldenkrais Project",
+          "similarity": 0.7491,
+          "doc_id": "586f2d9e-d0ac-4019-b85f-0b05311592cf"
+        },
+        {
+          "title": "Length Without Effort - Feldenkrais Project",
+          "similarity": 0.7488,
+          "doc_id": "27f6966f-afb8-4b42-9eac-bbde02408b35"
+        },
+        {
+          "title": "A Fresh Look at Standing",
+          "similarity": 0.7479,
+          "doc_id": "07181d02-26d1-44b5-988f-001d2bd5f418"
+        }
+      ]
+    },
+    {
+      "id": "q0073",
+      "query": "feldenkrais lesson drawing up pelvic floor and releasing",
+      "category": "action",
+      "expected_doc_id": "80b3c160-1fa0-4903-8254-8136d3c3efe9",
+      "expected_title": "Pelvic Floor Connections - Feldenkrais Project",
+      "rank": 1,
+      "band": "high",
+      "gap": 0.043,
+      "top_hits": [
+        {
+          "title": "Pelvic Floor Connections - Feldenkrais Project",
+          "similarity": 0.7785,
+          "doc_id": "80b3c160-1fa0-4903-8254-8136d3c3efe9"
+        },
+        {
+          "title": "Activating the Pelvic Floor",
+          "similarity": 0.751,
+          "doc_id": "ad3611dc-97bc-4c74-9899-efe569e41e89"
+        },
+        {
+          "title": "Talk: We Can Learn to be Better for Ourselves, Moment to Moment - Feldenkrais Project",
+          "similarity": 0.7372,
+          "doc_id": "51edc0e3-9460-4d53-ba63-fbae2020db35"
+        },
+        {
+          "title": "Balance & Uprightness - Eyes & Pelvis",
+          "similarity": 0.7357,
+          "doc_id": "e787b1bc-0e62-4c99-95ea-2b0b4e1f07f4"
+        },
+        {
+          "title": "Your Navigational Pelvis - Feldenkrais Project",
+          "similarity": 0.7356,
+          "doc_id": "154cde8d-d1c9-4f95-a23c-fd4010713646"
+        }
+      ]
+    },
+    {
+      "id": "q0074",
+      "query": "pelvic floor connection to breathing and hip movement feldenkrais",
+      "category": "body",
+      "expected_doc_id": "80b3c160-1fa0-4903-8254-8136d3c3efe9",
+      "expected_title": "Pelvic Floor Connections - Feldenkrais Project",
+      "rank": 1,
+      "band": "high",
+      "gap": 0.0489,
+      "top_hits": [
+        {
+          "title": "Pelvic Floor Connections - Feldenkrais Project",
+          "similarity": 0.7997,
+          "doc_id": "80b3c160-1fa0-4903-8254-8136d3c3efe9"
+        },
+        {
+          "title": "Breath, Belly, Back, and Hips: Connecting to the Earth - Feldenkrais Project",
+          "similarity": 0.7653,
+          "doc_id": "00a0dff0-23d1-48f5-923e-d77b1d6d5d74"
+        },
+        {
+          "title": "Your Navigational Pelvis - Feldenkrais Project",
+          "similarity": 0.7574,
+          "doc_id": "154cde8d-d1c9-4f95-a23c-fd4010713646"
+        },
+        {
+          "title": "Activating the Pelvic Floor",
+          "similarity": 0.7563,
+          "doc_id": "ad3611dc-97bc-4c74-9899-efe569e41e89"
+        },
+        {
+          "title": "The Hip Joints: Moving Proximal Around Distal - Feldenkrais Project",
+          "similarity": 0.7507,
+          "doc_id": "88f70d83-c274-41c4-9d43-df630fd2ad52"
+        }
+      ]
+    },
+    {
+      "id": "q0075",
+      "query": "feldenkrais lesson feeling the pelvic floor softening and releasing tension",
+      "category": "experience",
+      "expected_doc_id": "80b3c160-1fa0-4903-8254-8136d3c3efe9",
+      "expected_title": "Pelvic Floor Connections - Feldenkrais Project",
+      "rank": 1,
+      "band": "high",
+      "gap": 0.0407,
+      "top_hits": [
+        {
+          "title": "Pelvic Floor Connections - Feldenkrais Project",
+          "similarity": 0.7767,
+          "doc_id": "80b3c160-1fa0-4903-8254-8136d3c3efe9"
+        },
+        {
+          "title": "Activating the Pelvic Floor",
+          "similarity": 0.743,
+          "doc_id": "ad3611dc-97bc-4c74-9899-efe569e41e89"
+        },
+        {
+          "title": "Talk: We Can Learn to be Better for Ourselves, Moment to Moment - Feldenkrais Project",
+          "similarity": 0.7396,
+          "doc_id": "51edc0e3-9460-4d53-ba63-fbae2020db35"
+        },
+        {
+          "title": "Your Navigational Pelvis - Feldenkrais Project",
+          "similarity": 0.7375,
+          "doc_id": "154cde8d-d1c9-4f95-a23c-fd4010713646"
+        },
+        {
+          "title": "Oiling the Hip Joints",
+          "similarity": 0.736,
+          "doc_id": "631b14ab-c439-4b70-88c3-5175ff3f01a4"
+        }
+      ]
+    },
+    {
+      "id": "q0076",
+      "query": "Feldenkrais lesson rolling from back to side using leg momentum",
+      "category": "action",
+      "expected_doc_id": "d3ff9c31-27a4-4af6-90f3-38465ed44d54",
+      "expected_title": "Reaching, Rolling, and Ribs - Feldenkrais Project",
+      "rank": null,
+      "band": "low",
+      "gap": 0.0131,
+      "top_hits": [
+        {
+          "title": "Rolling with Length - Feldenkrais Project",
+          "similarity": 0.766,
+          "doc_id": "a5b061ee-55a3-43ca-8e0e-d25c59936345"
+        },
+        {
+          "title": "From Side to Back",
+          "similarity": 0.7603,
+          "doc_id": "dcf9316d-3daa-41e5-b129-c7da960c9394"
+        },
+        {
+          "title": "Rolling to Sitting, and Beyond - Feldenkrais Project",
+          "similarity": 0.7576,
+          "doc_id": "07c970de-d30a-4ecf-8859-c7a6b148e8fd"
+        },
+        {
+          "title": "Transitions Matter",
+          "similarity": 0.7556,
+          "doc_id": "bbd9b8cd-becf-42c9-8f6c-c17fda6d3850"
+        },
+        {
+          "title": "Rolling to Side with Integrated Movement (ATM, 10/11/25, Ch 2)",
+          "similarity": 0.7528,
+          "doc_id": "e11ac1d8-e67a-4b0a-b521-6949e192015f"
+        }
+      ]
+    },
+    {
+      "id": "q0077",
+      "query": "Feldenkrais lesson connecting shoulder blade movement to rib cage rotation",
+      "category": "body",
+      "expected_doc_id": "d3ff9c31-27a4-4af6-90f3-38465ed44d54",
+      "expected_title": "Reaching, Rolling, and Ribs - Feldenkrais Project",
+      "rank": 1,
+      "band": "low",
+      "gap": 0.0133,
+      "top_hits": [
+        {
+          "title": "Reaching, Rolling, and Ribs - Feldenkrais Project",
+          "similarity": 0.7981,
+          "doc_id": "d3ff9c31-27a4-4af6-90f3-38465ed44d54"
+        },
+        {
+          "title": "Simple Self-Hug - Feldenkrais Project",
+          "similarity": 0.7977,
+          "doc_id": "4c768a03-56ef-4ef5-827c-f8694e248f7a"
+        },
+        {
+          "title": "The Periscope - Feldenkrais Project",
+          "similarity": 0.7948,
+          "doc_id": "6819613d-75b4-4cd1-87b2-431daf999c3b"
+        },
+        {
+          "title": "Softening the Ribs - Feldenkrais Project",
+          "similarity": 0.7927,
+          "doc_id": "124fc281-a2c6-41bf-9a78-e1f2624ccac9"
+        },
+        {
+          "title": "Chanukia, the Candle Holder Lesson - Feldenkrais Project",
+          "similarity": 0.7848,
+          "doc_id": "f54baa93-2bff-4e27-9b2f-29750472a261"
+        }
+      ]
+    },
+    {
+      "id": "q0078",
+      "query": "Feldenkrais lesson feeling the ribs deform and the body pour",
+      "category": "experience",
+      "expected_doc_id": "d3ff9c31-27a4-4af6-90f3-38465ed44d54",
+      "expected_title": "Reaching, Rolling, and Ribs - Feldenkrais Project",
+      "rank": 3,
+      "band": "mid-high",
+      "gap": 0.0287,
+      "top_hits": [
+        {
+          "title": "Softening the Ribs - Feldenkrais Project",
+          "similarity": 0.7973,
+          "doc_id": "124fc281-a2c6-41bf-9a78-e1f2624ccac9"
+        },
+        {
+          "title": "Twisted Lamprey - Feldenkrais Project",
+          "similarity": 0.7809,
+          "doc_id": "a3b0f882-2acd-4dd0-bcab-3714758ca1bc"
+        },
+        {
+          "title": "Reaching, Rolling, and Ribs - Feldenkrais Project",
+          "similarity": 0.778,
+          "doc_id": "d3ff9c31-27a4-4af6-90f3-38465ed44d54"
+        },
+        {
+          "title": "The Periscope - Feldenkrais Project",
+          "similarity": 0.7722,
+          "doc_id": "6819613d-75b4-4cd1-87b2-431daf999c3b"
+        },
+        {
+          "title": "Supple Twisting - Feldenkrais Project",
+          "similarity": 0.7687,
+          "doc_id": "b3a86cf1-faaa-4ee5-be3c-1bb60ed292ea"
+        }
+      ]
+    },
+    {
+      "id": "q0079",
+      "query": "Feldenkrais lesson rolling from side to back with leg arc",
+      "category": "action",
+      "expected_doc_id": "07c970de-d30a-4ecf-8859-c7a6b148e8fd",
+      "expected_title": "Rolling to Sitting, and Beyond - Feldenkrais Project",
+      "rank": 5,
+      "band": "low",
+      "gap": 0.0091,
+      "top_hits": [
+        {
+          "title": "From Side to Back",
+          "similarity": 0.7691,
+          "doc_id": "dcf9316d-3daa-41e5-b129-c7da960c9394"
+        },
+        {
+          "title": "Lengthening the Leg into Pulling Movements While Rolling",
+          "similarity": 0.7656,
+          "doc_id": "f1b60478-08b9-4f8e-90b3-8624412eb356"
+        },
+        {
+          "title": "Rolling with Length - Feldenkrais Project",
+          "similarity": 0.7641,
+          "doc_id": "a5b061ee-55a3-43ca-8e0e-d25c59936345"
+        },
+        {
+          "title": "Rolling and Sweeping While Side-Lying (ATM, 1/20/25, Ch 3)",
+          "similarity": 0.761,
+          "doc_id": "055cd431-825a-457f-b2a3-1f9405529dad"
+        },
+        {
+          "title": "Rolling to Sitting, and Beyond - Feldenkrais Project",
+          "similarity": 0.7599,
+          "doc_id": "07c970de-d30a-4ecf-8859-c7a6b148e8fd"
+        }
+      ]
+    },
+    {
+      "id": "q0080",
+      "query": "Feldenkrais lesson using head weight to counterbalance pelvis for sitting",
+      "category": "body",
+      "expected_doc_id": "07c970de-d30a-4ecf-8859-c7a6b148e8fd",
+      "expected_title": "Rolling to Sitting, and Beyond - Feldenkrais Project",
+      "rank": null,
+      "band": "mid",
+      "gap": 0.02,
+      "top_hits": [
+        {
+          "title": "Dynamic Sitting and Chair Clock - Feldenkrais Project",
+          "similarity": 0.7767,
+          "doc_id": "8cde4e74-6d1d-461a-a626-0993b26571eb"
+        },
+        {
+          "title": "Exploring Balance to Improve Sitting",
+          "similarity": 0.7691,
+          "doc_id": "b35c6fe2-3ed4-41f7-958e-2a8beb443dc9"
+        },
+        {
+          "title": "Easier Sitting Workshop Lesson 1 - Feldenkrais Project",
+          "similarity": 0.7656,
+          "doc_id": "2504991a-441b-45e3-bb98-dc2795c2afd6"
+        },
+        {
+          "title": "Driving and Dynamic Sitting - Chair Practice - Feldenkrais Project",
+          "similarity": 0.7604,
+          "doc_id": "05f95b68-d8d4-4547-b868-a1a2d8e7baf7"
+        },
+        {
+          "title": "Sitting Movements",
+          "similarity": 0.7567,
+          "doc_id": "f6d59f93-823b-48ce-a101-cd1e5f814d1e"
+        }
+      ]
+    },
+    {
+      "id": "q0081",
+      "query": "Feldenkrais lesson feeling the roundness in the hip joint while rolling",
+      "category": "experience",
+      "expected_doc_id": "07c970de-d30a-4ecf-8859-c7a6b148e8fd",
+      "expected_title": "Rolling to Sitting, and Beyond - Feldenkrais Project",
+      "rank": null,
+      "band": "low",
+      "gap": 0.0147,
+      "top_hits": [
+        {
+          "title": "The Hip Joints: Moving Proximal Around Distal - Feldenkrais Project",
+          "similarity": 0.7761,
+          "doc_id": "88f70d83-c274-41c4-9d43-df630fd2ad52"
+        },
+        {
+          "title": "Rolling from Side to Front",
+          "similarity": 0.7757,
+          "doc_id": "5d2702ef-b1c4-425b-a405-38aba3e21fc1"
+        },
+        {
+          "title": "Side Clock: Hips (Patrons) - Feldenkrais Project",
+          "similarity": 0.767,
+          "doc_id": "d4c11394-faad-4137-b4f1-757e5600d5a4"
+        },
+        {
+          "title": "Rolling with Length - Feldenkrais Project",
+          "similarity": 0.7641,
+          "doc_id": "a5b061ee-55a3-43ca-8e0e-d25c59936345"
+        },
+        {
+          "title": "Hips and Round Kicks",
+          "similarity": 0.7614,
+          "doc_id": "9d530b83-c189-4e03-a7c1-eb02e057227b"
+        }
+      ]
+    },
+    {
+      "id": "q0082",
+      "query": "feldenkrais lesson twisting while seated and using hands on floor",
+      "category": "action",
+      "expected_doc_id": "aaea18f1-a090-40d0-b719-eff0b52f12e5",
+      "expected_title": "Secrets of the Seated Twist - Feldenkrais Project",
+      "rank": 2,
+      "band": "low",
+      "gap": 0.0117,
+      "top_hits": [
+        {
+          "title": "Driving and Dynamic Sitting - Floor Practice - Feldenkrais Project",
+          "similarity": 0.7794,
+          "doc_id": "7e8e442e-5dea-4750-8a76-0267a3d9f731"
+        },
+        {
+          "title": "Secrets of the Seated Twist - Feldenkrais Project",
+          "similarity": 0.7766,
+          "doc_id": "aaea18f1-a090-40d0-b719-eff0b52f12e5"
+        },
+        {
+          "title": "Supple Twisting - Feldenkrais Project",
+          "similarity": 0.773,
+          "doc_id": "b3a86cf1-faaa-4ee5-be3c-1bb60ed292ea"
+        },
+        {
+          "title": "Simple Twisting - Feldenkrais Project",
+          "similarity": 0.7696,
+          "doc_id": "95e68e7a-adae-43d4-b71c-6bb8827284c1"
+        },
+        {
+          "title": "Sitting and Turning with Length - Feldenkrais Project",
+          "similarity": 0.7677,
+          "doc_id": "d2688638-17f2-4cc2-a66f-33ee1414e07e"
+        }
+      ]
+    },
+    {
+      "id": "q0083",
+      "query": "feldenkrais lesson sternum movement and spinal rotation side sitting",
+      "category": "body",
+      "expected_doc_id": "aaea18f1-a090-40d0-b719-eff0b52f12e5",
+      "expected_title": "Secrets of the Seated Twist - Feldenkrais Project",
+      "rank": 1,
+      "band": "high",
+      "gap": 0.0397,
+      "top_hits": [
+        {
+          "title": "Secrets of the Seated Twist - Feldenkrais Project",
+          "similarity": 0.8031,
+          "doc_id": "aaea18f1-a090-40d0-b719-eff0b52f12e5"
+        },
+        {
+          "title": "The Movement of the Eyes Organizes the Movement of the Body (Patrons) - Feldenkrais Project",
+          "similarity": 0.7738,
+          "doc_id": "71a59311-76a2-4e49-be64-a85adeb96eb9"
+        },
+        {
+          "title": "Free Your Torso for Better Posture, Walking, and Running - Feldenkrais Project",
+          "similarity": 0.7719,
+          "doc_id": "9b67a689-c1fd-4063-ad1a-fa2aeb7f69dd"
+        },
+        {
+          "title": "Side-bending in Sitting",
+          "similarity": 0.7646,
+          "doc_id": "1a507561-fab9-4322-a12e-bb1908e026af"
+        },
+        {
+          "title": "Sitting and Turning with Length - Feldenkrais Project",
+          "similarity": 0.7634,
+          "doc_id": "d2688638-17f2-4cc2-a66f-33ee1414e07e"
+        }
+      ]
+    },
+    {
+      "id": "q0084",
+      "query": "feldenkrais lesson feeling the connection between chest and spine while twisting",
+      "category": "experience",
+      "expected_doc_id": "aaea18f1-a090-40d0-b719-eff0b52f12e5",
+      "expected_title": "Secrets of the Seated Twist - Feldenkrais Project",
+      "rank": 1,
+      "band": "high",
+      "gap": 0.0315,
+      "top_hits": [
+        {
+          "title": "Secrets of the Seated Twist - Feldenkrais Project",
+          "similarity": 0.7994,
+          "doc_id": "aaea18f1-a090-40d0-b719-eff0b52f12e5"
+        },
+        {
+          "title": "Supple Twisting - Feldenkrais Project",
+          "similarity": 0.7933,
+          "doc_id": "b3a86cf1-faaa-4ee5-be3c-1bb60ed292ea"
+        },
+        {
+          "title": "Simple Twisting - Feldenkrais Project",
+          "similarity": 0.7816,
+          "doc_id": "95e68e7a-adae-43d4-b71c-6bb8827284c1"
+        },
+        {
+          "title": "The Power of Prone: Twisting on Your Belly - Feldenkrais Project",
+          "similarity": 0.7802,
+          "doc_id": "901195d6-8e48-4c01-8ab2-e6641492c1ec"
+        },
+        {
+          "title": "Spine and Chest Side-Bending, Lengthening Limbs - Feldenkrais Project",
+          "similarity": 0.7679,
+          "doc_id": "3371e90e-c560-4396-ac84-2bc473d19706"
+        }
+      ]
+    },
+    {
+      "id": "q0085",
+      "query": "Feldenkrais lesson side lying moving shoulder like clock hands",
+      "category": "action",
+      "expected_doc_id": "22cc3119-fba9-4e92-8c4a-a540b8c89e75",
+      "expected_title": "Side Clock: Shoulders (and Intro to Hip) - Feldenkrais Project",
+      "rank": 1,
+      "band": "high",
+      "gap": 0.0377,
+      "top_hits": [
+        {
+          "title": "Side Clock: Shoulders (and Intro to Hip) - Feldenkrais Project",
+          "similarity": 0.7927,
+          "doc_id": "22cc3119-fba9-4e92-8c4a-a540b8c89e75"
+        },
+        {
+          "title": "Side Clock: Hips (Patrons) - Feldenkrais Project",
+          "similarity": 0.771,
+          "doc_id": "d4c11394-faad-4137-b4f1-757e5600d5a4"
+        },
+        {
+          "title": "Side-Lying Arm and Shoulder Exploration (ATM, 10/3/25, Ch 3)",
+          "similarity": 0.7564,
+          "doc_id": "e3fbdc39-e011-4034-9de4-b2dc21ea1897"
+        },
+        {
+          "title": "Circling the Hand: Shifting focus",
+          "similarity": 0.7555,
+          "doc_id": "2473976a-7bba-4953-9cc9-0379a93ae255"
+        },
+        {
+          "title": "Side-Lying Shoulder Circles and Exploration (ATM, 6/2/25, Ch 4)",
+          "similarity": 0.755,
+          "doc_id": "497cc209-7c8b-4dbf-8d99-1c4e1d840bf2"
+        }
+      ]
+    },
+    {
+      "id": "q0086",
+      "query": "Feldenkrais side lying lesson differentiate shoulder girdle from ribcage",
+      "category": "body",
+      "expected_doc_id": "22cc3119-fba9-4e92-8c4a-a540b8c89e75",
+      "expected_title": "Side Clock: Shoulders (and Intro to Hip) - Feldenkrais Project",
+      "rank": null,
+      "band": "low",
+      "gap": 0.0104,
+      "top_hits": [
+        {
+          "title": "Softening the Ribs - Feldenkrais Project",
+          "similarity": 0.7786,
+          "doc_id": "124fc281-a2c6-41bf-9a78-e1f2624ccac9"
+        },
+        {
+          "title": "Reaching, Rolling, and Ribs - Feldenkrais Project",
+          "similarity": 0.7765,
+          "doc_id": "d3ff9c31-27a4-4af6-90f3-38465ed44d54"
+        },
+        {
+          "title": "Simple Self-Hug - Feldenkrais Project",
+          "similarity": 0.7764,
+          "doc_id": "4c768a03-56ef-4ef5-827c-f8694e248f7a"
+        },
+        {
+          "title": "Shoulder/Hip Circles on Sides",
+          "similarity": 0.7708,
+          "doc_id": "05267db1-0e58-4c15-9780-658ed2111435"
+        },
+        {
+          "title": "Hands-On Observation and Palpation Skills (Discussion, 1/18/26, Ch 2)",
+          "similarity": 0.7682,
+          "doc_id": "015c6a20-04ab-4b58-8d98-39cd22e02f19"
+        }
+      ]
+    },
+    {
+      "id": "q0087",
+      "query": "Feldenkrais lesson side lying notice the middle place of no effort",
+      "category": "experience",
+      "expected_doc_id": "22cc3119-fba9-4e92-8c4a-a540b8c89e75",
+      "expected_title": "Side Clock: Shoulders (and Intro to Hip) - Feldenkrais Project",
+      "rank": null,
+      "band": "mid",
+      "gap": 0.0194,
+      "top_hits": [
+        {
+          "title": "Side-Lying Position Observation Skills (Practice, 5/10/25, Ch 3)",
+          "similarity": 0.7406,
+          "doc_id": "75ff4297-a25a-4229-880f-9874a8c423eb"
+        },
+        {
+          "title": "Hand and Head Integration on Side-Lying (ATM, 10/4/25, Ch 7)",
+          "similarity": 0.7331,
+          "doc_id": "dddf2d4c-0882-4fb2-8c6b-ec6d0370011d"
+        },
+        {
+          "title": "Introductions and Lesson Feedback (Discussion, 1/17/25, Ch 2)",
+          "similarity": 0.7308,
+          "doc_id": "060862e1-ae0e-4f64-845d-cdb52ad9d8b1"
+        },
+        {
+          "title": "On side, sliding arms and legs to improve ability to lift head",
+          "similarity": 0.7229,
+          "doc_id": "e224da76-e06c-4222-a371-67260352df7a"
+        },
+        {
+          "title": "Side-Lying Arm and Head Movement (FI Demo, 10/11/25, Ch 3)",
+          "similarity": 0.7212,
+          "doc_id": "7d63f94f-acc3-452c-8a26-cfe3ca70bbdf"
+        }
+      ]
+    },
+    {
+      "id": "q0088",
+      "query": "Feldenkrais lesson rolling pelvis in a circle lying on back",
+      "category": "action",
+      "expected_doc_id": "795b4039-7c22-4619-9aec-4d26755c3c6c",
+      "expected_title": "Simple Floor Clock - Feldenkrais Project",
+      "rank": 2,
+      "band": "mid-high",
+      "gap": 0.0255,
+      "top_hits": [
+        {
+          "title": "Rolling with Length - Feldenkrais Project",
+          "similarity": 0.7816,
+          "doc_id": "a5b061ee-55a3-43ca-8e0e-d25c59936345"
+        },
+        {
+          "title": "Simple Floor Clock - Feldenkrais Project",
+          "similarity": 0.7695,
+          "doc_id": "795b4039-7c22-4619-9aec-4d26755c3c6c"
+        },
+        {
+          "title": "Differentiation of Pelvic Movements by Means of an Imaginary Clock (Patrons) - Feldenkrais Project",
+          "similarity": 0.7694,
+          "doc_id": "82edeeb9-b563-4822-9a13-53a18ab60dba"
+        },
+        {
+          "title": "Rolling from Side to Front",
+          "similarity": 0.7605,
+          "doc_id": "5d2702ef-b1c4-425b-a405-38aba3e21fc1"
+        },
+        {
+          "title": "Your Navigational Pelvis - Feldenkrais Project",
+          "similarity": 0.756,
+          "doc_id": "154cde8d-d1c9-4f95-a23c-fd4010713646"
+        }
+      ]
+    },
+    {
+      "id": "q0089",
+      "query": "how to connect head movement to pelvic movement Feldenkrais",
+      "category": "body",
+      "expected_doc_id": "795b4039-7c22-4619-9aec-4d26755c3c6c",
+      "expected_title": "Simple Floor Clock - Feldenkrais Project",
+      "rank": 9,
+      "band": "low",
+      "gap": 0.0124,
+      "top_hits": [
+        {
+          "title": "Differentiation of Pelvic Movements by Means of an Imaginary Clock (Patrons) - Feldenkrais Project",
+          "similarity": 0.7933,
+          "doc_id": "82edeeb9-b563-4822-9a13-53a18ab60dba"
+        },
+        {
+          "title": "Dynamic Sitting and Chair Clock - Feldenkrais Project",
+          "similarity": 0.7886,
+          "doc_id": "8cde4e74-6d1d-461a-a626-0993b26571eb"
+        },
+        {
+          "title": "Rolling Head and Circling Coccyx on Knees",
+          "similarity": 0.786,
+          "doc_id": "0107a9fa-aa8e-4600-b5f9-e7edbeb956bb"
+        },
+        {
+          "title": "The Pelvic Clock: An Introduction",
+          "similarity": 0.7833,
+          "doc_id": "b12f77aa-3693-46b8-a16f-51f71b90ba76"
+        },
+        {
+          "title": "Head and Pelvis Rocking with Breath Awareness (ATM, 6/1/25, Ch 2)",
+          "similarity": 0.7809,
+          "doc_id": "196ec29a-c94b-43c9-9651-14368962a1a1"
+        }
+      ]
+    },
+    {
+      "id": "q0090",
+      "query": "Feldenkrais lesson feeling roundness in hips and spine",
+      "category": "experience",
+      "expected_doc_id": "795b4039-7c22-4619-9aec-4d26755c3c6c",
+      "expected_title": "Simple Floor Clock - Feldenkrais Project",
+      "rank": null,
+      "band": "mid-high",
+      "gap": 0.0237,
+      "top_hits": [
+        {
+          "title": "More Precise Hips and Spine - Feldenkrais Project",
+          "similarity": 0.7789,
+          "doc_id": "be9869b7-38df-4723-b434-9b6542334d25"
+        },
+        {
+          "title": "Hips and Round Kicks",
+          "similarity": 0.7683,
+          "doc_id": "9d530b83-c189-4e03-a7c1-eb02e057227b"
+        },
+        {
+          "title": "Spinal Support and a Powerful Pelvis - Feldenkrais Project",
+          "similarity": 0.7611,
+          "doc_id": "4d61b1bf-a3e6-4869-9da5-518834298e60"
+        },
+        {
+          "title": "Rolling from Side to Front",
+          "similarity": 0.7574,
+          "doc_id": "5d2702ef-b1c4-425b-a405-38aba3e21fc1"
+        },
+        {
+          "title": "Oiling the Hip Joints",
+          "similarity": 0.7553,
+          "doc_id": "631b14ab-c439-4b70-88c3-5175ff3f01a4"
+        }
+      ]
+    },
+    {
+      "id": "q0091",
+      "query": "Feldenkrais lesson rolling side to side in a self embrace",
+      "category": "action",
+      "expected_doc_id": "4c768a03-56ef-4ef5-827c-f8694e248f7a",
+      "expected_title": "Simple Self-Hug - Feldenkrais Project",
+      "rank": 1,
+      "band": "mid-high",
+      "gap": 0.0292,
+      "top_hits": [
+        {
+          "title": "Simple Self-Hug - Feldenkrais Project",
+          "similarity": 0.7806,
+          "doc_id": "4c768a03-56ef-4ef5-827c-f8694e248f7a"
+        },
+        {
+          "title": "The Ultimate Self-Hug - Feldenkrais Project",
+          "similarity": 0.7632,
+          "doc_id": "f609c85d-803b-4d8c-8d80-ff78275d4303"
+        },
+        {
+          "title": "Rolling with Length - Feldenkrais Project",
+          "similarity": 0.7593,
+          "doc_id": "a5b061ee-55a3-43ca-8e0e-d25c59936345"
+        },
+        {
+          "title": "Rolling to Sitting, and Beyond - Feldenkrais Project",
+          "similarity": 0.757,
+          "doc_id": "07c970de-d30a-4ecf-8859-c7a6b148e8fd"
+        },
+        {
+          "title": "Rolling and Sweeping While Side-Lying (ATM, 1/20/25, Ch 3)",
+          "similarity": 0.7514,
+          "doc_id": "055cd431-825a-457f-b2a3-1f9405529dad"
+        }
+      ]
+    },
+    {
+      "id": "q0092",
+      "query": "Feldenkrais lesson differentiating shoulder blades from ribs and spine",
+      "category": "body",
+      "expected_doc_id": "4c768a03-56ef-4ef5-827c-f8694e248f7a",
+      "expected_title": "Simple Self-Hug - Feldenkrais Project",
+      "rank": 3,
+      "band": "low",
+      "gap": 0.0098,
+      "top_hits": [
+        {
+          "title": "Contouring the Scapula: A Tactile Map",
+          "similarity": 0.7784,
+          "doc_id": "4d25ec8f-57e2-4dbf-b372-b08783f1f65d"
+        },
+        {
+          "title": "Free Your Upper Back & Shoulders",
+          "similarity": 0.7725,
+          "doc_id": "910a6441-d000-4fe5-89aa-a29551af7e75"
+        },
+        {
+          "title": "Simple Self-Hug - Feldenkrais Project",
+          "similarity": 0.7719,
+          "doc_id": "4c768a03-56ef-4ef5-827c-f8694e248f7a"
+        },
+        {
+          "title": "Reaching, Rolling, and Ribs - Feldenkrais Project",
+          "similarity": 0.7706,
+          "doc_id": "d3ff9c31-27a4-4af6-90f3-38465ed44d54"
+        },
+        {
+          "title": "The Periscope - Feldenkrais Project",
+          "similarity": 0.7686,
+          "doc_id": "6819613d-75b4-4cd1-87b2-431daf999c3b"
+        }
+      ]
+    },
+    {
+      "id": "q0093",
+      "query": "Feldenkrais lesson feeling more supported and wider in the back",
+      "category": "experience",
+      "expected_doc_id": "4c768a03-56ef-4ef5-827c-f8694e248f7a",
+      "expected_title": "Simple Self-Hug - Feldenkrais Project",
+      "rank": null,
+      "band": "low",
+      "gap": 0.0138,
+      "top_hits": [
+        {
+          "title": "Getting Your Back Back",
+          "similarity": 0.7622,
+          "doc_id": "799fc040-d310-44dd-8d41-fb4ef3900f09"
+        },
+        {
+          "title": "Spinal Support and a Powerful Pelvis - Feldenkrais Project",
+          "similarity": 0.753,
+          "doc_id": "4d61b1bf-a3e6-4869-9da5-518834298e60"
+        },
+        {
+          "title": "11. Generalize Your Skills",
+          "similarity": 0.7528,
+          "doc_id": "8f803688-82d4-47b2-b495-13cc7642fea1"
+        },
+        {
+          "title": "Talk: We Can Learn to be Better for Ourselves, Moment to Moment - Feldenkrais Project",
+          "similarity": 0.7487,
+          "doc_id": "51edc0e3-9460-4d53-ba63-fbae2020db35"
+        },
+        {
+          "title": "Stretch Without Strain - Feldenkrais Project",
+          "similarity": 0.7485,
+          "doc_id": "f6135208-f4f4-4c59-bab3-cf740c3e9986"
+        }
+      ]
+    },
+    {
+      "id": "q0094",
+      "query": "feldenkrais lesson turning while sitting and arching my back",
+      "category": "action",
+      "expected_doc_id": "d2688638-17f2-4cc2-a66f-33ee1414e07e",
+      "expected_title": "Sitting and Turning with Length - Feldenkrais Project",
+      "rank": 1,
+      "band": "high",
+      "gap": 0.0313,
+      "top_hits": [
+        {
+          "title": "Sitting and Turning with Length - Feldenkrais Project",
+          "similarity": 0.7947,
+          "doc_id": "d2688638-17f2-4cc2-a66f-33ee1414e07e"
+        },
+        {
+          "title": "Driving and Dynamic Sitting - Floor Practice - Feldenkrais Project",
+          "similarity": 0.783,
+          "doc_id": "7e8e442e-5dea-4750-8a76-0267a3d9f731"
+        },
+        {
+          "title": "Driving and Dynamic Sitting - Chair Practice - Feldenkrais Project",
+          "similarity": 0.7669,
+          "doc_id": "05f95b68-d8d4-4547-b868-a1a2d8e7baf7"
+        },
+        {
+          "title": "Elements of Turning",
+          "similarity": 0.7648,
+          "doc_id": "3cad8fbf-5577-4595-84cf-2965c2aa9e7e"
+        },
+        {
+          "title": "Secrets of the Seated Twist - Feldenkrais Project",
+          "similarity": 0.7634,
+          "doc_id": "aaea18f1-a090-40d0-b719-eff0b52f12e5"
+        }
+      ]
+    },
+    {
+      "id": "q0095",
+      "query": "how to use my knees to initiate spinal rotation feldenkrais",
+      "category": "body",
+      "expected_doc_id": "d2688638-17f2-4cc2-a66f-33ee1414e07e",
+      "expected_title": "Sitting and Turning with Length - Feldenkrais Project",
+      "rank": 3,
+      "band": "mid",
+      "gap": 0.0186,
+      "top_hits": [
+        {
+          "title": "Connecting Arms and Legs, Hinges at Feet and Knees - Feldenkrais Project",
+          "similarity": 0.7894,
+          "doc_id": "7233897b-431d-4101-9324-753e1f2ca384"
+        },
+        {
+          "title": "Easier Sitting Workshop Lesson 2 - Feldenkrais Project",
+          "similarity": 0.7837,
+          "doc_id": "459578fb-4832-4ac8-9027-0eec471dec96"
+        },
+        {
+          "title": "Sitting and Turning with Length - Feldenkrais Project",
+          "similarity": 0.7827,
+          "doc_id": "d2688638-17f2-4cc2-a66f-33ee1414e07e"
+        },
+        {
+          "title": "Turning and the Eyes",
+          "similarity": 0.7725,
+          "doc_id": "e2bec977-c447-4309-a2f0-93bbfe0025bc"
+        },
+        {
+          "title": "Spinal Rotation Through Standing Movements (ATM, 3/10/25, Ch 5)",
+          "similarity": 0.7708,
+          "doc_id": "6cf399b2-9e8e-47b0-8ec7-cc6499e992b0"
+        }
+      ]
+    },
+    {
+      "id": "q0096",
+      "query": "feldenkrais lesson feeling lighter and taller when turning",
+      "category": "experience",
+      "expected_doc_id": "d2688638-17f2-4cc2-a66f-33ee1414e07e",
+      "expected_title": "Sitting and Turning with Length - Feldenkrais Project",
+      "rank": 1,
+      "band": "mid",
+      "gap": 0.019,
+      "top_hits": [
+        {
+          "title": "Sitting and Turning with Length - Feldenkrais Project",
+          "similarity": 0.7792,
+          "doc_id": "d2688638-17f2-4cc2-a66f-33ee1414e07e"
+        },
+        {
+          "title": "Freeing Your Turning",
+          "similarity": 0.7787,
+          "doc_id": "a9b56fed-aafc-445d-afec-15de6d324e04"
+        },
+        {
+          "title": "Elements of Turning",
+          "similarity": 0.7712,
+          "doc_id": "3cad8fbf-5577-4595-84cf-2965c2aa9e7e"
+        },
+        {
+          "title": "Driving and Dynamic Sitting - Floor Practice - Feldenkrais Project",
+          "similarity": 0.7614,
+          "doc_id": "7e8e442e-5dea-4750-8a76-0267a3d9f731"
+        },
+        {
+          "title": "Effortless Skiing",
+          "similarity": 0.7602,
+          "doc_id": "0430890c-e0a5-463a-bd24-6003d8707054"
+        }
+      ]
+    },
+    {
+      "id": "q0097",
+      "query": "Feldenkrais lesson rolling pelvis side to side keeping knees still",
+      "category": "action",
+      "expected_doc_id": "4d61b1bf-a3e6-4869-9da5-518834298e60",
+      "expected_title": "Spinal Support and a Powerful Pelvis - Feldenkrais Project",
+      "rank": 6,
+      "band": "mid-high",
+      "gap": 0.0219,
+      "top_hits": [
+        {
+          "title": "Rolling with Length - Feldenkrais Project",
+          "similarity": 0.7828,
+          "doc_id": "a5b061ee-55a3-43ca-8e0e-d25c59936345"
+        },
+        {
+          "title": "Becoming More Balanced",
+          "similarity": 0.776,
+          "doc_id": "8eee60b1-dcb6-4487-9d5a-7e5a8b33eb0b"
+        },
+        {
+          "title": "Legs as Free as a Baby's - Feldenkrais Project",
+          "similarity": 0.7734,
+          "doc_id": "92cb5d50-1e79-46d6-b4e4-e4f367d7a002"
+        },
+        {
+          "title": "Rolling from Side to Front",
+          "similarity": 0.7647,
+          "doc_id": "5d2702ef-b1c4-425b-a405-38aba3e21fc1"
+        },
+        {
+          "title": "Oiling the Hip Joints",
+          "similarity": 0.7609,
+          "doc_id": "631b14ab-c439-4b70-88c3-5175ff3f01a4"
+        }
+      ]
+    },
+    {
+      "id": "q0098",
+      "query": "Feldenkrais lesson differentiating pelvis and femur rotation",
+      "category": "body",
+      "expected_doc_id": "4d61b1bf-a3e6-4869-9da5-518834298e60",
+      "expected_title": "Spinal Support and a Powerful Pelvis - Feldenkrais Project",
+      "rank": 3,
+      "band": "low",
+      "gap": 0.0132,
+      "top_hits": [
+        {
+          "title": "The Hip Joints: Moving Proximal Around Distal - Feldenkrais Project",
+          "similarity": 0.7783,
+          "doc_id": "88f70d83-c274-41c4-9d43-df630fd2ad52"
+        },
+        {
+          "title": "Side-Lying Leg Lifts and Hip Rotation (ATM, 10/9/25, Ch 2)",
+          "similarity": 0.7744,
+          "doc_id": "09de4f18-0823-4bc0-ac02-025963172010"
+        },
+        {
+          "title": "Spinal Support and a Powerful Pelvis - Feldenkrais Project",
+          "similarity": 0.7694,
+          "doc_id": "4d61b1bf-a3e6-4869-9da5-518834298e60"
+        },
+        {
+          "title": "Differentiation of Pelvic Movements by Means of an Imaginary Clock (Patrons) - Feldenkrais Project",
+          "similarity": 0.7661,
+          "doc_id": "82edeeb9-b563-4822-9a13-53a18ab60dba"
+        },
+        {
+          "title": "Ischia",
+          "similarity": 0.7652,
+          "doc_id": "f86ce9ef-a53d-4593-89a1-cd14b539e65b"
+        }
+      ]
+    },
+    {
+      "id": "q0099",
+      "query": "Feldenkrais lesson feeling spine untwist sweetly and passively",
+      "category": "experience",
+      "expected_doc_id": "4d61b1bf-a3e6-4869-9da5-518834298e60",
+      "expected_title": "Spinal Support and a Powerful Pelvis - Feldenkrais Project",
+      "rank": 10,
+      "band": "low",
+      "gap": 0.014,
+      "top_hits": [
+        {
+          "title": "Supple Twisting - Feldenkrais Project",
+          "similarity": 0.7759,
+          "doc_id": "b3a86cf1-faaa-4ee5-be3c-1bb60ed292ea"
+        },
+        {
+          "title": "Simple Twisting - Feldenkrais Project",
+          "similarity": 0.7646,
+          "doc_id": "95e68e7a-adae-43d4-b71c-6bb8827284c1"
+        },
+        {
+          "title": "The Power of Prone: Twisting on Your Belly - Feldenkrais Project",
+          "similarity": 0.7628,
+          "doc_id": "901195d6-8e48-4c01-8ab2-e6641492c1ec"
+        },
+        {
+          "title": "Sitting and Turning with Length - Feldenkrais Project",
+          "similarity": 0.7626,
+          "doc_id": "d2688638-17f2-4cc2-a66f-33ee1414e07e"
+        },
+        {
+          "title": "Secrets of the Seated Twist - Feldenkrais Project",
+          "similarity": 0.7619,
+          "doc_id": "aaea18f1-a090-40d0-b719-eff0b52f12e5"
+        }
+      ]
+    },
+    {
+      "id": "q0100",
+      "query": "Feldenkrais lesson using a bridge and rolling to mobilize spine",
+      "category": "action",
+      "expected_doc_id": "35900777-13cf-48fe-b441-64be29053339",
+      "expected_title": "Spine Like a Chain, Freeing the Shoulder Girdle - Feldenkrais Project",
+      "rank": 1,
+      "band": "low",
+      "gap": 0.013,
+      "top_hits": [
+        {
+          "title": "Spine Like a Chain, Freeing the Shoulder Girdle - Feldenkrais Project",
+          "similarity": 0.7744,
+          "doc_id": "35900777-13cf-48fe-b441-64be29053339"
+        },
+        {
+          "title": "Pushing through Bridging Hand and Rolling",
+          "similarity": 0.7664,
+          "doc_id": "a1a46a09-16e1-4421-8b4a-64798e720002"
+        },
+        {
+          "title": "Spine Like a Chain, with a Bias - Feldenkrais Project",
+          "similarity": 0.7658,
+          "doc_id": "ade87dda-4bb5-447a-b412-6203edc0c3b5"
+        },
+        {
+          "title": "Rolling with Length - Feldenkrais Project",
+          "similarity": 0.7632,
+          "doc_id": "a5b061ee-55a3-43ca-8e0e-d25c59936345"
+        },
+        {
+          "title": "Transitions Matter",
+          "similarity": 0.7614,
+          "doc_id": "bbd9b8cd-becf-42c9-8f6c-c17fda6d3850"
+        }
+      ]
+    },
+    {
+      "id": "q0101",
+      "query": "Feldenkrais lesson differentiating ribs and spine from shoulder girdle",
+      "category": "body",
+      "expected_doc_id": "35900777-13cf-48fe-b441-64be29053339",
+      "expected_title": "Spine Like a Chain, Freeing the Shoulder Girdle - Feldenkrais Project",
+      "rank": 8,
+      "band": "low",
+      "gap": 0.0078,
+      "top_hits": [
+        {
+          "title": "The Periscope - Feldenkrais Project",
+          "similarity": 0.7908,
+          "doc_id": "6819613d-75b4-4cd1-87b2-431daf999c3b"
+        },
+        {
+          "title": "Reaching, Rolling, and Ribs - Feldenkrais Project",
+          "similarity": 0.7849,
+          "doc_id": "d3ff9c31-27a4-4af6-90f3-38465ed44d54"
+        },
+        {
+          "title": "Chanukia, the Candle Holder Lesson - Feldenkrais Project",
+          "similarity": 0.7839,
+          "doc_id": "f54baa93-2bff-4e27-9b2f-29750472a261"
+        },
+        {
+          "title": "Free Your Upper Back & Shoulders",
+          "similarity": 0.7831,
+          "doc_id": "910a6441-d000-4fe5-89aa-a29551af7e75"
+        },
+        {
+          "title": "Simple Self-Hug - Feldenkrais Project",
+          "similarity": 0.783,
+          "doc_id": "4c768a03-56ef-4ef5-827c-f8694e248f7a"
+        }
+      ]
+    },
+    {
+      "id": "q0102",
+      "query": "Feldenkrais lesson feeling the spine articulate like a chain",
+      "category": "experience",
+      "expected_doc_id": "35900777-13cf-48fe-b441-64be29053339",
+      "expected_title": "Spine Like a Chain, Freeing the Shoulder Girdle - Feldenkrais Project",
+      "rank": 1,
+      "band": "low",
+      "gap": 0.0164,
+      "top_hits": [
+        {
+          "title": "Spine Like a Chain, Freeing the Shoulder Girdle - Feldenkrais Project",
+          "similarity": 0.8062,
+          "doc_id": "35900777-13cf-48fe-b441-64be29053339"
+        },
+        {
+          "title": "A Mobile Spine",
+          "similarity": 0.8012,
+          "doc_id": "64eeac3c-32f5-4e84-9fed-c87eb0950069"
+        },
+        {
+          "title": "Spine Like a Chain, with a Bias - Feldenkrais Project",
+          "similarity": 0.7946,
+          "doc_id": "ade87dda-4bb5-447a-b412-6203edc0c3b5"
+        },
+        {
+          "title": "Spine Like a Chain",
+          "similarity": 0.7905,
+          "doc_id": "a2f37a40-6d4d-4306-bf23-47d0f60f929e"
+        },
+        {
+          "title": "Spine as a Chain",
+          "similarity": 0.7898,
+          "doc_id": "8e699c9d-7e51-422e-b357-3255296ed61a"
+        }
+      ]
+    },
+    {
+      "id": "q0103",
+      "query": "feldenkrais lesson rolling pelvis up and down like a chain",
+      "category": "action",
+      "expected_doc_id": "ade87dda-4bb5-447a-b412-6203edc0c3b5",
+      "expected_title": "Spine Like a Chain, with a Bias - Feldenkrais Project",
+      "rank": 2,
+      "band": "mid-high",
+      "gap": 0.0239,
+      "top_hits": [
+        {
+          "title": "Rolling with Length - Feldenkrais Project",
+          "similarity": 0.7943,
+          "doc_id": "a5b061ee-55a3-43ca-8e0e-d25c59936345"
+        },
+        {
+          "title": "Spine Like a Chain, with a Bias - Feldenkrais Project",
+          "similarity": 0.7863,
+          "doc_id": "ade87dda-4bb5-447a-b412-6203edc0c3b5"
+        },
+        {
+          "title": "Dynamic Sitting and Chair Clock - Feldenkrais Project",
+          "similarity": 0.7729,
+          "doc_id": "8cde4e74-6d1d-461a-a626-0993b26571eb"
+        },
+        {
+          "title": "Oiling the Hip Joints",
+          "similarity": 0.7722,
+          "doc_id": "631b14ab-c439-4b70-88c3-5175ff3f01a4"
+        },
+        {
+          "title": "Differentiation of Pelvic Movements by Means of an Imaginary Clock (Patrons) - Feldenkrais Project",
+          "similarity": 0.7704,
+          "doc_id": "82edeeb9-b563-4822-9a13-53a18ab60dba"
+        }
+      ]
+    },
+    {
+      "id": "q0104",
+      "query": "feldenkrais lesson asymmetrical movement spine and ribcage connection",
+      "category": "body",
+      "expected_doc_id": "ade87dda-4bb5-447a-b412-6203edc0c3b5",
+      "expected_title": "Spine Like a Chain, with a Bias - Feldenkrais Project",
+      "rank": 2,
+      "band": "low",
+      "gap": 0.0056,
+      "top_hits": [
+        {
+          "title": "Softening the Ribs - Feldenkrais Project",
+          "similarity": 0.7847,
+          "doc_id": "124fc281-a2c6-41bf-9a78-e1f2624ccac9"
+        },
+        {
+          "title": "Spine Like a Chain, with a Bias - Feldenkrais Project",
+          "similarity": 0.7841,
+          "doc_id": "ade87dda-4bb5-447a-b412-6203edc0c3b5"
+        },
+        {
+          "title": "Spine and Chest Side-Bending, Lengthening Limbs - Feldenkrais Project",
+          "similarity": 0.7805,
+          "doc_id": "3371e90e-c560-4396-ac84-2bc473d19706"
+        },
+        {
+          "title": "Arms Like a Skeleton, with a Bias - Feldenkrais Project",
+          "similarity": 0.7794,
+          "doc_id": "98211ff4-c690-4eb3-9243-9a642ac14d8c"
+        },
+        {
+          "title": "Twisted Lamprey - Feldenkrais Project",
+          "similarity": 0.7791,
+          "doc_id": "a3b0f882-2acd-4dd0-bcab-3714758ca1bc"
+        }
+      ]
+    },
+    {
+      "id": "q0105",
+      "query": "feldenkrais lesson feeling weight shift through spine during pelvic lift",
+      "category": "experience",
+      "expected_doc_id": "ade87dda-4bb5-447a-b412-6203edc0c3b5",
+      "expected_title": "Spine Like a Chain, with a Bias - Feldenkrais Project",
+      "rank": 2,
+      "band": "low",
+      "gap": 0.0101,
+      "top_hits": [
+        {
+          "title": "(variations on) Lifting Pelvis on Standing Feet",
+          "similarity": 0.7762,
+          "doc_id": "8e776f9c-0169-4d1d-9a3b-28b006017a81"
+        },
+        {
+          "title": "Spine Like a Chain, with a Bias - Feldenkrais Project",
+          "similarity": 0.7756,
+          "doc_id": "ade87dda-4bb5-447a-b412-6203edc0c3b5"
+        },
+        {
+          "title": "Lifting Up and Through - Feldenkrais Project",
+          "similarity": 0.7697,
+          "doc_id": "af3ab002-2dfe-46d6-9e0f-ce3a3013029d"
+        },
+        {
+          "title": "Talk: We Can Learn to be Better for Ourselves, Moment to Moment - Feldenkrais Project",
+          "similarity": 0.7677,
+          "doc_id": "51edc0e3-9460-4d53-ba63-fbae2020db35"
+        },
+        {
+          "title": "Pelvic Movement and Skeletal Transmission (FI Demo, 5/30/25, Ch 5)",
+          "similarity": 0.7661,
+          "doc_id": "3d4047cc-d60b-4125-ab18-23b22e9194bf"
+        }
+      ]
+    },
+    {
+      "id": "q0106",
+      "query": "Feldenkrais lesson folding torso diagonally and rolling on back",
+      "category": "action",
+      "expected_doc_id": "642a5cff-80ce-4b78-bbbd-42d6e00e0660",
+      "expected_title": "Strength Without Excess - Feldenkrais Project",
+      "rank": 3,
+      "band": "low",
+      "gap": 0.0137,
+      "top_hits": [
+        {
+          "title": "Basic Arching and Folding (Patrons) - Feldenkrais Project",
+          "similarity": 0.7834,
+          "doc_id": "36202c43-1a84-4c1f-afa7-4597865f8459"
+        },
+        {
+          "title": "Folding, Foundation, and Feet - Feldenkrais Project",
+          "similarity": 0.7788,
+          "doc_id": "f53988e0-8eab-4468-9dc1-ecdc478f5141"
+        },
+        {
+          "title": "Strength Without Excess - Feldenkrais Project",
+          "similarity": 0.7762,
+          "doc_id": "642a5cff-80ce-4b78-bbbd-42d6e00e0660"
+        },
+        {
+          "title": "Reaching, Rolling, and Ribs - Feldenkrais Project",
+          "similarity": 0.7697,
+          "doc_id": "d3ff9c31-27a4-4af6-90f3-38465ed44d54"
+        },
+        {
+          "title": "Right Shoulder and Arm Reaching Across Torso (ATM, 1/17/26, Ch 1)",
+          "similarity": 0.7696,
+          "doc_id": "d84fa2f6-36f7-46e4-996f-ed2f735a7ef6"
+        }
+      ]
+    },
+    {
+      "id": "q0107",
+      "query": "coordinate front and back lines of torso Feldenkrais lesson",
+      "category": "body",
+      "expected_doc_id": "642a5cff-80ce-4b78-bbbd-42d6e00e0660",
+      "expected_title": "Strength Without Excess - Feldenkrais Project",
+      "rank": 1,
+      "band": "mid-high",
+      "gap": 0.0271,
+      "top_hits": [
+        {
+          "title": "Strength Without Excess - Feldenkrais Project",
+          "similarity": 0.7911,
+          "doc_id": "642a5cff-80ce-4b78-bbbd-42d6e00e0660"
+        },
+        {
+          "title": "Free Your Torso for Better Posture, Walking, and Running - Feldenkrais Project",
+          "similarity": 0.772,
+          "doc_id": "9b67a689-c1fd-4063-ad1a-fa2aeb7f69dd"
+        },
+        {
+          "title": "11. Generalize Your Skills",
+          "similarity": 0.7666,
+          "doc_id": "8f803688-82d4-47b2-b495-13cc7642fea1"
+        },
+        {
+          "title": "Basic Arching and Folding (Patrons) - Feldenkrais Project",
+          "similarity": 0.7647,
+          "doc_id": "36202c43-1a84-4c1f-afa7-4597865f8459"
+        },
+        {
+          "title": "Long Belly, Strong Back: Short Version - Feldenkrais Project",
+          "similarity": 0.764,
+          "doc_id": "f5b8cece-4f45-4caf-acfe-4964e561cb10"
+        }
+      ]
+    },
+    {
+      "id": "q0108",
+      "query": "Feldenkrais lesson feeling length in spine while folding and resting",
+      "category": "experience",
+      "expected_doc_id": "642a5cff-80ce-4b78-bbbd-42d6e00e0660",
+      "expected_title": "Strength Without Excess - Feldenkrais Project",
+      "rank": 6,
+      "band": "mid-high",
+      "gap": 0.0291,
+      "top_hits": [
+        {
+          "title": "Folding, Foundation, and Feet - Feldenkrais Project",
+          "similarity": 0.7843,
+          "doc_id": "f53988e0-8eab-4468-9dc1-ecdc478f5141"
+        },
+        {
+          "title": "Sliding Along the Length of the Leg,",
+          "similarity": 0.7721,
+          "doc_id": "a144cf0b-9671-4ae8-90d2-4e3c4f012741"
+        },
+        {
+          "title": "Basic Arching and Folding (Patrons) - Feldenkrais Project",
+          "similarity": 0.7687,
+          "doc_id": "36202c43-1a84-4c1f-afa7-4597865f8459"
+        },
+        {
+          "title": "Sitting and Turning with Length - Feldenkrais Project",
+          "similarity": 0.7601,
+          "doc_id": "d2688638-17f2-4cc2-a66f-33ee1414e07e"
+        },
+        {
+          "title": "Paddling WorkshopLesson 1: Introduction to FlexionPaddling requires a supple spine and rib cage.  This lesson teaches an\n  aspect of this.",
+          "similarity": 0.7552,
+          "doc_id": "2378a9b2-7ea0-477b-8404-f0b73ce095aa"
+        }
+      ]
+    },
+    {
+      "id": "q0109",
+      "query": "Feldenkrais lesson rotating shoulders and hips in opposite directions",
+      "category": "action",
+      "expected_doc_id": "f6135208-f4f4-4c59-bab3-cf740c3e9986",
+      "expected_title": "Stretch Without Strain - Feldenkrais Project",
+      "rank": 4,
+      "band": "mid-high",
+      "gap": 0.0297,
+      "top_hits": [
+        {
+          "title": "Connecting Shoulders and Hips Part 2 - Feldenkrais Project",
+          "similarity": 0.7854,
+          "doc_id": "ce25c5bd-07f2-4ab1-ac7c-08c80366e11b"
+        },
+        {
+          "title": "Connecting Shoulders and Hips Part 1 - Feldenkrais Project",
+          "similarity": 0.7845,
+          "doc_id": "d490d242-0625-4480-9acf-33a1a78ebe5e"
+        },
+        {
+          "title": "Shoulder/Hip Circles on Sides",
+          "similarity": 0.7596,
+          "doc_id": "05267db1-0e58-4c15-9780-658ed2111435"
+        },
+        {
+          "title": "Stretch Without Strain - Feldenkrais Project",
+          "similarity": 0.7593,
+          "doc_id": "f6135208-f4f4-4c59-bab3-cf740c3e9986"
+        },
+        {
+          "title": "Side Clock: Shoulders (and Intro to Hip) - Feldenkrais Project",
+          "similarity": 0.7557,
+          "doc_id": "22cc3119-fba9-4e92-8c4a-a540b8c89e75"
+        }
+      ]
+    },
+    {
+      "id": "q0110",
+      "query": "improve relationship between shoulder girdle and pelvic girdle Feldenkrais",
+      "category": "body",
+      "expected_doc_id": "f6135208-f4f4-4c59-bab3-cf740c3e9986",
+      "expected_title": "Stretch Without Strain - Feldenkrais Project",
+      "rank": 2,
+      "band": "low",
+      "gap": 0.0129,
+      "top_hits": [
+        {
+          "title": "Connecting Shoulders and Hips Part 1 - Feldenkrais Project",
+          "similarity": 0.79,
+          "doc_id": "d490d242-0625-4480-9acf-33a1a78ebe5e"
+        },
+        {
+          "title": "Stretch Without Strain - Feldenkrais Project",
+          "similarity": 0.7889,
+          "doc_id": "f6135208-f4f4-4c59-bab3-cf740c3e9986"
+        },
+        {
+          "title": "Side Clock: Shoulders (and Intro to Hip) - Feldenkrais Project",
+          "similarity": 0.7854,
+          "doc_id": "22cc3119-fba9-4e92-8c4a-a540b8c89e75"
+        },
+        {
+          "title": "Shoulder/Hip Circles on Sides",
+          "similarity": 0.7825,
+          "doc_id": "05267db1-0e58-4c15-9780-658ed2111435"
+        },
+        {
+          "title": "Connecting Shoulders and Hips Part 2 - Feldenkrais Project",
+          "similarity": 0.7772,
+          "doc_id": "ce25c5bd-07f2-4ab1-ac7c-08c80366e11b"
+        }
+      ]
+    },
+    {
+      "id": "q0111",
+      "query": "Feldenkrais lesson for feeling more grounded and taller in standing",
+      "category": "experience",
+      "expected_doc_id": "f6135208-f4f4-4c59-bab3-cf740c3e9986",
+      "expected_title": "Stretch Without Strain - Feldenkrais Project",
+      "rank": null,
+      "band": "low",
+      "gap": 0.0108,
+      "top_hits": [
+        {
+          "title": "Talk: The Why and How of Growing Taller - Feldenkrais Project",
+          "similarity": 0.7574,
+          "doc_id": "586f2d9e-d0ac-4019-b85f-0b05311592cf"
+        },
+        {
+          "title": "Talk: Feldenkrais for Self Empowerment - Feldenkrais Project",
+          "similarity": 0.7555,
+          "doc_id": "d293737c-d25e-4877-a909-36b8eab8db97"
+        },
+        {
+          "title": "Lifting Up and Through - Feldenkrais Project",
+          "similarity": 0.7528,
+          "doc_id": "af3ab002-2dfe-46d6-9e0f-ce3a3013029d"
+        },
+        {
+          "title": "Standing, Centering",
+          "similarity": 0.7491,
+          "doc_id": "d261bc2f-8fba-4d5d-b92d-eba83935a478"
+        },
+        {
+          "title": "FM To Increase Mobility (chair-based), 1-3",
+          "similarity": 0.7466,
+          "doc_id": "04609ded-b697-4048-9f58-189268764834"
+        }
+      ]
+    },
+    {
+      "id": "q0112",
+      "query": "Feldenkrais lesson pushing with heels to move spine and head",
+      "category": "action",
+      "expected_doc_id": "5f4f4acf-9697-43ec-b961-5fb129fc2408",
+      "expected_title": "The Anti-Gravity Lesson - Feldenkrais Project",
+      "rank": 2,
+      "band": "low",
+      "gap": 0.0164,
+      "top_hits": [
+        {
+          "title": "In Bed - Pressing the Heels",
+          "similarity": 0.7674,
+          "doc_id": "7942544a-0bf5-4073-a5f0-c5c82128fc91"
+        },
+        {
+          "title": "The Anti-Gravity Lesson - Feldenkrais Project",
+          "similarity": 0.7635,
+          "doc_id": "5f4f4acf-9697-43ec-b961-5fb129fc2408"
+        },
+        {
+          "title": "Breathing from Head to Heels - Feldenkrais Project",
+          "similarity": 0.76,
+          "doc_id": "881a7dad-90a9-470e-8fca-22fd0c85c2f7"
+        },
+        {
+          "title": "Carriage of the Head Revisited - July 24, 2025",
+          "similarity": 0.7513,
+          "doc_id": "da4df18c-b3ae-44c2-9f02-5bf073f45682"
+        },
+        {
+          "title": "Length Without Effort - Feldenkrais Project",
+          "similarity": 0.751,
+          "doc_id": "27f6966f-afb8-4b42-9eac-bbde02408b35"
+        }
+      ]
+    },
+    {
+      "id": "q0113",
+      "query": "How to find skeletal support instead of muscular effort in spine",
+      "category": "body",
+      "expected_doc_id": "5f4f4acf-9697-43ec-b961-5fb129fc2408",
+      "expected_title": "The Anti-Gravity Lesson - Feldenkrais Project",
+      "rank": null,
+      "band": "high",
+      "gap": 0.0542,
+      "top_hits": [
+        {
+          "title": "Talk: Reducing Excess Effort and Sensing the Skeleton - Feldenkrais Project",
+          "similarity": 0.7678,
+          "doc_id": "948d9342-587f-4249-a793-fc00aae0beb8"
+        },
+        {
+          "title": "Easier Sitting Workshop Talk 1 - Feldenkrais Project",
+          "similarity": 0.7257,
+          "doc_id": "263997a3-f335-46ae-ace6-9e6a18288c72"
+        },
+        {
+          "title": "Bones Do It Better",
+          "similarity": 0.7232,
+          "doc_id": "cd936ead-5a7d-4f62-97db-8b88b9c2caed"
+        },
+        {
+          "title": "Easier Sitting Workshop Talk 2 - Feldenkrais Project",
+          "similarity": 0.7219,
+          "doc_id": "cc4de663-da12-4eab-9433-93dac995db59"
+        },
+        {
+          "title": "Length Without Effort - Feldenkrais Project",
+          "similarity": 0.7136,
+          "doc_id": "27f6966f-afb8-4b42-9eac-bbde02408b35"
+        }
+      ]
+    },
+    {
+      "id": "q0114",
+      "query": "Feldenkrais lesson feeling the floor pushing me up through my skeleton",
+      "category": "experience",
+      "expected_doc_id": "5f4f4acf-9697-43ec-b961-5fb129fc2408",
+      "expected_title": "The Anti-Gravity Lesson - Feldenkrais Project",
+      "rank": 1,
+      "band": "high",
+      "gap": 0.03,
+      "top_hits": [
+        {
+          "title": "The Anti-Gravity Lesson - Feldenkrais Project",
+          "similarity": 0.7934,
+          "doc_id": "5f4f4acf-9697-43ec-b961-5fb129fc2408"
+        },
+        {
+          "title": "Lifting Up and Through - Feldenkrais Project",
+          "similarity": 0.791,
+          "doc_id": "af3ab002-2dfe-46d6-9e0f-ce3a3013029d"
+        },
+        {
+          "title": "Talk: Feldenkrais for Self Empowerment - Feldenkrais Project",
+          "similarity": 0.7796,
+          "doc_id": "d293737c-d25e-4877-a909-36b8eab8db97"
+        },
+        {
+          "title": "Bones Do It Better",
+          "similarity": 0.772,
+          "doc_id": "cd936ead-5a7d-4f62-97db-8b88b9c2caed"
+        },
+        {
+          "title": "Talk: Reducing Excess Effort and Sensing the Skeleton - Feldenkrais Project",
+          "similarity": 0.7635,
+          "doc_id": "948d9342-587f-4249-a793-fc00aae0beb8"
+        }
+      ]
+    },
+    {
+      "id": "q0115",
+      "query": "Feldenkrais lesson using buttock clenches to lift pelvis",
+      "category": "action",
+      "expected_doc_id": "c0697055-4a0f-4e4a-a1ce-46bb9832363f",
+      "expected_title": "The Buttocks - Feldenkrais Project",
+      "rank": 1,
+      "band": "high",
+      "gap": 0.0489,
+      "top_hits": [
+        {
+          "title": "The Buttocks - Feldenkrais Project",
+          "similarity": 0.7912,
+          "doc_id": "c0697055-4a0f-4e4a-a1ce-46bb9832363f"
+        },
+        {
+          "title": "Buttocks",
+          "similarity": 0.7588,
+          "doc_id": "762c3e49-c04c-4382-b990-a20d64e64ed2"
+        },
+        {
+          "title": "Lifting Up and Through - Feldenkrais Project",
+          "similarity": 0.7476,
+          "doc_id": "af3ab002-2dfe-46d6-9e0f-ce3a3013029d"
+        },
+        {
+          "title": "Pelvic Floor Connections - Feldenkrais Project",
+          "similarity": 0.7439,
+          "doc_id": "80b3c160-1fa0-4903-8254-8136d3c3efe9"
+        },
+        {
+          "title": "Dynamic Sitting and Chair Clock - Feldenkrais Project",
+          "similarity": 0.7423,
+          "doc_id": "8cde4e74-6d1d-461a-a626-0993b26571eb"
+        }
+      ]
+    },
+    {
+      "id": "q0116",
+      "query": "how do glutes connect to foot arches Feldenkrais",
+      "category": "body",
+      "expected_doc_id": "c0697055-4a0f-4e4a-a1ce-46bb9832363f",
+      "expected_title": "The Buttocks - Feldenkrais Project",
+      "rank": 2,
+      "band": "high",
+      "gap": 0.0396,
+      "top_hits": [
+        {
+          "title": "Activating the Arches - Feldenkrais Project",
+          "similarity": 0.7874,
+          "doc_id": "b2cee454-6355-4f80-966e-133dfc18f8eb"
+        },
+        {
+          "title": "The Buttocks - Feldenkrais Project",
+          "similarity": 0.7743,
+          "doc_id": "c0697055-4a0f-4e4a-a1ce-46bb9832363f"
+        },
+        {
+          "title": "Buttocks",
+          "similarity": 0.7636,
+          "doc_id": "762c3e49-c04c-4382-b990-a20d64e64ed2"
+        },
+        {
+          "title": "Improve Your Knees",
+          "similarity": 0.7486,
+          "doc_id": "0ca2e1d1-69f7-4518-b2c0-34dbfa30a43b"
+        },
+        {
+          "title": "The Edges of the Feet",
+          "similarity": 0.7478,
+          "doc_id": "bd1418ee-b26c-496a-aece-46c761464a70"
+        }
+      ]
+    },
+    {
+      "id": "q0117",
+      "query": "Feldenkrais lesson feeling skeletal reverberation in heels",
+      "category": "experience",
+      "expected_doc_id": "c0697055-4a0f-4e4a-a1ce-46bb9832363f",
+      "expected_title": "The Buttocks - Feldenkrais Project",
+      "rank": null,
+      "band": "low",
+      "gap": 0.0073,
+      "top_hits": [
+        {
+          "title": "Aligning the Knees",
+          "similarity": 0.7712,
+          "doc_id": "0fa5d2d9-ff32-4088-9704-a44e74d34452"
+        },
+        {
+          "title": "Jelly Pudding Pelvis",
+          "similarity": 0.7701,
+          "doc_id": "42033193-8ff8-4c73-aa28-fe21baccd0b2"
+        },
+        {
+          "title": "Activating the Arches - Feldenkrais Project",
+          "similarity": 0.7672,
+          "doc_id": "b2cee454-6355-4f80-966e-133dfc18f8eb"
+        },
+        {
+          "title": "The Anti-Gravity Lesson - Feldenkrais Project",
+          "similarity": 0.7653,
+          "doc_id": "5f4f4acf-9697-43ec-b961-5fb129fc2408"
+        },
+        {
+          "title": "Talk: Feldenkrais for Self Empowerment - Feldenkrais Project",
+          "similarity": 0.7639,
+          "doc_id": "d293737c-d25e-4877-a909-36b8eab8db97"
+        }
+      ]
+    },
+    {
+      "id": "q0118",
+      "query": "Feldenkrais lesson moving pelvis around stationary femur",
+      "category": "action",
+      "expected_doc_id": "88f70d83-c274-41c4-9d43-df630fd2ad52",
+      "expected_title": "The Hip Joints: Moving Proximal Around Distal - Feldenkrais Project",
+      "rank": 1,
+      "band": "low",
+      "gap": 0.0158,
+      "top_hits": [
+        {
+          "title": "The Hip Joints: Moving Proximal Around Distal - Feldenkrais Project",
+          "similarity": 0.7871,
+          "doc_id": "88f70d83-c274-41c4-9d43-df630fd2ad52"
+        },
+        {
+          "title": "Exploring Hip Joint Sensation and Movement (ATM, 7/21/25, Ch 2)",
+          "similarity": 0.7766,
+          "doc_id": "d8c73691-5faf-4052-82ac-bdfc9f230804"
+        },
+        {
+          "title": "Legs as Free as a Baby's - Feldenkrais Project",
+          "similarity": 0.7742,
+          "doc_id": "92cb5d50-1e79-46d6-b4e4-e4f367d7a002"
+        },
+        {
+          "title": "Your Navigational Pelvis - Feldenkrais Project",
+          "similarity": 0.7742,
+          "doc_id": "154cde8d-d1c9-4f95-a23c-fd4010713646"
+        },
+        {
+          "title": "Oiling the Hip Joints",
+          "similarity": 0.7713,
+          "doc_id": "631b14ab-c439-4b70-88c3-5175ff3f01a4"
+        }
+      ]
+    },
+    {
+      "id": "q0119",
+      "query": "improve hip joint mobility and spinal alignment Feldenkrais",
+      "category": "body",
+      "expected_doc_id": "88f70d83-c274-41c4-9d43-df630fd2ad52",
+      "expected_title": "The Hip Joints: Moving Proximal Around Distal - Feldenkrais Project",
+      "rank": 1,
+      "band": "mid",
+      "gap": 0.0196,
+      "top_hits": [
+        {
+          "title": "The Hip Joints: Moving Proximal Around Distal - Feldenkrais Project",
+          "similarity": 0.7857,
+          "doc_id": "88f70d83-c274-41c4-9d43-df630fd2ad52"
+        },
+        {
+          "title": "More Precise Hips and Spine - Feldenkrais Project",
+          "similarity": 0.781,
+          "doc_id": "be9869b7-38df-4723-b434-9b6542334d25"
+        },
+        {
+          "title": "Spinal Support and a Powerful Pelvis - Feldenkrais Project",
+          "similarity": 0.7673,
+          "doc_id": "4d61b1bf-a3e6-4869-9da5-518834298e60"
+        },
+        {
+          "title": "Exploring Hip Joint Sensation and Movement (ATM, 7/21/25, Ch 2)",
+          "similarity": 0.7663,
+          "doc_id": "d8c73691-5faf-4052-82ac-bdfc9f230804"
+        },
+        {
+          "title": "Hip Joints by Way of Lengthening",
+          "similarity": 0.7661,
+          "doc_id": "9ec5685c-194f-4936-8e3e-83b8fe0764ae"
+        }
+      ]
+    },
+    {
+      "id": "q0120",
+      "query": "Feldenkrais lesson feeling the connection between hips and spine",
+      "category": "experience",
+      "expected_doc_id": "88f70d83-c274-41c4-9d43-df630fd2ad52",
+      "expected_title": "The Hip Joints: Moving Proximal Around Distal - Feldenkrais Project",
+      "rank": 3,
+      "band": "high",
+      "gap": 0.0355,
+      "top_hits": [
+        {
+          "title": "More Precise Hips and Spine - Feldenkrais Project",
+          "similarity": 0.8068,
+          "doc_id": "be9869b7-38df-4723-b434-9b6542334d25"
+        },
+        {
+          "title": "Spinal Support and a Powerful Pelvis - Feldenkrais Project",
+          "similarity": 0.7798,
+          "doc_id": "4d61b1bf-a3e6-4869-9da5-518834298e60"
+        },
+        {
+          "title": "The Hip Joints: Moving Proximal Around Distal - Feldenkrais Project",
+          "similarity": 0.7753,
+          "doc_id": "88f70d83-c274-41c4-9d43-df630fd2ad52"
+        },
+        {
+          "title": "Connecting Shoulders and Hips Part 2 - Feldenkrais Project",
+          "similarity": 0.7737,
+          "doc_id": "ce25c5bd-07f2-4ab1-ac7c-08c80366e11b"
+        },
+        {
+          "title": "Connecting Shoulders and Hips Part 1 - Feldenkrais Project",
+          "similarity": 0.7713,
+          "doc_id": "d490d242-0625-4480-9acf-33a1a78ebe5e"
+        }
+      ]
+    },
+    {
+      "id": "q0121",
+      "query": "feldenkrais lesson rolling to side reaching arm overhead",
+      "category": "action",
+      "expected_doc_id": "6819613d-75b4-4cd1-87b2-431daf999c3b",
+      "expected_title": "The Periscope - Feldenkrais Project",
+      "rank": null,
+      "band": "mid",
+      "gap": 0.0175,
+      "top_hits": [
+        {
+          "title": "Reaching, Rolling, and Ribs - Feldenkrais Project",
+          "similarity": 0.783,
+          "doc_id": "d3ff9c31-27a4-4af6-90f3-38465ed44d54"
+        },
+        {
+          "title": "Reaching Up",
+          "similarity": 0.7752,
+          "doc_id": "44131685-28b8-45ee-a6d6-b3d9c3671a8e"
+        },
+        {
+          "title": "Welcome and Training Format Overview (Discussion, 1/17/25, Ch 1)",
+          "similarity": 0.7672,
+          "doc_id": "3c8170c4-8e33-4688-9dc1-2dd4e767cad4"
+        },
+        {
+          "title": "Rolling to Sitting, and Beyond - Feldenkrais Project",
+          "similarity": 0.7668,
+          "doc_id": "07c970de-d30a-4ecf-8859-c7a6b148e8fd"
+        },
+        {
+          "title": "Side-Lying Arm and Shoulder Exploration (ATM, 10/3/25, Ch 3)",
+          "similarity": 0.7655,
+          "doc_id": "e3fbdc39-e011-4034-9de4-b2dc21ea1897"
+        }
+      ]
+    },
+    {
+      "id": "q0122",
+      "query": "feldenkrais lesson differentiate shoulder blade from ribs twist spine",
+      "category": "body",
+      "expected_doc_id": "6819613d-75b4-4cd1-87b2-431daf999c3b",
+      "expected_title": "The Periscope - Feldenkrais Project",
+      "rank": 7,
+      "band": "low",
+      "gap": 0.0112,
+      "top_hits": [
+        {
+          "title": "Supple Twisting - Feldenkrais Project",
+          "similarity": 0.784,
+          "doc_id": "b3a86cf1-faaa-4ee5-be3c-1bb60ed292ea"
+        },
+        {
+          "title": "Chanukia, the Candle Holder Lesson - Feldenkrais Project",
+          "similarity": 0.7785,
+          "doc_id": "f54baa93-2bff-4e27-9b2f-29750472a261"
+        },
+        {
+          "title": "Simple Self-Hug - Feldenkrais Project",
+          "similarity": 0.7766,
+          "doc_id": "4c768a03-56ef-4ef5-827c-f8694e248f7a"
+        },
+        {
+          "title": "Softening the Ribs - Feldenkrais Project",
+          "similarity": 0.7737,
+          "doc_id": "124fc281-a2c6-41bf-9a78-e1f2624ccac9"
+        },
+        {
+          "title": "Twisted Lamprey - Feldenkrais Project",
+          "similarity": 0.7728,
+          "doc_id": "a3b0f882-2acd-4dd0-bcab-3714758ca1bc"
+        }
+      ]
+    },
+    {
+      "id": "q0123",
+      "query": "feldenkrais lesson feeling ribs move while breathing lying on back",
+      "category": "experience",
+      "expected_doc_id": "6819613d-75b4-4cd1-87b2-431daf999c3b",
+      "expected_title": "The Periscope - Feldenkrais Project",
+      "rank": null,
+      "band": "mid",
+      "gap": 0.0174,
+      "top_hits": [
+        {
+          "title": "Softening the Ribs - Feldenkrais Project",
+          "similarity": 0.7729,
+          "doc_id": "124fc281-a2c6-41bf-9a78-e1f2624ccac9"
+        },
+        {
+          "title": "Rib Mobility and Spinal Integration (ATM, 3/7/25, Ch 4)",
+          "similarity": 0.7593,
+          "doc_id": "af861ba4-8d5f-4624-a27c-f8a887f26613"
+        },
+        {
+          "title": "Reaching, Rolling, and Ribs - Feldenkrais Project",
+          "similarity": 0.7591,
+          "doc_id": "d3ff9c31-27a4-4af6-90f3-38465ed44d54"
+        },
+        {
+          "title": "Freeing Your Breath and Spine (16m or 37m) - Feldenkrais Project",
+          "similarity": 0.7572,
+          "doc_id": "d4be3b8d-3cbc-42b6-9d23-b97381858157"
+        },
+        {
+          "title": "Legs Crossed and Expanding Chest and Abdomen,",
+          "similarity": 0.7555,
+          "doc_id": "5418844f-a459-4b3c-9e5b-e4e0da5c9151"
+        }
+      ]
+    },
+    {
+      "id": "q0124",
+      "query": "Feldenkrais lesson twisting torso and reaching arm overhead",
+      "category": "action",
+      "expected_doc_id": "a3b0f882-2acd-4dd0-bcab-3714758ca1bc",
+      "expected_title": "Twisted Lamprey - Feldenkrais Project",
+      "rank": null,
+      "band": "low",
+      "gap": 0.0146,
+      "top_hits": [
+        {
+          "title": "Reaching Up",
+          "similarity": 0.774,
+          "doc_id": "44131685-28b8-45ee-a6d6-b3d9c3671a8e"
+        },
+        {
+          "title": "Arm to the Back",
+          "similarity": 0.7689,
+          "doc_id": "e98da181-273e-4049-af90-6a04c5d95058"
+        },
+        {
+          "title": "Chanukia, the Candle Holder Lesson - Feldenkrais Project",
+          "similarity": 0.7656,
+          "doc_id": "f54baa93-2bff-4e27-9b2f-29750472a261"
+        },
+        {
+          "title": "Supple Twisting - Feldenkrais Project",
+          "similarity": 0.7635,
+          "doc_id": "b3a86cf1-faaa-4ee5-be3c-1bb60ed292ea"
+        },
+        {
+          "title": "Simple Twisting - Feldenkrais Project",
+          "similarity": 0.7594,
+          "doc_id": "95e68e7a-adae-43d4-b71c-6bb8827284c1"
+        }
+      ]
+    },
+    {
+      "id": "q0125",
+      "query": "Feldenkrais lesson ribs moving independently from pelvis and shoulders",
+      "category": "body",
+      "expected_doc_id": "a3b0f882-2acd-4dd0-bcab-3714758ca1bc",
+      "expected_title": "Twisted Lamprey - Feldenkrais Project",
+      "rank": 9,
+      "band": "low",
+      "gap": 0.0166,
+      "top_hits": [
+        {
+          "title": "Softening the Ribs - Feldenkrais Project",
+          "similarity": 0.789,
+          "doc_id": "124fc281-a2c6-41bf-9a78-e1f2624ccac9"
+        },
+        {
+          "title": "Reaching, Rolling, and Ribs - Feldenkrais Project",
+          "similarity": 0.7789,
+          "doc_id": "d3ff9c31-27a4-4af6-90f3-38465ed44d54"
+        },
+        {
+          "title": "The Periscope - Feldenkrais Project",
+          "similarity": 0.7772,
+          "doc_id": "6819613d-75b4-4cd1-87b2-431daf999c3b"
+        },
+        {
+          "title": "Legs Crossed and Expanding Chest and Abdomen,",
+          "similarity": 0.7734,
+          "doc_id": "5418844f-a459-4b3c-9e5b-e4e0da5c9151"
+        },
+        {
+          "title": "Supple Twisting - Feldenkrais Project",
+          "similarity": 0.7724,
+          "doc_id": "b3a86cf1-faaa-4ee5-be3c-1bb60ed292ea"
+        }
+      ]
+    },
+    {
+      "id": "q0126",
+      "query": "Feldenkrais lesson feeling ribs as a flexible basket, not a cage",
+      "category": "experience",
+      "expected_doc_id": "a3b0f882-2acd-4dd0-bcab-3714758ca1bc",
+      "expected_title": "Twisted Lamprey - Feldenkrais Project",
+      "rank": 1,
+      "band": "high",
+      "gap": 0.034,
+      "top_hits": [
+        {
+          "title": "Twisted Lamprey - Feldenkrais Project",
+          "similarity": 0.8008,
+          "doc_id": "a3b0f882-2acd-4dd0-bcab-3714758ca1bc"
+        },
+        {
+          "title": "Softening the Ribs - Feldenkrais Project",
+          "similarity": 0.7877,
+          "doc_id": "124fc281-a2c6-41bf-9a78-e1f2624ccac9"
+        },
+        {
+          "title": "Chest and Rib Anatomy (Lecture, 3/7/25, Ch 3)",
+          "similarity": 0.7749,
+          "doc_id": "177bcda9-dd42-403e-823e-53af406e282f"
+        },
+        {
+          "title": "Rib Mobility and Spinal Integration (ATM, 3/7/25, Ch 4)",
+          "similarity": 0.7678,
+          "doc_id": "af861ba4-8d5f-4624-a27c-f8a887f26613"
+        },
+        {
+          "title": "The Periscope - Feldenkrais Project",
+          "similarity": 0.7668,
+          "doc_id": "6819613d-75b4-4cd1-87b2-431daf999c3b"
+        }
+      ]
+    },
+    {
+      "id": "q0127",
+      "query": "feldenkrais lesson tilting pelvis using feet to drive movement",
+      "category": "action",
+      "expected_doc_id": "154cde8d-d1c9-4f95-a23c-fd4010713646",
+      "expected_title": "Your Navigational Pelvis - Feldenkrais Project",
+      "rank": 1,
+      "band": "low",
+      "gap": 0.0085,
+      "top_hits": [
+        {
+          "title": "Your Navigational Pelvis - Feldenkrais Project",
+          "similarity": 0.7689,
+          "doc_id": "154cde8d-d1c9-4f95-a23c-fd4010713646"
+        },
+        {
+          "title": "Waking the Feet",
+          "similarity": 0.7659,
+          "doc_id": "c2e78ae1-de12-4d91-a237-37fa0509f9c6"
+        },
+        {
+          "title": "Driving and Dynamic Sitting - Chair Practice - Feldenkrais Project",
+          "similarity": 0.7615,
+          "doc_id": "05f95b68-d8d4-4547-b868-a1a2d8e7baf7"
+        },
+        {
+          "title": "Aligning the Knees",
+          "similarity": 0.7612,
+          "doc_id": "0fa5d2d9-ff32-4088-9704-a44e74d34452"
+        },
+        {
+          "title": "Legs as Free as a Baby's - Feldenkrais Project",
+          "similarity": 0.7604,
+          "doc_id": "92cb5d50-1e79-46d6-b4e4-e4f367d7a002"
+        }
+      ]
+    },
+    {
+      "id": "q0128",
+      "query": "how to release glutes and abdominals for pelvic mobility",
+      "category": "body",
+      "expected_doc_id": "154cde8d-d1c9-4f95-a23c-fd4010713646",
+      "expected_title": "Your Navigational Pelvis - Feldenkrais Project",
+      "rank": null,
+      "band": "low",
+      "gap": 0.0068,
+      "top_hits": [
+        {
+          "title": "Oiling the Hip Joints",
+          "similarity": 0.7039,
+          "doc_id": "631b14ab-c439-4b70-88c3-5175ff3f01a4"
+        },
+        {
+          "title": "Soles Together",
+          "similarity": 0.7035,
+          "doc_id": "4e02de62-9a74-4855-b4ed-51040468a060"
+        },
+        {
+          "title": "Pelvic Clocks",
+          "similarity": 0.6995,
+          "doc_id": "d2d22c42-b8ba-4f36-ae8b-b276296b3343"
+        },
+        {
+          "title": "Rolling from Side to Front",
+          "similarity": 0.6993,
+          "doc_id": "5d2702ef-b1c4-425b-a405-38aba3e21fc1"
+        },
+        {
+          "title": "Freedom in the Pelvis (for Horse Riders)",
+          "similarity": 0.6971,
+          "doc_id": "6d883d0d-d904-4c36-aa5e-1cd3817e5b17"
+        }
+      ]
+    },
+    {
+      "id": "q0129",
+      "query": "feldenkrais lesson feeling connection between feet pelvis and head",
+      "category": "experience",
+      "expected_doc_id": "154cde8d-d1c9-4f95-a23c-fd4010713646",
+      "expected_title": "Your Navigational Pelvis - Feldenkrais Project",
+      "rank": 9,
+      "band": "mid-high",
+      "gap": 0.0229,
+      "top_hits": [
+        {
+          "title": "Rolling our Feet and Head for Better Balance",
+          "similarity": 0.8037,
+          "doc_id": "e303ed37-a50c-471d-a670-ee1e3309cd03"
+        },
+        {
+          "title": "Length Without Effort - Feldenkrais Project",
+          "similarity": 0.7937,
+          "doc_id": "27f6966f-afb8-4b42-9eac-bbde02408b35"
+        },
+        {
+          "title": "Connecting legs through upper spine",
+          "similarity": 0.783,
+          "doc_id": "ffc57d8a-b1cd-4c09-8410-bb60988397c1"
+        },
+        {
+          "title": "The Ultimate Self-Hug - Feldenkrais Project",
+          "similarity": 0.7821,
+          "doc_id": "f609c85d-803b-4d8c-8d80-ff78275d4303"
+        },
+        {
+          "title": "Pelvic Movement and Skeletal Transmission (FI Demo, 5/30/25, Ch 5)",
+          "similarity": 0.7808,
+          "doc_id": "3d4047cc-d60b-4125-ab18-23b22e9194bf"
+        }
+      ]
+    }
+  ],
+  "missing_from_index": []
+}

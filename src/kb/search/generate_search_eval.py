@@ -89,6 +89,7 @@ def main():
     group.add_argument("--apply", action="store_true", help="Actually generate queries via LLM")
     parser.add_argument("--limit", type=int, default=None, help="Process only first N lessons")
     parser.add_argument("--force", action="store_true", help="Regenerate even if output file exists")
+    parser.add_argument("--source", type=int, default=None, help="Only include lessons from this source_id")
     parser.add_argument("--output", type=str, default=DEFAULT_OUTPUT, help="Output JSON file path")
     args = parser.parse_args()
 
@@ -112,6 +113,13 @@ def main():
     db.initialize()
 
     docs = db.get_docs_with_condensed()
+    if args.source:
+        # Filter to lessons from specific source
+        with db.get_cursor(commit=False) as cursor:
+            cursor.execute("SELECT id::text FROM document WHERE source_id = %s", (args.source,))
+            source_ids = {row["id"] for row in cursor.fetchall()}
+        docs = [d for d in docs if d["doc_id"] in source_ids]
+        print(f"Filtered to source_id={args.source}: {len(docs)} lessons")
     docs.sort(key=lambda d: d["title"])
     print(f"Found {len(docs)} lessons with condensed cards")
 
