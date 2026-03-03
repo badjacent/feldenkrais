@@ -3509,6 +3509,7 @@ def build_lesson_page_html(document_id: str) -> str:
             <div class="note-line" id="annotation-note"></div>
         </div>
     </div>
+    <div id="no-audio-msg" style="display:none; color: #888; font-size: 0.9em; font-style: italic; margin-bottom: 12px;">Audio unavailable for this lesson.</div>
 
     <div class="tab-bar" id="tab-bar">
         <button class="active" onclick="switchTab('condensed')">Outline</button>
@@ -4367,6 +4368,8 @@ async function sendChat() {{
             }}
             if (segData.segments) whisperSegments = segData.segments;
             if (wordData.words) whisperWords = wordData.words;
+        }} else {{
+            document.getElementById('no-audio-msg').style.display = '';
         }}
 
         // 3. Auto-run analysis
