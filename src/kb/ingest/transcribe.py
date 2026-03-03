@@ -359,7 +359,7 @@ class TranscriptionService:
         # Get batch status
         batch = self.groq.batches.retrieve(batch_id)
 
-        if batch.status not in ("completed", "failed", "expired"):
+        if batch.status not in ("completed", "failed", "expired", "cancelled"):
             return {
                 "status": "not_ready",
                 "batch_status": batch.status,
@@ -454,6 +454,23 @@ class TranscriptionService:
                         "job_id": job_id,
                         "error": error_msg,
                     })
+
+        # For cancelled batches, mark any still-pending jobs as failed
+        if batch.status == "cancelled":
+            jobs = self.db.get_transcription_jobs_by_batch(batch_id)
+            for job in jobs:
+                if job["status"] == "pending":
+                    self.db.update_transcription_job(
+                        job_id=job["id"],
+                        status="failed",
+                        error=f"Batch {batch_id} was cancelled",
+                        increment_attempts=True,
+                    )
+                    results["jobs_failed"].append({
+                        "job_id": job["id"],
+                        "error": f"Batch cancelled",
+                    })
+                    logger.warning(f"Job {job['id']} failed: batch was cancelled")
 
         # Check for documents where all chunks are complete and reassemble
         completed_docs = self._reassemble_completed_documents(batch_id)
@@ -679,7 +696,7 @@ class TranscriptionService:
                 status = self.check_batch_status(batch_id)
                 logger.info(f"Batch {batch_id}: {status['status']}")
 
-                if status["status"] in ("completed", "failed", "expired"):
+                if status["status"] in ("completed", "failed", "expired", "cancelled"):
                     result = self.process_batch_results(batch_id)
                     result["batch_id"] = batch_id
                     results.append(result)
