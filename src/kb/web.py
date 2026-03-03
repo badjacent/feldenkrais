@@ -3384,16 +3384,16 @@ def build_lesson_page_html(document_id: str) -> str:
         .analysis-section strong {{ color: #333; }}
 
         /* Transcript segments */
-        .segment-details {{ margin-bottom: 12px; }}
+        .segment-details {{ margin-top: 6px; }}
         .segment-details summary {{
-            font-size: 0.8em; font-weight: 700; color: #666;
-            text-transform: uppercase; letter-spacing: 0.5px;
-            cursor: pointer; padding-bottom: 4px; border-bottom: 1px solid #eee;
+            cursor: pointer; font-size: 0.85em; color: #888;
         }}
-        .segment-details .seg-text {{
-            font-size: 0.88em; color: #555; line-height: 1.5;
-            margin-top: 8px; padding: 8px; background: #fafafa; border-radius: 4px;
+        .segment-details .seg-container {{
+            margin-top: 4px; padding: 6px 10px; background: #fafafa;
+            border-radius: 4px; font-size: 0.85em; color: #555;
         }}
+        .segment-details .seg-line {{ margin: 2px 0; }}
+        .segment-details .seg-id {{ color: #999; font-size: 0.85em; }}
 
         /* Navigation */
         .card-nav {{
@@ -3520,7 +3520,7 @@ def build_lesson_page_html(document_id: str) -> str:
                     <ul id="lang-bullets"></ul>
                 </div>
                 <details id="segment-details" class="segment-details" style="display:none;">
-                    <summary>Transcript segments</summary>
+                    <summary>Original text</summary>
                     <div id="segment-list"></div>
                 </details>
                 <div class="card-nav">
@@ -3698,12 +3698,20 @@ function renderCard() {{
     const segDetails = document.getElementById('segment-details');
     const segList = document.getElementById('segment-list');
     segList.innerHTML = '';
-    if (step.segments && step.segments.length) {{
-        const text = step.segments.map(s => s.text).join(' ');
-        const div = document.createElement('div');
-        div.className = 'seg-text';
-        div.textContent = text;
-        segList.appendChild(div);
+    const segs = (step.segments || []).filter(s => s.text);
+    if (segs.length) {{
+        const n = segs.length;
+        segDetails.querySelector('summary').textContent =
+            'Original text (' + n + ' segment' + (n !== 1 ? 's' : '') + ')';
+        const container = document.createElement('div');
+        container.className = 'seg-container';
+        segs.forEach(s => {{
+            const line = document.createElement('div');
+            line.className = 'seg-line';
+            line.innerHTML = '<span class="seg-id">[' + s.id + ']</span> ' + escHtml(s.text);
+            container.appendChild(line);
+        }});
+        segList.appendChild(container);
         segDetails.style.display = '';
         segDetails.removeAttribute('open');
     }} else {{
