@@ -74,7 +74,7 @@ def find_docs_with_concepts(db: Database) -> list[dict]:
                    a.data->>'text' as text
             FROM analysis a
             JOIN document d ON d.id = a.document_id
-            JOIN analysis_type at ON at.id = a.type_id AND at.name = 'transcription'{public_join}
+            JOIN analysis_type at ON at.id = a.type_id AND at.name = 'TRANSCRIPTION'{public_join}
             WHERE a.data->>'text' IS NOT NULL{public_filter}
         """)
         docs = [dict(row) for row in cursor.fetchall()]

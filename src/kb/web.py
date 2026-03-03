@@ -1950,6 +1950,28 @@ async def lesson_detail_page(request: Request, document_id: str):
     return HTMLResponse(build_lesson_page_html(document_id, user=user, search_mode=_is_search_site(request)))
 
 
+@app.get("/api/lesson/{document_id}/concepts")
+async def api_lesson_concepts(document_id: str):
+    """Get concept extraction data for a lesson."""
+    if not _db:
+        return JSONResponse({"error": "No database connection"}, status_code=500)
+    try:
+        concepts = _db.get_lesson_concepts(document_id)
+        # Also get the cached concept extraction for summary/search terms
+        text = _db.get_document_transcription(document_id)
+        extra = {}
+        if text:
+            from cache_helpers import get_cache_key
+            cache_key = get_cache_key(text.strip() + ":pass_0b_concepts_v1")
+            cached = _db.get_cache(cache_key)
+            if cached:
+                extra["distinctive_summary"] = cached.get("distinctive_summary", "")
+                extra["search_terms"] = cached.get("search_terms", [])
+        return JSONResponse({"concepts": concepts, **extra})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 @app.post("/api/pass0b-lang/clear-cache")
 async def api_pass0b_lang_clear_cache():
     """Clear Pass 0b-lang cache entries."""
@@ -3725,6 +3747,7 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
     <div class="tab-bar" id="tab-bar">
         <button class="active" onclick="switchTab('steps')">Step by Step</button>
         <button onclick="switchTab('condensed')">Overview</button>
+        <button onclick="switchTab('concepts')">Search Specifics</button>
         <button onclick="switchTab('chat')">Q&amp;A</button>
         <button onclick="switchTab('detailed')">All Details</button>
     </div>
@@ -3773,6 +3796,14 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
         <div id="condensed-setting-card"></div>
         <div id="condensed-group-cards"></div>
         <div class="progress-bar" id="condensed-progress"></div>
+    </div>
+
+    <!-- Search Specifics tab -->
+    <div id="tab-concepts" style="display:none;">
+        <div class="tab-intro">How this lesson is indexed for search &mdash; the concepts, distinctive summary, and search terms extracted by analysis.</div>
+        <div id="concepts-content">
+            <div style="color:#999; padding:16px;"><span class="spinner-inline"></span> Loading concept data...</div>
+        </div>
     </div>
 
     <!-- Q&A tab -->
@@ -3845,7 +3876,8 @@ const audioContainer = document.getElementById('audio-container');
 
 // ── Tab switching ──
 
-const TAB_ORDER = ['steps', 'condensed', 'chat', 'detailed'];
+const TAB_ORDER = ['steps', 'condensed', 'concepts', 'chat', 'detailed'];
+let conceptsLoaded = false;
 
 function switchTab(tab) {{
     activeTab = tab;
@@ -3859,9 +3891,83 @@ function switchTab(tab) {{
 
     if (tab === 'condensed' && !condensedLoaded) loadCondensed();
     if (tab === 'annotated' && !annotatedLoaded) loadAnnotated();
+    if (tab === 'concepts' && !conceptsLoaded) loadConcepts();
     if (tab === 'detailed' && !detailedRendered && analysisData) renderDetailed();
     if (tab === 'steps' && analysisData) renderCard();
     if (tab === 'chat') document.getElementById('chat-input').focus();
+}}
+
+// ── Concepts loading ──
+
+async function loadConcepts() {{
+    conceptsLoaded = true;
+    const div = document.getElementById('concepts-content');
+    try {{
+        const res = await fetch('/api/lesson/' + DOCUMENT_ID + '/concepts');
+        const data = await res.json();
+        if (data.error) {{
+            div.innerHTML = '<div style="color:#999;padding:16px;">No concept data available for this lesson.</div>';
+            return;
+        }}
+        let html = '';
+        // Distinctive summary
+        if (data.distinctive_summary) {{
+            html += '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
+            html += '<div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#1a73e8;margin-bottom:6px;">What Makes This Lesson Distinctive</div>';
+            html += '<div style="font-size:0.95em;line-height:1.6;color:#333;">' + escConcept(data.distinctive_summary) + '</div>';
+            html += '</div>';
+        }}
+        // Search terms
+        if (data.search_terms && data.search_terms.length) {{
+            html += '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
+            html += '<div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#e65100;margin-bottom:8px;">Search Terms</div>';
+            html += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
+            data.search_terms.forEach(t => {{
+                html += '<span style="padding:4px 12px;background:#fff3e0;border:1px solid #ffe0b2;border-radius:14px;font-size:0.85em;color:#e65100;">' + escConcept(t) + '</span>';
+            }});
+            html += '</div></div>';
+        }}
+        // Concepts by category
+        if (data.concepts && data.concepts.length) {{
+            const byCategory = {{}};
+            data.concepts.forEach(c => {{
+                if (!byCategory[c.category]) byCategory[c.category] = [];
+                byCategory[c.category].push(c.value);
+            }});
+            const catColors = {{
+                body_region: '#2196f3', movement_pattern: '#4caf50', position: '#9c27b0',
+                feldenkrais_concept: '#ff9800', teaching_strategy: '#e91e63', theme: '#607d8b'
+            }};
+            const catLabels = {{
+                body_region: 'Body Region', movement_pattern: 'Movement Pattern', position: 'Position',
+                feldenkrais_concept: 'Feldenkrais Concept', teaching_strategy: 'Teaching Strategy', theme: 'Theme'
+            }};
+            html += '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
+            html += '<div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#333;margin-bottom:12px;">Concept Tags</div>';
+            Object.keys(byCategory).sort().forEach(cat => {{
+                const color = catColors[cat] || '#666';
+                const label = catLabels[cat] || cat.replace(/_/g, ' ');
+                html += '<div style="margin-bottom:10px;">';
+                html += '<div style="font-size:0.8em;font-weight:600;color:' + color + ';margin-bottom:4px;text-transform:capitalize;">' + label + '</div>';
+                html += '<div style="display:flex;flex-wrap:wrap;gap:5px;">';
+                byCategory[cat].forEach(v => {{
+                    html += '<span style="padding:3px 10px;border:1px solid #ddd;border-radius:12px;font-size:0.85em;color:#444;background:#fafafa;">' + escConcept(v) + '</span>';
+                }});
+                html += '</div></div>';
+            }});
+            html += '</div>';
+        }}
+        if (!html) html = '<div style="color:#999;padding:16px;">No concept data available for this lesson.</div>';
+        div.innerHTML = html;
+    }} catch (e) {{
+        div.innerHTML = '<div style="color:#999;padding:16px;">Failed to load concept data.</div>';
+    }}
+}}
+
+function escConcept(str) {{
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
 }}
 
 // ── Card rendering ──
