@@ -185,6 +185,24 @@ CREATE TABLE IF NOT EXISTS user_beta_access (
     feature TEXT NOT NULL,
     PRIMARY KEY (user_id, feature)
 );
+
+CREATE TABLE IF NOT EXISTS access_group (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS user_group (
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    group_id INTEGER NOT NULL REFERENCES access_group(id) ON DELETE CASCADE,
+    PRIMARY KEY (user_id, group_id)
+);
+
+CREATE TABLE IF NOT EXISTS group_source_access (
+    group_id INTEGER NOT NULL REFERENCES access_group(id) ON DELETE CASCADE,
+    source_id INTEGER NOT NULL REFERENCES document_source(id) ON DELETE CASCADE,
+    PRIMARY KEY (group_id, source_id)
+);
 """
 
 INDEXES = """
@@ -225,7 +243,8 @@ class Database:
         self._pool: Optional[pool.ThreadedConnectionPool] = None
         self._min_connections = min_connections
         self._max_connections = max_connections
-        self.public_only = False
+        self.public_only = False  # deprecated, kept for compat
+        self.allowed_source_ids: set[int] | None = None  # None = no filtering (superuser/admin)
 
     def _get_pool(self) -> pool.ThreadedConnectionPool:
         """Get or create the connection pool."""
@@ -305,6 +324,7 @@ class Database:
                 ("document_source", "public", "BOOLEAN NOT NULL DEFAULT TRUE"),
                 ("document", "category_name", "TEXT"),
                 ("document", "transcription_retries", "INTEGER DEFAULT 0"),
+                ("users", "superuser_eligible", "BOOLEAN NOT NULL DEFAULT FALSE"),
             ]:
                 cursor.execute(
                     """SELECT 1 FROM information_schema.columns
@@ -916,7 +936,12 @@ class Database:
 
         Returns list of dicts with: source_id, source_name, category_name, lesson_count.
         """
-        public_filter = " AND ds.public = TRUE" if self.public_only else ""
+        if self.allowed_source_ids is None:
+            source_filter = ""
+            params: list = []
+        else:
+            source_filter = " AND ds.id = ANY(%s)"
+            params = [list(self.allowed_source_ids)]
         with self.get_cursor(commit=False) as cursor:
             cursor.execute(f"""
                 SELECT ds.id as source_id, ds.name as source_name,
@@ -925,10 +950,10 @@ class Database:
                 FROM document_source ds
                 JOIN document d ON d.source_id = ds.id
                 JOIN analysis a ON a.document_id = d.id AND a.type_id = 1
-                WHERE ds.visible = TRUE{public_filter}
+                WHERE ds.visible = TRUE{source_filter}
                 GROUP BY ds.id, ds.name, ds.category_name
                 ORDER BY ds.id
-            """)
+            """, params)
             return [dict(row) for row in cursor.fetchall()]
 
     def get_source_lessons(self, source_id: int) -> list[dict]:
@@ -1047,7 +1072,7 @@ class Database:
                     avatar_url = EXCLUDED.avatar_url,
                     last_login_at = NOW()
                 RETURNING id, provider, provider_id, login, name, email,
-                          avatar_url, tier, created_at, last_login_at
+                          avatar_url, tier, superuser_eligible, created_at, last_login_at
                 """,
                 (provider, provider_id, login, name, email, avatar_url),
             )
@@ -1083,6 +1108,82 @@ class Database:
                 (user_id,),
             )
             return [row["feature"] for row in cursor.fetchall()]
+
+    # ── Group-based source access ──────────────────────────────────────
+
+    def get_user_allowed_sources(self, user_id: int | None) -> set[int]:
+        """Return source IDs visible to a user: public sources UNION group-granted sources.
+
+        If user_id is None (anonymous), returns only public source IDs.
+        """
+        with self.get_cursor(commit=False) as cursor:
+            # Public sources are visible to everyone
+            cursor.execute("SELECT id FROM document_source WHERE public = TRUE AND visible = TRUE")
+            ids = {row["id"] for row in cursor.fetchall()}
+            if user_id is not None:
+                # Add sources granted via group membership
+                cursor.execute("""
+                    SELECT DISTINCT gsa.source_id
+                    FROM group_source_access gsa
+                    JOIN user_group ug ON ug.group_id = gsa.group_id
+                    WHERE ug.user_id = %s
+                """, (user_id,))
+                ids |= {row["source_id"] for row in cursor.fetchall()}
+            return ids
+
+    def _source_filter(self) -> tuple[str, str, list]:
+        """Build SQL fragments for source-based access filtering.
+
+        Returns (join_clause, where_clause, params).
+        - If allowed_source_ids is None: no filtering (superuser/admin).
+        - If allowed_source_ids is a set: filter to those IDs.
+        """
+        if self.allowed_source_ids is None:
+            return "", "", []
+        ids = list(self.allowed_source_ids)
+        return (
+            "\nJOIN document_source ds ON ds.id = d.source_id",
+            " AND ds.id = ANY(%s)",
+            [ids],
+        )
+
+    def is_document_accessible(self, doc_id: str) -> bool:
+        """Check if a document belongs to an allowed source. Always True if no filtering."""
+        if self.allowed_source_ids is None:
+            return True
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute(
+                "SELECT source_id FROM document WHERE id = %s", (doc_id,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return False
+            return row["source_id"] in self.allowed_source_ids
+
+    def create_access_group(self, name: str) -> dict:
+        """Create an access group. Returns the new group dict."""
+        with self.get_cursor() as cursor:
+            cursor.execute(
+                "INSERT INTO access_group (name) VALUES (%s) RETURNING id, name, created_at",
+                (name,),
+            )
+            return dict(cursor.fetchone())
+
+    def add_user_to_group(self, user_id: int, group_id: int):
+        """Add a user to an access group."""
+        with self.get_cursor() as cursor:
+            cursor.execute(
+                "INSERT INTO user_group (user_id, group_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                (user_id, group_id),
+            )
+
+    def add_source_to_group(self, source_id: int, group_id: int):
+        """Grant a group access to a document source."""
+        with self.get_cursor() as cursor:
+            cursor.execute(
+                "INSERT INTO group_source_access (group_id, source_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                (group_id, source_id),
+            )
 
     def log_event(self, event: str, title: str = None,
                   document_id: str = None, detail: dict = None):
@@ -1150,16 +1251,18 @@ class Database:
 
     def get_pipeline_summary(self) -> dict:
         """Get pipeline status counts."""
+        filtering = self.allowed_source_ids is not None
+        if filtering:
+            ids = list(self.allowed_source_ids)
         with self.get_cursor(commit=False) as cursor:
-            if self.public_only:
-                # Document counts by status (public sources only)
+            if filtering:
                 cursor.execute("""
                     SELECT d.status, COUNT(*) as count
                     FROM document d
                     JOIN document_source ds ON ds.id = d.source_id
-                    WHERE ds.public = TRUE
+                    WHERE ds.id = ANY(%s)
                     GROUP BY d.status
-                """)
+                """, (ids,))
             else:
                 cursor.execute("""
                     SELECT status, COUNT(*) as count
@@ -1175,25 +1278,25 @@ class Database:
             job_counts = {row["status"]: row["count"] for row in cursor.fetchall()}
 
             # Total documents
-            if self.public_only:
+            if filtering:
                 cursor.execute("""
                     SELECT COUNT(*) as count FROM document d
                     JOIN document_source ds ON ds.id = d.source_id
-                    WHERE ds.public = TRUE
-                """)
+                    WHERE ds.id = ANY(%s)
+                """, (ids,))
             else:
                 cursor.execute("SELECT COUNT(*) as count FROM document")
             doc_total = cursor.fetchone()["count"]
 
             # Total with transcriptions
-            if self.public_only:
+            if filtering:
                 cursor.execute("""
                     SELECT COUNT(DISTINCT a.document_id) as count
                     FROM analysis a
                     JOIN document d ON d.id = a.document_id
                     JOIN document_source ds ON ds.id = d.source_id
-                    WHERE a.type_id = 1 AND ds.public = TRUE
-                """)
+                    WHERE a.type_id = 1 AND ds.id = ANY(%s)
+                """, (ids,))
             else:
                 cursor.execute("""
                     SELECT COUNT(DISTINCT document_id) as count
@@ -1209,7 +1312,12 @@ class Database:
 
     def get_document_pipeline_view(self, limit: int = 50) -> list[dict]:
         """Get documents with their pipeline status for the dashboard."""
-        public_filter = "\nWHERE ds.public = TRUE" if self.public_only else ""
+        if self.allowed_source_ids is None:
+            source_filter = ""
+            params: list = [limit]
+        else:
+            source_filter = "\nWHERE ds.id = ANY(%s)"
+            params = [list(self.allowed_source_ids), limit]
         with self.get_cursor(commit=False) as cursor:
             cursor.execute(f"""
                 SELECT d.id, d.title, d.status, d.created_at, d.updated_at,
@@ -1230,10 +1338,10 @@ class Database:
                               WHERE le.document_id = d.id) as has_embedding,
                        COALESCE(d.transcription_retries, 0) as retry_count
                 FROM document d
-                JOIN document_source ds ON ds.id = d.source_id{public_filter}
+                JOIN document_source ds ON ds.id = d.source_id{source_filter}
                 ORDER BY d.updated_at DESC
                 LIMIT %s
-            """, (limit,))
+            """, params)
             rows = [dict(row) for row in cursor.fetchall()]
 
         # Check which docs have condensed analysis cached
@@ -1350,16 +1458,22 @@ class Database:
         Single DB round-trip instead of one per document.
         """
         import hashlib
-        public_join = """
+        if self.allowed_source_ids is not None:
+            source_join = """
                 JOIN document d ON d.id = a.document_id
-                JOIN document_source ds ON ds.id = d.source_id""" if self.public_only else ""
-        public_filter = " AND ds.public = TRUE" if self.public_only else ""
+                JOIN document_source ds ON ds.id = d.source_id"""
+            source_filter = " AND ds.id = ANY(%s)"
+            params: list = [list(self.allowed_source_ids)]
+        else:
+            source_join = ""
+            source_filter = ""
+            params = []
         with self.get_cursor(commit=False) as cursor:
             cursor.execute(f"""
                 SELECT a.document_id::text as doc_id, a.data->>'text' as text
-                FROM analysis a{public_join}
-                WHERE a.type_id = 1 AND a.data->>'text' IS NOT NULL{public_filter}
-            """)
+                FROM analysis a{source_join}
+                WHERE a.type_id = 1 AND a.data->>'text' IS NOT NULL{source_filter}
+            """, params)
             result = {}
             for row in cursor.fetchall():
                 text = row["text"].strip()
@@ -1388,8 +1502,14 @@ class Database:
 
     def search_lessons(self, query_embedding: list[float], limit: int = 10, method: str = "default") -> list[dict]:
         """Search lessons by cosine similarity. Returns list of {document_id, title, similarity, summary_text, source_id, category_name}."""
-        public_join = "\nJOIN document_source ds ON ds.id = d.source_id" if self.public_only else ""
-        public_filter = " AND ds.public = TRUE" if self.public_only else ""
+        if self.allowed_source_ids is not None:
+            source_join = "\nJOIN document_source ds ON ds.id = d.source_id"
+            source_filter = " AND ds.id = ANY(%s)"
+            extra_params: list = [list(self.allowed_source_ids)]
+        else:
+            source_join = ""
+            source_filter = ""
+            extra_params = []
         with self.get_cursor(commit=False) as cursor:
             cursor.execute(
                 f"""
@@ -1399,29 +1519,31 @@ class Database:
                        d.source_id,
                        d.category_name
                 FROM lesson_embedding le
-                JOIN document d ON d.id = le.document_id{public_join}
-                WHERE le.method = %s{public_filter}
+                JOIN document d ON d.id = le.document_id{source_join}
+                WHERE le.method = %s{source_filter}
                 ORDER BY le.embedding <=> %s::vector
                 LIMIT %s
                 """,
-                (str(query_embedding), method, str(query_embedding), limit),
+                [str(query_embedding), method] + extra_params + [str(query_embedding), limit],
             )
             return [dict(row) for row in cursor.fetchall()]
 
     def get_embedding_hashes(self, method: str = "default") -> dict[str, str]:
         """Return {document_id: summary_hash} for all embedded lessons."""
-        if self.public_only:
+        if self.allowed_source_ids is not None:
             query = """
                 SELECT le.document_id::text, le.summary_hash
                 FROM lesson_embedding le
                 JOIN document d ON d.id = le.document_id
                 JOIN document_source ds ON ds.id = d.source_id
-                WHERE le.method = %s AND ds.public = TRUE
+                WHERE le.method = %s AND ds.id = ANY(%s)
             """
+            params: tuple = (method, list(self.allowed_source_ids))
         else:
             query = "SELECT document_id::text, summary_hash FROM lesson_embedding WHERE method = %s"
+            params = (method,)
         with self.get_cursor(commit=False) as cursor:
-            cursor.execute(query, (method,))
+            cursor.execute(query, params)
             return {row["document_id"]: row["summary_hash"] for row in cursor.fetchall()}
 
     # Lesson concept operations
@@ -1453,8 +1575,13 @@ class Database:
             params.append(f"%{term}%")
 
         where_clause = " OR ".join(conditions)
-        public_join = "\nJOIN document_source ds ON ds.id = d.source_id" if self.public_only else ""
-        public_filter = " AND ds.public = TRUE" if self.public_only else ""
+        if self.allowed_source_ids is not None:
+            source_join = "\nJOIN document_source ds ON ds.id = d.source_id"
+            source_filter = " AND ds.id = ANY(%s)"
+            params.append(list(self.allowed_source_ids))
+        else:
+            source_join = ""
+            source_filter = ""
 
         with self.get_cursor(commit=False) as cursor:
             cursor.execute(
@@ -1465,8 +1592,8 @@ class Database:
                        d.source_id,
                        d.category_name
                 FROM lesson_concept lc
-                JOIN document d ON d.id = lc.document_id{public_join}
-                WHERE ({where_clause}){public_filter}
+                JOIN document d ON d.id = lc.document_id{source_join}
+                WHERE ({where_clause}){source_filter}
                 GROUP BY lc.document_id, d.title, d.source_id, d.category_name
                 ORDER BY COUNT(*) DESC
                 LIMIT %s
@@ -1493,8 +1620,14 @@ class Database:
         """
         import hashlib
 
-        public_join = "\nJOIN document_source ds ON ds.id = d.source_id" if self.public_only else ""
-        public_filter = " AND ds.public = TRUE" if self.public_only else ""
+        if self.allowed_source_ids is not None:
+            source_join = "\nJOIN document_source ds ON ds.id = d.source_id"
+            source_filter = " AND ds.id = ANY(%s)"
+            params: list = [list(self.allowed_source_ids)]
+        else:
+            source_join = ""
+            source_filter = ""
+            params = []
 
         # One query: get all transcript texts and doc titles
         with self.get_cursor(commit=False) as cursor:
@@ -1503,9 +1636,9 @@ class Database:
                        d.title,
                        a.data->>'text' as text
                 FROM analysis a
-                JOIN document d ON d.id = a.document_id{public_join}
-                WHERE a.type_id = 1 AND a.data->>'text' IS NOT NULL{public_filter}
-            """)
+                JOIN document d ON d.id = a.document_id{source_join}
+                WHERE a.type_id = 1 AND a.data->>'text' IS NOT NULL{source_filter}
+            """, params)
             doc_keys = {}
             for row in cursor.fetchall():
                 text = (row["text"] or "").strip()

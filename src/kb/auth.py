@@ -80,6 +80,7 @@ def _set_session_cookie(user: dict, request: Request) -> RedirectResponse:
         "user_id": user["id"],
         "tier": user["tier"],
         "login": user["login"],
+        "superuser_eligible": bool(user.get("superuser_eligible", False)),
         "exp": int(time.time()) + COOKIE_MAX_AGE,
     }
     response = RedirectResponse("/")

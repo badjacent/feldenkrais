@@ -50,6 +50,37 @@ def _is_search_site(request: Request) -> bool:
     return host == SEARCH_DOMAIN or host.startswith(SEARCH_DOMAIN + ":")
 
 
+# ── Source access helpers ─────────────────────────────────────────────
+
+SUPERUSER_COOKIE = "fk_superuser"
+
+
+def _is_superuser_active(request: Request, user: dict | None) -> bool:
+    """True if the user is superuser-eligible AND has the superuser cookie set."""
+    if not user or not user.get("superuser_eligible"):
+        return False
+    return request.cookies.get(SUPERUSER_COOKIE) == "1"
+
+
+def _set_source_access(request: Request) -> dict | None:
+    """Compute allowed_source_ids on _db based on the current user/request.
+
+    Returns the user dict (or None for anonymous).
+    """
+    if not _db:
+        return None
+    user = _auth_mod.get_current_user(request)
+    if user and user.get("tier") == "admin":
+        _db.allowed_source_ids = None
+    elif user and _is_superuser_active(request, user):
+        _db.allowed_source_ids = None
+    elif user:
+        _db.allowed_source_ids = _db.get_user_allowed_sources(user["user_id"])
+    else:
+        _db.allowed_source_ids = _db.get_user_allowed_sources(None)
+    return user
+
+
 # ── Pipeline lock (DB-based, 5-minute expiry) ───────────────────────────
 
 PIPELINE_LOCK_KEY = "pipeline:global_lock"
@@ -243,6 +274,31 @@ async def auth_logout(request: Request):
     return _auth_mod.logout(request)
 
 
+@app.get("/auth/superuser/on")
+async def superuser_on(request: Request):
+    """Enable superuser mode (for eligible users only)."""
+    user = _auth_mod.get_current_user(request)
+    if not user or not user.get("superuser_eligible"):
+        return RedirectResponse("/")
+    response = RedirectResponse("/")
+    response.set_cookie(
+        SUPERUSER_COOKIE, "1",
+        max_age=30 * 24 * 3600,
+        httponly=True,
+        samesite="lax",
+        secure=_auth_mod._is_secure(request),
+    )
+    return response
+
+
+@app.get("/auth/superuser/off")
+async def superuser_off(request: Request):
+    """Disable superuser mode."""
+    response = RedirectResponse("/")
+    response.delete_cookie(SUPERUSER_COOKIE)
+    return response
+
+
 # Paths - handle both local development and Lambda environment
 IS_LAMBDA = bool(os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
 if IS_LAMBDA:
@@ -269,7 +325,6 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 if DATABASE_URL:
     from database import Database
     _db = Database(DATABASE_URL)
-    _db.public_only = IS_LAMBDA
     _db.initialize()
 
 # ── Initialize extracted modules ──────────────────────────────────────────
@@ -408,14 +463,13 @@ def align_pass0_with_whisper(pass_0_result: dict, whisper_segments: list) -> Non
 
 
 
-def get_available_lessons(public_only: bool = False) -> tuple[dict[str, list[tuple[str, str]]], dict[str, str]]:
+def get_available_lessons() -> tuple[dict[str, list[tuple[str, str]]], dict[str, str]]:
     """Get categories and their display names.
 
     DB documents with category_name set are grouped under that name (override).
     DB documents without category_name are grouped under their source's category.
 
-    Args:
-        public_only: If True, only include sources marked as public.
+    Uses _db.allowed_source_ids (set by _set_source_access) to filter sources.
 
     Returns (categories_dict, display_names_dict).
     - categories: category_key -> [(lesson_key, display_name)]
@@ -428,8 +482,6 @@ def get_available_lessons(public_only: bool = False) -> tuple[dict[str, list[tup
     # 1. Database sources (if available)
     if _db:
         try:
-            prev_public = _db.public_only
-            _db.public_only = public_only
             for src in _db.get_lesson_categories():
                 source_display = (
                     src.get("source_category_name")
@@ -471,8 +523,6 @@ def get_available_lessons(public_only: bool = False) -> tuple[dict[str, list[tup
         except Exception as e:
             import logging
             logging.getLogger(__name__).error("get_available_lessons DB error: %s", e)
-        finally:
-            _db.public_only = prev_public
 
     # Skip empty sources (e.g. OTHER with no documents)
     categories = {k: v for k, v in categories.items() if v}
@@ -1263,7 +1313,14 @@ async def docs_page(request: Request, slug: str):
     user = _auth_mod.get_current_user(request) if _auth_mod else None
     if user:
         login = html_mod.escape(user.get("login", ""))
-        auth_bar = f'<div class="auth-bar">{login} &middot; <a href="/auth/logout">Log out</a> &middot; <a href="/">Search</a></div>'
+        su_parts = []
+        if user.get("superuser_eligible"):
+            if _is_superuser_active(request, user):
+                su_parts.append('<a href="/auth/superuser/off" style="color:#d32f2f; font-weight:600;">Exit Superuser</a>')
+            else:
+                su_parts.append('<a href="/auth/superuser/on">Superuser</a>')
+        su_html = (' &middot; ' + ' &middot; '.join(su_parts)) if su_parts else ''
+        auth_bar = f'<div class="auth-bar">{login}{su_html} &middot; <a href="/auth/logout">Log out</a> &middot; <a href="/">Search</a></div>'
     else:
         auth_bar = ''
     return HTMLResponse(f"""<!DOCTYPE html>
@@ -1398,10 +1455,8 @@ async def api_search(request: Request, query: str = Form(""), method: str = Form
         return JSONResponse({"error": "No database connection"}, status_code=500)
     if method not in ("default", "concepts", "tags", "combined"):
         return JSONResponse({"error": f"Unknown method: {method}"}, status_code=400)
-    prev_public = _db.public_only
+    _set_source_access(request)
     try:
-        _db.public_only = _auth_mod.get_access_tier(request) != "admin"
-
         if method == "tags":
             # Tag-based search: match query words against concept values
             terms = [t.strip() for t in query.split() if t.strip()]
@@ -1465,13 +1520,12 @@ async def api_search(request: Request, query: str = Form(""), method: str = Form
         return JSONResponse(resp)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
-    finally:
-        _db.public_only = prev_public
 
 
 @app.get("/pass0b", response_class=HTMLResponse)
 async def pass0b_page(request: Request):
     """Pass 0b experiment page."""
+    _set_source_access(request)
     return build_pass0b_html(search_mode=_is_search_site(request))
 
 
@@ -2094,6 +2148,7 @@ async def api_lesson_chat(request: Request):
 @app.get("/pass0b-player", response_class=HTMLResponse)
 async def pass0b_player_page(request: Request):
     """Pass 0b audio player page."""
+    _set_source_access(request)
     return build_pass0b_player_html(search_mode=_is_search_site(request))
 
 
@@ -2102,14 +2157,17 @@ async def pass0b_player_page(request: Request):
 @app.get("/pass0b-lang", response_class=HTMLResponse)
 async def pass0b_lang_page(request: Request):
     """Pass 0b-lang language analysis page."""
+    _set_source_access(request)
     return build_pass0b_lang_html(search_mode=_is_search_site(request))
 
 
 @app.get("/lesson/{document_id}", response_class=HTMLResponse)
 async def lesson_detail_page(request: Request, document_id: str):
     """Unified lesson detail page."""
-    user = _auth_mod.get_current_user(request)
-    return HTMLResponse(build_lesson_page_html(document_id, user=user, search_mode=_is_search_site(request)))
+    user = _set_source_access(request)
+    if _db and not _db.is_document_accessible(document_id):
+        return HTMLResponse("<h1>Not Found</h1>", status_code=404)
+    return HTMLResponse(build_lesson_page_html(document_id, user=user, search_mode=_is_search_site(request), superuser_active=_is_superuser_active(request, user)))
 
 
 @app.post("/api/pass0b-lang/clear-cache")
@@ -2935,7 +2993,7 @@ def render_pass0b_combined_result(somatic_result: dict, lang_result: dict) -> st
 
 def build_pass0b_html(search_mode: bool = False) -> str:
     """Build the Pass 0b experiment page HTML."""
-    categories, display_names = get_available_lessons(public_only=search_mode)
+    categories, display_names = get_available_lessons()
 
     category_options = ['<option value="">-- Select category --</option>']
     for cat_name in categories.keys():
@@ -3369,11 +3427,19 @@ def build_pass0b_html(search_mode: bool = False) -> str:
 """
 
 
-def _auth_bar_html(user: dict | None) -> str:
-    """Render logout link for logged-in users."""
+def _auth_bar_html(user: dict | None, superuser_active: bool = False) -> str:
+    """Render logout link for logged-in users, with superuser toggle if eligible."""
     if user:
         login = html_mod.escape(user.get("login", ""))
-        return f'<div class="auth-bar">{login} &middot; <a href="/auth/logout">Log out</a> &middot; <a href="/docs/demo_overview">Docs</a></div>'
+        parts = [login]
+        if user.get("superuser_eligible"):
+            if superuser_active:
+                parts.append('<a href="/auth/superuser/off" style="color:#d32f2f; font-weight:600;">Exit Superuser</a>')
+            else:
+                parts.append('<a href="/auth/superuser/on">Superuser</a>')
+        parts.append('<a href="/auth/logout">Log out</a>')
+        parts.append('<a href="/docs/demo_overview">Docs</a>')
+        return '<div class="auth-bar">' + ' &middot; '.join(parts) + '</div>'
     return ''
 
 
@@ -3384,9 +3450,9 @@ _AUTH_BAR_CSS = """
 """
 
 
-def build_search_home_html(extra_html: str = "", user: dict | None = None) -> str:
+def build_search_home_html(extra_html: str = "", user: dict | None = None, superuser_active: bool = False) -> str:
     """Build the search subdomain home page with search box and browse-by-source."""
-    categories, display_names = get_available_lessons(public_only=True)
+    categories, display_names = get_available_lessons()
 
     # Count total lessons across all categories
     total_lessons = sum(len(lessons) for lessons in categories.values())
@@ -3485,7 +3551,7 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None) -> st
     </style>
 </head>
 <body>
-    {_auth_bar_html(user)}
+    {_auth_bar_html(user, superuser_active=superuser_active)}
     <h1>Feldenkrais Lesson Search</h1>
     <p class="subtitle">Search across {total_lessons} lessons by meaning, not keywords.<br>
     Each lesson is automatically analyzed into movement steps, body positions,
@@ -3632,7 +3698,7 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None) -> st
 </html>"""
 
 
-def build_lesson_page_html(document_id: str, user: dict | None = None, search_mode: bool = False) -> str:
+def build_lesson_page_html(document_id: str, user: dict | None = None, search_mode: bool = False, superuser_active: bool = False) -> str:
     """Build the unified lesson detail page HTML."""
     esc_id = html_mod.escape(document_id)
 
@@ -3925,7 +3991,7 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
-    {_auth_bar_html(user)}
+    {_auth_bar_html(user, superuser_active=superuser_active)}
     <div class="back-link"><a href="/">&larr; All lessons</a></div>
     <h1 id="lesson-title">Loading...</h1>
     <div class="source-line" id="source-line"></div>
@@ -4951,7 +5017,7 @@ async function sendChat() {{
 
 def build_pass0b_player_html(search_mode: bool = False) -> str:
     """Build the Pass 0b audio player page HTML."""
-    categories, display_names = get_available_lessons(public_only=search_mode)
+    categories, display_names = get_available_lessons()
 
     category_options = ['<option value="">-- Select category --</option>']
     for cat_name in categories.keys():
@@ -6287,7 +6353,7 @@ async function sendChat() {{
 
 def build_pass0b_lang_html(search_mode: bool = False) -> str:
     """Build the Pass 0b-lang language analysis page HTML."""
-    categories, display_names = get_available_lessons(public_only=search_mode)
+    categories, display_names = get_available_lessons()
 
     category_options = ['<option value="">-- Select category --</option>']
     for cat_name in categories.keys():
@@ -6736,11 +6802,12 @@ except ImportError:
 @app.get("/", response_class=HTMLResponse)
 async def landing_page(request: Request):
     """Landing page: search home, plus dev tools for admin or local dev."""
-    user = _auth_mod.get_current_user(request)
+    user = _set_source_access(request)
     search_mode = _is_search_site(request)
+    su_active = _is_superuser_active(request, user)
     show_dev = not IS_LAMBDA or (user and user.get("tier") == "admin")
     if not show_dev:
-        return HTMLResponse(build_search_home_html(user=user))
+        return HTMLResponse(build_search_home_html(user=user, superuser_active=su_active))
     # Show dev tool links for admin or local dev
     links = []
     if _book_available:
@@ -6753,7 +6820,7 @@ async def landing_page(request: Request):
     links.append('<li><a href="/pass0b-lang">Pass 0b Language</a></li>')
     dev_section = f"""<h2 style="margin-top:40px; border-top:1px solid #e0e0e0; padding-top:20px;">Dev Tools</h2>
 <ul style="list-style:none; padding:0;">{"".join(links)}</ul>"""
-    return HTMLResponse(build_search_home_html(extra_html=dev_section, user=user))
+    return HTMLResponse(build_search_home_html(extra_html=dev_section, user=user, superuser_active=su_active))
 
 
 # Lambda handler
