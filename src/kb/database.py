@@ -142,6 +142,7 @@ CREATE TABLE IF NOT EXISTS search_query_log (
     specificity_band TEXT,
     specificity_gap REAL,
     top_results JSONB,
+    user_id INTEGER,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -980,17 +981,17 @@ class Database:
 
     def log_search_query(self, query: str, result_count: int = None,
                          specificity_band: str = None, specificity_gap: float = None,
-                         top_results: list = None):
+                         top_results: list = None, user_id: int = None):
         """Log a search query for usage analysis."""
         top_json = json.dumps(top_results) if top_results else None
         with self.get_cursor() as cursor:
             cursor.execute(
                 """
                 INSERT INTO search_query_log
-                    (query, result_count, specificity_band, specificity_gap, top_results)
-                VALUES (%s, %s, %s, %s, %s::jsonb)
+                    (query, result_count, specificity_band, specificity_gap, top_results, user_id)
+                VALUES (%s, %s, %s, %s, %s::jsonb, %s)
                 """,
-                (query, result_count, specificity_band, specificity_gap, top_json),
+                (query, result_count, specificity_band, specificity_gap, top_json, user_id),
             )
 
     # User management

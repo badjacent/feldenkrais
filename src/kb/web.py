@@ -143,19 +143,75 @@ async def _lifespan(app):
 app = FastAPI(title="Feldenkrais Lesson Analyzer", lifespan=_lifespan)
 
 
+def _login_page_html() -> str:
+    return """<!DOCTYPE html>
+<html>
+<head>
+    <title>Sign In — Feldenkrais Lesson Search</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex; justify-content: center; align-items: center;
+            min-height: 100vh; margin: 0; background: #fafafa; color: #333;
+        }
+        .login-card {
+            text-align: center; padding: 48px 40px;
+            background: #fff; border: 1px solid #e0e0e0; border-radius: 12px;
+            max-width: 380px; width: 100%;
+        }
+        h1 { font-size: 1.4em; margin: 0 0 8px; }
+        .subtitle { color: #666; font-size: 0.9em; margin-bottom: 32px; }
+        .btn {
+            display: block; width: 100%; padding: 12px; margin-bottom: 12px;
+            font-size: 15px; font-weight: 600; border-radius: 6px;
+            text-decoration: none; text-align: center; cursor: pointer;
+        }
+        .btn-github {
+            background: #24292e; color: #fff; border: none;
+        }
+        .btn-github:hover { background: #1a1e22; }
+        .btn-google {
+            background: #fff; color: #333; border: 1px solid #dadce0;
+        }
+        .btn-google:hover { background: #f8f9fa; }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <h1>Feldenkrais Lesson Search</h1>
+        <p class="subtitle">Sign in to continue</p>
+        <a class="btn btn-github" href="/auth/github/login">Sign in with GitHub</a>
+        <a class="btn btn-google" href="/auth/google/login">Sign in with Google</a>
+    </div>
+</body>
+</html>"""
+
+
 @app.middleware("http")
 async def search_site_guard(request: Request, call_next):
-    """On the search subdomain, only allow lesson pages and API endpoints."""
+    """Auth gate + search subdomain path restrictions."""
+    path = request.url.path
+
+    # Auth routes are always accessible
+    if path.startswith("/auth/"):
+        return await call_next(request)
+
+    # On Lambda, require login for all pages
+    if IS_LAMBDA and not _auth_mod.get_current_user(request):
+        return HTMLResponse(_login_page_html())
+
+    # On search subdomain, restrict to allowed paths
     if _is_search_site(request):
-        path = request.url.path
         allowed = (
             path == "/"
             or path.startswith("/lesson/")
             or path.startswith("/api/")
-            or path.startswith("/auth/")
         )
         if not allowed:
             return RedirectResponse("/")
+
     return await call_next(request)
 
 
@@ -1219,7 +1275,7 @@ async def api_search(request: Request, query: str = Form("")):
         for r in results:
             r["similarity"] = round(r["similarity"], 4)
             if r.get("summary_text"):
-                r["snippet"] = r["summary_text"][:200]
+                r["snippet"] = r["summary_text"][:400]
             del r["summary_text"]
             # Build category key for player link (matches get_available_lessons format)
             src_id = r.pop("source_id", None)
@@ -1234,12 +1290,14 @@ async def api_search(request: Request, query: str = Form("")):
                 {"doc_id": r.get("document_id"), "title": r.get("title"), "similarity": r.get("similarity")}
                 for r in results[:5]
             ]
+            _user = _auth_mod.get_current_user(request)
             _db.log_search_query(
                 query=query,
                 result_count=len(results),
                 specificity_band=band,
                 specificity_gap=gap,
                 top_results=top5,
+                user_id=_user["user_id"] if _user else None,
             )
         except Exception:
             pass  # never break search for logging
@@ -3135,26 +3193,17 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None) -> st
     # Count total lessons across all categories
     total_lessons = sum(len(lessons) for lessons in categories.values())
 
-    # Build flat lesson list HTML (no details/summary wrapper)
-    lesson_items = ""
+    # Build lesson list HTML grouped by source
+    lesson_list_html = ""
     for cat_key, lessons in categories.items():
+        source_name = html_mod.escape(display_names.get(cat_key, cat_key))
+        lesson_list_html += f'<h3 class="source-header">{source_name} ({len(lessons)})</h3>\n'
+        lesson_list_html += '<ul class="lesson-list">\n'
         for lesson in lessons:
             doc_id, display_name = lesson[0], lesson[1]
             esc_name = html_mod.escape(display_name)
-            lesson_items += f'<li><a href="/lesson/{html_mod.escape(doc_id)}">{esc_name}</a></li>\n'
-
-    # Featured lessons: curated picks for demo
-    featured = [
-        ("795b4039", "Simple Floor Clock", "A classic pelvic clock with clear structure"),
-        ("b2cee454", "Activating the Arches", "Detailed foot work from sitting to standing"),
-        ("80b3c160", "Pelvic Floor Connections", "Rich position tracking and somatic detail"),
-    ]
-    featured_html = ""
-    for fid, ftitle, fdesc in featured:
-        esc_fid = html_mod.escape(fid)
-        esc_ftitle = html_mod.escape(ftitle)
-        esc_fdesc = html_mod.escape(fdesc)
-        featured_html += f'<a class="featured-card" href="/lesson/{esc_fid}"><strong>{esc_ftitle}</strong><span>{esc_fdesc}</span></a>\n'
+            lesson_list_html += f'<li><a href="/lesson/{html_mod.escape(doc_id)}">{esc_name}</a></li>\n'
+        lesson_list_html += '</ul>\n'
 
     return f"""<!DOCTYPE html>
 <html>
@@ -3178,22 +3227,17 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None) -> st
         }}
         .example-queries a:hover {{ text-decoration: underline; }}
 
-        /* Featured lessons */
-        .featured-row {{
-            display: flex; gap: 12px; margin-bottom: 28px;
+        /* Suggested searches */
+        .suggested-searches {{
+            display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px;
         }}
-        .featured-card {{
-            flex: 1; padding: 14px 16px; background: #fff;
-            border: 1px solid #e0e0e0; border-radius: 8px;
-            text-decoration: none; color: #333;
-            transition: border-color 0.15s, box-shadow 0.15s;
-            display: flex; flex-direction: column; gap: 4px;
+        .suggested-searches a {{
+            padding: 6px 14px; background: #fff; border: 1px solid #e0e0e0;
+            border-radius: 16px; font-size: 0.85em; color: #007bff;
+            text-decoration: none; cursor: pointer;
+            transition: border-color 0.15s, background 0.15s;
         }}
-        .featured-card:hover {{
-            border-color: #007bff; box-shadow: 0 2px 8px rgba(0,123,255,0.1);
-        }}
-        .featured-card strong {{ color: #007bff; font-size: 0.95em; }}
-        .featured-card span {{ color: #666; font-size: 0.82em; }}
+        .suggested-searches a:hover {{ border-color: #007bff; background: #f0f7ff; }}
 
         /* Search */
         .search-box {{
@@ -3224,6 +3268,7 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None) -> st
 
         /* Browse */
         h2 {{ font-size: 1.15em; color: #444; margin-top: 32px; margin-bottom: 12px; }}
+        .source-header {{ font-size: 1em; color: #555; margin-top: 24px; margin-bottom: 4px; }}
         .lesson-list {{ list-style: none; padding: 0; margin: 4px 0 0 0; }}
         .lesson-list li {{ padding: 4px 0 4px 16px; }}
         .lesson-list li a {{ color: #007bff; text-decoration: none; }}
@@ -3243,19 +3288,18 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None) -> st
                onkeydown="if(event.key==='Enter'){{event.preventDefault();searchLessons();}}">
         <button type="button" id="search-btn" onclick="searchLessons()">Search</button>
     </div>
-    <div class="example-queries">Try:
-        <a onclick="tryQuery(this)">lessons for freeing the shoulders</a> &middot;
-        <a onclick="tryQuery(this)">rolling patterns</a> &middot;
+    <div class="suggested-searches">
+        <a onclick="tryQuery(this)">freeing the shoulders</a>
+        <a onclick="tryQuery(this)">rolling patterns</a>
         <a onclick="tryQuery(this)">pelvic clock</a>
+        <a onclick="tryQuery(this)">breathing and ribs</a>
+        <a onclick="tryQuery(this)">jaw and tongue</a>
+        <a onclick="tryQuery(this)">standing balance</a>
     </div>
     <div id="search-results"></div>
 
-    <div class="featured-row">
-        {featured_html}
-    </div>
-
     <h2>All Lessons ({total_lessons})</h2>
-    <ul class="lesson-list">{lesson_items}</ul>
+    {lesson_list_html}
 
     <script>
         async function searchLessons() {{
@@ -3367,6 +3411,9 @@ def build_lesson_page_html(document_id: str, user: dict | None = None) -> str:
         }}
         .tab-bar button:hover {{ color: #333; }}
         .tab-bar button.active {{ color: #007bff; border-bottom-color: #007bff; }}
+        .tab-intro {{
+            font-size: 0.85em; color: #888; margin-bottom: 12px; font-style: italic;
+        }}
 
         /* Word-level annotation colors */
         .word-directive {{ border-bottom: 2px solid rgba(97, 97, 97, 0.3); }}
@@ -3559,18 +3606,9 @@ def build_lesson_page_html(document_id: str, user: dict | None = None) -> str:
 
         /* Chat panel */
         .chat-panel {{
-            margin-top: 24px; border: 1px solid #e0e0e0; border-radius: 10px;
+            border: 1px solid #e0e0e0; border-radius: 10px;
             background: #fff; overflow: hidden;
         }}
-        .chat-header {{
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 10px 16px; background: #f5f5f5; border-bottom: 1px solid #e0e0e0;
-            cursor: pointer; user-select: none;
-        }}
-        .chat-header h3 {{ margin: 0; font-size: 0.95em; color: #333; }}
-        .chat-header .toggle {{ font-size: 0.8em; color: #888; }}
-        .chat-body {{ display: none; }}
-        .chat-body.open {{ display: block; }}
         .chat-context-config {{
             padding: 8px 16px; background: #fafafa; border-bottom: 1px solid #eee;
             font-size: 0.8em; color: #555;
@@ -3620,23 +3658,16 @@ def build_lesson_page_html(document_id: str, user: dict | None = None) -> str:
     <div id="no-audio-msg" style="display:none; color: #888; font-size: 0.9em; font-style: italic; margin-bottom: 12px;">Audio unavailable for this lesson.</div>
 
     <div class="tab-bar" id="tab-bar">
-        <button class="active" onclick="switchTab('condensed')">Outline</button>
-        <button onclick="switchTab('steps')">Cards</button>
+        <button class="active" onclick="switchTab('steps')">Cards</button>
+        <button onclick="switchTab('condensed')">Outline</button>
+        <button onclick="switchTab('chat')">Chat</button>
         <button onclick="switchTab('detailed')">Detailed</button>
     </div>
-    <div style="font-size: 0.75em; color: #999; margin-bottom: 8px;">Analysis generated automatically from transcript</div>
-
     <div id="status-area"></div>
 
-    <!-- Condensed/Outline tab (default) -->
-    <div id="tab-condensed">
-        <div id="condensed-setting-card"></div>
-        <div id="condensed-group-cards"></div>
-        <div class="progress-bar" id="condensed-progress"></div>
-    </div>
-
-    <!-- Steps/Cards tab -->
-    <div id="tab-steps" style="display:none;">
+    <!-- Steps/Cards tab (default) -->
+    <div id="tab-steps">
+        <div class="tab-intro">Walk through the lesson one step at a time, with biomechanical and language analysis for each movement.</div>
         <div class="card" id="card">
             <div class="card-placeholder" id="card-placeholder">
                 <span class="spinner-inline"></span> Loading analysis...
@@ -3671,23 +3702,18 @@ def build_lesson_page_html(document_id: str, user: dict | None = None) -> str:
         <div class="progress-bar" id="progress-bar"></div>
     </div>
 
-    <!-- Annotated tab -->
-    <div id="tab-annotated" style="display:none;">
-        <div class="progress-bar" id="annotated-progress"></div>
+    <!-- Condensed/Outline tab -->
+    <div id="tab-condensed" style="display:none;">
+        <div class="tab-intro">A condensed overview of the lesson's arc, themes, and movement groups at a glance.</div>
+        <div id="condensed-setting-card"></div>
+        <div id="condensed-group-cards"></div>
+        <div class="progress-bar" id="condensed-progress"></div>
     </div>
 
-    <!-- Detailed tab -->
-    <div id="tab-detailed" style="display:none;">
-        <div id="detailed-content"></div>
-    </div>
-
-    <!-- Lesson Chat panel -->
-    <div class="chat-panel" id="chat-panel">
-        <div class="chat-header" onclick="toggleChat()">
-            <h3>Ask about this lesson</h3>
-            <span class="toggle" id="chat-toggle">&#9660; Close</span>
-        </div>
-        <div class="chat-body open" id="chat-body">
+    <!-- Chat tab -->
+    <div id="tab-chat" style="display:none;">
+        <div class="tab-intro">Ask questions about the lesson and get answers grounded in the transcript and analysis.</div>
+        <div class="chat-panel">
             <div class="chat-context-config" id="chat-context-config">
                 <strong>Context:</strong>
                 <label><input type="checkbox" id="ctx-lesson-text" checked> Lesson text</label>
@@ -3709,6 +3735,17 @@ def build_lesson_page_html(document_id: str, user: dict | None = None) -> str:
         </div>
     </div>
 
+    <!-- Annotated tab (hidden) -->
+    <div id="tab-annotated" style="display:none;">
+        <div class="progress-bar" id="annotated-progress"></div>
+    </div>
+
+    <!-- Detailed tab -->
+    <div id="tab-detailed" style="display:none;">
+        <div class="tab-intro">The full structured analysis output with all fields, tables, and raw data.</div>
+        <div id="detailed-content"></div>
+    </div>
+
 <script>
 // ── Constants ──
 const DOCUMENT_ID = '{esc_id}';
@@ -3728,27 +3765,30 @@ let _stepAnnotationCache = {{}};
 let condensedLoaded = false;
 let annotatedLoaded = false;
 let detailedRendered = false;
-let activeTab = 'condensed';
+let activeTab = 'steps';
 
 const audio = document.getElementById('audio-player');
 const audioContainer = document.getElementById('audio-container');
 
 // ── Tab switching ──
 
+const TAB_ORDER = ['steps', 'condensed', 'chat', 'detailed'];
+
 function switchTab(tab) {{
     activeTab = tab;
     document.querySelectorAll('.tab-bar button').forEach((b, i) => {{
-        b.classList.toggle('active', ['condensed','steps','detailed'][i] === tab);
+        b.classList.toggle('active', TAB_ORDER[i] === tab);
     }});
-    document.getElementById('tab-steps').style.display = tab === 'steps' ? '' : 'none';
-    document.getElementById('tab-condensed').style.display = tab === 'condensed' ? '' : 'none';
-    document.getElementById('tab-annotated').style.display = tab === 'annotated' ? '' : 'none';
-    document.getElementById('tab-detailed').style.display = tab === 'detailed' ? '' : 'none';
+    TAB_ORDER.concat(['annotated']).forEach(t => {{
+        const el = document.getElementById('tab-' + t);
+        if (el) el.style.display = t === tab ? '' : 'none';
+    }});
 
     if (tab === 'condensed' && !condensedLoaded) loadCondensed();
     if (tab === 'annotated' && !annotatedLoaded) loadAnnotated();
     if (tab === 'detailed' && !detailedRendered && analysisData) renderDetailed();
     if (tab === 'steps' && analysisData) renderCard();
+    if (tab === 'chat') document.getElementById('chat-input').focus();
 }}
 
 // ── Card rendering ──
@@ -4371,19 +4411,6 @@ function clearStatus() {{
 
 // ── Chat ──
 
-function toggleChat() {{
-    const body = document.getElementById('chat-body');
-    const toggle = document.getElementById('chat-toggle');
-    if (body.classList.contains('open')) {{
-        body.classList.remove('open');
-        toggle.innerHTML = '&#9654; Open';
-    }} else {{
-        body.classList.add('open');
-        toggle.innerHTML = '&#9660; Close';
-        document.getElementById('chat-input').focus();
-    }}
-}}
-
 function getChatContextConfig() {{
     return {{
         lesson_text: document.getElementById('ctx-lesson-text').checked,
@@ -4517,7 +4544,7 @@ async function sendChat() {{
         const langTime = data.cached_lang ? 'cached' : (data.elapsed_lang || '?') + 's';
         document.getElementById('progress-bar').textContent =
             data.steps.length + ' steps | Somatic: ' + somTime + ', Language: ' + langTime;
-        // Outline is the default tab — load it now
+        // Pre-load condensed data for Outline tab
         if (!condensedLoaded) loadCondensed();
     }} catch (e) {{
         showStatus('Error loading lesson: ' + e.message, true);
@@ -4767,18 +4794,9 @@ def build_pass0b_player_html(search_mode: bool = False) -> str:
 
         /* Chat panel */
         .chat-panel {{
-            margin-top: 24px; border: 1px solid #e0e0e0; border-radius: 10px;
+            border: 1px solid #e0e0e0; border-radius: 10px;
             background: #fff; overflow: hidden;
         }}
-        .chat-header {{
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 10px 16px; background: #f5f5f5; border-bottom: 1px solid #e0e0e0;
-            cursor: pointer; user-select: none;
-        }}
-        .chat-header h3 {{ margin: 0; font-size: 0.95em; color: #333; }}
-        .chat-header .toggle {{ font-size: 0.8em; color: #888; }}
-        .chat-body {{ display: none; }}
-        .chat-body.open {{ display: block; }}
         .chat-context-config {{
             padding: 8px 16px; background: #fafafa; border-bottom: 1px solid #eee;
             font-size: 0.8em; color: #555;
