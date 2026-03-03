@@ -3,9 +3,9 @@ Run the pass0b condensed pipeline on multiple lessons in parallel,
 then build embeddings from the condensed summaries.
 
 Usage:
-    .venv/bin/python src/kb/run_pipeline_batch.py --dry-run --limit 50
-    .venv/bin/python src/kb/run_pipeline_batch.py --apply --limit 50
-    .venv/bin/python src/kb/run_pipeline_batch.py --apply --limit 50 --workers 3
+    .venv/bin/python src/kb/pipeline/batch.py --dry-run --limit 50
+    .venv/bin/python src/kb/pipeline/batch.py --apply --limit 50
+    .venv/bin/python src/kb/pipeline/batch.py --apply --limit 50 --workers 3
 """
 
 import argparse
@@ -16,6 +16,9 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+
+# Add src/kb to path for infrastructure imports
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # Force unbuffered output + tee to log file
 _log_file = None
@@ -46,7 +49,7 @@ import llm_config
 import analysis
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
-DATA_DIR = Path(__file__).parent.parent.parent / "data"
+DATA_DIR = Path(__file__).resolve().parent.parent.parent.parent / "data"
 
 _db = Database(DATABASE_URL) if DATABASE_URL else None
 if _db:

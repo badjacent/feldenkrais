@@ -696,6 +696,10 @@ data "archive_file" "web_lambda" {
     content  = file("${path.module}/../src/kb/config.py")
     filename = "config.py"
   }
+  source {
+    content  = file("${path.module}/../src/kb/auth.py")
+    filename = "auth.py"
+  }
   # Pass 0b data files (prompts and schemas)
   source {
     content  = file("${path.module}/../data/pass_0b.md")
@@ -762,6 +766,15 @@ data "archive_file" "web_lambda" {
     content  = file("${path.module}/data/explore.schema.json")
     filename = "data/explore.schema.json"
   }
+  # Pipeline package (required by web.py)
+  source {
+    content  = file("${path.module}/../src/kb/pipeline/__init__.py")
+    filename = "pipeline/__init__.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/pipeline/engine.py")
+    filename = "pipeline/engine.py"
+  }
   # Note: Lesson files are loaded dynamically from S3 or user input
 }
 
@@ -789,6 +802,11 @@ resource "aws_lambda_function" "web" {
       AWS_LAMBDA_FUNCTION_NAME_SELF = "feldenkrais-web-${var.environment}"
       DEPLOY_SHA                    = var.deploy_sha
       SEARCH_DOMAIN                 = var.search_domain_name
+      GITHUB_CLIENT_ID              = var.github_client_id
+      GITHUB_CLIENT_SECRET          = var.github_client_secret
+      GOOGLE_OAUTH_CLIENT_ID        = var.google_oauth_client_id
+      GOOGLE_OAUTH_CLIENT_SECRET    = var.google_oauth_client_secret
+      COOKIE_SECRET                 = var.cookie_secret
     }
   }
 }

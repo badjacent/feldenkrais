@@ -5,25 +5,25 @@ analyzes failures, and iterates on the generation prompt.
 
 Usage:
     # Record baseline metrics (version 0 = current embeddings)
-    .venv/bin/python src/kb/search_iterate.py --baseline
+    .venv/bin/python src/kb/search/search_iterate.py --baseline
 
     # Dry-run: generate 3 search docs and print them
-    .venv/bin/python src/kb/search_iterate.py --step generate --version 1 --limit 3
+    .venv/bin/python src/kb/search/search_iterate.py --step generate --version 1 --limit 3
 
     # Single step
-    .venv/bin/python src/kb/search_iterate.py --step generate --version 1
-    .venv/bin/python src/kb/search_iterate.py --step embed --version 1
-    .venv/bin/python src/kb/search_iterate.py --step eval --version 1
-    .venv/bin/python src/kb/search_iterate.py --step analyze --version 1
+    .venv/bin/python src/kb/search/search_iterate.py --step generate --version 1
+    .venv/bin/python src/kb/search/search_iterate.py --step embed --version 1
+    .venv/bin/python src/kb/search/search_iterate.py --step eval --version 1
+    .venv/bin/python src/kb/search/search_iterate.py --step analyze --version 1
 
     # Full auto loop
-    .venv/bin/python src/kb/search_iterate.py --auto --max-iterations 5
+    .venv/bin/python src/kb/search/search_iterate.py --auto --max-iterations 5
 
     # View history
-    .venv/bin/python src/kb/search_iterate.py --history
+    .venv/bin/python src/kb/search/search_iterate.py --history
 
     # Compare versions
-    .venv/bin/python src/kb/search_iterate.py --compare 0 1
+    .venv/bin/python src/kb/search/search_iterate.py --compare 0 1
 """
 
 import argparse
@@ -34,6 +34,9 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+
+# Add src/kb to path for infrastructure imports
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from dotenv import load_dotenv
 
@@ -50,7 +53,7 @@ from search_doc import (
     PROMPTS_DIR,
 )
 
-DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
+DATA_DIR = Path(__file__).resolve().parent.parent.parent.parent / "data"
 ITERATIONS_DIR = DATA_DIR / "search_iterations"
 
 

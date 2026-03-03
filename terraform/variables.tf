@@ -80,3 +80,38 @@ variable "search_domain_name" {
   type        = string
   default     = ""
 }
+
+variable "github_client_id" {
+  description = "GitHub OAuth app client ID"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "github_client_secret" {
+  description = "GitHub OAuth app client secret"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "google_oauth_client_id" {
+  description = "Google OAuth client ID"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "google_oauth_client_secret" {
+  description = "Google OAuth client secret"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "cookie_secret" {
+  description = "Secret key for signing session cookies"
+  type        = string
+  sensitive   = true
+  default     = ""
+}

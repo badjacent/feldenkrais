@@ -46,7 +46,7 @@ For each step, provide:
 - Segment IDs from the source text (e.g., `[45, 46, 47]` if the step covers segments 45-47)
 - Brief note on the pedagogical purpose (optional)
 - Whether this step is a **return to home position** (`is_home: true`)
-- **Starting position**: the body position at the start of this step. Use plain language like "lying on back", "lying on back with knees standing", "lying on left side", "sitting", "standing", "hands and knees". Track position changes throughout the lesson — when the teacher says "roll onto your side" or "come to sitting", subsequent steps have the new position.
+- **Starting position**: a detailed description of the body configuration at the start of this step. Include the base posture (lying on back, sitting, standing, hands and knees, etc.) AND any specific limb arrangements that have been instructed — for example: "lying on back, knees standing, right hand holding left foot", "lying on left side, left arm extended overhead, right hand on floor in front of chest", "sitting cross-legged, hands on knees". Track position changes throughout the lesson — when the teacher says "roll onto your side" or "put your hand on your foot", update subsequent steps to reflect the new configuration. Be specific about arm positions (extended, bent, overhead, out to the side), hand placements (on foot, behind head, interlaced), and leg arrangements (crossed, one knee bent, feet standing).
 
 ### Home Position
 

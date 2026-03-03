@@ -152,10 +152,38 @@ async def search_site_guard(request: Request, call_next):
             path == "/"
             or path.startswith("/lesson/")
             or path.startswith("/api/")
+            or path.startswith("/auth/")
         )
         if not allowed:
             return RedirectResponse("/")
     return await call_next(request)
+
+
+# ── Auth routes ──────────────────────────────────────────────────────
+
+@app.get("/auth/github/login")
+async def auth_github_login(request: Request):
+    return _auth_mod.github_login_redirect(request)
+
+
+@app.get("/auth/github/callback")
+async def auth_github_callback(request: Request):
+    return _auth_mod.github_oauth_callback(request, _db)
+
+
+@app.get("/auth/google/login")
+async def auth_google_login(request: Request):
+    return _auth_mod.google_login_redirect(request)
+
+
+@app.get("/auth/google/callback")
+async def auth_google_callback(request: Request):
+    return _auth_mod.google_oauth_callback(request, _db)
+
+
+@app.get("/auth/logout")
+async def auth_logout(request: Request):
+    return _auth_mod.logout(request)
 
 
 # Paths - handle both local development and Lambda environment
@@ -188,6 +216,7 @@ if DATABASE_URL:
     _db.initialize()
 
 # ── Initialize extracted modules ──────────────────────────────────────────
+import auth as _auth_mod
 import cache_helpers
 import llm_config
 import analysis as _analysis_mod
@@ -322,11 +351,14 @@ def align_pass0_with_whisper(pass_0_result: dict, whisper_segments: list) -> Non
 
 
 
-def get_available_lessons() -> tuple[dict[str, list[tuple[str, str]]], dict[str, str]]:
+def get_available_lessons(public_only: bool = False) -> tuple[dict[str, list[tuple[str, str]]], dict[str, str]]:
     """Get categories and their display names.
 
     DB documents with category_name set are grouped under that name (override).
     DB documents without category_name are grouped under their source's category.
+
+    Args:
+        public_only: If True, only include sources marked as public.
 
     Returns (categories_dict, display_names_dict).
     - categories: category_key -> [(lesson_key, display_name)]
@@ -339,6 +371,8 @@ def get_available_lessons() -> tuple[dict[str, list[tuple[str, str]]], dict[str,
     # 1. Database sources (if available)
     if _db:
         try:
+            prev_public = _db.public_only
+            _db.public_only = public_only
             for src in _db.get_lesson_categories():
                 source_display = (
                     src.get("source_category_name")
@@ -380,6 +414,8 @@ def get_available_lessons() -> tuple[dict[str, list[tuple[str, str]]], dict[str,
         except Exception as e:
             import logging
             logging.getLogger(__name__).error("get_available_lessons DB error: %s", e)
+        finally:
+            _db.public_only = prev_public
 
     # Skip empty sources (e.g. OTHER with no documents)
     categories = {k: v for k, v in categories.items() if v}
@@ -1146,23 +1182,27 @@ def build_pipeline_html() -> str:
 
 
 @app.get("/pipeline", response_class=HTMLResponse)
-async def pipeline_dashboard():
+async def pipeline_dashboard(request: Request):
     """Pipeline monitoring dashboard — ingestion + book generation."""
+    if IS_LAMBDA and _auth_mod.get_access_tier(request) != "admin":
+        return RedirectResponse("/")
     return build_pipeline_html()
 
 
 # --- Pass 0b Experiment ---
 
 @app.post("/api/search")
-async def api_search(query: str = Form("")):
+async def api_search(request: Request, query: str = Form("")):
     """Semantic search over lesson embeddings."""
     query = query.strip()
     if not query:
         return JSONResponse({"error": "Empty query"}, status_code=400)
     if not _db:
         return JSONResponse({"error": "No database connection"}, status_code=500)
+    prev_public = _db.public_only
     try:
         from llm import get_embeddings
+        _db.public_only = _auth_mod.get_access_tier(request) != "admin"
         embeddings, _ = get_embeddings([query], task_type="RETRIEVAL_QUERY")
         results = _db.search_lessons(embeddings[0], limit=10)
         sims = [r["similarity"] for r in results]
@@ -1206,6 +1246,8 @@ async def api_search(query: str = Form("")):
         return JSONResponse({"results": results, "specificity": {"gap": gap, "band": band}})
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+    finally:
+        _db.public_only = prev_public
 
 
 @app.get("/pass0b", response_class=HTMLResponse)
@@ -1823,9 +1865,10 @@ async def pass0b_lang_page(request: Request):
 
 
 @app.get("/lesson/{document_id}", response_class=HTMLResponse)
-async def lesson_detail_page(document_id: str):
+async def lesson_detail_page(request: Request, document_id: str):
     """Unified lesson detail page."""
-    return HTMLResponse(build_lesson_page_html(document_id))
+    user = _auth_mod.get_current_user(request)
+    return HTMLResponse(build_lesson_page_html(document_id, user=user))
 
 
 @app.post("/api/pass0b-lang/clear-cache")
@@ -2651,7 +2694,7 @@ def render_pass0b_combined_result(somatic_result: dict, lang_result: dict) -> st
 
 def build_pass0b_html(search_mode: bool = False) -> str:
     """Build the Pass 0b experiment page HTML."""
-    categories, display_names = get_available_lessons()
+    categories, display_names = get_available_lessons(public_only=search_mode)
 
     category_options = ['<option value="">-- Select category --</option>']
     for cat_name in categories.keys():
@@ -3070,26 +3113,48 @@ def build_pass0b_html(search_mode: bool = False) -> str:
 """
 
 
-def build_search_home_html() -> str:
-    """Build the search subdomain home page with search box and browse-by-source."""
-    categories, display_names = get_available_lessons()
+def _auth_bar_html(user: dict | None) -> str:
+    """Render login/logout link for the top-right corner."""
+    if user:
+        login = html_mod.escape(user.get("login", ""))
+        return f'<div class="auth-bar">{login} &middot; <a href="/auth/logout">Log out</a></div>'
+    return '<div class="auth-bar">Sign in with <a href="/auth/github/login">GitHub</a> or <a href="/auth/google/login">Google</a></div>'
 
-    # Build browse-by-source HTML
-    browse_html = ""
-    first = True
+
+_AUTH_BAR_CSS = """
+        .auth-bar { text-align: right; font-size: 0.85em; color: #666; margin-bottom: 8px; }
+        .auth-bar a { color: #007bff; text-decoration: none; }
+        .auth-bar a:hover { text-decoration: underline; }
+"""
+
+
+def build_search_home_html(extra_html: str = "", user: dict | None = None) -> str:
+    """Build the search subdomain home page with search box and browse-by-source."""
+    categories, display_names = get_available_lessons(public_only=True)
+
+    # Count total lessons across all categories
+    total_lessons = sum(len(lessons) for lessons in categories.values())
+
+    # Build flat lesson list HTML (no details/summary wrapper)
+    lesson_items = ""
     for cat_key, lessons in categories.items():
-        cat_display = html_mod.escape(display_names.get(cat_key, cat_key))
-        open_attr = " open" if first else ""
-        first = False
-        items = ""
         for lesson in lessons:
             doc_id, display_name = lesson[0], lesson[1]
             esc_name = html_mod.escape(display_name)
-            items += f'<li><a href="/lesson/{html_mod.escape(doc_id)}">{esc_name}</a></li>\n'
-        browse_html += f"""<details{open_attr}>
-<summary>{cat_display} <span class="count">({len(lessons)})</span></summary>
-<ul>{items}</ul>
-</details>\n"""
+            lesson_items += f'<li><a href="/lesson/{html_mod.escape(doc_id)}">{esc_name}</a></li>\n'
+
+    # Featured lessons: curated picks for demo
+    featured = [
+        ("795b4039", "Simple Floor Clock", "A classic pelvic clock with clear structure"),
+        ("b2cee454", "Activating the Arches", "Detailed foot work from sitting to standing"),
+        ("80b3c160", "Pelvic Floor Connections", "Rich position tracking and somatic detail"),
+    ]
+    featured_html = ""
+    for fid, ftitle, fdesc in featured:
+        esc_fid = html_mod.escape(fid)
+        esc_ftitle = html_mod.escape(ftitle)
+        esc_fdesc = html_mod.escape(fdesc)
+        featured_html += f'<a class="featured-card" href="/lesson/{esc_fid}"><strong>{esc_ftitle}</strong><span>{esc_fdesc}</span></a>\n'
 
     return f"""<!DOCTYPE html>
 <html>
@@ -3104,11 +3169,35 @@ def build_search_home_html() -> str:
             line-height: 1.6; background: #fafafa; color: #333;
         }}
         h1 {{ margin-bottom: 4px; }}
-        .subtitle {{ color: #666; font-size: 0.95em; margin-bottom: 24px; }}
+        .subtitle {{ color: #555; font-size: 0.95em; margin-bottom: 24px; line-height: 1.5; }}
+
+        /* Example queries */
+        .example-queries {{ font-size: 0.85em; color: #888; margin-bottom: 24px; }}
+        .example-queries a {{
+            color: #007bff; text-decoration: none; cursor: pointer;
+        }}
+        .example-queries a:hover {{ text-decoration: underline; }}
+
+        /* Featured lessons */
+        .featured-row {{
+            display: flex; gap: 12px; margin-bottom: 28px;
+        }}
+        .featured-card {{
+            flex: 1; padding: 14px 16px; background: #fff;
+            border: 1px solid #e0e0e0; border-radius: 8px;
+            text-decoration: none; color: #333;
+            transition: border-color 0.15s, box-shadow 0.15s;
+            display: flex; flex-direction: column; gap: 4px;
+        }}
+        .featured-card:hover {{
+            border-color: #007bff; box-shadow: 0 2px 8px rgba(0,123,255,0.1);
+        }}
+        .featured-card strong {{ color: #007bff; font-size: 0.95em; }}
+        .featured-card span {{ color: #666; font-size: 0.82em; }}
 
         /* Search */
         .search-box {{
-            display: flex; gap: 8px; margin-bottom: 16px;
+            display: flex; gap: 8px; margin-bottom: 8px;
         }}
         .search-box input {{
             flex: 1; padding: 10px 14px; font-size: 15px;
@@ -3129,35 +3218,44 @@ def build_search_home_html() -> str:
         .search-result a {{ color: #007bff; text-decoration: none; font-weight: 500; }}
         .search-result a:hover {{ text-decoration: underline; }}
         .search-result .snippet {{ color: #666; font-size: 0.85em; margin-top: 2px; }}
+        .search-result .view-link {{ color: #007bff; font-size: 0.82em; text-decoration: none; }}
+        .search-result .view-link:hover {{ text-decoration: underline; }}
         .search-result .similarity {{ color: #28a745; font-size: 0.85em; white-space: nowrap; }}
 
         /* Browse */
         h2 {{ font-size: 1.15em; color: #444; margin-top: 32px; margin-bottom: 12px; }}
-        details {{ margin-bottom: 8px; }}
-        summary {{
-            cursor: pointer; font-weight: 600; font-size: 1em; color: #333;
-            padding: 8px 0;
-        }}
-        summary .count {{ color: #888; font-weight: 400; }}
-        details ul {{ list-style: none; padding: 0; margin: 4px 0 0 0; }}
-        details li {{ padding: 4px 0 4px 16px; }}
-        details li a {{ color: #007bff; text-decoration: none; }}
-        details li a:hover {{ text-decoration: underline; }}
+        .lesson-list {{ list-style: none; padding: 0; margin: 4px 0 0 0; }}
+        .lesson-list li {{ padding: 4px 0 4px 16px; }}
+        .lesson-list li a {{ color: #007bff; text-decoration: none; }}
+        .lesson-list li a:hover {{ text-decoration: underline; }}
+{_AUTH_BAR_CSS}
     </style>
 </head>
 <body>
-    <h1>Feldenkrais Lessons</h1>
-    <p class="subtitle">Search or browse lessons</p>
+    {_auth_bar_html(user)}
+    <h1>Feldenkrais Lesson Search</h1>
+    <p class="subtitle">Search across {total_lessons} lessons by meaning, not keywords.<br>
+    Each lesson is automatically analyzed into movement steps, body positions,
+    and somatic cues &mdash; search runs against that structured understanding.</p>
 
     <div class="search-box">
         <input type="text" id="search-query" placeholder="e.g. rolling pelvis, eyes and head..."
                onkeydown="if(event.key==='Enter'){{event.preventDefault();searchLessons();}}">
         <button type="button" id="search-btn" onclick="searchLessons()">Search</button>
     </div>
+    <div class="example-queries">Try:
+        <a onclick="tryQuery(this)">lessons for freeing the shoulders</a> &middot;
+        <a onclick="tryQuery(this)">rolling patterns</a> &middot;
+        <a onclick="tryQuery(this)">pelvic clock</a>
+    </div>
     <div id="search-results"></div>
 
-    <h2>Browse by Source</h2>
-    {browse_html}
+    <div class="featured-row">
+        {featured_html}
+    </div>
+
+    <h2>All Lessons ({total_lessons})</h2>
+    <ul class="lesson-list">{lesson_items}</ul>
 
     <script>
         async function searchLessons() {{
@@ -3201,6 +3299,7 @@ def build_search_home_html() -> str:
                         html += '<span class="similarity">'+pct+'%</span>';
                         html += '</div>';
                         if (snippet) html += '<div class="snippet">'+snippet+'</div>';
+                        html += '<a class="view-link" href="/lesson/'+r.document_id+'">View lesson &rarr;</a>';
                         html += '</div>';
                     }});
                     resultsDiv.innerHTML = html;
@@ -3214,17 +3313,24 @@ def build_search_home_html() -> str:
             btn.textContent = 'Search';
         }}
 
+        function tryQuery(el) {{
+            const input = document.getElementById('search-query');
+            input.value = el.textContent;
+            searchLessons();
+        }}
+
         function escHtml(str) {{
             const d = document.createElement('div');
             d.textContent = str;
             return d.innerHTML;
         }}
     </script>
+    {extra_html}
 </body>
 </html>"""
 
 
-def build_lesson_page_html(document_id: str) -> str:
+def build_lesson_page_html(document_id: str, user: dict | None = None) -> str:
     """Build the unified lesson detail page HTML."""
     esc_id = html_mod.escape(document_id)
 
@@ -3241,6 +3347,7 @@ def build_lesson_page_html(document_id: str) -> str:
             line-height: 1.6; background: #fafafa;
         }}
         h1 {{ color: #333; margin-bottom: 2px; font-size: 1.4em; }}
+{_AUTH_BAR_CSS}
         .source-line {{ color: #666; font-size: 0.9em; margin-bottom: 16px; }}
         .source-line a {{ color: #007bff; text-decoration: none; }}
         .source-line a:hover {{ text-decoration: underline; }}
@@ -3498,6 +3605,7 @@ def build_lesson_page_html(document_id: str) -> str:
     </style>
 </head>
 <body>
+    {_auth_bar_html(user)}
     <div class="back-link"><a href="/">&larr; All lessons</a></div>
     <h1 id="lesson-title">Loading...</h1>
     <div class="source-line" id="source-line"></div>
@@ -3516,6 +3624,7 @@ def build_lesson_page_html(document_id: str) -> str:
         <button onclick="switchTab('steps')">Cards</button>
         <button onclick="switchTab('detailed')">Detailed</button>
     </div>
+    <div style="font-size: 0.75em; color: #999; margin-bottom: 8px;">Analysis generated automatically from transcript</div>
 
     <div id="status-area"></div>
 
@@ -3575,10 +3684,10 @@ def build_lesson_page_html(document_id: str) -> str:
     <!-- Lesson Chat panel -->
     <div class="chat-panel" id="chat-panel">
         <div class="chat-header" onclick="toggleChat()">
-            <h3>Lesson Chat</h3>
-            <span class="toggle" id="chat-toggle">&#9654; Open</span>
+            <h3>Ask about this lesson</h3>
+            <span class="toggle" id="chat-toggle">&#9660; Close</span>
         </div>
-        <div class="chat-body" id="chat-body">
+        <div class="chat-body open" id="chat-body">
             <div class="chat-context-config" id="chat-context-config">
                 <strong>Context:</strong>
                 <label><input type="checkbox" id="ctx-lesson-text" checked> Lesson text</label>
@@ -3589,7 +3698,9 @@ def build_lesson_page_html(document_id: str) -> str:
                 <label><input type="checkbox" id="ctx-language-summary" checked> Language summary</label>
                 <label><input type="checkbox" id="ctx-condensed" checked> Condensed cards</label>
             </div>
-            <div class="chat-messages" id="chat-messages"></div>
+            <div class="chat-messages" id="chat-messages">
+                <div class="chat-hint" id="chat-hint" style="color:#999; font-size:0.85em; font-style:italic; padding:8px 0;">Try: &ldquo;What muscles are activated in step 3?&rdquo; or &ldquo;How does the teacher use imagery?&rdquo;</div>
+            </div>
             <div class="chat-input-row">
                 <input type="text" id="chat-input" placeholder="Ask about this lesson..."
                        onkeydown="if(event.key==='Enter') sendChat()">
@@ -4298,6 +4409,9 @@ async function sendChat() {{
     const input = document.getElementById('chat-input');
     const text = input.value.trim();
     if (!text) return;
+    // Remove hint on first message
+    const hint = document.getElementById('chat-hint');
+    if (hint) hint.remove();
     if (!lessonText) {{
         chatMessages.push({{role: 'error', content: 'No lesson text available.'}});
         renderChatMessages();
@@ -4418,7 +4532,7 @@ async function sendChat() {{
 
 def build_pass0b_player_html(search_mode: bool = False) -> str:
     """Build the Pass 0b audio player page HTML."""
-    categories, display_names = get_available_lessons()
+    categories, display_names = get_available_lessons(public_only=search_mode)
 
     category_options = ['<option value="">-- Select category --</option>']
     for cat_name in categories.keys():
@@ -5752,7 +5866,7 @@ async function sendChat() {{
 
 def build_pass0b_lang_html(search_mode: bool = False) -> str:
     """Build the Pass 0b-lang language analysis page HTML."""
-    categories, display_names = get_available_lessons()
+    categories, display_names = get_available_lessons(public_only=search_mode)
 
     category_options = ['<option value="">-- Select category --</option>']
     for cat_name in categories.keys():
@@ -6144,8 +6258,10 @@ async def auto_analyze(request: Request):
 
 
 @app.post("/admin/clear-cache")
-async def admin_clear_cache():
+async def admin_clear_cache(request: Request):
     """Clear all cached analysis results."""
+    if IS_LAMBDA and _auth_mod.get_access_tier(request) != "admin":
+        return JSONResponse({"error": "forbidden"}, status_code=403)
     if _db:
         count = _db.clear_cache()
     else:
@@ -6154,8 +6270,10 @@ async def admin_clear_cache():
 
 
 @app.get("/admin/cache")
-async def admin_cache_list():
+async def admin_cache_list(request: Request):
     """List cached entries in database."""
+    if IS_LAMBDA and _auth_mod.get_access_tier(request) != "admin":
+        return JSONResponse({"error": "forbidden"}, status_code=403)
     if _db:
         entries = _db.list_cache()
         for e in entries:
@@ -6196,10 +6314,13 @@ except ImportError:
 
 @app.get("/", response_class=HTMLResponse)
 async def landing_page(request: Request):
-    """Simple landing page with links to available sections."""
+    """Landing page: search home, plus dev tools for admin or local dev."""
+    user = _auth_mod.get_current_user(request)
     search_mode = _is_search_site(request)
-    if search_mode:
-        return HTMLResponse(build_search_home_html())
+    show_dev = not IS_LAMBDA or (user and user.get("tier") == "admin")
+    if not show_dev:
+        return HTMLResponse(build_search_home_html(user=user))
+    # Show dev tool links for admin or local dev
     links = []
     if _book_available:
         links.append('<li><a href="/book"><strong>Book</strong></a></li>')
@@ -6209,14 +6330,9 @@ async def landing_page(request: Request):
     links.append('<li><a href="/pass0b">Pass 0b Analysis</a></li>')
     links.append('<li><a href="/pass0b-player">Pass 0b Player</a></li>')
     links.append('<li><a href="/pass0b-lang">Pass 0b Language</a></li>')
-    title = "Feldenkrais Lesson Analysis"
-    return f"""<!DOCTYPE html><html><head><title>{title}</title>
-<style>body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-max-width: 800px; margin: 0 auto; padding: 40px; line-height: 1.6; }}
-h1 {{ color: #333; }} a {{ color: #007bff; text-decoration: none; }}
-a:hover {{ text-decoration: underline; }} li {{ margin: 8px 0; }}</style>
-</head><body><h1>{title}</h1>
-<ul>{"".join(links)}</ul></body></html>"""
+    dev_section = f"""<h2 style="margin-top:40px; border-top:1px solid #e0e0e0; padding-top:20px;">Dev Tools</h2>
+<ul style="list-style:none; padding:0;">{"".join(links)}</ul>"""
+    return HTMLResponse(build_search_home_html(extra_html=dev_section, user=user))
 
 
 # Lambda handler

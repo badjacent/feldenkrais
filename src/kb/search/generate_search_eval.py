@@ -6,10 +6,10 @@ search queries (action, body, experience) that a student might use to find
 that lesson. Output is a JSON file usable by run_search_eval.py.
 
 Usage:
-    .venv/bin/python src/kb/generate_search_eval.py --dry-run
-    .venv/bin/python src/kb/generate_search_eval.py --apply
-    .venv/bin/python src/kb/generate_search_eval.py --apply --limit 10
-    .venv/bin/python src/kb/generate_search_eval.py --apply --force
+    .venv/bin/python src/kb/search/generate_search_eval.py --dry-run
+    .venv/bin/python src/kb/search/generate_search_eval.py --apply
+    .venv/bin/python src/kb/search/generate_search_eval.py --apply --limit 10
+    .venv/bin/python src/kb/search/generate_search_eval.py --apply --force
 """
 
 import argparse
@@ -18,6 +18,10 @@ import os
 import sys
 import time
 from datetime import datetime, timezone
+from pathlib import Path
+
+# Add src/kb to path for infrastructure imports
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from dotenv import load_dotenv
 
@@ -26,7 +30,7 @@ load_dotenv()
 from database import Database
 from llm import LLM
 
-DEFAULT_OUTPUT = os.path.join(os.path.dirname(__file__), "..", "..", "data", "search_eval_questions.json")
+DEFAULT_OUTPUT = os.path.join(os.path.dirname(__file__), "..", "..", "..", "data", "search_eval_questions.json")
 
 SYSTEM_PROMPT = """You generate realistic search queries that a Feldenkrais student or teacher might type to find a specific lesson. You will be given a condensed analysis card for one lesson. Generate exactly 3 search queries, one for each category:
 

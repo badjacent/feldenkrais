@@ -15,6 +15,9 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
+# Add src/kb to path for infrastructure imports
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -22,7 +25,7 @@ load_dotenv()
 from database import Database
 from llm import LLM, get_embeddings
 
-DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
+DATA_DIR = Path(__file__).resolve().parent.parent.parent.parent / "data"
 PROMPTS_DIR = DATA_DIR / "search_doc_prompts"
 
 

@@ -7,9 +7,9 @@ relevance ranking to answer: how close is cheap RAG to what an expensive LLM
 would consider the best results?
 
 Usage:
-    .venv/bin/python src/kb/judge_search_eval.py --sample 5 --verbose
-    .venv/bin/python src/kb/judge_search_eval.py --sample 50
-    .venv/bin/python src/kb/judge_search_eval.py --sample 50 --output data/judge_results.json
+    .venv/bin/python src/kb/search/judge_search_eval.py --sample 5 --verbose
+    .venv/bin/python src/kb/search/judge_search_eval.py --sample 50
+    .venv/bin/python src/kb/search/judge_search_eval.py --sample 50 --output data/judge_results.json
 """
 
 import argparse
@@ -22,6 +22,10 @@ import sys
 import time
 from collections import defaultdict
 from datetime import datetime, timezone
+from pathlib import Path
+
+# Add src/kb to path for infrastructure imports
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from dotenv import load_dotenv
 
@@ -31,7 +35,7 @@ from database import Database
 from generate_search_eval import format_condensed_for_prompt
 from llm import LLM, get_embeddings
 
-DEFAULT_QUESTIONS = os.path.join(os.path.dirname(__file__), "..", "..", "data", "search_eval_questions.json")
+DEFAULT_QUESTIONS = os.path.join(os.path.dirname(__file__), "..", "..", "..", "data", "search_eval_questions.json")
 
 JUDGE_SYSTEM_PROMPT = """You are evaluating whether a Feldenkrais lesson is relevant to a search query.
 

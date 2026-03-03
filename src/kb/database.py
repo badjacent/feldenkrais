@@ -144,6 +144,37 @@ CREATE TABLE IF NOT EXISTS search_query_log (
     top_results JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    provider TEXT NOT NULL,
+    provider_id TEXT NOT NULL,
+    login TEXT NOT NULL,
+    name TEXT,
+    email TEXT,
+    avatar_url TEXT,
+    tier TEXT NOT NULL DEFAULT 'user',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    last_login_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (provider, provider_id)
+);
+
+CREATE TABLE IF NOT EXISTS allowed_logins (
+    login TEXT PRIMARY KEY,
+    added_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS user_source_access (
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    source_id INTEGER NOT NULL REFERENCES document_source(id) ON DELETE CASCADE,
+    PRIMARY KEY (user_id, source_id)
+);
+
+CREATE TABLE IF NOT EXISTS user_beta_access (
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    feature TEXT NOT NULL,
+    PRIMARY KEY (user_id, feature)
+);
 """
 
 INDEXES = """
@@ -961,6 +992,61 @@ class Database:
                 """,
                 (query, result_count, specificity_band, specificity_gap, top_json),
             )
+
+    # User management
+
+    def upsert_user(self, provider: str, provider_id: str, login: str,
+                    name: str = None, email: str = None,
+                    avatar_url: str = None) -> dict:
+        """Insert or update an OAuth user. Returns the user dict."""
+        with self.get_cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO users (provider, provider_id, login, name, email, avatar_url)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (provider, provider_id) DO UPDATE SET
+                    login = EXCLUDED.login,
+                    name = EXCLUDED.name,
+                    email = EXCLUDED.email,
+                    avatar_url = EXCLUDED.avatar_url,
+                    last_login_at = NOW()
+                RETURNING id, provider, provider_id, login, name, email,
+                          avatar_url, tier, created_at, last_login_at
+                """,
+                (provider, provider_id, login, name, email, avatar_url),
+            )
+            return dict(cursor.fetchone())
+
+    def get_user(self, user_id: int) -> dict | None:
+        """Get a user by id. Returns dict or None."""
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def is_login_allowed(self, login: str) -> bool:
+        """Check if a GitHub login is on the allowlist."""
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute("SELECT 1 FROM allowed_logins WHERE login = %s", (login,))
+            return cursor.fetchone() is not None
+
+    def get_user_source_ids(self, user_id: int) -> list[int]:
+        """Return source_ids this user has been granted access to."""
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute(
+                "SELECT source_id FROM user_source_access WHERE user_id = %s",
+                (user_id,),
+            )
+            return [row["source_id"] for row in cursor.fetchall()]
+
+    def get_user_beta_features(self, user_id: int) -> list[str]:
+        """Return beta feature names this user has access to."""
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute(
+                "SELECT feature FROM user_beta_access WHERE user_id = %s",
+                (user_id,),
+            )
+            return [row["feature"] for row in cursor.fetchall()]
 
     def log_event(self, event: str, title: str = None,
                   document_id: str = None, detail: dict = None):

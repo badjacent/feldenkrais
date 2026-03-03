@@ -29,13 +29,13 @@ Specificity bands (derived 2026-03-02 from 1788 eval queries):
     The monotonic increase confirms the metric tracks real specificity.
 
 Usage:
-    .venv/bin/python src/kb/run_search_eval.py
-    .venv/bin/python src/kb/run_search_eval.py --verbose
-    .venv/bin/python src/kb/run_search_eval.py --failures-only
-    .venv/bin/python src/kb/run_search_eval.py --top-k 20
-    .venv/bin/python src/kb/run_search_eval.py --band high
-    .venv/bin/python src/kb/run_search_eval.py --band mid-high,high
-    .venv/bin/python src/kb/run_search_eval.py --output results.json
+    .venv/bin/python src/kb/search/run_search_eval.py
+    .venv/bin/python src/kb/search/run_search_eval.py --verbose
+    .venv/bin/python src/kb/search/run_search_eval.py --failures-only
+    .venv/bin/python src/kb/search/run_search_eval.py --top-k 20
+    .venv/bin/python src/kb/search/run_search_eval.py --band high
+    .venv/bin/python src/kb/search/run_search_eval.py --band mid-high,high
+    .venv/bin/python src/kb/search/run_search_eval.py --output results.json
 """
 
 import argparse
@@ -44,6 +44,10 @@ import os
 import sys
 import time
 from datetime import datetime, timezone
+from pathlib import Path
+
+# Add src/kb to path for infrastructure imports
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from dotenv import load_dotenv
 
@@ -52,7 +56,7 @@ load_dotenv()
 from database import Database
 from llm import get_embeddings
 
-DEFAULT_QUESTIONS = os.path.join(os.path.dirname(__file__), "..", "..", "data", "search_eval_questions.json")
+DEFAULT_QUESTIONS = os.path.join(os.path.dirname(__file__), "..", "..", "..", "data", "search_eval_questions.json")
 
 # Specificity band thresholds (gap = rank1_similarity - rank5_similarity).
 # Derived 2026-03-02 from percentiles of 1788 eval queries against the full

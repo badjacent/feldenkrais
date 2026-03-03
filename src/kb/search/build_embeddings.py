@@ -5,16 +5,20 @@ Reads condensed analysis cards from the cache, builds summary text,
 embeds via Gemini, and stores in the lesson_embedding table (pgvector).
 
 Usage:
-    .venv/bin/python src/kb/build_embeddings.py --dry-run
-    .venv/bin/python src/kb/build_embeddings.py --apply
-    .venv/bin/python src/kb/build_embeddings.py --apply --force
-    .venv/bin/python src/kb/build_embeddings.py --apply --limit 5
+    .venv/bin/python src/kb/search/build_embeddings.py --dry-run
+    .venv/bin/python src/kb/search/build_embeddings.py --apply
+    .venv/bin/python src/kb/search/build_embeddings.py --apply --force
+    .venv/bin/python src/kb/search/build_embeddings.py --apply --limit 5
 """
 
 import argparse
 import hashlib
 import os
 import sys
+from pathlib import Path
+
+# Add src/kb to path for infrastructure imports
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from dotenv import load_dotenv
 

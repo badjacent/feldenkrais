@@ -51,11 +51,21 @@ See `terraform/OPERATIONS.md` for:
 
 ## Key Files
 
-- `src/kb/llm.py` - LLM abstraction (Anthropic, OpenAI, Gemini)
-- `src/kb/schemas.py` - Pydantic models for structured analysis output
-- `src/kb/web.py` - FastAPI web interface for lesson analysis
+### Infrastructure (at src/kb/ root — imported everywhere)
+- `src/kb/web.py` - FastAPI web interface (Lambda handler)
 - `src/kb/analysis.py` - Analysis engine (pass0b, pass_a, frameworks)
+- `src/kb/database.py` - PostgreSQL, cache, embeddings, pgvector
+- `src/kb/llm.py` - LLM abstraction (Anthropic, OpenAI, Gemini)
 - `src/kb/agent.py` - Agent with LLM-powered transform layer
+- `src/kb/auth.py` - OAuth + cookie sessions
+
+### Workflow packages (in subdirectories)
+- `src/kb/pipeline/` - DAG engine (`engine.py`) + batch CLI (`batch.py`)
+- `src/kb/ingest/` - Lambda handlers: loader, transcribe, youtube, scraper + load_fp_free CLI
+- `src/kb/search/` - Embeddings, search eval, judge, search doc iteration
+- `src/kb/ops/` - Monitoring scripts
+
+### Private submodule
 - `private/src/web_book.py` - Book/analyzer routes (private)
 - `private/src/pipeline_graph.py` - Book pipeline DAG (private)
 
