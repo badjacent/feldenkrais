@@ -3655,7 +3655,16 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
             cursor: pointer; transition: background 0.15s;
         }}
         .chat-suggestion:hover {{ background: #e3f2fd; border-color: #90caf9; }}
+        .chat-msg.assistant {{ white-space: normal; }}
+        .chat-msg.assistant p {{ margin: 0 0 8px 0; }}
+        .chat-msg.assistant p:last-child {{ margin-bottom: 0; }}
+        .chat-msg.assistant ul, .chat-msg.assistant ol {{ margin: 4px 0 8px 0; padding-left: 20px; }}
+        .chat-msg.assistant li {{ margin-bottom: 2px; }}
+        .chat-msg.assistant strong {{ font-weight: 600; }}
+        .chat-msg.assistant code {{ background: #e8e8e8; padding: 1px 4px; border-radius: 3px; font-size: 0.9em; }}
+        .chat-msg.assistant h1, .chat-msg.assistant h2, .chat-msg.assistant h3 {{ font-size: 1em; font-weight: 600; margin: 8px 0 4px 0; }}
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
     {_auth_bar_html(user)}
@@ -4450,7 +4459,8 @@ function renderChatMessages() {{
     const container = document.getElementById('chat-messages');
     container.innerHTML = chatMessages.map(m => {{
         const cls = m.role === 'user' ? 'user' : (m.role === 'error' ? 'error' : 'assistant');
-        return '<div class="chat-msg ' + cls + '">' + escHtml(m.content) + '</div>';
+        const content = m.role === 'assistant' ? marked.parse(m.content) : escHtml(m.content);
+        return '<div class="chat-msg ' + cls + '">' + content + '</div>';
     }}).join('');
     container.scrollTop = container.scrollHeight;
 }}
@@ -4865,7 +4875,16 @@ def build_pass0b_player_html(search_mode: bool = False) -> str:
         }}
         .chat-input-row button:hover {{ background: #1565c0; }}
         .chat-input-row button:disabled {{ opacity: 0.5; cursor: not-allowed; }}
+        .chat-msg.assistant {{ white-space: normal; }}
+        .chat-msg.assistant p {{ margin: 0 0 8px 0; }}
+        .chat-msg.assistant p:last-child {{ margin-bottom: 0; }}
+        .chat-msg.assistant ul, .chat-msg.assistant ol {{ margin: 4px 0 8px 0; padding-left: 20px; }}
+        .chat-msg.assistant li {{ margin-bottom: 2px; }}
+        .chat-msg.assistant strong {{ font-weight: 600; }}
+        .chat-msg.assistant code {{ background: #e8e8e8; padding: 1px 4px; border-radius: 3px; font-size: 0.9em; }}
+        .chat-msg.assistant h1, .chat-msg.assistant h2, .chat-msg.assistant h3 {{ font-size: 1em; font-weight: 600; margin: 8px 0 4px 0; }}
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
     <h1>Pass 0b: Audio Player</h1>
@@ -5826,7 +5845,8 @@ function renderChatMessages() {{
     const container = document.getElementById('chat-messages');
     container.innerHTML = chatMessages.map(m => {{
         const cls = m.role === 'user' ? 'user' : (m.role === 'error' ? 'error' : 'assistant');
-        return '<div class="chat-msg ' + cls + '">' + escHtml(m.content) + '</div>';
+        const content = m.role === 'assistant' ? marked.parse(m.content) : escHtml(m.content);
+        return '<div class="chat-msg ' + cls + '">' + content + '</div>';
     }}).join('');
     container.scrollTop = container.scrollHeight;
 }}
