@@ -2,33 +2,23 @@
 
 ## The Idea
 
-You have lesson recordings or transcripts. This system turns them into a searchable, browsable library where practitioners and students can find lessons by *meaning* — not just keywords — and explore each lesson's structure in detail.
+You have lesson recordings, videos, or transcripts. This system turns them into a searchable, browsable library where practitioners and students can find lessons by *meaning* — not just keywords — and explore each lesson's structure. This matters because finding the right lesson is hard: libraries grow, titles are cryptic, and students often know what they're looking for in terms of movement or sensation but not by name.
 
 ## How Lessons Get In
 
-You provide a lesson transcript (text file or audio recording). The system handles the rest:
+You provide a lesson transcript, audio recording, or video. The system handles the rest:
 
-1. **Audio transcription** — If you provide audio, the system transcribes it with word-level timestamps, so the text stays synced to playback.
+1. **Transcription** — If you provide audio, the system transcribes it with word-level timestamps, so the text stays synced to playback. If you have video, we extract the audio from the video.
 
-2. **Structural analysis** — An LLM reads the transcript and breaks it into movement steps: what position the student is in, what they're asked to do, how steps group into phases. This is the backbone everything else builds on.
+2. **Analysis** — An LLM reads the transcript and breaks it into movement steps, grouping them into phases. Each step is analyzed for body mechanics — which muscles activate, what's being differentiated, how force travels through the body, where attention is directed. The teaching voice itself is also analyzed: imagery, attention cues, and where inquiry happens in the language.
 
-3. **Somatic analysis** — Each step gets analyzed for body mechanics: which muscles activate, what's being differentiated, how force travels through the body, where attention is directed.
-
-4. **Language analysis** — The teaching voice itself is analyzed: how the teacher uses imagery, what kinds of attention cues appear, where inquiry and exploration happen in the language.
-
-5. **Concept extraction** — A separate pass reads the full analysis and produces a detailed physical description of the lesson: what positions the student gets into, what movements they perform, what body connections the lesson develops, and what makes it distinctive. This becomes the lesson's search identity — the document that search queries match against.
+3. **Search optimization** — A final extraction step reads the full analysis and predigests it to optimize for the capabilities of modern semantic search. It produces a detailed physical description of the lesson focused on what makes it distinctive, along with structured concept tags for body regions, movement patterns, and teaching strategies. Despite the apparent depth of processing, this step costs pennies per lesson and only needs to be done once.
 
 All of this runs automatically. Results are cached, so you only pay the LLM cost once per lesson.
 
 ## Search
 
-Search uses multiple layers of understanding, not raw text. When someone searches for "lessons that work with the eyes and turning," the system matches against:
-
-- **Distinctive reports** — detailed physical descriptions of what happens in each lesson, written specifically to differentiate lessons from one another
-- **Structural summaries** — condensed movement patterns, body regions, and teaching themes from the step-level analysis
-- **Concept tags** — body regions, movement patterns, positions, and teaching strategies extracted from each lesson
-
-The system combines these signals using a cascade approach: when one method produces a confident match, it trusts that result. When the match is ambiguous, it blends signals from multiple methods to find the best answer. A specificity indicator shows whether the query is broad ("many lessons match equally") or precise ("strong match, clear winner").
+Search combines what is distinctive about a lesson, its movement structure, and the concepts it contains to generate a ranking. When the system is confident in a match, it commits to it; when results are ambiguous, it blends signals from multiple methods. Results include a specificity indicator showing whether a query is broad or precise.
 
 ## Lesson Pages
 
@@ -52,18 +42,7 @@ The chat has access to the transcript, structural breakdown, somatic analysis, a
 
 ## Search Quality
 
-Search quality is measured against a curated evaluation set: 129 queries across 43 diverse lessons, covering three query types (action, body, experience). The system is evaluated on precision (does the right lesson appear at rank 1?) and recall (does it appear at all in the top 10?).
-
-Current performance on the evaluation set:
-
-| Metric | Value |
-|--------|-------|
-| P@1 (correct lesson is the top result) | 44.2% |
-| P@5 (correct lesson in top 5) | 81.4% |
-| MRR (mean reciprocal rank) | 0.601 |
-| Found anywhere in top 10 | 90.7% |
-
-The cascade approach outperforms any single search method. Parameters are optimized via grid search and re-tuned as the lesson library and evaluation set grow.
+We evaluated several ranking strategies — embedding search against lesson summaries, embedding search against distinctive reports, direct concept tag matching, and various weighted combinations — then optimized a hybrid approach using a systematic grid search over parameters. This isn't guesswork: strategies are scored against a curated question set and the best combination is selected automatically. Running search queries is very cheap — less than a penny per hundred requests. As the library grows and real user queries accumulate, both the evaluation data and the search quality improve.
 
 ## What This Means for Lesson Site Owners
 
@@ -73,4 +52,3 @@ The cascade approach outperforms any single search method. Parameters are optimi
 - **It's automatic.** No manual tagging or annotation. Add a transcript, and the system does the rest.
 - **Search improves with scale.** The concept extraction and evaluation framework mean search quality is measurable and tunable as the library grows.
 
-Currently running with 67 public lessons. The system handles new lessons in minutes.
