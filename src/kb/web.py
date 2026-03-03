@@ -3496,25 +3496,25 @@ def build_lesson_page_html(document_id: str, user: dict | None = None) -> str:
         /* Card */
         .card {{
             background: #fff; border: 1px solid #e0e0e0; border-radius: 10px;
-            padding: 24px; margin-bottom: 16px;
+            padding: 16px 20px; margin-bottom: 12px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-            min-height: 300px; display: flex; flex-direction: column;
+            min-height: 250px; display: flex; flex-direction: column;
         }}
         .card-placeholder {{
             color: #999; text-align: center; padding: 60px 20px; font-size: 1.1em;
         }}
         .group-label {{
-            font-size: 0.8em; font-weight: 700; color: #1a73e8;
-            text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;
+            font-size: 0.75em; font-weight: 700; color: #1a73e8;
+            text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;
         }}
-        .step-header {{ font-size: 1.15em; font-weight: 700; color: #222; margin-bottom: 2px; }}
-        .step-time {{ color: #888; font-weight: 400; font-size: 0.85em; }}
+        .step-header {{ font-size: 1.05em; font-weight: 700; color: #222; margin-bottom: 1px; }}
+        .step-time {{ color: #888; font-weight: 400; font-size: 0.82em; }}
         .step-position {{
-            color: #888; font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.3px;
-            margin-bottom: 4px;
+            color: #888; font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.3px;
+            margin-bottom: 2px;
         }}
         .step-instruction {{
-            color: #444; font-style: italic; margin-bottom: 12px; font-size: 0.95em;
+            color: #444; font-style: italic; margin-bottom: 8px; font-size: 0.88em; line-height: 1.4;
         }}
 
         /* Segment highlight box */
@@ -3527,14 +3527,14 @@ def build_lesson_page_html(document_id: str, user: dict | None = None) -> str:
         .segment-box strong {{ transition: color 0.15s; }}
 
         /* Analysis sections */
-        .analysis-section {{ margin-bottom: 12px; }}
+        .analysis-section {{ margin-bottom: 8px; }}
         .analysis-section h4 {{
-            font-size: 0.8em; font-weight: 700; color: #666;
+            font-size: 0.75em; font-weight: 700; color: #666;
             text-transform: uppercase; letter-spacing: 0.5px;
-            margin: 0 0 6px 0; padding-bottom: 4px; border-bottom: 1px solid #eee;
+            margin: 0 0 4px 0; padding-bottom: 3px; border-bottom: 1px solid #eee;
         }}
-        .analysis-section ul {{ margin: 0; padding-left: 18px; font-size: 0.9em; color: #444; }}
-        .analysis-section li {{ margin-bottom: 4px; }}
+        .analysis-section ul {{ margin: 0; padding-left: 16px; font-size: 0.84em; color: #444; line-height: 1.4; }}
+        .analysis-section li {{ margin-bottom: 2px; }}
         .analysis-section strong {{ color: #333; }}
 
         /* Transcript segments */
@@ -3667,7 +3667,7 @@ def build_lesson_page_html(document_id: str, user: dict | None = None) -> str:
 
     <!-- Steps/Cards tab (default) -->
     <div id="tab-steps">
-        <div class="tab-intro">Walk through the lesson one step at a time, with biomechanical and language analysis for each movement.</div>
+        <div class="tab-intro">Walk through the lesson one step at a time, with biomechanical and language analysis for each movement. The active card syncs with the transcript as you scroll or listen.</div>
         <div class="card" id="card">
             <div class="card-placeholder" id="card-placeholder">
                 <span class="spinner-inline"></span> Loading analysis...
