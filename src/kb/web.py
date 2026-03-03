@@ -3172,11 +3172,11 @@ def build_pass0b_html(search_mode: bool = False) -> str:
 
 
 def _auth_bar_html(user: dict | None) -> str:
-    """Render login/logout link for the top-right corner."""
+    """Render logout link for logged-in users."""
     if user:
         login = html_mod.escape(user.get("login", ""))
         return f'<div class="auth-bar">{login} &middot; <a href="/auth/logout">Log out</a></div>'
-    return '<div class="auth-bar">Sign in with <a href="/auth/github/login">GitHub</a> or <a href="/auth/google/login">Google</a></div>'
+    return ''
 
 
 _AUTH_BAR_CSS = """
