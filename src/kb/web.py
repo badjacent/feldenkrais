@@ -1559,6 +1559,28 @@ async def api_lesson_info(document_id: str):
     return JSONResponse(info)
 
 
+@app.get("/api/lesson/{document_id}/concepts")
+async def api_lesson_concepts(document_id: str):
+    """Get concept extraction data for a lesson."""
+    if not _db:
+        return JSONResponse({"error": "No database connection"}, status_code=500)
+    try:
+        concepts = _db.get_lesson_concepts(document_id)
+        # Also get the cached concept extraction for summary/search terms
+        text = _db.get_document_transcription(document_id)
+        extra = {}
+        if text:
+            from cache_helpers import get_cache_key
+            cache_key = get_cache_key(text.strip() + ":pass_0b_concepts_v1")
+            cached = _db.get_cache(cache_key)
+            if cached:
+                extra["distinctive_summary"] = cached.get("distinctive_summary", "")
+                extra["search_terms"] = cached.get("search_terms", [])
+        return JSONResponse({"concepts": concepts, **extra})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 @app.get("/api/lesson/{category}/{filename}")
 async def api_lesson_text(category: str, filename: str):
     """Return lesson text for a given category and lesson key."""
@@ -1948,28 +1970,6 @@ async def lesson_detail_page(request: Request, document_id: str):
     """Unified lesson detail page."""
     user = _auth_mod.get_current_user(request)
     return HTMLResponse(build_lesson_page_html(document_id, user=user, search_mode=_is_search_site(request)))
-
-
-@app.get("/api/lesson/{document_id}/concepts")
-async def api_lesson_concepts(document_id: str):
-    """Get concept extraction data for a lesson."""
-    if not _db:
-        return JSONResponse({"error": "No database connection"}, status_code=500)
-    try:
-        concepts = _db.get_lesson_concepts(document_id)
-        # Also get the cached concept extraction for summary/search terms
-        text = _db.get_document_transcription(document_id)
-        extra = {}
-        if text:
-            from cache_helpers import get_cache_key
-            cache_key = get_cache_key(text.strip() + ":pass_0b_concepts_v1")
-            cached = _db.get_cache(cache_key)
-            if cached:
-                extra["distinctive_summary"] = cached.get("distinctive_summary", "")
-                extra["search_terms"] = cached.get("search_terms", [])
-        return JSONResponse({"concepts": concepts, **extra})
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 @app.post("/api/pass0b-lang/clear-cache")
