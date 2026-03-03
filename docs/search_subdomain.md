@@ -16,7 +16,7 @@ User → Route 53 (search.aionyourside.net)
      → Two pages: search home (/) and lesson detail (/lesson/{id})
 ```
 
-Single Lambda, single database, single embedding index. No separate deployment.
+Single Lambda, single database, multiple embedding indexes. No separate deployment.
 
 ## Pages
 
@@ -36,28 +36,73 @@ Single Lambda, single database, single embedding index. No separate deployment.
 ## Search Pipeline
 
 ### Indexing (offline)
-1. Pass0b analysis produces structured step-level biomechanical data (somatic, language, condensed)
-2. `build_summary_from_condensed()` flattens condensed cards into plain text: title + settings + group labels/actions/body descriptions
-3. Text → Gemini `gemini-embedding-001` (1536-dim, task_type=`RETRIEVAL_DOCUMENT`)
-4. Stored in `lesson_embedding` table (pgvector, HNSW index with cosine similarity)
-5. SHA-256 hash of summary text enables incremental rebuilds (skip unchanged)
+
+Two embedding indexes coexist in the `lesson_embedding` table, distinguished by a `method` column:
+
+**Default index** (`method='default'`) — all lessons:
+1. Pass0b condensed analysis flattened to plain text: title + settings + group labels/actions/body descriptions
+2. Text → Gemini `text-embedding-004` (1536-dim, task_type=`RETRIEVAL_DOCUMENT`)
 
 ```bash
-.venv/bin/python src/kb/build_embeddings.py --apply        # incremental
-.venv/bin/python src/kb/build_embeddings.py --apply --force # full rebuild
+.venv/bin/python src/kb/build_embeddings.py --apply
 ```
 
-### Query (real-time)
+**Concepts index** (`method='concepts'`) — lessons with concept extraction:
+1. Concept extraction pass (`pass_0b_concepts`) produces a 200-400 word distinctive report: position inventory, movement sequences, key body connections, what makes the lesson unique
+2. Also extracts structured concept tags (body regions, movement patterns, positions, teaching strategies) and search terms
+3. Distinctive report → Gemini embedding
+4. Concept tags stored in `lesson_concept` table for direct text matching
+
+```bash
+.venv/bin/python src/kb/search/run_concept_extraction.py --apply   # LLM extraction
+.venv/bin/python src/kb/search/build_concept_index.py --apply       # embed + populate tags
+```
+
+Both indexes use SHA-256 hashes for incremental rebuilds.
+
+### Query (real-time) — Cascade Search
+
+The default search method is **Combined**, a cascade that uses multiple signals:
+
 1. User query → Gemini embedding (task_type=`RETRIEVAL_QUERY`)
-2. pgvector `<=>` cosine distance search, top 10 results
-3. Specificity band calculated from gap between rank-1 and rank-5 similarity:
+2. Run both default and concepts embedding searches (top 20 each)
+3. Compute confidence gate: similarity gap (rank 1 - rank 5) from concepts results
+4. **If gap ≥ 0.07** ("confident"): the concepts index has a clear best match — use its results directly
+5. **If gap < 0.07** ("blended"): results are ambiguous — merge default + concepts via Reciprocal Rank Fusion (RRF) with 3x concepts weight
+6. Specificity band calculated from concepts similarity gap:
    - **low** (gap < 0.0167): many equally-good matches
    - **mid** (0.0167–0.0215): several good matches
    - **mid-high** (0.0215–0.0297): top result stands out
    - **high** (≥ 0.0297): clear best answer
-4. Query logged to `search_query_log` (query, result count, band, top-5 results)
+7. Query logged to `search_query_log`
 
-Thresholds calibrated on 1788 eval queries across 600 lessons.
+The cascade parameters (gate threshold, RRF weights) were optimized via grid search over 129 eval queries. The optimizer (`optimize_combined.py`) is re-run when the lesson set or eval questions change.
+
+### Search Methods Available
+
+Users can select from four methods via a dropdown:
+
+| Method | How it works |
+|--------|-------------|
+| **Combined** (default) | Cascade: confident → concepts alone, ambiguous → RRF blend |
+| **Standard** | Cosine search against default embeddings (all lessons) |
+| **Distinctive** | Cosine search against concept embeddings (extracted lessons) |
+| **Tag Match** | Direct text matching on concept tags, ranked by match count |
+
+### Evaluation
+
+Search quality is measured with `run_search_eval.py` against curated question sets. Current results on the 43-lesson FP Free reference set (129 queries):
+
+| Method | P@1 | P@5 | MRR | Found |
+|--------|-----|-----|-----|-------|
+| Standard | 34.1% | 58.9% | 0.451 | 72.9% |
+| Distinctive | 41.9% | 78.3% | 0.565 | 86.8% |
+| **Combined (cascade)** | **44.2%** | **81.4%** | **0.601** | **90.7%** |
+
+```bash
+.venv/bin/python src/kb/search/run_search_eval.py --questions data/search_eval_fp_free.json --method combined
+.venv/bin/python src/kb/search/optimize_combined.py --output data/combined_optimization.json
+```
 
 ## Routing & Middleware
 
@@ -85,17 +130,29 @@ Everything else redirects to `/`. Main site routes (pass0b, book, analyzer, expl
 ## Database Schema
 
 ```sql
--- Embedding storage (pgvector)
+-- Embedding storage (pgvector) — multi-method via composite PK
 CREATE TABLE lesson_embedding (
-    document_id UUID PRIMARY KEY REFERENCES document(id) ON DELETE CASCADE,
+    document_id UUID NOT NULL REFERENCES document(id) ON DELETE CASCADE,
+    method TEXT NOT NULL DEFAULT 'default',
     embedding vector(1536),
     summary_text TEXT,
     summary_hash TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (document_id, method)
 );
 CREATE INDEX idx_lesson_embedding_hnsw ON lesson_embedding
     USING hnsw (embedding vector_cosine_ops);
+
+-- Concept tags for tag-based search
+CREATE TABLE lesson_concept (
+    document_id UUID NOT NULL REFERENCES document(id) ON DELETE CASCADE,
+    category TEXT NOT NULL,
+    value TEXT NOT NULL,
+    PRIMARY KEY (document_id, category, value)
+);
+CREATE INDEX idx_lesson_concept_value ON lesson_concept (value);
+CREATE INDEX idx_lesson_concept_category ON lesson_concept (category, value);
 
 -- Query analytics
 CREATE TABLE search_query_log (
@@ -143,10 +200,14 @@ Lambda env var: `SEARCH_DOMAIN=search.aionyourside.net`
 
 | File | Role |
 |------|------|
-| `src/kb/web.py` | FastAPI app, all routes, page builders, middleware |
-| `src/kb/database.py` | DB layer, `search_lessons()`, `public_only` filtering |
-| `src/kb/build_embeddings.py` | Offline embedding builder CLI |
-| `src/kb/cache_helpers.py` | `build_summary_from_condensed()` |
+| `src/kb/web.py` | FastAPI app, all routes, cascade search, page builders |
+| `src/kb/database.py` | DB layer, `search_lessons()`, `search_by_concepts()`, `public_only` filtering |
+| `src/kb/analysis.py` | Analysis engine including `run_pass_0b_concepts()` |
+| `src/kb/build_embeddings.py` | Default embedding builder CLI |
+| `src/kb/search/run_concept_extraction.py` | Batch concept extraction (LLM pass) |
+| `src/kb/search/build_concept_index.py` | Concept embedding + tag table builder |
+| `src/kb/search/run_search_eval.py` | Search quality evaluation harness |
+| `src/kb/search/generate_search_eval.py` | LLM-generated eval questions from condensed cards |
+| `src/kb/search/optimize_combined.py` | Grid search optimizer for cascade parameters |
 | `src/kb/llm.py` | `get_embeddings()` — Gemini embedding API |
-| `src/kb/run_search_eval.py` | Search quality evaluation harness |
 | `terraform/main.tf` | Infrastructure (Route 53, ACM, API Gateway) |

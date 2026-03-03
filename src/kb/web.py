@@ -208,6 +208,7 @@ async def search_site_guard(request: Request, call_next):
             path == "/"
             or path.startswith("/lesson/")
             or path.startswith("/api/")
+            or path.startswith("/docs/")
         )
         if not allowed:
             return RedirectResponse("/")
@@ -1243,6 +1244,55 @@ async def pipeline_dashboard(request: Request):
     if IS_LAMBDA and _auth_mod.get_access_tier(request) != "admin":
         return RedirectResponse("/")
     return build_pipeline_html()
+
+
+# --- Docs ---
+
+DOCS_DIR = Path(__file__).parent.parent.parent / "docs" if not IS_LAMBDA else Path(__file__).parent / "docs"
+
+@app.get("/docs/{slug}", response_class=HTMLResponse)
+async def docs_page(request: Request, slug: str):
+    """Render a markdown doc file."""
+    # Sanitize slug — alphanumeric, hyphens, underscores only
+    if not all(c.isalnum() or c in "-_" for c in slug):
+        return HTMLResponse("Not found", status_code=404)
+    md_path = DOCS_DIR / f"{slug}.md"
+    if not md_path.exists():
+        return HTMLResponse("Not found", status_code=404)
+    md_content = md_path.read_text()
+    user = _auth_mod.get_current_user(request) if _auth_mod else None
+    auth_bar = _auth_bar_html(user)
+    return HTMLResponse(f"""<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Docs</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6; color: #333; }}
+    {_AUTH_BAR_CSS}
+    h1 {{ border-bottom: 2px solid #eee; padding-bottom: 8px; }}
+    h2 {{ border-bottom: 1px solid #eee; padding-bottom: 4px; margin-top: 2em; }}
+    table {{ border-collapse: collapse; width: 100%; margin: 1em 0; }}
+    th, td {{ border: 1px solid #ddd; padding: 8px 12px; text-align: left; }}
+    th {{ background: #f5f5f5; }}
+    code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }}
+    pre {{ background: #f5f5f5; padding: 12px; border-radius: 4px; overflow-x: auto; }}
+    pre code {{ background: none; padding: 0; }}
+    a {{ color: #007bff; text-decoration: none; }}
+    a:hover {{ text-decoration: underline; }}
+</style>
+</head><body>
+{auth_bar}
+<div id="content"></div>
+<script>
+    const md = {json.dumps(md_content)};
+    document.getElementById('content').innerHTML = marked.parse(md);
+    // Set page title from first h1
+    const h1 = document.querySelector('#content h1');
+    if (h1) document.title = h1.textContent;
+</script>
+</body></html>""")
 
 
 # --- Search ---
@@ -3319,7 +3369,7 @@ def _auth_bar_html(user: dict | None) -> str:
     """Render logout link for logged-in users."""
     if user:
         login = html_mod.escape(user.get("login", ""))
-        return f'<div class="auth-bar">{login} &middot; <a href="/auth/logout">Log out</a></div>'
+        return f'<div class="auth-bar">{login} &middot; <a href="/auth/logout">Log out</a> &middot; <a href="/docs/demo_overview">Docs</a></div>'
     return ''
 
 
