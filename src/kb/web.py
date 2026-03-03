@@ -3663,43 +3663,45 @@ function renderCard() {{
         document.getElementById('card-step-time').textContent = '';
     }}
     document.getElementById('card-instruction').textContent = step.instruction || '';
-    const posEl = document.getElementById('card-position');
-    if (step.starting_position) {{
-        posEl.textContent = step.starting_position;
-        posEl.style.display = '';
-    }} else {{
-        posEl.style.display = 'none';
-    }}
     updateSegmentForTime(audio.currentTime);
 
     // Somatic bullets
     const somDiv = document.getElementById('analysis-somatic');
     const somUl = document.getElementById('somatic-bullets');
     somUl.innerHTML = '';
-    if (step.somatic) {{
-        const fields = [
-            ['Intent', 'intent'], ['Differentiation', 'differentiation'],
-            ['Activation', 'activation'], ['Inhibition', 'inhibition'],
-            ['Transmission Route', 'transmission_route'], ['Ground Push', 'ground_push'],
-            ['Mechanical Directive', 'mechanical_directive'],
-            ['Attentional Cue', 'attentional_cue'],
-        ];
+    if (step.somatic || step.starting_position) {{
         let hasBullets = false;
-        fields.forEach(([label, key]) => {{
-            const val = step.somatic[key];
-            if (val && val.toLowerCase() !== 'none') {{
+        // Starting position as first bullet
+        if (step.starting_position) {{
+            const li = document.createElement('li');
+            li.innerHTML = '<strong>Position:</strong> ' + escHtml(step.starting_position);
+            somUl.appendChild(li);
+            hasBullets = true;
+        }}
+        if (step.somatic) {{
+            const fields = [
+                ['Intent', 'intent'], ['Differentiation', 'differentiation'],
+                ['Activation', 'activation'], ['Inhibition', 'inhibition'],
+                ['Transmission Route', 'transmission_route'], ['Ground Push', 'ground_push'],
+                ['Mechanical Directive', 'mechanical_directive'],
+                ['Attentional Cue', 'attentional_cue'],
+            ];
+            fields.forEach(([label, key]) => {{
+                const val = step.somatic[key];
+                if (val && val.toLowerCase() !== 'none') {{
+                    const li = document.createElement('li');
+                    li.innerHTML = '<strong>' + label + ':</strong> ' + escHtml(val);
+                    somUl.appendChild(li);
+                    hasBullets = true;
+                }}
+            }});
+            if (step.somatic.clarified) {{
                 const li = document.createElement('li');
-                li.innerHTML = '<strong>' + label + ':</strong> ' + escHtml(val);
-                somUl.appendChild(li);
+                li.innerHTML = '<strong>Clarified:</strong> ' + escHtml(step.somatic.clarified);
+                li.style.fontStyle = 'italic';
+                somUl.prepend(li);
                 hasBullets = true;
             }}
-        }});
-        if (step.somatic.clarified) {{
-            const li = document.createElement('li');
-            li.innerHTML = '<strong>Clarified:</strong> ' + escHtml(step.somatic.clarified);
-            li.style.fontStyle = 'italic';
-            somUl.prepend(li);
-            hasBullets = true;
         }}
         somDiv.style.display = hasBullets ? '' : 'none';
     }} else {{
@@ -3987,6 +3989,9 @@ function renderGroupCards(cards) {{
             html += '<p style="margin:8px 0 12px 0;color:#444;">' + escHtml(card.the_action) + '</p>';
         }}
         const groupAttrs = [];
+        // Look up starting_position from analysisData groups
+        const adGroup = analysisData && analysisData.groups ? analysisData.groups.find(g => g.group_number === card.group_number) : null;
+        if (adGroup && adGroup.starting_position) groupAttrs.push('<li><strong>Position:</strong> ' + escHtml(adGroup.starting_position) + '</li>');
         if (card.the_body) groupAttrs.push('<li><strong>Body:</strong> ' + escHtml(card.the_body) + '</li>');
         if (card.the_attention) groupAttrs.push('<li><strong>Attention:</strong> ' + escHtml(card.the_attention) + '</li>');
         if (card.the_intention) groupAttrs.push('<li><strong>Intention:</strong> ' + escHtml(card.the_intention) + '</li>');
@@ -4575,6 +4580,10 @@ def build_pass0b_player_html(search_mode: bool = False) -> str:
             margin-bottom: 2px;
         }}
         .step-time {{ color: #888; font-weight: 400; font-size: 0.85em; }}
+        .step-position {{
+            color: #888; font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.3px;
+            margin-bottom: 4px;
+        }}
         .step-instruction {{
             color: #444; font-style: italic; margin-bottom: 12px;
             font-size: 0.95em;
@@ -4772,6 +4781,7 @@ def build_pass0b_player_html(search_mode: bool = False) -> str:
                 <span id="card-step-label"></span>
                 <span class="step-time" id="card-step-time"></span>
             </div>
+            <div class="step-position" id="card-position" style="display:none;"></div>
             <div class="step-instruction" id="card-instruction"></div>
 
             <div id="analysis-somatic" class="analysis-section" style="display:none;">
@@ -4980,8 +4990,9 @@ function renderCard() {{
     const group = analysisData.groups.find(g => g.group_number === step.group_number);
 
     // Group label
+    const groupPos = group && group.starting_position ? ' (' + group.starting_position + ')' : '';
     document.getElementById('card-group').textContent =
-        group ? 'Group ' + group.group_number + ': ' + group.label : '';
+        group ? 'Group ' + group.group_number + ': ' + group.label + groupPos : '';
 
     // Step header
     document.getElementById('card-step-label').textContent = 'Step ' + step.step_number;
@@ -5002,31 +5013,40 @@ function renderCard() {{
     const somDiv = document.getElementById('analysis-somatic');
     const somUl = document.getElementById('somatic-bullets');
     somUl.innerHTML = '';
-    if (step.somatic) {{
-        const fields = [
-            ['Intent', 'intent'], ['Differentiation', 'differentiation'],
-            ['Activation', 'activation'], ['Inhibition', 'inhibition'],
-            ['Transmission Route', 'transmission_route'], ['Ground Push', 'ground_push'],
-            ['Mechanical Directive', 'mechanical_directive'],
-            ['Attentional Cue', 'attentional_cue'],
-        ];
+    if (step.somatic || step.starting_position) {{
         let hasBullets = false;
-        fields.forEach(([label, key]) => {{
-            const val = step.somatic[key];
-            if (val && val.toLowerCase() !== 'none') {{
+        // Starting position as first bullet
+        if (step.starting_position) {{
+            const li = document.createElement('li');
+            li.innerHTML = '<strong>Position:</strong> ' + escHtml(step.starting_position);
+            somUl.appendChild(li);
+            hasBullets = true;
+        }}
+        if (step.somatic) {{
+            const fields = [
+                ['Intent', 'intent'], ['Differentiation', 'differentiation'],
+                ['Activation', 'activation'], ['Inhibition', 'inhibition'],
+                ['Transmission Route', 'transmission_route'], ['Ground Push', 'ground_push'],
+                ['Mechanical Directive', 'mechanical_directive'],
+                ['Attentional Cue', 'attentional_cue'],
+            ];
+            fields.forEach(([label, key]) => {{
+                const val = step.somatic[key];
+                if (val && val.toLowerCase() !== 'none') {{
+                    const li = document.createElement('li');
+                    li.innerHTML = '<strong>' + label + ':</strong> ' + escHtml(val);
+                    somUl.appendChild(li);
+                    hasBullets = true;
+                }}
+            }});
+            // Show clarified text
+            if (step.somatic.clarified) {{
                 const li = document.createElement('li');
-                li.innerHTML = '<strong>' + label + ':</strong> ' + escHtml(val);
-                somUl.appendChild(li);
+                li.innerHTML = '<strong>Clarified:</strong> ' + escHtml(step.somatic.clarified);
+                li.style.fontStyle = 'italic';
+                somUl.prepend(li);
                 hasBullets = true;
             }}
-        }});
-        // Show clarified text
-        if (step.somatic.clarified) {{
-            const li = document.createElement('li');
-            li.innerHTML = '<strong>Clarified:</strong> ' + escHtml(step.somatic.clarified);
-            li.style.fontStyle = 'italic';
-            somUl.prepend(li);
-            hasBullets = true;
         }}
         somDiv.style.display = hasBullets ? '' : 'none';
     }} else {{
@@ -5545,6 +5565,9 @@ function renderGroupCards(cards) {{
             html += '<p style="margin:8px 0 12px 0;color:#444;">' + escHtml(card.the_action) + '</p>';
         }}
         const groupAttrs = [];
+        // Look up starting_position from analysisData groups
+        const adGroup = analysisData && analysisData.groups ? analysisData.groups.find(g => g.group_number === card.group_number) : null;
+        if (adGroup && adGroup.starting_position) groupAttrs.push('<li><strong>Position:</strong> ' + escHtml(adGroup.starting_position) + '</li>');
         if (card.the_body) groupAttrs.push('<li><strong>Body:</strong> ' + escHtml(card.the_body) + '</li>');
         if (card.the_attention) groupAttrs.push('<li><strong>Attention:</strong> ' + escHtml(card.the_attention) + '</li>');
         if (card.the_intention) groupAttrs.push('<li><strong>Intention:</strong> ' + escHtml(card.the_intention) + '</li>');
