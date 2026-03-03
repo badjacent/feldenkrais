@@ -1297,6 +1297,180 @@ def _run_condensed_for_groups(
         raise
 
 
+def load_pass_0b_concepts() -> tuple[str, dict]:
+    """Load Pass 0b concepts prompt and schema (lesson-level concept tagging)."""
+    prompt_path = _data_dir / "pass_0b_concepts.md"
+    schema_path = _data_dir / "pass_0b_concepts.schema.json"
+    prompt = prompt_path.read_text() if prompt_path.exists() else ""
+    schema = json.loads(schema_path.read_text()) if schema_path.exists() else {}
+    return prompt, schema
+
+
+def format_input_for_concepts(pass_a_result: dict, somatic_steps: list) -> str:
+    """Build LLM input for concept extraction from Pass A + Pass 0b somatic.
+
+    Produces a compact representation with group structure, step instructions,
+    and key somatic fields (differentiation, activation, transmission_route).
+    """
+    pass_0 = pass_a_result.get("pass_0", {})
+    segments = pass_0.get("segments", [])
+    seg_lookup = {s["id"]: s["text"] for s in segments}
+
+    steps = pass_a_result.get("steps", [])
+    step_lookup = {s["step_number"]: s for s in steps}
+    somatic_lookup = {s["step_number"]: s for s in somatic_steps}
+
+    groups = pass_a_result.get("groups", [])
+
+    somatic_fields = ["differentiation", "activation", "inhibition",
+                      "transmission_route", "ground_push"]
+
+    lines = []
+    for g in groups:
+        gnum = g.get("group_number", 0)
+        label = g.get("label", "")
+        desc = g.get("description", "")
+        lines.append(f"## Group {gnum}: {label}")
+        if desc:
+            lines.append(desc)
+        lines.append("")
+
+        for sn in g.get("steps", []):
+            pa_step = step_lookup.get(sn)
+            if not pa_step:
+                continue
+            tags_str = ", ".join(pa_step.get("tags", []))
+            instruction = pa_step.get("instruction", "")
+            lines.append(f"### Step {sn} [{tags_str}] — {instruction}")
+
+            # Include original segment texts
+            for seg_id in pa_step.get("segments", []):
+                text = seg_lookup.get(seg_id, "")
+                if text:
+                    lines.append(f"[{seg_id}] {text}")
+
+            # Include key somatic fields
+            som = somatic_lookup.get(sn, {})
+            for field in somatic_fields:
+                val = som.get(field, "")
+                if val and str(val).lower() != "none":
+                    lines.append(f"- **{field}**: {val}")
+
+            lines.append("")
+
+    return "\n".join(lines)
+
+
+def run_pass_0b_concepts(
+    lesson_text: str,
+    provider_key: str | None = None,
+    debug_log: list | None = None,
+) -> dict:
+    """
+    Pass 0b Concepts: Lesson-level concept tagging for search.
+
+    Runs Pass A + Pass 0b somatic first, then extracts concepts, distinctive
+    summary, and search terms.
+
+    Returns:
+        {
+            "concepts": [{"category": "...", "value": "..."}, ...],
+            "distinctive_summary": "...",
+            "search_terms": ["...", ...],
+            "elapsed": float,
+            "cached": bool,
+        }
+    """
+    import time
+
+    # Run Pass 0b (which internally runs Pass A)
+    somatic_result = run_pass_0b(lesson_text, provider_key, debug_log)
+    pass_a_result = somatic_result["pass_a"]
+    somatic_steps = somatic_result.get("enriched_steps", [])
+
+    # Build concept extraction input
+    concept_input = format_input_for_concepts(pass_a_result, somatic_steps)
+
+    # Load prompt and schema
+    prompt_template, schema = load_pass_0b_concepts()
+
+    # Build the full prompt
+    prompt = prompt_template + concept_input
+
+    system_prompt = (
+        "You are an expert Feldenkrais practitioner tagging a lesson with "
+        "searchable concepts. Be specific and distinctive — avoid generic terms "
+        "that apply to every lesson."
+    )
+
+    # Check cache
+    cache_suffix = ":pass_0b_concepts_v1"
+    if provider_key and provider_key != DEFAULT_LLM:
+        cache_suffix += f":{provider_key}"
+    cache_key = get_cache_key(lesson_text.strip() + cache_suffix)
+    cached = load_cached_analysis(cache_key)
+    if cached:
+        return {
+            "concepts": cached.get("concepts", []),
+            "distinctive_summary": cached.get("distinctive_summary", ""),
+            "search_terms": cached.get("search_terms", []),
+            "cached": True,
+        }
+
+    # Run LLM
+    llm = _get_llm(provider_key)
+    t0 = time.time()
+
+    if debug_log is not None:
+        debug_log.append({
+            "name": "Pass 0b Concepts",
+            "provider": provider_key or DEFAULT_LLM,
+            "prompt": prompt,
+            "system": system_prompt,
+            "schema": schema,
+        })
+
+    try:
+        result = llm.complete_structured_json(
+            prompt=prompt,
+            schema=schema,
+            system=system_prompt,
+        )
+        elapsed = round(time.time() - t0, 1)
+
+        if debug_log is not None:
+            debug_log[-1]["output"] = json.dumps(result, indent=2)
+            debug_log[-1]["elapsed"] = elapsed
+
+        concepts = result.get("concepts", [])
+        distinctive_summary = result.get("distinctive_summary", "")
+        search_terms = result.get("search_terms", [])
+
+        usage = llm.last_usage if llm.last_usage else {}
+
+        # Cache the result
+        save_cached_analysis(cache_key, {
+            "concepts": concepts,
+            "distinctive_summary": distinctive_summary,
+            "search_terms": search_terms,
+            "usage": usage,
+        })
+
+        return {
+            "concepts": concepts,
+            "distinctive_summary": distinctive_summary,
+            "search_terms": search_terms,
+            "elapsed": elapsed,
+            "cached": False,
+            "usage": usage,
+        }
+
+    except Exception as e:
+        if debug_log is not None:
+            debug_log[-1]["error"] = str(e)
+        raise
+
+
 def run_pass_0b_condensed(
     somatic_result: dict,
     lang_result: dict,

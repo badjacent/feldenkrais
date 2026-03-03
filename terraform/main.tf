@@ -750,6 +750,14 @@ data "archive_file" "web_lambda" {
     filename = "data/pass_0b_word_lang.schema.json"
   }
   source {
+    content  = file("${path.module}/../data/pass_0b_concepts.md")
+    filename = "data/pass_0b_concepts.md"
+  }
+  source {
+    content  = file("${path.module}/../data/pass_0b_concepts.schema.json")
+    filename = "data/pass_0b_concepts.schema.json"
+  }
+  source {
     content  = file("${path.module}/../data/pass_0.schema.json")
     filename = "data/pass_0.schema.json"
   }

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Pass0bConceptsResult",
+  "description": "Pass 0b Concepts: lesson-level concept tagging for search",
+  "type": "object",
+  "properties": {
+    "concepts": {
+      "type": "array",
+      "description": "Concept tags for the lesson, across multiple categories",
+      "items": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "description": "Concept category: body_region, movement_pattern, position, feldenkrais_concept, teaching_strategy, or theme"
+          },
+          "value": {
+            "type": "string",
+            "description": "Short, specific concept term (not a sentence)"
+          }
+        },
+        "required": ["category", "value"]
+      }
+    },
+    "distinctive_summary": {
+      "type": "string",
+      "description": "2-3 sentences describing what makes this lesson distinctive"
+    },
+    "search_terms": {
+      "type": "array",
+      "description": "5-10 plain-language search phrases a practitioner would use to find this lesson",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": ["concepts", "distinctive_summary", "search_terms"]
+}

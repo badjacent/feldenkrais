@@ -1248,19 +1248,40 @@ async def pipeline_dashboard(request: Request):
 # --- Pass 0b Experiment ---
 
 @app.post("/api/search")
-async def api_search(request: Request, query: str = Form("")):
-    """Semantic search over lesson embeddings."""
+async def api_search(request: Request, query: str = Form(""), method: str = Form("default")):
+    """Semantic search over lesson embeddings. Supports multiple search methods."""
     query = query.strip()
     if not query:
         return JSONResponse({"error": "Empty query"}, status_code=400)
     if not _db:
         return JSONResponse({"error": "No database connection"}, status_code=500)
+    if method not in ("default", "concepts", "tags"):
+        return JSONResponse({"error": f"Unknown method: {method}"}, status_code=400)
     prev_public = _db.public_only
     try:
-        from llm import get_embeddings
         _db.public_only = _auth_mod.get_access_tier(request) != "admin"
+
+        if method == "tags":
+            # Tag-based search: match query words against concept values
+            terms = [t.strip() for t in query.split() if t.strip()]
+            results = _db.search_by_concepts(terms, limit=10)
+            # Normalize results to match embedding search format
+            for r in results:
+                r["similarity"] = r.pop("match_count", 0)
+                matched = r.pop("matched_concepts", [])
+                r["snippet"] = ", ".join(matched[:8]) if matched else ""
+                src_id = r.pop("source_id", None)
+                cat_name = r.pop("category_name", None)
+                if src_id and cat_name:
+                    r["category"] = f"db:{src_id}:{cat_name}"
+                elif src_id:
+                    r["category"] = f"db:{src_id}"
+            return JSONResponse({"results": results, "method": "tags"})
+
+        # Embedding-based search (default or concepts)
+        from llm import get_embeddings
         embeddings, _ = get_embeddings([query], task_type="RETRIEVAL_QUERY")
-        results = _db.search_lessons(embeddings[0], limit=10)
+        results = _db.search_lessons(embeddings[0], limit=10, method=method)
         sims = [r["similarity"] for r in results]
         gap = round(sims[0] - sims[4], 4) if len(sims) >= 5 else 0
         # Specificity band based on similarity spread (see run_search_eval.py docstring)
@@ -1301,7 +1322,7 @@ async def api_search(request: Request, query: str = Form("")):
             )
         except Exception:
             pass  # never break search for logging
-        return JSONResponse({"results": results, "specificity": {"gap": gap, "band": band}})
+        return JSONResponse({"results": results, "specificity": {"gap": gap, "band": band}, "method": method})
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
     finally:
@@ -3005,6 +3026,7 @@ def build_pass0b_html(search_mode: bool = False) -> str:
         async function searchLessons() {{
             const query = document.getElementById('search-query').value.trim();
             if (!query) return;
+            const method = document.getElementById('search-method').value;
             const btn = document.getElementById('search-btn');
             const resultsDiv = document.getElementById('search-results');
             btn.disabled = true;
@@ -3013,12 +3035,14 @@ def build_pass0b_html(search_mode: bool = False) -> str:
             try {{
                 const fd = new FormData();
                 fd.append('query', query);
+                fd.append('method', method);
                 const response = await fetch('/api/search', {{ method: 'POST', body: fd }});
                 const data = await response.json();
                 if (data.error) {{
                     resultsDiv.innerHTML = '<div style="color: #999; padding: 8px;">Error: ' + data.error + '</div>';
                 }} else if (data.results && data.results.length > 0) {{
                     let html = '';
+                    const isTagSearch = data.method === 'tags';
                     if (data.specificity) {{
                         const s = data.specificity;
                         const bandColors = {{low: '#dc3545', mid: '#fd7e14', 'mid-high': '#28a745', high: '#007bff'}};
@@ -3035,14 +3059,14 @@ def build_pass0b_html(search_mode: bool = False) -> str:
                         html += '<div style="font-size: 0.8em; color: #888; margin-bottom: 6px;">Specificity: <span style="color: ' + color + '; font-weight: 600;">' + label + '</span> \u2014 ' + explainer + '</div>';
                     }}
                     data.results.forEach(r => {{
-                        const pct = Math.round(r.similarity * 100);
+                        const scoreDisplay = isTagSearch ? (r.similarity + ' matches') : (Math.round(r.similarity * 100) + '%');
                         const snippet = (r.snippet || '').replace(/</g, '&lt;').replace(/\\n/g, ' ');
                         const playerUrl = r.category ? '/pass0b-player?category=' + encodeURIComponent(r.category) + '&lesson=' + encodeURIComponent(r.document_id) : '';
                         html += '<div class="search-result" data-doc-id="' + r.document_id + '">';
                         html += '<div style="display: flex; justify-content: space-between; align-items: baseline;">';
                         html += '<strong style="flex: 1; cursor: pointer;" onclick="selectSearchResult(this.closest(&quot;.search-result&quot;))">' + (r.title || '').replace(/</g, '&lt;') + '</strong>';
                         if (playerUrl) html += '<a href="' + playerUrl + '" style="color: #007bff; font-size: 0.85em; margin-left: 12px; white-space: nowrap; text-decoration: none;" title="Open in audio player">&#9654; Player</a>';
-                        html += '<span style="color: #28a745; font-size: 0.85em; margin-left: 8px; white-space: nowrap;">' + pct + '%</span>';
+                        html += '<span style="color: #28a745; font-size: 0.85em; margin-left: 8px; white-space: nowrap;">' + scoreDisplay + '</span>';
                         html += '</div>';
                         if (snippet) html += '<div style="color: #666; font-size: 0.85em; margin-top: 2px; cursor: pointer;" onclick="selectSearchResult(this.closest(&quot;.search-result&quot;))">' + snippet + '</div>';
                         html += '</div>';
@@ -3112,6 +3136,11 @@ def build_pass0b_html(search_mode: bool = False) -> str:
         <label>Search lessons:</label>
         <div class="search-box">
             <input type="text" id="search-query" placeholder="e.g. rolling pelvis, eyes and head..." onkeydown="if(event.key==='Enter'){{event.preventDefault();searchLessons();}}">
+            <select id="search-method" style="padding:6px 8px;font-size:13px;border:1px solid #ccc;border-radius:4px;">
+                <option value="default">Standard</option>
+                <option value="concepts">Concept</option>
+                <option value="tags">Tag Match</option>
+            </select>
             <button type="button" id="search-btn" onclick="searchLessons()">Search</button>
         </div>
         <div id="search-results"></div>
@@ -3286,6 +3315,11 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None) -> st
     <div class="search-box">
         <input type="text" id="search-query" placeholder="e.g. rolling pelvis, eyes and head..."
                onkeydown="if(event.key==='Enter'){{event.preventDefault();searchLessons();}}">
+        <select id="search-method" style="padding:8px 10px;font-size:14px;border:1px solid #ccc;border-radius:6px;background:#fff;">
+            <option value="default">Standard</option>
+            <option value="concepts">Concept</option>
+            <option value="tags">Tag Match</option>
+        </select>
         <button type="button" id="search-btn" onclick="searchLessons()">Search</button>
     </div>
     <div class="suggested-searches">
@@ -3305,6 +3339,7 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None) -> st
         async function searchLessons() {{
             const query = document.getElementById('search-query').value.trim();
             if (!query) return;
+            const method = document.getElementById('search-method').value;
             const btn = document.getElementById('search-btn');
             const resultsDiv = document.getElementById('search-results');
             btn.disabled = true;
@@ -3313,12 +3348,17 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None) -> st
             try {{
                 const fd = new FormData();
                 fd.append('query', query);
+                fd.append('method', method);
                 const response = await fetch('/api/search', {{ method: 'POST', body: fd }});
                 const data = await response.json();
                 if (data.error) {{
                     resultsDiv.innerHTML = '<div style="color:#999;padding:8px;">Error: ' + escHtml(data.error) + '</div>';
                 }} else if (data.results && data.results.length > 0) {{
                     let html = '';
+                    if (data.method) {{
+                        const methodLabels = {{default:'Standard',concepts:'Concept',tags:'Tag Match'}};
+                        html += '<div style="font-size:0.8em;color:#888;margin-bottom:4px;">Method: <strong>' + (methodLabels[data.method] || data.method) + '</strong></div>';
+                    }}
                     if (data.specificity) {{
                         const s = data.specificity;
                         const bandColors = {{low:'#dc3545',mid:'#fd7e14','mid-high':'#28a745',high:'#007bff'}};
@@ -3334,14 +3374,15 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None) -> st
                         const explainer = bandExplainers[s.band] || '';
                         html += '<div style="font-size:0.8em;color:#888;margin-bottom:6px;">Specificity: <span style="color:'+color+';font-weight:600;">'+label+'</span> \u2014 '+explainer+'</div>';
                     }}
+                    const isTagSearch = data.method === 'tags';
                     data.results.forEach(r => {{
-                        const pct = Math.round(r.similarity * 100);
+                        const scoreDisplay = isTagSearch ? (r.similarity + ' matches') : (Math.round(r.similarity * 100) + '%');
                         let snippet = (r.snippet || '').replace(/</g, '&lt;').replace(/\\n/g, ' ');
                         snippet = snippet.replace(/^Setting:\s*/i, '');
                         html += '<div class="search-result">';
                         html += '<div style="display:flex;justify-content:space-between;align-items:baseline;">';
                         html += '<a href="/lesson/'+r.document_id+'">' + escHtml(r.title || '') + '</a>';
-                        html += '<span class="similarity">'+pct+'%</span>';
+                        html += '<span class="similarity">'+scoreDisplay+'</span>';
                         html += '</div>';
                         if (snippet) html += '<div class="snippet">'+snippet+'</div>';
                         html += '</div>';

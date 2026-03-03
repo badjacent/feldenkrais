@@ -127,12 +127,21 @@ CREATE TABLE IF NOT EXISTS pipeline_node_state (
 );
 
 CREATE TABLE IF NOT EXISTS lesson_embedding (
-    document_id UUID PRIMARY KEY REFERENCES document(id) ON DELETE CASCADE,
+    document_id UUID NOT NULL REFERENCES document(id) ON DELETE CASCADE,
+    method TEXT NOT NULL DEFAULT 'default',
     embedding vector(1536),
     summary_text TEXT,
     summary_hash TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (document_id, method)
+);
+
+CREATE TABLE IF NOT EXISTS lesson_concept (
+    document_id UUID NOT NULL REFERENCES document(id) ON DELETE CASCADE,
+    category TEXT NOT NULL,
+    value TEXT NOT NULL,
+    PRIMARY KEY (document_id, category, value)
 );
 
 CREATE TABLE IF NOT EXISTS search_query_log (
@@ -196,6 +205,9 @@ CREATE INDEX IF NOT EXISTS idx_pipeline_log_event ON pipeline_log(event);
 CREATE INDEX IF NOT EXISTS idx_pipeline_log_created ON pipeline_log(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_pipeline_log_document ON pipeline_log(document_id);
 CREATE INDEX IF NOT EXISTS idx_lesson_embedding_hnsw ON lesson_embedding USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX IF NOT EXISTS idx_lesson_embedding_method ON lesson_embedding (method);
+CREATE INDEX IF NOT EXISTS idx_lesson_concept_value ON lesson_concept (value);
+CREATE INDEX IF NOT EXISTS idx_lesson_concept_category ON lesson_concept (category, value);
 """
 
 SEED_DATA = """
@@ -1335,26 +1347,26 @@ class Database:
     # Lesson embedding operations
 
     def upsert_embedding(self, document_id: str, embedding: list[float],
-                         summary_text: str, summary_hash: str):
+                         summary_text: str, summary_hash: str, method: str = "default"):
         """Insert or update a lesson embedding."""
         with self.get_cursor() as cursor:
             cursor.execute(
                 """
-                INSERT INTO lesson_embedding (document_id, embedding, summary_text, summary_hash, updated_at)
-                VALUES (%s, %s::vector, %s, %s, NOW())
-                ON CONFLICT (document_id) DO UPDATE SET
+                INSERT INTO lesson_embedding (document_id, method, embedding, summary_text, summary_hash, updated_at)
+                VALUES (%s, %s, %s::vector, %s, %s, NOW())
+                ON CONFLICT (document_id, method) DO UPDATE SET
                     embedding = EXCLUDED.embedding,
                     summary_text = EXCLUDED.summary_text,
                     summary_hash = EXCLUDED.summary_hash,
                     updated_at = NOW()
                 """,
-                (document_id, str(embedding), summary_text, summary_hash),
+                (document_id, method, str(embedding), summary_text, summary_hash),
             )
 
-    def search_lessons(self, query_embedding: list[float], limit: int = 10) -> list[dict]:
+    def search_lessons(self, query_embedding: list[float], limit: int = 10, method: str = "default") -> list[dict]:
         """Search lessons by cosine similarity. Returns list of {document_id, title, similarity, summary_text, source_id, category_name}."""
         public_join = "\nJOIN document_source ds ON ds.id = d.source_id" if self.public_only else ""
-        public_filter = "\nWHERE ds.public = TRUE" if self.public_only else ""
+        public_filter = " AND ds.public = TRUE" if self.public_only else ""
         with self.get_cursor(commit=False) as cursor:
             cursor.execute(
                 f"""
@@ -1364,15 +1376,16 @@ class Database:
                        d.source_id,
                        d.category_name
                 FROM lesson_embedding le
-                JOIN document d ON d.id = le.document_id{public_join}{public_filter}
+                JOIN document d ON d.id = le.document_id{public_join}
+                WHERE le.method = %s{public_filter}
                 ORDER BY le.embedding <=> %s::vector
                 LIMIT %s
                 """,
-                (str(query_embedding), str(query_embedding), limit),
+                (str(query_embedding), method, str(query_embedding), limit),
             )
             return [dict(row) for row in cursor.fetchall()]
 
-    def get_embedding_hashes(self) -> dict[str, str]:
+    def get_embedding_hashes(self, method: str = "default") -> dict[str, str]:
         """Return {document_id: summary_hash} for all embedded lessons."""
         if self.public_only:
             query = """
@@ -1380,13 +1393,73 @@ class Database:
                 FROM lesson_embedding le
                 JOIN document d ON d.id = le.document_id
                 JOIN document_source ds ON ds.id = d.source_id
-                WHERE ds.public = TRUE
+                WHERE le.method = %s AND ds.public = TRUE
             """
         else:
-            query = "SELECT document_id::text, summary_hash FROM lesson_embedding"
+            query = "SELECT document_id::text, summary_hash FROM lesson_embedding WHERE method = %s"
         with self.get_cursor(commit=False) as cursor:
-            cursor.execute(query)
+            cursor.execute(query, (method,))
             return {row["document_id"]: row["summary_hash"] for row in cursor.fetchall()}
+
+    # Lesson concept operations
+
+    def upsert_concepts(self, document_id: str, concepts: list[dict]):
+        """Replace all concepts for a lesson. concepts: [{"category": ..., "value": ...}, ...]"""
+        with self.get_cursor() as cursor:
+            cursor.execute("DELETE FROM lesson_concept WHERE document_id = %s", (document_id,))
+            if concepts:
+                from psycopg2.extras import execute_values
+                execute_values(
+                    cursor,
+                    "INSERT INTO lesson_concept (document_id, category, value) VALUES %s",
+                    [(document_id, c["category"], c["value"]) for c in concepts],
+                )
+
+    def search_by_concepts(self, terms: list[str], limit: int = 10) -> list[dict]:
+        """Search lessons by matching concept values. Ranks by number of matching concepts.
+
+        Returns list of {document_id, title, match_count, matched_concepts, source_id, category_name}.
+        """
+        if not terms:
+            return []
+        # Build ILIKE conditions for each search term
+        conditions = []
+        params = []
+        for term in terms:
+            conditions.append("lc.value ILIKE %s")
+            params.append(f"%{term}%")
+
+        where_clause = " OR ".join(conditions)
+        public_join = "\nJOIN document_source ds ON ds.id = d.source_id" if self.public_only else ""
+        public_filter = " AND ds.public = TRUE" if self.public_only else ""
+
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute(
+                f"""
+                SELECT lc.document_id::text, d.title,
+                       COUNT(*) as match_count,
+                       ARRAY_AGG(DISTINCT lc.category || ':' || lc.value) as matched_concepts,
+                       d.source_id,
+                       d.category_name
+                FROM lesson_concept lc
+                JOIN document d ON d.id = lc.document_id{public_join}
+                WHERE ({where_clause}){public_filter}
+                GROUP BY lc.document_id, d.title, d.source_id, d.category_name
+                ORDER BY COUNT(*) DESC
+                LIMIT %s
+                """,
+                params + [limit],
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_lesson_concepts(self, document_id: str) -> list[dict]:
+        """Return concepts for a lesson as [{category, value}, ...]."""
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute(
+                "SELECT category, value FROM lesson_concept WHERE document_id = %s ORDER BY category, value",
+                (document_id,),
+            )
+            return [dict(row) for row in cursor.fetchall()]
 
     def get_docs_with_condensed(self, cache_suffix: str = ":pass_0b_condensed_v4") -> list[dict]:
         """Find docs that have condensed analysis cached.
