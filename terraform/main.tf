@@ -770,6 +770,10 @@ data "archive_file" "web_lambda" {
     content  = file("${path.module}/../docs/search_subdomain.md")
     filename = "docs/search_subdomain.md"
   }
+  source {
+    content  = file("${path.module}/../docs/feldenkrais_method.md")
+    filename = "docs/feldenkrais_method.md"
+  }
   # Exploration agent (from terraform/data/ deployment copy)
   source {
     content  = file("${path.module}/data/explore_init.md")
