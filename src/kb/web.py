@@ -4011,6 +4011,7 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
         <button class="active" onclick="switchTab('steps')">Step by Step</button>
         <button onclick="switchTab('condensed')">Overview</button>
         <button onclick="switchTab('concepts')">Search Specifics</button>
+        <button onclick="switchTab('transcript')">Transcript</button>
         <button onclick="switchTab('chat')">Q&amp;A</button>
         <button onclick="switchTab('detailed')">All Details</button>
     </div>
@@ -4078,6 +4079,14 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
         </div>
         <div id="concepts-content">
             <div style="color:#999; padding:16px;"><span class="spinner-inline"></span> Loading concept data...</div>
+        </div>
+    </div>
+
+    <!-- Transcript tab -->
+    <div id="tab-transcript" style="display:none;">
+        <div class="tab-intro">The full lesson transcript, organized by movement group and step.</div>
+        <div id="transcript-content">
+            <div style="color:#999; padding:16px;"><span class="spinner-inline"></span> Preparing transcript...</div>
         </div>
     </div>
 
@@ -4151,8 +4160,9 @@ const audioContainer = document.getElementById('audio-container');
 
 // ── Tab switching ──
 
-const TAB_ORDER = ['steps', 'condensed', 'concepts', 'chat', 'detailed'];
+const TAB_ORDER = ['steps', 'condensed', 'concepts', 'transcript', 'chat', 'detailed'];
 let conceptsLoaded = false;
+let transcriptRendered = false;
 
 function switchTab(tab) {{
     activeTab = tab;
@@ -4167,9 +4177,59 @@ function switchTab(tab) {{
     if (tab === 'condensed' && !condensedLoaded) loadCondensed();
     if (tab === 'annotated' && !annotatedLoaded) loadAnnotated();
     if (tab === 'concepts' && !conceptsLoaded) loadConcepts();
+    if (tab === 'transcript' && !transcriptRendered) renderTranscript();
     if (tab === 'detailed' && !detailedRendered && analysisData) renderDetailed();
     if (tab === 'steps' && analysisData) renderCard();
     if (tab === 'chat') document.getElementById('chat-input').focus();
+}}
+
+// ── Transcript rendering ──
+
+function renderTranscript() {{
+    transcriptRendered = true;
+    const div = document.getElementById('transcript-content');
+    if (!analysisData || !analysisData.steps || !analysisData.steps.length) {{
+        // Fallback to raw lesson text
+        if (lessonText) {{
+            div.innerHTML = '<pre style="white-space:pre-wrap;font-family:inherit;font-size:0.95em;line-height:1.7;color:#333;margin:0;padding:16px 0;">' + escHtml(lessonText) + '</pre>';
+        }} else {{
+            div.innerHTML = '<div style="color:#999;padding:16px;">No transcript data available.</div>';
+        }}
+        return;
+    }}
+    // Group steps by group_number
+    const groupMap = {{}};
+    const groupOrder = [];
+    for (const step of analysisData.steps) {{
+        const gn = step.group_number || 0;
+        if (!groupMap[gn]) {{
+            groupMap[gn] = [];
+            groupOrder.push(gn);
+        }}
+        groupMap[gn].push(step);
+    }}
+    let html = '';
+    for (const gn of groupOrder) {{
+        const group = analysisData.groups ? analysisData.groups.find(g => g.group_number === gn) : null;
+        const label = group ? group.label : 'Group ' + gn;
+        const pos = group && group.starting_position ? '<span style="color:#888;font-weight:400;font-size:0.85em;margin-left:8px;">' + escHtml(group.starting_position) + '</span>' : '';
+        html += '<div style="margin-bottom:28px;">';
+        html += '<div style="border-left:4px solid #1a73e8;padding:8px 16px;margin-bottom:12px;">';
+        html += '<div style="font-size:1.05em;font-weight:600;color:#222;">Group ' + gn + ': ' + escHtml(label) + pos + '</div>';
+        html += '</div>';
+        for (let si = 0; si < groupMap[gn].length; si++) {{
+            const step = groupMap[gn][si];
+            const segs = (step.segments || []).filter(s => s.text);
+            if (!segs.length) continue;
+            const text = segs.map(s => s.text.trim()).join(' ');
+            html += '<div style="padding:0 16px 12px 24px;' + (si < groupMap[gn].length - 1 ? 'border-bottom:1px solid #f0f0f0;margin-bottom:12px;' : '') + '">';
+            html += '<div style="font-size:0.75em;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Step ' + step.step_number + '</div>';
+            html += '<div style="font-size:0.95em;line-height:1.7;color:#333;">' + escHtml(text) + '</div>';
+            html += '</div>';
+        }}
+        html += '</div>';
+    }}
+    div.innerHTML = html;
 }}
 
 // ── Concepts loading ──
@@ -4211,11 +4271,13 @@ async function loadConcepts() {{
             }});
             const catColors = {{
                 body_region: '#2196f3', movement_pattern: '#4caf50', position: '#9c27b0',
-                feldenkrais_concept: '#ff9800', teaching_strategy: '#e91e63', theme: '#607d8b'
+                feldenkrais_concept: '#ff9800', teaching_strategy: '#e91e63', theme: '#607d8b',
+                spatial_config: '#00897b', contact_point: '#5c6bc0', constraint: '#c62828', working_position: '#6a1b9a'
             }};
             const catLabels = {{
                 body_region: 'Body Region', movement_pattern: 'Movement Pattern', position: 'Position',
-                feldenkrais_concept: 'Feldenkrais Concept', teaching_strategy: 'Teaching Strategy', theme: 'Theme'
+                feldenkrais_concept: 'Feldenkrais Concept', teaching_strategy: 'Teaching Strategy', theme: 'Theme',
+                spatial_config: 'Spatial Configuration', contact_point: 'Contact Point', constraint: 'Constraint', working_position: 'Working Position'
             }};
             html += '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
             html += '<div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#333;margin-bottom:12px;">Concept Tags</div>';
