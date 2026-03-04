@@ -918,6 +918,13 @@ def handler(event, context):
     db = Database(config.database_url)
     db.initialize()
 
+    # Check LLM kill switch — stall (skip) rather than fail
+    settings = db.get_cache("settings:llm_enabled")
+    if not settings or not settings.get("enabled", False):
+        logger.info("LLM disabled, skipping transcription")
+        db.close()
+        return {"statusCode": 200, "body": json.dumps({"message": "Skipped - LLM disabled"})}
+
     # For scheduled events, acquire advisory lock to prevent concurrent runs
     is_scheduled = "source" in event and event["source"] == "aws.events"
     lock_acquired = False

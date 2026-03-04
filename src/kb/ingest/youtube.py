@@ -411,6 +411,14 @@ def handler(event, context):
     db = Database(config.database_url)
     db.initialize()
 
+    # Check LLM kill switch — stall (skip) rather than fail
+    if action == "process":
+        settings = db.get_cache("settings:llm_enabled")
+        if not settings or not settings.get("enabled", False):
+            logger.info("LLM disabled, skipping YouTube processing")
+            db.close()
+            return {"statusCode": 200, "body": json.dumps({"message": "Skipped - LLM disabled"})}
+
     # For process action, acquire advisory lock to prevent concurrent runs
     lock_acquired = False
     if action == "process":
