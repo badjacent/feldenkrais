@@ -230,6 +230,7 @@ def run_eval(db: Database, questions_path: str | None = None, top_k: int = 10,
             "id": q["id"],
             "query": q["query"],
             "category": q["category"],
+            "tags": q.get("tags", []),
             "expected_doc_id": q["expected_doc_id"],
             "expected_title": q["expected_title"],
             "rank": rank,
@@ -362,6 +363,14 @@ def compute_metrics(results: list[dict], categories: list[str], top_k: int) -> d
         if subset:
             metrics["bands"][band] = calc(subset)
 
+    # Per-tag metrics
+    all_tags = sorted(set(tag for r in results for tag in r.get("tags", [])))
+    if all_tags:
+        metrics["tags"] = {}
+        for tag in all_tags:
+            subset = [r for r in results if tag in r.get("tags", [])]
+            metrics["tags"][tag] = calc(subset)
+
     return metrics
 
 
@@ -396,6 +405,14 @@ def print_report(metrics, results, missing_from_index, args, qfile, embed_time, 
                 m = metrics["bands"][band]
                 print(f"{band:<12} {m['count']:>6} {m['p_at_1']:>7.1%} {m['p_at_3']:>7.1%} {m['p_at_5']:>7.1%} {m['mrr']:>7.3f} {m['found_rate']:>7.1%}")
 
+    # Tag breakdown
+    if metrics.get("tags"):
+        print(f"\n{'Tag':<25} {'Count':>6} {'P@1':>7} {'P@3':>7} {'P@5':>7} {'MRR':>7} {'Found':>7}")
+        print("-" * 70)
+        for tag in sorted(metrics["tags"]):
+            m = metrics["tags"][tag]
+            print(f"{tag:<25} {m['count']:>6} {m['p_at_1']:>7.1%} {m['p_at_3']:>7.1%} {m['p_at_5']:>7.1%} {m['mrr']:>7.3f} {m['found_rate']:>7.1%}")
+
     # Failures
     failures = [r for r in results if r["rank"] is None]
     near_misses = [r for r in results if r["rank"] is not None and r["rank"] > 1]
@@ -403,7 +420,9 @@ def print_report(metrics, results, missing_from_index, args, qfile, embed_time, 
     if failures:
         print(f"\n--- FAILURES ({len(failures)} queries, expected not in top-{args.top_k}) ---")
         for r in failures:
-            print(f"\n  [{r['id']}] ({r['category']}, {r['band']}) {r['query']}")
+            tags_str = ",".join(r.get("tags", [])) if r.get("tags") else ""
+            tag_label = f" [{tags_str}]" if tags_str else ""
+            print(f"\n  [{r['id']}] ({r['category']}, {r['band']}{tag_label}) {r['query']}")
             print(f"    Expected: {r['expected_title']}")
             print(f"    Got instead:")
             for i, h in enumerate(r["top_hits"][:3]):
@@ -412,7 +431,9 @@ def print_report(metrics, results, missing_from_index, args, qfile, embed_time, 
     if near_misses and not args.failures_only:
         print(f"\n--- NEAR MISSES ({len(near_misses)} queries, found but rank > 1) ---")
         for r in sorted(near_misses, key=lambda r: r["rank"], reverse=True):
-            print(f"  [{r['id']}] rank={r['rank']} ({r['category']}, {r['band']}) {r['query']}")
+            tags_str = ",".join(r.get("tags", [])) if r.get("tags") else ""
+            tag_label = f" [{tags_str}]" if tags_str else ""
+            print(f"  [{r['id']}] rank={r['rank']} ({r['category']}, {r['band']}{tag_label}) {r['query']}")
             print(f"    Expected: {r['expected_title']}")
 
     if args.verbose and not args.failures_only:

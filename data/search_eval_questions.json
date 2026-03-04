@@ -29,7 +29,10 @@
       "query": "Feldenkrais lesson lifting foot and tilting pelvis on back",
       "expected_doc_id": "08cc779b-3a8c-4505-ae71-089887a44ba5",
       "expected_title": "(variations on) Getting to Know the Hip Joints",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q0005",
@@ -554,7 +557,10 @@
       "query": "Feldenkrais lesson reaching arm up while pressing opposite foot",
       "expected_doc_id": "b1f5b997-328d-4666-a483-49f272afea88",
       "expected_title": "ATM Lesson #01",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q0080",
@@ -722,7 +728,10 @@
       "query": "Feldenkrais lesson sliding arm on floor head turning",
       "expected_doc_id": "d0b06245-f697-4274-9671-56dd318f1679",
       "expected_title": "ATM Lesson #20",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q0104",
@@ -841,7 +850,10 @@
       "query": "Feldenkrais lesson feeling spine move from foot to head",
       "expected_doc_id": "423dad8e-748c-473b-bfb9-708dce174dff",
       "expected_title": "ATM: Foot in the Hand, Lying on the Back",
-      "category": "experience"
+      "category": "experience",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q0121",
@@ -1002,7 +1014,10 @@
       "query": "Feldenkrais lesson connecting leg movement to spine and head",
       "expected_doc_id": "b1a9fc15-1152-4efa-bc7f-db50ac8325d3",
       "expected_title": "Ankle on the knee to sitting,",
-      "category": "body"
+      "category": "body",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q0144",
@@ -1086,7 +1101,10 @@
       "query": "improve shoulder mobility by connecting arm movement to spine and pelvis",
       "expected_doc_id": "8d6cb194-1e00-4528-b8e3-8efd9f2c472e",
       "expected_title": "Arm and Leg Exploration Standing and Lying (ATM, 6/2/25, Ch 2)",
-      "category": "body"
+      "category": "body",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q0156",
@@ -1184,7 +1202,10 @@
       "query": "feldenkrais reaching one arm to ceiling while lying on back",
       "expected_doc_id": "c2029d32-8c74-4bec-90cb-472d677051ae",
       "expected_title": "Arms Like a Skeleton, Integrating the Neck, Jaw, and Eyes (Patrons) - Feldenkrais Project",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q0170",
@@ -1198,7 +1219,10 @@
       "query": "feldenkrais lesson feeling connection from foot to hand while reaching",
       "expected_doc_id": "c2029d32-8c74-4bec-90cb-472d677051ae",
       "expected_title": "Arms Like a Skeleton, Integrating the Neck, Jaw, and Eyes (Patrons) - Feldenkrais Project",
-      "category": "experience"
+      "category": "experience",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q0172",
@@ -1380,7 +1404,10 @@
       "query": "how to improve force transmission from hip to opposite shoulder feldenkrais",
       "expected_doc_id": "592b913d-bfe4-424b-b229-00613d482969",
       "expected_title": "Attention, Integration, and Movement Exploration (Discussion, 7/26/25, Ch 4)",
-      "category": "body"
+      "category": "body",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q0198",
@@ -1611,7 +1638,10 @@
       "query": "how to connect arm movement to spine rotation Feldenkrais",
       "expected_doc_id": "ac4083eb-21db-4f0a-b45d-86df7c6fb082",
       "expected_title": "Bending Fingers Backward, Part 1,",
-      "category": "body"
+      "category": "body",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q0231",
@@ -1667,7 +1697,10 @@
       "query": "feldenkrais side bending lesson reaching hand toward heel",
       "expected_doc_id": "a0e67f28-3e30-4a76-a419-0d8f1693be4e",
       "expected_title": "Bending Left and Right - Second Pass(more advanced)",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q0239",
@@ -1884,7 +1917,10 @@
       "query": "Feldenkrais lesson diagonal support hand to opposite foot",
       "expected_doc_id": "ccf25c85-bb9b-49d9-af86-b3ee740507d4",
       "expected_title": "Bouffes du Nord #3: Movements on Four Points",
-      "category": "body"
+      "category": "body",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q0270",
@@ -1996,7 +2032,10 @@
       "query": "Feldenkrais lesson noticing how movement travels from pelvis to head",
       "expected_doc_id": "54ff0b2b-f752-4eaf-8074-583c6df3dc48",
       "expected_title": "Bouffes du Nord #8: Clock in Three Positions",
-      "category": "experience"
+      "category": "experience",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q0286",
@@ -2045,7 +2084,10 @@
       "query": "Feldenkrais weight shifting from foot to foot with the breath",
       "expected_doc_id": "f6462323-1d42-4631-b66c-1ad96c32bc88",
       "expected_title": "Breath and Balance | Movement is Life with the Feldenkrais Method\u00ae",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q0293",
@@ -2087,7 +2129,10 @@
       "query": "feldenkrais lesson crossing leg over knee and twisting",
       "expected_doc_id": "a58f0668-ef1f-4fb5-b327-9cc9fdeeb723",
       "expected_title": "Breath, Hip Rotation, and Leg Integration (ATM, 11/7/25, Ch 3)",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q0299",
@@ -2192,7 +2237,10 @@
       "query": "Feldenkrais lesson using arm as lever to move upper back",
       "expected_doc_id": "05779a3a-b713-4621-a2e1-a0db24a68166",
       "expected_title": "Bridge 1.",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q0314",
@@ -2248,7 +2296,10 @@
       "query": "feldenkrais bridge lesson feeling diagonal connection from hip to shoulder",
       "expected_doc_id": "1cf98811-adb8-4b79-ba3e-0410b87ccc7c",
       "expected_title": "Bridging and Spinal Waves Exploration (ATM, 7/26/25, Ch 5)",
-      "category": "experience"
+      "category": "experience",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q0322",
@@ -2262,7 +2313,10 @@
       "query": "feeling the connection from foot through femur to spine when standing",
       "expected_doc_id": "9e85d846-3711-48f1-bca3-6ec9933fb3f7",
       "expected_title": "Bringing Legs to Standing Position (Practice, 7/21/25, Ch 4)",
-      "category": "body"
+      "category": "body",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q0324",
@@ -2346,7 +2400,10 @@
       "query": "Feldenkrais lesson connecting shoulder movement to spine and pelvis",
       "expected_doc_id": "189cfd7d-632c-4c60-8a1b-a5d422652c00",
       "expected_title": "Candle Holding",
-      "category": "body"
+      "category": "body",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q0336",
@@ -2689,7 +2746,10 @@
       "query": "Feldenkrais lesson feeling connection from arm through spine to feet",
       "expected_doc_id": "4f7ebd6e-2cd5-4827-8cb9-9ab55e675507",
       "expected_title": "Cicling the Arm Around Yourself",
-      "category": "experience"
+      "category": "experience",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q0385",
@@ -2815,7 +2875,10 @@
       "query": "Feldenkrais lesson feeling rotation travel up spine from pelvis to head",
       "expected_doc_id": "7b0bda12-cf0e-4390-850a-aad4fdd209b3",
       "expected_title": "Co-Ordinating Flexors & Extensors | Movement is Life with the Feldenkrais Method\u00ae",
-      "category": "experience"
+      "category": "experience",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q0403",
@@ -2948,7 +3011,10 @@
       "query": "Feldenkrais lesson lifting arm and leg together on back and stomach",
       "expected_doc_id": "a5fec5f8-8f95-486c-bf9c-65c668dd4b4e",
       "expected_title": "Coordinating Leg and Arm Lifts with Breath Awareness (ATM, 5/30/25, Ch 2)",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q0422",
@@ -3137,7 +3203,10 @@
       "query": "feldenkrais lesson lifting arm and opposite leg while lying on back",
       "expected_doc_id": "671a0727-1e22-4afe-b008-4502f4f5b20a",
       "expected_title": "Diagonal Folding",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q0449",
@@ -3151,7 +3220,10 @@
       "query": "feldenkrais lesson feeling diagonal connection from shoulder to opposite hip",
       "expected_doc_id": "671a0727-1e22-4afe-b008-4502f4f5b20a",
       "expected_title": "Diagonal Folding",
-      "category": "experience"
+      "category": "experience",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q0451",
@@ -3242,7 +3314,10 @@
       "query": "Feldenkrais lesson rolling on back reaching arm across body",
       "expected_doc_id": "8e7c0b47-9e68-4c42-b03a-752070bec00f",
       "expected_title": "Differentiation of the Shoulder Girdle",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q0464",
@@ -3347,7 +3422,10 @@
       "query": "feldenkrais lesson moving shoulder blade while hand is on belly",
       "expected_doc_id": "32740f82-39c7-47e5-a02f-810ec37a5f6e",
       "expected_title": "Easier Hands & Arms | Movement is Life with the Feldenkrais Method\u00ae",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q0479",
@@ -3501,7 +3579,10 @@
       "query": "how to improve thoracic mobility by connecting hand to face",
       "expected_doc_id": "3267f1f1-8376-4344-9f43-b13653c3696b",
       "expected_title": "Elbow Circles Holding the Chin",
-      "category": "body"
+      "category": "body",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q0501",
@@ -3662,7 +3743,10 @@
       "query": "Feldenkrais lesson reaching arm across body to opposite hip",
       "expected_doc_id": "33ce7a55-8a7f-49c6-8386-9ca9833615c0",
       "expected_title": "Exploring Dimensions and Five Lines (ATM, 5/12/25, Ch 1)",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q0524",
@@ -3704,7 +3788,10 @@
       "query": "feldenkrais lesson crossing one leg behind the other hands and knees",
       "expected_doc_id": "d8c73691-5faf-4052-82ac-bdfc9f230804",
       "expected_title": "Exploring Hip Joint Sensation and Movement (ATM, 7/21/25, Ch 2)",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q0530",
@@ -3984,14 +4071,20 @@
       "query": "feldenkrais lesson connecting hand movement to shoulder and spine",
       "expected_doc_id": "d28785ad-f73e-4387-9344-b2b6701fa789",
       "expected_title": "FM To Increase Mobility (chair-based), 1-5",
-      "category": "body"
+      "category": "body",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q0570",
       "query": "feldenkrais lesson feeling connection between hand and pelvis while reaching",
       "expected_doc_id": "d28785ad-f73e-4387-9344-b2b6701fa789",
       "expected_title": "FM To Increase Mobility (chair-based), 1-5",
-      "category": "experience"
+      "category": "experience",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q0571",
@@ -4124,7 +4217,10 @@
       "query": "feldenkrais lesson rocking pelvis while lifting knee to chest",
       "expected_doc_id": "294ac574-8c09-405a-b2de-1fdb7df4a652",
       "expected_title": "Finding Your Hip Joints | Movement is Life with the Feldenkrais Method\u00ae",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q0590",
@@ -4551,7 +4647,10 @@
       "query": "How to connect foot and ankle movement to spine for rolling",
       "expected_doc_id": "dcf9316d-3daa-41e5-b129-c7da960c9394",
       "expected_title": "From Side to Back | Movement is Life with the Feldenkrais Method\u00ae",
-      "category": "body"
+      "category": "body",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q0651",
@@ -4586,7 +4685,10 @@
       "query": "Feldenkrais lesson moving head to arm instead of arm to head",
       "expected_doc_id": "41c5cded-2717-4a97-badb-b4ca81136f7b",
       "expected_title": "Frozen Shoulder and Head Movement Integration (FI Demo, 10/5/25, Ch 3)",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q0656",
@@ -4621,14 +4723,20 @@
       "query": "feldenkrais lesson feeling connection between foot and spine during reaching",
       "expected_doc_id": "c26545bc-1829-4552-a244-0123ea6739e0",
       "expected_title": "Functional Integration Review and Demonstration (Practice, 11/7/25, Ch 6)",
-      "category": "experience"
+      "category": "experience",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q0661",
       "query": "feldenkrais lesson lifting one arm and leg on the floor",
       "expected_doc_id": "b013c912-d502-46e3-aac4-f8b0c3f24240",
       "expected_title": "Fundamental Properties of Movement (ATM, 5/30/25, Ch 1)",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q0662",
@@ -4761,7 +4869,10 @@
       "query": "Feldenkrais lesson connecting shoulder blade movement to head and spine",
       "expected_doc_id": "fae0780e-c52d-44fc-a22c-9e156fe365dd",
       "expected_title": "Gliding Shoulder Blades",
-      "category": "body"
+      "category": "body",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q0681",
@@ -5538,7 +5649,10 @@
       "query": "feldenkrais lesson connecting hand movement to shoulder blade",
       "expected_doc_id": "66d894b9-6135-4724-8613-e1ef8f6de3d7",
       "expected_title": "Help Is At Hand | Movement is Life with the Feldenkrais Method\u00ae",
-      "category": "body"
+      "category": "body",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q0792",
@@ -5573,7 +5687,10 @@
       "query": "Feldenkrais lesson circling leg with and without reaching through heel",
       "expected_doc_id": "1915c43f-71fa-4bce-b54b-04126fe72f43",
       "expected_title": "Hip Joint Mechanics and Skeletal Integration (Lecture, 2/27/26, Ch 4)",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q0797",
@@ -5594,7 +5711,10 @@
       "query": "how to arch my back while bringing my knee to my chest",
       "expected_doc_id": "0e53355f-11e7-4a2a-bc49-4683715b44b4",
       "expected_title": "Hip Joints For Sitting Cross Legged | Movement is Life with the Feldenkrais Method\u00ae",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q0800",
@@ -5895,7 +6015,10 @@
       "query": "how to connect heel to pelvis and elbow to shoulder blade",
       "expected_doc_id": "7942544a-0bf5-4073-a5f0-c5c82128fc91",
       "expected_title": "In Bed - Pressing the Heels | Movement is Life with the Feldenkrais Method\u00ae",
-      "category": "body"
+      "category": "body",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q0843",
@@ -5986,7 +6109,10 @@
       "query": "feldenkrais lesson feeling connection from foot to head",
       "expected_doc_id": "5207ea60-1a2d-4fe9-98fa-e4095236b3ec",
       "expected_title": "Inter-Weaving the Back with the Help of the Hands | Movement is Life with the Feldenkrais Method\u00ae",
-      "category": "experience"
+      "category": "experience",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q0856",
@@ -6063,7 +6189,10 @@
       "query": "how does force travel from my foot to my spine feldenkrais",
       "expected_doc_id": "a7de8077-7ac7-4b10-93d7-f133fca439e2",
       "expected_title": "Introductions and Reflections on Learning (Discussion, 2/7/25, Ch 1)",
-      "category": "body"
+      "category": "body",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q0867",
@@ -6126,7 +6255,10 @@
       "query": "feldenkrais lesson connecting arm to spine through knee movement",
       "expected_doc_id": "a901f733-c2b4-457f-8074-cea8685f401c",
       "expected_title": "Knee Pulling through Arm | Movement is Life with the Feldenkrais Method\u00ae",
-      "category": "body"
+      "category": "body",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q0876",
@@ -6189,7 +6321,10 @@
       "query": "how to connect leg movement to shoulder blade movement Feldenkrais",
       "expected_doc_id": "ff2f694d-e529-4998-9e0a-29a51614ee21",
       "expected_title": "Knees Pulling Shoulders | Movement is Life with the Feldenkrais Method\u00ae",
-      "category": "body"
+      "category": "body",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q0885",
@@ -6308,7 +6443,10 @@
       "query": "Feldenkrais lesson turning body with weight shift from foot to foot",
       "expected_doc_id": "c368ade5-df68-4b02-90d7-b7d6ecb38ec0",
       "expected_title": "Learning Through Exploration and Permission (Discussion, 1/19/25, Ch 2)",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q0902",
@@ -6434,7 +6572,10 @@
       "query": "Feldenkrais lesson swinging leg while lying on back with arm under",
       "expected_doc_id": "55652d58-a446-4b71-ad07-ede577ee2aff",
       "expected_title": "Leg Swinging with Arm Support (ATM, 11/9/25, Ch 2)",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q0920",
@@ -6707,7 +6848,10 @@
       "query": "how to lift head and hip together on the floor",
       "expected_doc_id": "4e70582a-08dc-4b80-8e3c-42ceee84accd",
       "expected_title": "Lifting Head on Diagonal",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q0959",
@@ -6959,7 +7103,10 @@
       "query": "feldenkrais lesson arching back while holding one knee to chest",
       "expected_doc_id": "4e4d98d7-7af4-47a9-9a75-76997968100e",
       "expected_title": "More Precise Hips and Spine",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q0995",
@@ -7085,7 +7232,10 @@
       "query": "move body around a fixed hand on the wall to reorganize shoulder",
       "expected_doc_id": "23979d23-dbe9-41aa-bfb2-688ebb66ab69",
       "expected_title": "Muscles as Springs and Movement Principles (Lecture, 5/31/25, Ch 5)",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q1013",
@@ -7176,7 +7326,10 @@
       "query": "Feldenkrais lesson connecting hand and foot movement to the spine",
       "expected_doc_id": "a4092dda-7c7d-4026-907b-4f12fb35e4b0",
       "expected_title": "Neurological Recovery Through Sensory Stimulation (FI Demo, 10/12/25, Ch 2)",
-      "category": "body"
+      "category": "body",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q1026",
@@ -7379,7 +7532,10 @@
       "query": "Feldenkrais lesson bridging pelvis and sliding hand under back",
       "expected_doc_id": "01bf0bb1-726b-4d37-b8e1-8c255a51acd1",
       "expected_title": "Observing and Describing ATM Movements (Practice, 11/10/25, Ch 2)",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q1055",
@@ -7617,7 +7773,10 @@
       "query": "Feldenkrais lesson connecting hand movements to spine and ribs",
       "expected_doc_id": "3d2a56a3-02b0-40fa-864c-e3b79238a1eb",
       "expected_title": "One Bell Hand / Two Bell Hands...and Feet (31m + 29m, Patrons) - Feldenkrais Project",
-      "category": "body"
+      "category": "body",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q1089",
@@ -7806,7 +7965,10 @@
       "query": "feldenkrais lesson mobilize shoulder blade by pinning arm under body",
       "expected_doc_id": "06fda783-aa54-41de-a08d-1a98b52d3d58",
       "expected_title": "Paddling Workshop Lesson 3: Tying the ArmsPaddling requires mobility of the shoulder blade...",
-      "category": "body"
+      "category": "body",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q1116",
@@ -7848,7 +8010,10 @@
       "query": "improve shoulder mobility by connecting arm rotation to spine",
       "expected_doc_id": "8a7bf4a2-7d47-48c4-be95-78577f91980f",
       "expected_title": "Paddling WorkshopLesson 2: Rolling the FistsPaddling also requires mobility in the shoulder joint.   This lesson helps one discover this but the secret is that\n   it is not all in the shoulder joint.",
-      "category": "body"
+      "category": "body",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q1122",
@@ -7939,7 +8104,10 @@
       "query": "Feldenkrais lesson noticing ease of shoulder movement when reaching",
       "expected_doc_id": "f0516533-3bbb-499d-bd03-0b5d34fb414e",
       "expected_title": "Partner Arm Observation and Exploration (Practice, 10/4/25, Ch 4)",
-      "category": "experience"
+      "category": "experience",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q1135",
@@ -8030,7 +8198,10 @@
       "query": "Feldenkrais lesson circling pelvis with one leg crossed over",
       "expected_doc_id": "2397e65b-9c23-4c4a-994b-5edf11fb69a6",
       "expected_title": "Pelvic Clock with Spinal Integration (ATM, 6/1/25, Ch 7)",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q1148",
@@ -8065,7 +8236,10 @@
       "query": "Feldenkrais lesson feeling spinal wave from pelvis to head",
       "expected_doc_id": "43935371-8486-43b7-a255-1ffcb9888c9f",
       "expected_title": "Pelvic Clock with Use of the Eyes",
-      "category": "experience"
+      "category": "experience",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q1153",
@@ -8107,7 +8281,10 @@
       "query": "feeling a spiral connection from my pelvis to my shoulder while twisting",
       "expected_doc_id": "78f4d5a0-cd51-4ff0-b4c9-fb067030d677",
       "expected_title": "Pelvic Rotation and Shoulder Integration (ATM, 5/9/25, Ch 4)",
-      "category": "experience"
+      "category": "experience",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q1159",
@@ -8184,7 +8361,10 @@
       "query": "Feldenkrais lesson connecting arm rotation to spine and pelvis",
       "expected_doc_id": "ddd36cfa-67b1-4232-97f0-f15a71d5edd0",
       "expected_title": "Pelvis Lifting with Arm Rolls (ATM, 5/10/25, Ch 4)",
-      "category": "body"
+      "category": "body",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q1170",
@@ -8709,7 +8889,10 @@
       "query": "Feldenkrais lesson connecting hand movement to spine and shoulder organization",
       "expected_doc_id": "2397d1d0-88c5-4f81-a80b-cb6d5a4c5251",
       "expected_title": "Reflecting on Hands-and-Knees Exploration Lesson (Discussion, 3/8/25, Ch 3)",
-      "category": "body"
+      "category": "body",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q1245",
@@ -8793,7 +8976,10 @@
       "query": "Feldenkrais lesson contralateral connection hand to opposite knee",
       "expected_doc_id": "fe838127-bf89-412e-833a-2a33ee4a498b",
       "expected_title": "Returning to Hands and Knees | Movement is Life with the Feldenkrais Method\u00ae",
-      "category": "body"
+      "category": "body",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q1257",
@@ -8870,14 +9056,20 @@
       "query": "feldenkrais lesson reaching arm across body to opposite hip",
       "expected_doc_id": "d84fa2f6-36f7-46e4-996f-ed2f735a7ef6",
       "expected_title": "Right Shoulder and Arm Reaching Across Torso (ATM, 1/17/26, Ch 1)",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q1268",
       "query": "feldenkrais lesson diagonal connection shoulder to opposite hip",
       "expected_doc_id": "d84fa2f6-36f7-46e4-996f-ed2f735a7ef6",
       "expected_title": "Right Shoulder and Arm Reaching Across Torso (ATM, 1/17/26, Ch 1)",
-      "category": "body"
+      "category": "body",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q1269",
@@ -9045,7 +9237,10 @@
       "query": "feldenkrais lesson shoulder blades sliding over ribs spinal rotation",
       "expected_doc_id": "5fbd06cf-d7b0-48fb-b3f6-0b20a5f35a8c",
       "expected_title": "Rolling Arms with Spinal Integration (ATM, 5/12/25, Ch 3)",
-      "category": "body"
+      "category": "body",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q1293",
@@ -9318,7 +9513,10 @@
       "query": "how to connect arm rotation to movement in the shoulder blades",
       "expected_doc_id": "b3cf9683-15ec-4a2c-899c-4e68d1257c37",
       "expected_title": "Rolling the Fists, Introduction",
-      "category": "body"
+      "category": "body",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q1332",
@@ -9857,7 +10055,10 @@
       "query": "feldenkrais lesson lifting shoulder with support under scapula",
       "expected_doc_id": "13f30dcd-0b68-4830-a578-102f1354aefa",
       "expected_title": "Shoulder Girdle Integration and Support (FI Demo, 2/9/25, Ch 5)",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q1409",
@@ -9906,7 +10107,10 @@
       "query": "Feldenkrais lesson connecting arm movement to spine and pelvis",
       "expected_doc_id": "7c3e20c4-77ba-4fd1-8e70-999c5ebf845b",
       "expected_title": "Shoulder Joint and Scapular Movement Anatomy (Lecture, 11/7/25, Ch 5)",
-      "category": "body"
+      "category": "body",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q1416",
@@ -9941,7 +10145,10 @@
       "query": "Feldenkrais lesson side lying shoulder moving up and over ribs",
       "expected_doc_id": "24bc7b4d-c4e0-4b95-8065-6b7f1a468a16",
       "expected_title": "Shoulder Mechanics and Mobilization Techniques (FI Demo, 1/16/26, Ch 3)",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q1421",
@@ -10018,21 +10225,30 @@
       "query": "feldenkrais lesson feeling weight shift from hip to shoulder",
       "expected_doc_id": "53fb598e-3e2d-4356-8e04-041a38a4eece",
       "expected_title": "Shoulder Restriction and Postural Habit Pattern (FI Demo, 10/4/25, Ch 2)",
-      "category": "experience"
+      "category": "experience",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q1432",
       "query": "Feldenkrais lesson rolling like a log with hand on chest",
       "expected_doc_id": "67f79924-9ba5-4a63-8046-201dd97ae6c5",
       "expected_title": "Shoulder and Arm Development Sequence (FI Demo, 11/8/25, Ch 2)",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q1433",
       "query": "Feldenkrais lesson connecting arm movement to spine and pelvis",
       "expected_doc_id": "67f79924-9ba5-4a63-8046-201dd97ae6c5",
       "expected_title": "Shoulder and Arm Development Sequence (FI Demo, 11/8/25, Ch 2)",
-      "category": "body"
+      "category": "body",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q1434",
@@ -10263,7 +10479,10 @@
       "query": "feldenkrais connecting hand to knee to feel spine and ribs",
       "expected_doc_id": "191e634f-0a44-44ac-9bef-8a2022df5212",
       "expected_title": "Side-Lying Leg Coordination Exploration (ATM, 10/10/25, Ch 3)",
-      "category": "body"
+      "category": "body",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q1467",
@@ -10613,7 +10832,10 @@
       "query": "pelvic rocking with arm rotations and tilting to the side",
       "expected_doc_id": "926921fc-4e10-4a19-89b8-642b4f0e2219",
       "expected_title": "Skewering the Spine | Movement is Life with the Feldenkrais Method\u00ae",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q1517",
@@ -10746,7 +10968,10 @@
       "query": "Feldenkrais lesson connecting hand through spine to opposite foot",
       "expected_doc_id": "20bd13fc-719d-4b20-9ea4-735b61fe0d09",
       "expected_title": "Spinal Articulation and Standing Organization (ATM, 5/11/25, Ch 7)",
-      "category": "body"
+      "category": "body",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q1536",
@@ -10928,7 +11153,10 @@
       "query": "Feldenkrais lesson pressing one foot to lift the hip and roll the head",
       "expected_doc_id": "f51db8b8-7b42-448f-8141-9210e56a217a",
       "expected_title": "Spring Awakening - Sensing Ground Forces | Movement is Life with the Feldenkrais Method\u00ae",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q1562",
@@ -11642,7 +11870,10 @@
       "query": "Feldenkrais lesson lifting arm and opposite leg while lying on back",
       "expected_doc_id": "f0025772-0a3f-4e23-a500-d2051c7795b6",
       "expected_title": "Thorax and Back",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q1664",
@@ -12132,7 +12363,10 @@
       "query": "Feldenkrais lesson diagonal connection foot to opposite shoulder",
       "expected_doc_id": "98717b2b-1ea8-4a91-bcea-396544cf49d4",
       "expected_title": "Twisting the Pelvis w/ Long Arm",
-      "category": "body"
+      "category": "body",
+      "tags": [
+        "kinetic_chain"
+      ]
     },
     {
       "id": "q1734",
@@ -12356,7 +12590,10 @@
       "query": "Feldenkrais lesson freeing the hand and connecting it to face and feet",
       "expected_doc_id": "9e3564d4-dc52-4631-b030-ec21fff23fbc",
       "expected_title": "Working with a Child with Hemiplegia (FI Demo, 7/23/25, Ch 2)",
-      "category": "action"
+      "category": "action",
+      "tags": [
+        "spatial_configuration"
+      ]
     },
     {
       "id": "q1766",

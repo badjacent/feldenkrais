@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Pass0bSpatialResult",
+  "description": "Pass 0b Spatial: per-group spatial configuration extraction",
+  "type": "object",
+  "properties": {
+    "groups": {
+      "type": "array",
+      "description": "Spatial configuration for each group in the lesson",
+      "items": {
+        "type": "object",
+        "properties": {
+          "group_number": {
+            "type": "integer",
+            "description": "Group number from the lesson structure"
+          },
+          "position": {
+            "type": "string",
+            "enum": ["supine", "prone", "side_lying_left", "side_lying_right", "sitting", "standing", "kneeling", "all_fours"],
+            "description": "Primary body position for this group"
+          },
+          "contacts": {
+            "type": "array",
+            "description": "Body-part-to-surface contact points (floor, wall, chair)",
+            "items": {
+              "type": "object",
+              "properties": {
+                "part": {
+                  "type": "string",
+                  "description": "Body part in contact with surface"
+                },
+                "surface": {
+                  "type": "string",
+                  "description": "Surface being contacted: floor, wall, chair"
+                },
+                "qualifier": {
+                  "type": "string",
+                  "description": "Optional detail about the contact (e.g., 'standing close to pelvis')"
+                }
+              },
+              "required": ["part", "surface"]
+            }
+          },
+          "holds": {
+            "type": "array",
+            "description": "Body-part-to-body-part contact (one part holding or touching another)",
+            "items": {
+              "type": "object",
+              "properties": {
+                "part_a": {
+                  "type": "string",
+                  "description": "First body part"
+                },
+                "part_b": {
+                  "type": "string",
+                  "description": "Second body part being held or contacted"
+                }
+              },
+              "required": ["part_a", "part_b"]
+            }
+          },
+          "constraints": {
+            "type": "array",
+            "description": "Movement restrictions — parts that must stay fixed or follow a rule",
+            "items": {
+              "type": "object",
+              "properties": {
+                "part": {
+                  "type": "string",
+                  "description": "Body part being constrained"
+                },
+                "rule": {
+                  "type": "string",
+                  "description": "What the constraint is (e.g., 'stay flat on floor', 'fixed length to feet')"
+                }
+              },
+              "required": ["part", "rule"]
+            }
+          },
+          "primary_movements": {
+            "type": "array",
+            "description": "The main movements explored in this group, described in plain physical language",
+            "items": {
+              "type": "string"
+            }
+          },
+          "config_signature": {
+            "type": "string",
+            "description": "Normalized one-line summary using canonical body part vocabulary: position | holds | constraints | movement"
+          },
+          "config_detail": {
+            "type": "string",
+            "description": "Detailed one-line summary using specific terms from the lesson: position | holds | constraints | movement"
+          }
+        },
+        "required": ["group_number", "position", "contacts", "holds", "constraints", "primary_movements", "config_signature", "config_detail"]
+      }
+    }
+  },
+  "required": ["groups"]
+}

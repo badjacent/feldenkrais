@@ -1560,6 +1560,28 @@ class Database:
                     [(document_id, c["category"], c["value"]) for c in concepts],
                 )
 
+    def upsert_spatial_concepts(self, document_id: str, concepts: list[dict]):
+        """Replace spatial concepts for a lesson (category-scoped delete).
+
+        Only deletes/replaces rows with spatial categories, leaving existing
+        concept rows (body_region, movement_pattern, etc.) untouched.
+
+        concepts: [{"category": ..., "value": ...}, ...]
+        """
+        spatial_categories = ("spatial_config", "contact_point", "constraint", "working_position")
+        with self.get_cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM lesson_concept WHERE document_id = %s AND category = ANY(%s)",
+                (document_id, list(spatial_categories)),
+            )
+            if concepts:
+                from psycopg2.extras import execute_values
+                execute_values(
+                    cursor,
+                    "INSERT INTO lesson_concept (document_id, category, value) VALUES %s",
+                    [(document_id, c["category"], c["value"]) for c in concepts],
+                )
+
     def search_by_concepts(self, terms: list[str], limit: int = 10) -> list[dict]:
         """Search lessons by matching concept values. Ranks by number of matching concepts.
 

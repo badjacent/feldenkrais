@@ -1471,6 +1471,160 @@ def run_pass_0b_concepts(
         raise
 
 
+# -- Spatial configuration extraction --
+
+
+def load_pass_0b_spatial() -> tuple[str, dict]:
+    """Load Pass 0b spatial prompt and schema (per-group spatial configs)."""
+    prompt_path = _data_dir / "pass_0b_spatial.md"
+    schema_path = _data_dir / "pass_0b_spatial.schema.json"
+    prompt = prompt_path.read_text() if prompt_path.exists() else ""
+    schema = json.loads(schema_path.read_text()) if schema_path.exists() else {}
+    return prompt, schema
+
+
+def format_input_for_spatial(pass_a_result: dict, somatic_steps: list) -> str:
+    """Build LLM input for spatial extraction from Pass A groups + Pass 0b somatic.
+
+    Includes only the fields relevant to spatial geometry: clarified,
+    ground_push, and mechanical_directive per step, organized by group.
+    """
+    steps = pass_a_result.get("steps", [])
+    step_lookup = {s["step_number"]: s for s in steps}
+    somatic_lookup = {s["step_number"]: s for s in somatic_steps}
+
+    groups = pass_a_result.get("groups", [])
+
+    spatial_fields = ["clarified", "ground_push", "mechanical_directive"]
+
+    lines = []
+    for g in groups:
+        gnum = g.get("group_number", 0)
+        label = g.get("label", "")
+        desc = g.get("description", "")
+        lines.append(f"## Group {gnum}: {label}")
+        if desc:
+            lines.append(desc)
+        lines.append("")
+
+        for sn in g.get("steps", []):
+            pa_step = step_lookup.get(sn)
+            if not pa_step:
+                continue
+            instruction = pa_step.get("instruction", "")
+            lines.append(f"### Step {sn} — {instruction}")
+
+            som = somatic_lookup.get(sn, {})
+            for field in spatial_fields:
+                val = som.get(field, "")
+                if val and str(val).lower() != "none":
+                    lines.append(f"- **{field}**: {val}")
+
+            lines.append("")
+
+    return "\n".join(lines)
+
+
+def run_pass_0b_spatial(
+    lesson_text: str,
+    provider_key: str | None = None,
+    debug_log: list | None = None,
+) -> dict:
+    """
+    Pass 0b Spatial: Per-group spatial configuration extraction.
+
+    Runs Pass 0b (which runs Pass A internally), then extracts spatial
+    configurations for each group.
+
+    Returns:
+        {
+            "groups": [{"group_number": ..., "position": ..., ...}, ...],
+            "elapsed": float,
+            "cached": bool,
+        }
+    """
+    import time
+
+    # Run Pass 0b (which internally runs Pass A)
+    somatic_result = run_pass_0b(lesson_text, provider_key, debug_log)
+    pass_a_result = somatic_result["pass_a"]
+    somatic_steps = somatic_result.get("enriched_steps", [])
+
+    # Build spatial extraction input
+    spatial_input = format_input_for_spatial(pass_a_result, somatic_steps)
+
+    # Load prompt and schema
+    prompt_template, schema = load_pass_0b_spatial()
+
+    # Build the full prompt
+    prompt = prompt_template + spatial_input
+
+    system_prompt = (
+        "You are a factual observer describing the physical geometry of body "
+        "positions and configurations. Report only what is stated — no "
+        "interpretation, no biomechanical analysis, no pedagogical language."
+    )
+
+    # Check cache
+    cache_suffix = ":pass_0b_spatial_v2"
+    if provider_key and provider_key != DEFAULT_LLM:
+        cache_suffix += f":{provider_key}"
+    cache_key = get_cache_key(lesson_text.strip() + cache_suffix)
+    cached = load_cached_analysis(cache_key)
+    if cached:
+        return {
+            "groups": cached.get("groups", []),
+            "cached": True,
+        }
+
+    # Run LLM
+    llm = _get_llm(provider_key)
+    t0 = time.time()
+
+    if debug_log is not None:
+        debug_log.append({
+            "name": "Pass 0b Spatial",
+            "provider": provider_key or DEFAULT_LLM,
+            "prompt": prompt,
+            "system": system_prompt,
+            "schema": schema,
+        })
+
+    try:
+        result = llm.complete_structured_json(
+            prompt=prompt,
+            schema=schema,
+            system=system_prompt,
+        )
+        elapsed = round(time.time() - t0, 1)
+
+        if debug_log is not None:
+            debug_log[-1]["output"] = json.dumps(result, indent=2)
+            debug_log[-1]["elapsed"] = elapsed
+
+        groups = result.get("groups", [])
+
+        usage = llm.last_usage if llm.last_usage else {}
+
+        # Cache the result
+        save_cached_analysis(cache_key, {
+            "groups": groups,
+            "usage": usage,
+        })
+
+        return {
+            "groups": groups,
+            "elapsed": elapsed,
+            "cached": False,
+            "usage": usage,
+        }
+
+    except Exception as e:
+        if debug_log is not None:
+            debug_log[-1]["error"] = str(e)
+        raise
+
+
 def run_pass_0b_condensed(
     somatic_result: dict,
     lang_result: dict,
