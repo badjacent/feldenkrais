@@ -2,7 +2,7 @@
 
 ## The Idea
 
-You have lesson recordings, videos, or transcripts. This system turns them into a searchable, browsable library where practitioners and students can find lessons by *meaning* — not just keywords — and explore each lesson's structure. This matters because finding the right lesson is hard: libraries grow, titles are cryptic, and students often know what they're looking for in terms of movement or sensation but not by name.
+You have lesson recordings, videos, or transcripts. This system turns them into a searchable, browsable library where practitioners and students can find [Feldenkrais](/docs/feldenkrais_method) lessons by *meaning* — not just keywords — and explore each lesson's structure. This matters because finding the right lesson is hard: libraries grow, titles are cryptic, and students often know what they're looking for in terms of movement or sensation but not by name.
 
 ## How Lessons Get In
 
