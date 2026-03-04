@@ -30,8 +30,8 @@ from llm import get_embeddings
 from cache_helpers import get_cache_key
 
 
-def build_concept_summary(concepts_result: dict, title: str) -> str:
-    """Build embedding text from the distinctive summary only.
+def build_concept_summary(concepts_result: dict, title: str, spatial_result: dict | None = None) -> str:
+    """Build embedding text from the distinctive summary + spatial configs.
 
     Keeps the embedding focused on what makes this lesson unique,
     without diluting with generic concept tags.
@@ -41,6 +41,16 @@ def build_concept_summary(concepts_result: dict, title: str) -> str:
     summary = concepts_result.get("distinctive_summary", "")
     if summary:
         parts.append(summary)
+
+    # Append spatial config_detail strings (body arrangements, holds, constraints)
+    if spatial_result:
+        details = []
+        for group in spatial_result.get("groups", []):
+            detail = group.get("config_detail", "")
+            if detail:
+                details.append(detail)
+        if details:
+            parts.append("Spatial configurations: " + " | ".join(details))
 
     return "\n".join(parts)
 
@@ -78,20 +88,25 @@ def find_docs_with_concepts(db: Database) -> list[dict]:
         docs = [dict(row) for row in cursor.fetchall()]
 
     results = []
-    cache_suffix = ":pass_0b_concepts_v2"
+    concepts_suffix = ":pass_0b_concepts_v2"
+    spatial_suffix = ":pass_0b_spatial_v2"
 
     for doc in docs:
         text = doc["text"].strip()
         if not text:
             continue
-        cache_key = get_cache_key(text + cache_suffix)
+        cache_key = get_cache_key(text + concepts_suffix)
         cached = db.get_cache(cache_key)
         if cached and cached.get("concepts"):
+            # Also look up spatial extraction if available
+            spatial_key = get_cache_key(text + spatial_suffix)
+            spatial_data = db.get_cache(spatial_key)
             results.append({
                 "doc_id": doc["doc_id"],
                 "title": doc["title"],
                 "cache_key": cache_key,
                 "concepts_data": cached,
+                "spatial_data": spatial_data,
             })
 
     return results
@@ -145,7 +160,7 @@ def main():
         concepts = concepts_data.get("concepts", [])
 
         # Build concept embedding text
-        summary = build_concept_summary(concepts_data, doc["title"])
+        summary = build_concept_summary(concepts_data, doc["title"], doc.get("spatial_data"))
         summary_hash = hashlib.sha256(summary.encode()).hexdigest()[:16]
 
         if args.dry_run:

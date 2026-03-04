@@ -20,7 +20,9 @@ Before search happens, each lesson goes through an analysis pipeline that produc
 - A **distinctive report** (200-400 words): position inventory, movement sequences, key body connections, and what makes this lesson different from others. This is the lesson's primary search document.
 - **Concept tags**: structured labels for body regions, movement patterns, positions, and teaching strategies.
 
-The concept extraction step is the key to search quality. It takes the shared somatic vocabulary and distills it into what's *specific* to each lesson.
+**Spatial configuration extraction** identifies the physical setup of each movement group: body position, contact points, holds (which body part holds which), and movement constraints. These spatial configurations are appended to the distinctive report, so the embedding captures concrete physical arrangements — "interlaced fingers behind head," "hand under buttock," "knees stacked" — alongside the conceptual description.
+
+The concept extraction step is the key to search quality. It takes the shared somatic vocabulary and distills it into what's *specific* to each lesson. The spatial layer adds the physical setup vocabulary that students naturally search with.
 
 ## Four Ranking Strategies
 
@@ -72,7 +74,7 @@ The cascade has three parameters: the confidence gate threshold, the RRF constan
 
 ### Evaluation set
 
-An LLM generates search queries from lesson analysis cards — three per lesson covering different query types (action, body region, sensation). Each query has a known correct answer. The current set is 129 queries across 43 diverse lessons selected for maximum variety.
+An LLM generates search queries from lesson analysis cards — three per lesson covering different query types (action, body region, sensation), plus one spatial configuration query per lesson describing a specific body arrangement. Each query has a known correct answer. The current set is 172 queries across 43 lessons.
 
 ### Grid search
 
@@ -84,11 +86,11 @@ This is reusable — when the lesson library or evaluation set changes, re-runni
 
 | Method | P@1 | P@5 | MRR | Found in top 10 |
 |--------|-----|-----|-----|-----------------|
-| Standard | 34.1% | 58.9% | 0.451 | 72.9% |
+| Standard | 29.1% | 51.7% | 0.392 | 65.7% |
 | Distinctive | 41.9% | 78.3% | 0.565 | 86.8% |
-| **Combined (cascade)** | **44.2%** | **81.4%** | **0.601** | **90.7%** |
+| **Combined (cascade)** | **43.6%** | **77.9%** | **0.581** | **86.6%** |
 
-The cascade finds the right lesson in the top 5 over 80% of the time, and somewhere in the top 10 over 90% of the time.
+These numbers reflect the expanded 172-question eval set that includes spatial configuration queries — a harder benchmark than the original 129-question set. The cascade finds the right lesson in the top 5 nearly 80% of the time, and somewhere in the top 10 over 86% of the time.
 
 ### Specificity bands
 
@@ -108,5 +110,6 @@ Search results display the band so users can calibrate their expectations.
 The system is designed to get better with more data:
 
 - **More lessons with concept extraction** — currently 43 of 700+ lessons have distinctive reports. Expanding coverage means the confident mode fires more often and the blended mode has a richer concepts index to draw from.
+- **Spatial enrichment** — adding spatial configuration data (positions, holds, constraints) to the distinctive embedding improved spatial query P@1 from 11.6% to 41.9%, bringing it in line with other query types. Lessons that have both concept and spatial extraction get the strongest search performance.
 - **More evaluation queries** — the grid search is only as good as its test set. Real user queries, once collected, replace synthetic ones and better reflect actual search behavior.
 - **Prompt iteration** — the distinctive report prompt can be refined. Longer, more physically specific reports produced measurably better embeddings (we saw this when expanding from 2-3 sentences to 200-400 words).

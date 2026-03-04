@@ -1,6 +1,6 @@
 {
   "version": "1",
-  "generated_at": "2026-03-03T21:02:47.500947+00:00",
+  "generated_at": "2026-03-04T02:38:06.628012+00:00",
   "lesson_count": 43,
   "questions": [
     {
@@ -905,6 +905,307 @@
       "expected_doc_id": "154cde8d-d1c9-4f95-a23c-fd4010713646",
       "expected_title": "Your Navigational Pelvis - Feldenkrais Project",
       "category": "experience"
+    },
+    {
+      "id": "q0130",
+      "query": "Feldenkrais lesson sitting feeling tripod of foot",
+      "expected_doc_id": "b2cee454-6355-4f80-966e-133dfc18f8eb",
+      "expected_title": "Activating the Arches - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0131",
+      "query": "Feldenkrais supine one knee floating toward chest ankle moving",
+      "expected_doc_id": "082e2a61-c9ae-4f78-aee0-76344907cb38",
+      "expected_title": "Agile Hips, Knees, and Feet - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0132",
+      "query": "Feldenkrais supine one hand on opposite shoulder moving head",
+      "expected_doc_id": "98211ff4-c690-4eb3-9243-9a642ac14d8c",
+      "expected_title": "Arms Like a Skeleton, with a Bias - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0133",
+      "query": "feldenkrais supine hands behind head moving elbows side to side",
+      "expected_doc_id": "da0a6c28-4a78-45e8-b02d-cda28d14886e",
+      "expected_title": "Bending Sideways - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0134",
+      "query": "Feldenkrais lesson lying down, one knee bent out to the side",
+      "expected_doc_id": "00a0dff0-23d1-48f5-923e-d77b1d6d5d74",
+      "expected_title": "Breath, Belly, Back, and Hips: Connecting to the Earth - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0135",
+      "query": "Feldenkrais lying on back, elbows up, head rolls with hand closing",
+      "expected_doc_id": "fdf84091-1b9c-4c33-889c-50eb22d8541c",
+      "expected_title": "Calming Your Nervous System, Integrating Hands and Eyes - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0136",
+      "query": "supine feet standing interlaced fingers behind head elbows at shoulder height",
+      "expected_doc_id": "f54baa93-2bff-4e27-9b2f-29750472a261",
+      "expected_title": "Chanukia, the Candle Holder Lesson - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0137",
+      "query": "Feldenkrais side lying, knees stacked, sliding top hand forward and back",
+      "expected_doc_id": "7233897b-431d-4101-9324-753e1f2ca384",
+      "expected_title": "Connecting Arms and Legs, Hinges at Feet and Knees - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0138",
+      "query": "side lying hand on hip moving shoulder",
+      "expected_doc_id": "d490d242-0625-4480-9acf-33a1a78ebe5e",
+      "expected_title": "Connecting Shoulders and Hips Part 1 - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0139",
+      "query": "Feldenkrais sitting shifting weight feeling sit bones with fingers",
+      "expected_doc_id": "05f95b68-d8d4-4547-b868-a1a2d8e7baf7",
+      "expected_title": "Driving and Dynamic Sitting - Chair Practice - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0140",
+      "query": "sitting rolling pelvis with hand under buttock",
+      "expected_doc_id": "2504991a-441b-45e3-bb98-dc2795c2afd6",
+      "expected_title": "Easier Sitting Workshop Lesson 1 - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0141",
+      "query": "sitting, hands in lap, eyes forward, turning head",
+      "expected_doc_id": "459578fb-4832-4ac8-9027-0eec471dec96",
+      "expected_title": "Easier Sitting Workshop Lesson 2 - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0142",
+      "query": "Feldenkrais lesson sitting holding chin and moving jaw",
+      "expected_doc_id": "0408d9d6-a353-4a8d-836c-f2884c894acb",
+      "expected_title": "Easing the Jaw, Neck, and Shoulders - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0143",
+      "query": "Feldenkrais lesson: lying on back, one foot on opposite knee",
+      "expected_doc_id": "5a166415-3e7a-4411-a058-45ad372841d1",
+      "expected_title": "Floating Toward Bridging - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0144",
+      "query": "Feldenkrais lesson: lying on back, hands behind head, rocking on heels",
+      "expected_doc_id": "f53988e0-8eab-4468-9dc1-ecdc478f5141",
+      "expected_title": "Folding, Foundation, and Feet - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0145",
+      "query": "Feldenkrais standing fingertips on chest walking",
+      "expected_doc_id": "9b67a689-c1fd-4063-ad1a-fa2aeb7f69dd",
+      "expected_title": "Free Your Torso for Better Posture, Walking, and Running - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0146",
+      "query": "Feldenkrais lesson lying on back hands on belly flat back",
+      "expected_doc_id": "d4be3b8d-3cbc-42b6-9d23-b97381858157",
+      "expected_title": "Freeing Your Breath and Spine (16m or 37m) - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0147",
+      "query": "lying on back knees bent hands behind head lifting head",
+      "expected_doc_id": "98a59c2f-10ec-4eff-b49b-17e9db5f4e1c",
+      "expected_title": "Fundamentals of a Healthy Back - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0148",
+      "query": "lying on side, hand behind head, lengthening heel",
+      "expected_doc_id": "50fa3469-e889-4250-b531-08dac33c70d8",
+      "expected_title": "Gathering the Spine, Stepping Down - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0149",
+      "query": "Feldenkrais supine knees up hand on forehead eyes fixed",
+      "expected_doc_id": "92cb5d50-1e79-46d6-b4e4-e4f367d7a002",
+      "expected_title": "Legs as Free as a Baby's - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0150",
+      "query": "Feldenkrais hand on forehead rolling head and foot together",
+      "expected_doc_id": "27f6966f-afb8-4b42-9eac-bbde02408b35",
+      "expected_title": "Length Without Effort - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0151",
+      "query": "Feldenkrais lesson: lying on back, one hand behind head, other on knee",
+      "expected_doc_id": "af3ab002-2dfe-46d6-9e0f-ce3a3013029d",
+      "expected_title": "Lifting Up and Through - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0152",
+      "query": "lying on back holding knees, move pubic bone",
+      "expected_doc_id": "f5b8cece-4f45-4caf-acfe-4964e561cb10",
+      "expected_title": "Long Belly, Strong Back: Short Version - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0153",
+      "query": "sitting legs wide hands behind arching back looking up",
+      "expected_doc_id": "be9869b7-38df-4723-b434-9b6542334d25",
+      "expected_title": "More Precise Hips and Spine - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0154",
+      "query": "Feldenkrais lesson: lying on back, knees up, tilting knees side to side",
+      "expected_doc_id": "80b3c160-1fa0-4903-8254-8136d3c3efe9",
+      "expected_title": "Pelvic Floor Connections - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0155",
+      "query": "Feldenkrais lesson lying on side knees together arm opening like a wing",
+      "expected_doc_id": "d3ff9c31-27a4-4af6-90f3-38465ed44d54",
+      "expected_title": "Reaching, Rolling, and Ribs - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0156",
+      "query": "Feldenkrais lying on back holding knees rolling head side to side",
+      "expected_doc_id": "07c970de-d30a-4ecf-8859-c7a6b148e8fd",
+      "expected_title": "Rolling to Sitting, and Beyond - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0157",
+      "query": "Feldenkrais sitting knees to the side looking at hand",
+      "expected_doc_id": "aaea18f1-a090-40d0-b719-eff0b52f12e5",
+      "expected_title": "Secrets of the Seated Twist - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0158",
+      "query": "Feldenkrais lying on side moving shoulder towards ear and hip",
+      "expected_doc_id": "22cc3119-fba9-4e92-8c4a-a540b8c89e75",
+      "expected_title": "Side Clock: Shoulders (and Intro to Hip) - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0159",
+      "query": "lying on back moving pelvis like clock with feet on floor",
+      "expected_doc_id": "795b4039-7c22-4619-9aec-4d26755c3c6c",
+      "expected_title": "Simple Floor Clock - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0160",
+      "query": "Feldenkrais lesson lying down, hugging myself, one foot up",
+      "expected_doc_id": "4c768a03-56ef-4ef5-827c-f8694e248f7a",
+      "expected_title": "Simple Self-Hug - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0161",
+      "query": "sitting twisting while keeping eyes forward",
+      "expected_doc_id": "d2688638-17f2-4cc2-a66f-33ee1414e07e",
+      "expected_title": "Sitting and Turning with Length - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0162",
+      "query": "Feldenkrais supine, knees up, rolling pelvis without knees falling",
+      "expected_doc_id": "4d61b1bf-a3e6-4869-9da5-518834298e60",
+      "expected_title": "Spinal Support and a Powerful Pelvis - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0163",
+      "query": "Feldenkrais supine with hands together making triangle above chest",
+      "expected_doc_id": "35900777-13cf-48fe-b441-64be29053339",
+      "expected_title": "Spine Like a Chain, Freeing the Shoulder Girdle - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0164",
+      "query": "lying on back, hands on ribs, moving ribs and head opposite directions",
+      "expected_doc_id": "ade87dda-4bb5-447a-b412-6203edc0c3b5",
+      "expected_title": "Spine Like a Chain, with a Bias - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0165",
+      "query": "lying on back hands behind head knees bent bringing elbow to knee",
+      "expected_doc_id": "642a5cff-80ce-4b78-bbbd-42d6e00e0660",
+      "expected_title": "Strength Without Excess - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0166",
+      "query": "side lying with top hand on bottom hand and knee on knee",
+      "expected_doc_id": "f6135208-f4f4-4c59-bab3-cf740c3e9986",
+      "expected_title": "Stretch Without Strain - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0167",
+      "query": "supine pushing with heels while keeping shoulders on the floor",
+      "expected_doc_id": "5f4f4acf-9697-43ec-b961-5fb129fc2408",
+      "expected_title": "The Anti-Gravity Lesson - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0168",
+      "query": "Feldenkrais lesson lying on stomach with hands on buttocks",
+      "expected_doc_id": "c0697055-4a0f-4e4a-a1ce-46bb9832363f",
+      "expected_title": "The Buttocks - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0169",
+      "query": "Feldenkrais lesson: lying on back, one knee propped up, foot on floor",
+      "expected_doc_id": "88f70d83-c274-41c4-9d43-df630fd2ad52",
+      "expected_title": "The Hip Joints: Moving Proximal Around Distal - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0170",
+      "query": "lying on side, top knee resting on bottom knee",
+      "expected_doc_id": "6819613d-75b4-4cd1-87b2-431daf999c3b",
+      "expected_title": "The Periscope - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0171",
+      "query": "supine, legs crossed, hand on opposite temple, knees tilted",
+      "expected_doc_id": "a3b0f882-2acd-4dd0-bcab-3714758ca1bc",
+      "expected_title": "Twisted Lamprey - Feldenkrais Project",
+      "category": "spatial_configuration"
+    },
+    {
+      "id": "q0172",
+      "query": "Feldenkrais lesson lying on back hands on stomach moving pelvis",
+      "expected_doc_id": "154cde8d-d1c9-4f95-a23c-fd4010713646",
+      "expected_title": "Your Navigational Pelvis - Feldenkrais Project",
+      "category": "spatial_configuration"
     }
   ]
 }
