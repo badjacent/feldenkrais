@@ -4211,19 +4211,20 @@ function renderTranscript() {{
     let html = '';
     for (const gn of groupOrder) {{
         const group = analysisData.groups ? analysisData.groups.find(g => g.group_number === gn) : null;
-        const label = group ? group.label : 'Group ' + gn;
+        const heading = group ? 'Group ' + gn + ': ' + escHtml(group.label) : 'Group ' + gn;
         const pos = group && group.starting_position ? '<span style="color:#888;font-weight:400;font-size:0.85em;margin-left:8px;">' + escHtml(group.starting_position) + '</span>' : '';
         html += '<div style="margin-bottom:28px;">';
         html += '<div style="border-left:4px solid #1a73e8;padding:8px 16px;margin-bottom:12px;">';
-        html += '<div style="font-size:1.05em;font-weight:600;color:#222;">Group ' + gn + ': ' + escHtml(label) + pos + '</div>';
+        html += '<div style="font-size:1.05em;font-weight:600;color:#222;">' + heading + pos + '</div>';
         html += '</div>';
         for (let si = 0; si < groupMap[gn].length; si++) {{
             const step = groupMap[gn][si];
             const segs = (step.segments || []).filter(s => s.text);
             if (!segs.length) continue;
             const text = segs.map(s => s.text.trim()).join(' ');
+            const timeStr = (step.time_start != null && step.time_end != null) ? ' <span style="font-weight:400;color:#aaa;">' + fmtTime(step.time_start) + ' \u2013 ' + fmtTime(step.time_end) + '</span>' : '';
             html += '<div style="padding:0 16px 12px 24px;' + (si < groupMap[gn].length - 1 ? 'border-bottom:1px solid #f0f0f0;margin-bottom:12px;' : '') + '">';
-            html += '<div style="font-size:0.75em;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Step ' + step.step_number + '</div>';
+            html += '<div style="font-size:0.75em;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Step ' + step.step_number + timeStr + '</div>';
             html += '<div style="font-size:0.95em;line-height:1.7;color:#333;">' + escHtml(text) + '</div>';
             html += '</div>';
         }}
