@@ -166,7 +166,7 @@ CREATE TABLE IF NOT EXISTS users (
     tier TEXT NOT NULL DEFAULT 'user',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     last_login_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE (provider, provider_id)
+    UNIQUE (provider, login)
 );
 
 CREATE TABLE IF NOT EXISTS allowed_logins (
@@ -687,6 +687,66 @@ class Database:
             )
             return deleted
 
+    def resubmit_document(self, document_id: str) -> dict:
+        """
+        Clear all pipeline state for a document so it can be reprocessed.
+
+        Deletes: transcription jobs, transcription analysis, embeddings,
+        condensed/pass_0b cache entries, and permanent_failure log entries.
+        Resets transcription_retries to 0.
+        """
+        import hashlib
+
+        cleared = {}
+
+        # Compute cache keys to clear BEFORE deleting the transcript
+        cache_keys_to_delete = []
+        transcript = self.get_document_transcription(document_id)
+        if transcript and transcript.strip():
+            text = transcript.strip()
+            for suffix in (":pass_0b_v2", ":pass_0b_lang_v1", ":pass_0b_word_lang_v3",
+                           ":pass_0b_concepts_v2", ":pass_0b_spatial_v2",
+                           ":pass_0b_condensed_v4"):
+                cache_keys_to_delete.append(
+                    hashlib.sha256((text + suffix).encode()).hexdigest()[:16]
+                )
+
+        with self.get_cursor() as cursor:
+            # Delete transcription jobs
+            cursor.execute("DELETE FROM transcription_job WHERE document_id = %s", (document_id,))
+            cleared["transcription_jobs"] = cursor.rowcount
+
+            # Delete transcription (analysis type_id=1)
+            cursor.execute("DELETE FROM analysis WHERE document_id = %s AND type_id = 1", (document_id,))
+            cleared["transcription"] = cursor.rowcount
+
+            # Delete embeddings
+            cursor.execute("DELETE FROM lesson_embedding WHERE document_id = %s", (document_id,))
+            cleared["embeddings"] = cursor.rowcount
+
+            # Reset retry counter
+            cursor.execute(
+                "UPDATE document SET transcription_retries = 0, updated_at = NOW() WHERE id = %s",
+                (document_id,),
+            )
+
+            # Delete permanent_failure log entries for this doc
+            cursor.execute(
+                "DELETE FROM pipeline_log WHERE document_id = %s AND event = 'permanent_failure'",
+                (document_id,),
+            )
+            cleared["failure_logs"] = cursor.rowcount
+
+            # Delete pass_0b cache entries
+            if cache_keys_to_delete:
+                cursor.execute(
+                    "DELETE FROM cache WHERE key = ANY(%s)",
+                    (cache_keys_to_delete,),
+                )
+                cleared["cache_entries"] = cursor.rowcount
+
+        return cleared
+
     def create_analysis(
         self,
         document_id: str,
@@ -1059,14 +1119,19 @@ class Database:
     def upsert_user(self, provider: str, provider_id: str, login: str,
                     name: str = None, email: str = None,
                     avatar_url: str = None) -> dict:
-        """Insert or update an OAuth user. Returns the user dict."""
+        """Insert or update an OAuth user. Returns the user dict.
+
+        Matches on (provider, login) to handle provider_id format changes
+        (e.g. Google switching from email to numeric ID). Updates provider_id
+        on match so the record stays current.
+        """
         with self.get_cursor() as cursor:
             cursor.execute(
                 """
                 INSERT INTO users (provider, provider_id, login, name, email, avatar_url)
                 VALUES (%s, %s, %s, %s, %s, %s)
-                ON CONFLICT (provider, provider_id) DO UPDATE SET
-                    login = EXCLUDED.login,
+                ON CONFLICT (provider, login) DO UPDATE SET
+                    provider_id = EXCLUDED.provider_id,
                     name = EXCLUDED.name,
                     email = EXCLUDED.email,
                     avatar_url = EXCLUDED.avatar_url,
