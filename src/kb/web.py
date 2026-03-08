@@ -238,6 +238,16 @@ async def search_site_guard(request: Request, call_next):
     if path.startswith("/auth/"):
         return await call_next(request)
 
+    # Finder subdomain is public — no auth required
+    if _is_finder_site(request):
+        allowed = (
+            path == "/"
+            or path.startswith("/api/finder")
+        )
+        if not allowed:
+            return RedirectResponse("/")
+        return await call_next(request)
+
     # On Lambda, require login for all pages
     if IS_LAMBDA and not _auth_mod.get_current_user(request):
         return HTMLResponse(_login_page_html())
@@ -249,15 +259,6 @@ async def search_site_guard(request: Request, call_next):
             or path.startswith("/lesson/")
             or path.startswith("/api/")
             or path.startswith("/docs/")
-        )
-        if not allowed:
-            return RedirectResponse("/")
-
-    # On finder subdomain, restrict to finder paths only
-    if _is_finder_site(request):
-        allowed = (
-            path == "/"
-            or path.startswith("/api/finder")
         )
         if not allowed:
             return RedirectResponse("/")
