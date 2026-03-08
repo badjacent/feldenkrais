@@ -3361,6 +3361,10 @@ async function doSearch() {{
 @app.get("/api/finder/search")
 async def finder_search(q: str, limit: int = 20):
     """Semantic search across external lessons."""
+    # Check LLM kill switch
+    settings = _db.get_cache("settings:llm_enabled") if _db else None
+    if not settings or not settings.get("enabled", False):
+        return JSONResponse({"error": "Search is temporarily disabled"}, status_code=503)
     import openai
     client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY", "").strip())
     resp = client.embeddings.create(model="text-embedding-3-small", input=[q])
