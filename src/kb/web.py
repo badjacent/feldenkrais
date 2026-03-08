@@ -3421,6 +3421,9 @@ async def landing_page(request: Request):
     user = _set_source_access(request)
     search_mode = _is_search_site(request)
     su_active = _is_superuser_active(request, user)
+    # Search subdomain: always show clean search page, no dev tools
+    if search_mode:
+        return HTMLResponse(build_search_home_html(user=user, superuser_active=su_active, get_lessons_fn=get_available_lessons))
     show_dev = not IS_LAMBDA or (user and user.get("tier") == "admin")
     if not show_dev:
         return HTMLResponse(build_search_home_html(user=user, superuser_active=su_active, get_lessons_fn=get_available_lessons))
