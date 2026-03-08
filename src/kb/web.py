@@ -3362,7 +3362,7 @@ async function doSearch() {{
 async def finder_search(q: str, limit: int = 20):
     """Semantic search across external lessons."""
     import openai
-    client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
+    client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY", "").strip())
     resp = client.embeddings.create(model="text-embedding-3-small", input=[q])
     vec = resp.data[0].embedding
 
