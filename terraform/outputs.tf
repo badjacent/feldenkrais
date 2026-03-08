@@ -57,3 +57,8 @@ output "web_custom_domain" {
   description = "Custom domain URL"
   value       = var.domain_name != "" ? "https://${var.domain_name}" : null
 }
+
+output "finder_domain" {
+  description = "Finder subdomain URL"
+  value       = var.finder_domain_name != "" ? "https://${var.finder_domain_name}" : null
+}

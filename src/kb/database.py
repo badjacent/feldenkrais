@@ -203,6 +203,26 @@ CREATE TABLE IF NOT EXISTS group_source_access (
     source_id INTEGER NOT NULL REFERENCES document_source(id) ON DELETE CASCADE,
     PRIMARY KEY (group_id, source_id)
 );
+
+CREATE TABLE IF NOT EXISTS external_lesson (
+    id SERIAL PRIMARY KEY,
+    lesson_source_id INTEGER REFERENCES lesson_source(id) ON DELETE SET NULL,
+    title TEXT NOT NULL,
+    url TEXT,
+    description TEXT,
+    tags TEXT[],
+    position TEXT,
+    duration_minutes INTEGER,
+    language TEXT DEFAULT 'en',
+    access TEXT,
+    content_type TEXT,
+    embedding vector(1536),
+    embed_text TEXT,
+    extras JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (lesson_source_id, title)
+);
 """
 
 INDEXES = """
@@ -226,6 +246,8 @@ CREATE INDEX IF NOT EXISTS idx_lesson_embedding_hnsw ON lesson_embedding USING h
 CREATE INDEX IF NOT EXISTS idx_lesson_embedding_method ON lesson_embedding (method);
 CREATE INDEX IF NOT EXISTS idx_lesson_concept_value ON lesson_concept (value);
 CREATE INDEX IF NOT EXISTS idx_lesson_concept_category ON lesson_concept (category, value);
+CREATE INDEX IF NOT EXISTS idx_external_lesson_source ON external_lesson (lesson_source_id);
+CREATE INDEX IF NOT EXISTS idx_external_lesson_embedding_hnsw ON external_lesson USING hnsw (embedding vector_cosine_ops);
 """
 
 SEED_DATA = """

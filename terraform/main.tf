@@ -681,6 +681,10 @@ data "archive_file" "web_lambda" {
   }
   # Extracted modules (required by web.py)
   source {
+    content  = file("${path.module}/../src/kb/web_pages.py")
+    filename = "web_pages.py"
+  }
+  source {
     content  = file("${path.module}/../src/kb/cache_helpers.py")
     filename = "cache_helpers.py"
   }
@@ -823,6 +827,7 @@ resource "aws_lambda_function" "web" {
       AWS_LAMBDA_FUNCTION_NAME_SELF = "feldenkrais-web-${var.environment}"
       DEPLOY_SHA                    = var.deploy_sha
       SEARCH_DOMAIN                 = var.search_domain_name
+      FINDER_DOMAIN                 = var.finder_domain_name
       GITHUB_CLIENT_ID              = var.github_client_id
       GITHUB_CLIENT_SECRET          = var.github_client_secret
       GOOGLE_OAUTH_CLIENT_ID        = var.google_oauth_client_id
@@ -1002,6 +1007,84 @@ resource "aws_route53_record" "search" {
   alias {
     name                   = aws_apigatewayv2_domain_name.search[0].domain_name_configuration[0].target_domain_name
     zone_id                = aws_apigatewayv2_domain_name.search[0].domain_name_configuration[0].hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+# -----------------------------------------------------------------------------
+# Finder Subdomain (Route 53 + ACM + API Gateway) — external lesson finder
+# -----------------------------------------------------------------------------
+
+locals {
+  finder_parent_domain = var.finder_domain_name != "" ? join(".", slice(split(".", var.finder_domain_name), 1, length(split(".", var.finder_domain_name)))) : ""
+}
+
+data "aws_route53_zone" "finder" {
+  count = var.finder_domain_name != "" ? 1 : 0
+  name  = local.finder_parent_domain
+}
+
+resource "aws_acm_certificate" "finder" {
+  count             = var.finder_domain_name != "" ? 1 : 0
+  domain_name       = var.finder_domain_name
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_route53_record" "finder_cert_validation" {
+  for_each = var.finder_domain_name != "" ? {
+    for dvo in aws_acm_certificate.finder[0].domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      record = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
+  } : {}
+
+  zone_id = data.aws_route53_zone.finder[0].zone_id
+  name    = each.value.name
+  type    = each.value.type
+  records = [each.value.record]
+  ttl     = 60
+
+  allow_overwrite = true
+}
+
+resource "aws_acm_certificate_validation" "finder" {
+  count                   = var.finder_domain_name != "" ? 1 : 0
+  certificate_arn         = aws_acm_certificate.finder[0].arn
+  validation_record_fqdns = [for record in aws_route53_record.finder_cert_validation : record.fqdn]
+}
+
+resource "aws_apigatewayv2_domain_name" "finder" {
+  count       = var.finder_domain_name != "" ? 1 : 0
+  domain_name = var.finder_domain_name
+
+  domain_name_configuration {
+    certificate_arn = aws_acm_certificate_validation.finder[0].certificate_arn
+    endpoint_type   = "REGIONAL"
+    security_policy = "TLS_1_2"
+  }
+}
+
+resource "aws_apigatewayv2_api_mapping" "finder" {
+  count       = var.finder_domain_name != "" ? 1 : 0
+  api_id      = aws_apigatewayv2_api.web.id
+  domain_name = aws_apigatewayv2_domain_name.finder[0].domain_name
+  stage       = "$default"
+}
+
+resource "aws_route53_record" "finder" {
+  count   = var.finder_domain_name != "" ? 1 : 0
+  zone_id = data.aws_route53_zone.finder[0].zone_id
+  name    = var.finder_domain_name
+  type    = "A"
+
+  alias {
+    name                   = aws_apigatewayv2_domain_name.finder[0].domain_name_configuration[0].target_domain_name
+    zone_id                = aws_apigatewayv2_domain_name.finder[0].domain_name_configuration[0].hosted_zone_id
     evaluate_target_health = false
   }
 }

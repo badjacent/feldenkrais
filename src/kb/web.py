@@ -38,8 +38,9 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from llm import LLM
 from storage import Storage
 
-# ── Search subdomain detection ────────────────────────────────────────
+# ── Subdomain detection ───────────────────────────────────────────────
 SEARCH_DOMAIN = os.environ.get("SEARCH_DOMAIN", "")
+FINDER_DOMAIN = os.environ.get("FINDER_DOMAIN", "")
 
 
 def _is_search_site(request: Request) -> bool:
@@ -48,6 +49,14 @@ def _is_search_site(request: Request) -> bool:
         return False
     host = request.headers.get("host", "")
     return host == SEARCH_DOMAIN or host.startswith(SEARCH_DOMAIN + ":")
+
+
+def _is_finder_site(request: Request) -> bool:
+    """True when served from the finder subdomain."""
+    if not FINDER_DOMAIN:
+        return False
+    host = request.headers.get("host", "")
+    return host == FINDER_DOMAIN or host.startswith(FINDER_DOMAIN + ":")
 
 
 # ── Source access helpers ─────────────────────────────────────────────
@@ -240,6 +249,15 @@ async def search_site_guard(request: Request, call_next):
             or path.startswith("/lesson/")
             or path.startswith("/api/")
             or path.startswith("/docs/")
+        )
+        if not allowed:
+            return RedirectResponse("/")
+
+    # On finder subdomain, restrict to finder paths only
+    if _is_finder_site(request):
+        allowed = (
+            path == "/"
+            or path.startswith("/api/finder")
         )
         if not allowed:
             return RedirectResponse("/")
@@ -3243,11 +3261,163 @@ except ImportError:
     pass
 
 
+# --- Finder (external lesson search) ---
+
+def _build_finder_html():
+    """Build the finder landing page HTML."""
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Feldenkrais Lesson Finder</title>
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         background: #fafafa; color: #333; min-height: 100vh;
+         display: flex; flex-direction: column; align-items: center; }}
+  .hero {{ text-align: center; padding: 60px 20px 30px; max-width: 640px; }}
+  .hero h1 {{ font-size: 1.8rem; font-weight: 600; margin-bottom: 8px; }}
+  .hero p {{ color: #666; font-size: 1rem; margin-bottom: 30px; }}
+  .search-box {{ display: flex; gap: 8px; max-width: 560px; width: 100%; margin: 0 auto; }}
+  .search-box input {{ flex: 1; padding: 12px 16px; font-size: 1rem; border: 1px solid #ccc;
+                       border-radius: 8px; outline: none; }}
+  .search-box input:focus {{ border-color: #4a90d9; box-shadow: 0 0 0 2px rgba(74,144,217,0.2); }}
+  .search-box button {{ padding: 12px 24px; font-size: 1rem; background: #4a90d9; color: #fff;
+                        border: none; border-radius: 8px; cursor: pointer; font-weight: 500; }}
+  .search-box button:hover {{ background: #3a7bc8; }}
+  .results {{ max-width: 640px; width: 100%; padding: 20px; }}
+  .result-card {{ background: #fff; border: 1px solid #e8e8e8; border-radius: 8px;
+                  padding: 16px; margin-bottom: 12px; }}
+  .result-card h3 {{ font-size: 1rem; margin-bottom: 4px; }}
+  .result-card h3 a {{ color: #2c5282; text-decoration: none; }}
+  .result-card h3 a:hover {{ text-decoration: underline; }}
+  .result-card .desc {{ color: #555; font-size: 0.9rem; margin-bottom: 8px; }}
+  .result-card .meta {{ display: flex; gap: 8px; flex-wrap: wrap; }}
+  .tag {{ background: #edf2f7; color: #4a5568; padding: 2px 8px; border-radius: 4px;
+          font-size: 0.78rem; }}
+  .source {{ color: #888; font-size: 0.82rem; }}
+  .score {{ color: #aaa; font-size: 0.78rem; }}
+  .empty {{ text-align: center; color: #999; padding: 40px 0; }}
+  .loading {{ text-align: center; padding: 30px 0; color: #888; }}
+  .stats {{ text-align: center; color: #aaa; font-size: 0.82rem; margin-top: 4px; }}
+</style>
+</head>
+<body>
+<div class="hero">
+  <h1>Feldenkrais Lesson Finder</h1>
+  <p>Search across hundreds of Feldenkrais lessons from around the web.</p>
+  <div class="search-box">
+    <input type="text" id="q" placeholder="e.g. rolling from back to sitting, or jaw and tongue..."
+           autofocus autocomplete="off">
+    <button onclick="doSearch()">Search</button>
+  </div>
+  <div class="stats" id="stats"></div>
+</div>
+<div class="results" id="results"></div>
+<script>
+const input = document.getElementById('q');
+const results = document.getElementById('results');
+const stats = document.getElementById('stats');
+
+// Load stats on page load
+fetch('/api/finder/stats').then(r=>r.json()).then(d=>{{
+  stats.textContent = d.total + ' lessons indexed from ' + d.sources + ' sources';
+}}).catch(()=>{{}});
+
+input.addEventListener('keydown', e => {{ if (e.key === 'Enter') doSearch(); }});
+
+async function doSearch() {{
+  const q = input.value.trim();
+  if (!q) return;
+  results.innerHTML = '<div class="loading">Searching...</div>';
+  try {{
+    const resp = await fetch('/api/finder/search?q=' + encodeURIComponent(q));
+    const data = await resp.json();
+    if (!data.results || data.results.length === 0) {{
+      results.innerHTML = '<div class="empty">No results found. Try different keywords.</div>';
+      return;
+    }}
+    results.innerHTML = data.results.map(r => {{
+      const tags = (r.tags || []).slice(0, 6).map(t => '<span class="tag">' + t + '</span>').join('');
+      const desc = r.description ? '<div class="desc">' + r.description.slice(0, 200) +
+                   (r.description.length > 200 ? '...' : '') + '</div>' : '';
+      const link = r.url ? '<a href="' + r.url + '" target="_blank" rel="noopener">' + r.title + '</a>'
+                         : r.title;
+      const source = r.source_name ? '<span class="source">' + r.source_name + '</span>' : '';
+      return '<div class="result-card"><h3>' + link + '</h3>' + desc +
+             '<div class="meta">' + source + tags + '</div></div>';
+    }}).join('');
+  }} catch(e) {{
+    results.innerHTML = '<div class="empty">Search failed. Please try again.</div>';
+  }}
+}}
+</script>
+</body>
+</html>"""
+
+
+@app.get("/api/finder/search")
+async def finder_search(q: str, limit: int = 20):
+    """Semantic search across external lessons."""
+    import openai
+    client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
+    resp = client.embeddings.create(model="text-embedding-3-small", input=[q])
+    vec = resp.data[0].embedding
+
+    with _db.get_cursor(commit=False) as cur:
+        cur.execute("""
+            SELECT el.title, el.url, el.description, el.tags, el.access,
+                   el.content_type, ls.name as source_name,
+                   1 - (el.embedding <=> %s::vector) as similarity
+            FROM external_lesson el
+            LEFT JOIN lesson_source ls ON ls.id = el.lesson_source_id
+            WHERE el.embedding IS NOT NULL
+            ORDER BY el.embedding <=> %s::vector
+            LIMIT %s
+        """, (str(vec), str(vec), limit))
+        rows = cur.fetchall()
+
+    return {
+        "query": q,
+        "results": [
+            {
+                "title": r["title"],
+                "url": r["url"],
+                "description": r["description"],
+                "tags": r["tags"],
+                "access": r["access"],
+                "content_type": r["content_type"],
+                "source_name": r["source_name"],
+                "similarity": round(r["similarity"], 3),
+            }
+            for r in rows
+        ],
+    }
+
+
+@app.get("/api/finder/stats")
+async def finder_stats():
+    """Return basic stats for the finder."""
+    with _db.get_cursor(commit=False) as cur:
+        cur.execute("SELECT COUNT(*) as total FROM external_lesson WHERE embedding IS NOT NULL")
+        total = cur.fetchone()["total"]
+        cur.execute("""
+            SELECT COUNT(DISTINCT lesson_source_id) as sources
+            FROM external_lesson WHERE embedding IS NOT NULL
+        """)
+        sources = cur.fetchone()["sources"]
+    return {"total": total, "sources": sources}
+
+
 # --- Landing page ---
 
 @app.get("/", response_class=HTMLResponse)
 async def landing_page(request: Request):
     """Landing page: search home, plus dev tools for admin or local dev."""
+    # Finder subdomain gets its own UI
+    if _is_finder_site(request):
+        return HTMLResponse(_build_finder_html())
     user = _set_source_access(request)
     search_mode = _is_search_site(request)
     su_active = _is_superuser_active(request, user)

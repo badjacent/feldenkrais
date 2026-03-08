@@ -81,6 +81,12 @@ variable "search_domain_name" {
   default     = ""
 }
 
+variable "finder_domain_name" {
+  description = "Subdomain for the external lesson finder (finder.becomecomfortable.com)"
+  type        = string
+  default     = ""
+}
+
 variable "github_client_id" {
   description = "GitHub OAuth app client ID"
   type        = string
