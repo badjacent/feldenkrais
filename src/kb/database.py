@@ -1039,7 +1039,10 @@ class Database:
             return [dict(row) for row in cursor.fetchall()]
 
     def get_source_lessons(self, source_id: int) -> list[dict]:
-        """Get transcribed documents for a source.
+        """Get documents with content for a source.
+
+        Includes documents that have a transcription (type_id=1 analysis)
+        OR text documents (document type_id=1) which have content directly.
 
         Returns list of dicts with: id, title, category_name, created_at.
         Uses tiered override: document.category_name > source.category_name > source.name.
@@ -1052,22 +1055,49 @@ class Database:
                        d.metadata->>'lesson_type' as lesson_type,
                        d.source_url
                 FROM document d
-                JOIN analysis a ON a.document_id = d.id AND a.type_id = 1
                 WHERE d.source_id = %s
+                  AND (d.type_id = 1
+                       OR EXISTS (SELECT 1 FROM analysis a
+                                  WHERE a.document_id = d.id AND a.type_id = 1))
                 ORDER BY d.lesson_date NULLS LAST, d.lesson_index NULLS LAST, d.title
             """, (source_id,))
             return [dict(row) for row in cursor.fetchall()]
 
     def get_document_transcription(self, document_id: str) -> Optional[str]:
-        """Get the transcription text for a document."""
+        """Get the text content for a document.
+
+        For audio/video: returns the transcription from the analysis table.
+        For text documents (type_id=1): reads directly from S3 archive.
+        """
         with self.get_cursor(commit=False) as cursor:
+            # First try the analysis table (transcription)
             cursor.execute("""
                 SELECT a.data->>'text' as text
                 FROM analysis a
                 WHERE a.document_id = %s AND a.type_id = 1
             """, (document_id,))
             row = cursor.fetchone()
-            return row["text"] if row else None
+            if row and row["text"]:
+                return row["text"]
+
+            # For text documents, read from S3
+            cursor.execute("""
+                SELECT d.type_id, d.s3_key
+                FROM document d
+                WHERE d.id = %s AND d.type_id = 1
+            """, (document_id,))
+            doc = cursor.fetchone()
+            if doc and doc["s3_key"]:
+                try:
+                    import boto3
+                    s3 = boto3.client("s3")
+                    bucket = __import__("os").environ.get("KB_BUCKET", "")
+                    if bucket:
+                        obj = s3.get_object(Bucket=bucket, Key=doc["s3_key"])
+                        return obj["Body"].read().decode("utf-8")
+                except Exception:
+                    pass
+            return None
 
     def get_document_whisper_segments(self, document_id: str) -> Optional[list]:
         """Get whisper segments for a document from its transcription analysis."""
