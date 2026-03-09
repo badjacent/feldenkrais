@@ -1066,38 +1066,17 @@ class Database:
     def get_document_transcription(self, document_id: str) -> Optional[str]:
         """Get the text content for a document.
 
-        For audio/video: returns the transcription from the analysis table.
-        For text documents (type_id=1): reads directly from S3 archive.
+        Works for both transcribed audio/video and text documents —
+        both store their content as analysis type_id=1.
         """
         with self.get_cursor(commit=False) as cursor:
-            # First try the analysis table (transcription)
             cursor.execute("""
                 SELECT a.data->>'text' as text
                 FROM analysis a
                 WHERE a.document_id = %s AND a.type_id = 1
             """, (document_id,))
             row = cursor.fetchone()
-            if row and row["text"]:
-                return row["text"]
-
-            # For text documents, read from S3
-            cursor.execute("""
-                SELECT d.type_id, d.s3_key
-                FROM document d
-                WHERE d.id = %s AND d.type_id = 1
-            """, (document_id,))
-            doc = cursor.fetchone()
-            if doc and doc["s3_key"]:
-                try:
-                    import boto3
-                    s3 = boto3.client("s3")
-                    bucket = __import__("os").environ.get("KB_BUCKET", "")
-                    if bucket:
-                        obj = s3.get_object(Bucket=bucket, Key=doc["s3_key"])
-                        return obj["Body"].read().decode("utf-8")
-                except Exception:
-                    pass
-            return None
+            return row["text"] if row else None
 
     def get_document_whisper_segments(self, document_id: str) -> Optional[list]:
         """Get whisper segments for a document from its transcription analysis."""

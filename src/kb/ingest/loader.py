@@ -138,6 +138,15 @@ def process_file(
             lesson_index=lesson_index,
         )
 
+        # For text documents, store content as analysis (same as transcription)
+        if type_id == 1:
+            try:
+                text_content = storage.get_object(main_key).decode("utf-8")
+                db.create_analysis(doc_id, type_id=1, data=json.dumps({"text": text_content}))
+                logger.info(f"Stored text content as analysis for {doc_id}")
+            except Exception as e:
+                logger.warning(f"Could not store text content for {doc_id}: {e}")
+
         # Delete from staging
         logger.info(f"Cleaning up staging: {main_key}, {sidecar_key}")
         storage.delete_object(main_key)
