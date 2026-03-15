@@ -1102,7 +1102,10 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
 
     <!-- Transcript tab -->
     <div id="tab-transcript" style="display:none;">
-        <div class="tab-intro">The full lesson transcript, organized by movement group and step.</div>
+        <div class="tab-intro" style="display:flex;align-items:center;justify-content:space-between;">
+            <span>The full lesson transcript, organized by movement group and step.</span>
+            <button onclick="downloadTranscript()" style="padding:4px 12px;font-size:0.85em;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer;">Download</button>
+        </div>
         <div id="transcript-content">
             <div style="color:#999; padding:16px;"><span class="spinner-inline"></span> Preparing transcript...</div>
         </div>
@@ -1269,6 +1272,52 @@ function renderTranscript() {{
         if (groups.length) html += '</div>';
     }}
     div.innerHTML = html;
+}}
+
+function downloadTranscript() {{
+    let text = '';
+    const title = document.querySelector('h1')?.textContent || 'transcript';
+    if (!analysisData || !analysisData.steps || !analysisData.steps.length) {{
+        text = lessonText || '';
+    }} else {{
+        const stepLookup = {{}};
+        for (const step of analysisData.steps) stepLookup[step.step_number] = step;
+        const groups = analysisData.groups || [];
+        const groupedStepNums = new Set();
+        for (const group of groups) {{
+            const stepNums = group.steps || [];
+            stepNums.forEach(sn => groupedStepNums.add(sn));
+            const heading = group.label ? 'Group ' + group.group_number + ': ' + group.label : 'Group ' + group.group_number;
+            const pos = group.starting_position ? ' (' + group.starting_position + ')' : '';
+            text += heading + pos + '\\n';
+            text += '='.repeat(heading.length) + '\\n\\n';
+            const stepsInGroup = stepNums.map(sn => stepLookup[sn]).filter(Boolean);
+            for (const step of stepsInGroup) {{
+                const segs = (step.segments || []).filter(s => s.text);
+                if (!segs.length) continue;
+                const body = segs.map(s => s.text.trim()).join(' ');
+                text += 'Step ' + step.step_number + '\\n';
+                text += body + '\\n\\n';
+            }}
+        }}
+        const ungrouped = analysisData.steps.filter(s => !groupedStepNums.has(s.step_number));
+        if (ungrouped.length) {{
+            if (groups.length) text += 'Other Steps\\n===========\\n\\n';
+            for (const step of ungrouped) {{
+                const segs = (step.segments || []).filter(s => s.text);
+                if (!segs.length) continue;
+                const body = segs.map(s => s.text.trim()).join(' ');
+                text += 'Step ' + step.step_number + '\\n';
+                text += body + '\\n\\n';
+            }}
+        }}
+    }}
+    const blob = new Blob([text], {{type: 'text/plain'}});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = title.replace(/[^a-zA-Z0-9 _-]/g, '').trim().replace(/\\s+/g, '_') + '.txt';
+    a.click();
+    URL.revokeObjectURL(a.href);
 }}
 
 // ── Concepts loading ──

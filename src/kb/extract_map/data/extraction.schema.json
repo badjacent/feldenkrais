@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ExtractionResult",
+  "description": "Extract the sequence of instructions from a Feldenkrais lesson transcript",
+  "type": "object",
+  "properties": {
+    "steps": {
+      "type": "array",
+      "description": "Sequential instructions as given by the teacher",
+      "items": {
+        "type": "object",
+        "properties": {
+          "step_id": {
+            "type": "string",
+            "description": "Unique identifier (e.g. 's1', 's2')"
+          },
+          "raw_text": {
+            "type": "string",
+            "description": "Exact text from the transcript for this instruction"
+          },
+          "instruction_type": {
+            "type": "string",
+            "enum": ["move", "attend", "rest", "reframe", "repeat"],
+            "description": "What the teacher is asking the student to do"
+          },
+          "position": {
+            "type": "string",
+            "description": "Body position during this step, in teacher's language"
+          },
+          "body_parts_mentioned": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Body parts explicitly named in this instruction, in teacher's language"
+          }
+        },
+        "required": ["step_id", "raw_text", "instruction_type", "position", "body_parts_mentioned"]
+      }
+    }
+  },
+  "required": ["steps"]
+}

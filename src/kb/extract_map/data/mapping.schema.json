@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MappingResult",
+  "description": "Stage 2: Map extracted lesson features to canonical ontology terms",
+  "type": "object",
+  "properties": {
+    "body_map": {
+      "type": "object",
+      "description": "Canonical body/movement mappings for the lesson",
+      "properties": {
+        "positions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Canonical positions used in this lesson"
+        },
+        "primary_segments": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Primary body segments involved"
+        },
+        "differentiation_pairs": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": { "type": "string" },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "description": "Pairs of body segments being differentiated from each other"
+        },
+        "connectivity_patterns": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Laban/Bartenieff connectivity patterns active in this lesson"
+        },
+        "effort_qualities": {
+          "type": "array",
+          "description": "Effort qualities explicitly cued by the teacher",
+          "items": {
+            "type": "object",
+            "properties": {
+              "quality": {
+                "type": "string",
+                "description": "The canonical effort quality"
+              },
+              "teacher_cue": {
+                "type": "string",
+                "description": "The teacher's exact words that cue this quality"
+              }
+            },
+            "required": ["quality", "teacher_cue"]
+          }
+        },
+        "constraint_types": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Types of constraints introduced in the lesson"
+        },
+        "attention_targets": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Canonical attention targets"
+        },
+        "exit_state": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Canonical state descriptors for the lesson's exit/integration"
+        }
+      },
+      "required": ["positions", "primary_segments", "differentiation_pairs", "connectivity_patterns", "effort_qualities", "constraint_types", "attention_targets", "exit_state"]
+    },
+    "vocabulary_map": {
+      "type": "array",
+      "description": "Mappings from teacher terms to canonical ontology terms",
+      "items": {
+        "type": "object",
+        "properties": {
+          "teacher_term": {
+            "type": "string",
+            "description": "The teacher's original term"
+          },
+          "canonical_term": {
+            "type": "string",
+            "description": "The canonical ontology term it maps to"
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["high", "medium", "low"],
+            "description": "Confidence in the mapping"
+          },
+          "mapping_note": {
+            "type": "string",
+            "description": "Explanation of non-obvious mappings"
+          }
+        },
+        "required": ["teacher_term", "canonical_term", "confidence", "mapping_note"]
+      }
+    },
+    "ontology_gaps": {
+      "type": "array",
+      "description": "Teacher terms that could not be mapped to existing ontology",
+      "items": {
+        "type": "object",
+        "properties": {
+          "teacher_term": {
+            "type": "string",
+            "description": "The unmapped teacher term"
+          },
+          "why_unmapped": {
+            "type": "string",
+            "description": "Why no canonical term fits"
+          },
+          "candidate_term": {
+            "type": "string",
+            "description": "Suggested canonical term (but not asserted)"
+          }
+        },
+        "required": ["teacher_term", "why_unmapped", "candidate_term"]
+      }
+    }
+  },
+  "required": ["body_map", "vocabulary_map", "ontology_gaps"]
+}
