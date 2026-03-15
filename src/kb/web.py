@@ -900,7 +900,6 @@ def _build_ingestion_html() -> str:
         {pf_banner}
         <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
             <button id="refresh-ingestion" style="padding: 4px 12px; border: 1px solid #007bff; background: white; color: #007bff; border-radius: 4px; cursor: pointer; font-size: 0.85em;">Refresh</button>
-            <button id="auto-analyze-btn" style="padding: 4px 12px; border: 1px solid #28a745; background: white; color: #28a745; border-radius: 4px; cursor: pointer; font-size: 0.85em;">Auto-Analyze</button>
             <span id="refresh-status" style="font-size: 0.8em; color: #999;"></span>
         </div>
         <div class="cards">
@@ -1057,28 +1056,6 @@ def _build_ingestion_page() -> str:
                         btn.textContent = 'Refresh';
                     }});
             }}
-            if (e.target && e.target.id === 'auto-analyze-btn') {{
-                var btn = e.target;
-                var statusEl = document.getElementById('refresh-status');
-                btn.disabled = true;
-                btn.textContent = 'Starting...';
-                if (statusEl) statusEl.textContent = '';
-                fetch('/api/pipeline/auto-analyze', {{ method: 'POST' }})
-                    .then(function(r) {{ return r.json(); }})
-                    .then(function(data) {{
-                        btn.textContent = data.status === 'started' ? 'Running...' : (data.status || 'Done');
-                        if (statusEl) statusEl.textContent = data.status === 'already_running' ? 'Already running' : 'Analysis started in background';
-                        setTimeout(function() {{
-                            btn.disabled = false;
-                            btn.textContent = 'Auto-Analyze';
-                        }}, 5000);
-                    }})
-                    .catch(function(err) {{
-                        if (statusEl) statusEl.textContent = 'Error: ' + err;
-                        btn.disabled = false;
-                        btn.textContent = 'Auto-Analyze';
-                    }});
-            }}
             if (e.target && e.target.classList.contains('resubmit-btn')) {{
                 var btn = e.target;
                 var docId = btn.dataset.docid;
@@ -1119,25 +1096,50 @@ def _build_ingestion_page() -> str:
 
 def _build_analysis_html() -> str:
     """Build the analysis dashboard content HTML (the inner table)."""
-    docs = _db.get_analysis_dashboard(limit=200)
+    docs = _db.get_analysis_dashboard(limit=2000)
     steps = _db.get_analysis_steps()
-    step_names = [s["name"] for s in steps]
+    step_lookup = {s["name"]: s for s in steps}
 
-    # Short display names for column headers
-    short_names = {
-        "decompose": "dec",
-        "somatic": "som",
-        "language": "lang",
-        "language_patterns": "lpat",
-        "concept_tags": "ctag",
-        "spatial": "spat",
-        "condense": "cond",
-        "embed": "emb",
-        "index_concepts": "cidx",
-        "index_spatial": "sidx",
-        "extract_steps": "extr",
-        "map_body_parts": "map",
+    # Display order: dependency order (roots first, leaves last)
+    step_names = [
+        "decompose",
+        "somatic",
+        "language",
+        "condense",
+        "embed",
+        "concept_tags",
+        "index_concepts",
+        "spatial",
+        "index_spatial",
+        "language_patterns",
+        "extract_steps",
+        "map_body_parts",
+    ]
+    # Filter to only steps that exist in the DB
+    step_names = [sn for sn in step_names if sn in step_lookup]
+
+    # Display names for column headers (longer, readable)
+    display_names = {
+        "decompose": "decompose",
+        "somatic": "somatic",
+        "language": "language",
+        "language_patterns": "lang-pat",
+        "concept_tags": "concepts",
+        "spatial": "spatial",
+        "condense": "condense",
+        "embed": "embed",
+        "index_concepts": "idx-conc",
+        "index_spatial": "idx-spat",
+        "extract_steps": "extract",
+        "map_body_parts": "map-body",
     }
+
+    # Tooltips: name + description + deps
+    def step_tooltip(sn):
+        s = step_lookup[sn]
+        deps = ", ".join(s.get("depends_on") or []) or "none"
+        desc = s.get("description") or ""
+        return f"{sn} (v{s['current_version']}): {desc}. Depends on: {deps}"
 
     # State → cell display
     def cell_html(gate, doc_id, step_name):
@@ -1158,7 +1160,8 @@ def _build_analysis_html() -> str:
         elif state == "error":
             label = "err"
             bg, fg = "#f8d7da", "#721c24"
-            title = f"Error: {err or 'unknown'}"
+            err_safe = (err or 'unknown').replace('"', '&quot;').replace("'", "\\'")[:200]
+            title = f"Error: {err_safe} (click to clear)"
         elif state == "gated":
             label = "off"
             bg, fg = "#e2e3e5", "#6c757d"
@@ -1168,9 +1171,10 @@ def _build_analysis_html() -> str:
             bg, fg = "#f8f9fa", "#adb5bd"
             title = "No gate entry"
 
-        onclick = (
-            f"toggleGate('{doc_id}', '{step_name}', {str(not permitted).lower()})"
-        )
+        if state == "error":
+            onclick = f"clearError('{doc_id}', '{step_name}')"
+        else:
+            onclick = f"toggleGate('{doc_id}', '{step_name}', {str(not permitted).lower()})"
         return (
             f'<td style="text-align:center;padding:4px 6px;cursor:pointer;" '
             f'title="{title}" onclick="{onclick}">'
@@ -1180,8 +1184,8 @@ def _build_analysis_html() -> str:
 
     # Table header
     header_cells = "".join(
-        f'<th style="text-align:center;padding:4px 6px;font-size:0.8em;" title="{sn}">'
-        f'{short_names.get(sn, sn)}</th>'
+        f'<th style="text-align:center;padding:4px 6px;font-size:0.8em;cursor:help;" title="{step_tooltip(sn)}">'
+        f'{display_names.get(sn, sn)}</th>'
         for sn in step_names
     )
 
@@ -1299,6 +1303,42 @@ def _build_analysis_page() -> str:
         <a href="/pipeline">Book Pipeline</a>
     </div>
     <h1>Analysis Pipeline</h1>
+    <p style="color:#666;font-size:0.9em;margin-bottom:16px;">
+        Each cell is a (document, step) gate. Click a cell to permit or unpermit that step for that document.
+        Only permitted + stale steps will run when you click "Run Pipeline".
+        When a step completes, its downstream steps become stale but won't run unless also permitted.
+    </p>
+    <details style="margin-bottom:16px;font-size:0.85em;">
+        <summary style="cursor:pointer;color:#007bff;">Show step dependency graph</summary>
+        <pre style="background:#f8f9fa;padding:12px;border-radius:6px;overflow-x:auto;font-size:0.8em;line-height:1.4;">
+decompose ──┬──► somatic ──┬──► condense ──► embed
+            │              │
+            ├──► language ──┘
+            │
+            ├──► concept_tags ──► index_concepts
+            │    (needs decompose + somatic)
+            │
+            └──► spatial ──► index_spatial
+                 (needs decompose + somatic)
+
+language_patterns (depends on decompose + language)
+extract_steps ──► map_body_parts (independent)</pre>
+        <table style="margin-top:8px;font-size:0.85em;">
+            <tr><th style="text-align:left;padding:2px 8px;">Step</th><th style="text-align:left;padding:2px 8px;">Depends on</th><th style="text-align:left;padding:2px 8px;">What it does</th></tr>
+            <tr><td style="padding:2px 8px;">decompose</td><td style="padding:2px 8px;">—</td><td style="padding:2px 8px;">Break lesson into steps + groups, classify by VL framework</td></tr>
+            <tr><td style="padding:2px 8px;">somatic</td><td style="padding:2px 8px;">decompose</td><td style="padding:2px 8px;">Somatic features per step (differentiation, activation, etc.)</td></tr>
+            <tr><td style="padding:2px 8px;">language</td><td style="padding:2px 8px;">decompose</td><td style="padding:2px 8px;">Teaching voice per step (attention cues, imagery, phrasing)</td></tr>
+            <tr><td style="padding:2px 8px;">condense</td><td style="padding:2px 8px;">somatic, language</td><td style="padding:2px 8px;">Merge somatic + language into condensed segments</td></tr>
+            <tr><td style="padding:2px 8px;">embed</td><td style="padding:2px 8px;">condense</td><td style="padding:2px 8px;">Vector embedding for semantic search</td></tr>
+            <tr><td style="padding:2px 8px;">concept_tags</td><td style="padding:2px 8px;">decompose, somatic</td><td style="padding:2px 8px;">Category/value concept tags for search</td></tr>
+            <tr><td style="padding:2px 8px;">spatial</td><td style="padding:2px 8px;">decompose, somatic</td><td style="padding:2px 8px;">Body configurations, holds, constraints</td></tr>
+            <tr><td style="padding:2px 8px;">index_concepts</td><td style="padding:2px 8px;">concept_tags</td><td style="padding:2px 8px;">Write concept tags to search index</td></tr>
+            <tr><td style="padding:2px 8px;">index_spatial</td><td style="padding:2px 8px;">spatial</td><td style="padding:2px 8px;">Write spatial configs to search index</td></tr>
+            <tr><td style="padding:2px 8px;">language_patterns</td><td style="padding:2px 8px;">decompose, language</td><td style="padding:2px 8px;">Full-text language patterns and vocabulary</td></tr>
+            <tr><td style="padding:2px 8px;">extract_steps</td><td style="padding:2px 8px;">—</td><td style="padding:2px 8px;">Extract step instructions from transcript</td></tr>
+            <tr><td style="padding:2px 8px;">map_body_parts</td><td style="padding:2px 8px;">extract_steps</td><td style="padding:2px 8px;">Map steps to body parts</td></tr>
+        </table>
+    </details>
 
     <div id="analysis-content">
         {content}
@@ -1310,6 +1350,20 @@ def _build_analysis_page() -> str:
             method: 'POST',
             headers: {{'Content-Type': 'application/json'}},
             body: JSON.stringify({{document_id: docId, step_name: stepName, permitted: newPermitted}})
+        }})
+        .then(r => r.json())
+        .then(data => {{
+            if (data.status === 'ok') refreshDashboard();
+            else alert(data.error || 'Error');
+        }})
+        .catch(err => alert('Error: ' + err));
+    }}
+
+    function clearError(docId, stepName) {{
+        fetch('/api/analysis/clear-error', {{
+            method: 'POST',
+            headers: {{'Content-Type': 'application/json'}},
+            body: JSON.stringify({{document_id: docId, step_name: stepName}})
         }})
         .then(r => r.json())
         .then(data => {{
@@ -3325,111 +3379,6 @@ async def resubmit_document(document_id: str):
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
-
-_auto_analyze_lock = asyncio.Lock()
-
-
-def _auto_analyze_worker(max_docs: int = 3) -> dict:
-    """Find transcribed docs without condensed analysis, run pass 0b + embeddings.
-
-    Runs synchronously (called from thread). Returns summary dict.
-    """
-    import hashlib
-    from llm import get_embeddings
-
-    # Check LLM kill switch
-    settings = _db.get_cache("settings:llm_enabled")
-    if not settings or not settings.get("enabled", False):
-        return {"status": "skipped", "reason": "LLM disabled"}
-
-    # Find candidates: transcribed docs without condensed analysis
-    cache_suffix = ":condense_v4"
-    all_keys = _db.get_cache_keys()
-
-    # Get all docs with transcriptions
-    tx_hashes = _db.get_all_transcription_hashes()  # {doc_id: hash}
-    candidates = []
-    for doc_id, text_hash in tx_hashes.items():
-        condensed_key = hashlib.sha256(
-            (_db.get_document_transcription(doc_id).strip() + cache_suffix).encode()
-        ).hexdigest()[:16]
-        if condensed_key not in all_keys:
-            candidates.append(doc_id)
-        if len(candidates) >= max_docs:
-            break
-
-    if not candidates:
-        return {"status": "complete", "message": "All transcribed docs already analyzed", "processed": 0}
-
-    processed = []
-    errors = []
-
-    for doc_id in candidates:
-        try:
-            transcript = _db.get_document_transcription(doc_id)
-            if not transcript or not transcript.strip():
-                continue
-
-            doc = _db.get_document(doc_id)
-            title = doc.get("title", doc_id) if doc else doc_id
-
-            # Run pass 0b somatic + language
-            somatic_result = run_pass_0b(transcript)
-            lang_result = run_pass_0b_lang(transcript)
-
-            # Run condensed synthesis
-            condensed_result = run_pass_0b_condensed(somatic_result, lang_result, transcript)
-
-            _db.log_event("analysis_complete", title=title, document_id=doc_id,
-                          detail={"segments": len(condensed_result.get("segments", []))})
-
-            # Build embeddings
-            summary_text = build_summary_from_condensed(condensed_result, title)
-            summary_hash = hashlib.sha256(summary_text.encode()).hexdigest()[:16]
-
-            embeddings, _ = get_embeddings([summary_text], task_type="RETRIEVAL_DOCUMENT")
-            _db.upsert_embedding(doc_id, embeddings[0], summary_text, summary_hash)
-
-            _db.log_event("embedding_complete", title=title, document_id=doc_id,
-                          detail={"summary_length": len(summary_text)})
-
-            processed.append({"doc_id": doc_id, "title": title})
-
-        except Exception as e:
-            err_title = title if 'title' in locals() else doc_id
-            _db.log_event("analysis_error", title=err_title,
-                          document_id=doc_id, detail={"error": str(e)})
-            errors.append({"doc_id": doc_id, "error": str(e)})
-
-    result = {
-        "status": "complete",
-        "processed": len(processed),
-        "errors": len(errors),
-        "details": processed,
-    }
-    _db.set_cache("pipeline:auto_analyze_last_result", result)
-    return result
-
-
-@app.post("/api/pipeline/auto-analyze")
-async def auto_analyze(request: Request):
-    """Run analysis + embeddings for transcribed docs missing condensed analysis."""
-    if not _db:
-        return JSONResponse({"error": "Database not configured"}, status_code=500)
-
-    if _auto_analyze_lock.locked():
-        return JSONResponse({"status": "already_running"})
-
-    async def run_in_background():
-        async with _auto_analyze_lock:
-            try:
-                result = await asyncio.to_thread(_auto_analyze_worker)
-                return result
-            except Exception as e:
-                return {"status": "error", "error": str(e)}
-
-    asyncio.create_task(run_in_background())
-    return JSONResponse({"status": "started"})
 
 
 

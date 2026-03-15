@@ -44,7 +44,7 @@ from analysis import (
 logger = logging.getLogger(__name__)
 
 # Default LLM provider for analysis steps
-DEFAULT_PROVIDER = "gemini-flash"
+DEFAULT_PROVIDER = "gemini"
 
 
 def _get_transcript(db: Database, document_id: str) -> str | None:

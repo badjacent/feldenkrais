@@ -95,18 +95,73 @@ When a step completes at a new version, all downstream steps (those with it in t
 ## Dependency Graph
 
 ```
-decompose ──────┬──────────────► somatic ──────┬──────► condense ──► embed
-                │                    │         │
-                │                    │    language
-                │                    │
-                ├──────────────► concept_tags ──► index_concepts
-                │                    │
-                └──────────────► spatial ──► index_spatial
+                          ┌──────────┐
+                          │decompose │
+                          └────┬─────┘
+                               │
+                 ┌─────────────┼─────────────┐
+                 │             │             │
+                 ▼             ▼             ▼
+           ┌──────────┐ ┌──────────┐  ┌──────────┐
+           │ somatic  │ │ language │  │          │
+           └────┬─────┘ └────┬─────┘  │          │
+                │             │        │          │
+       ┌────────┼─────────────┘        │          │
+       │        │                      │          │
+       │   ┌────┴─────────┐           │          │
+       │   │   condense   │           │          │
+       │   └──────┬───────┘           │          │
+       │          │                    │          │
+       │          ▼                    │          │
+       │   ┌──────────┐               │          │
+       │   │   embed   │              │          │
+       │   └──────────┘               │          │
+       │                               │          │
+       ▼                               ▼          ▼
+ ┌─────────────┐               ┌──────────────────┐
+ │ concept_tags│               │     spatial       │
+ └──────┬──────┘               └────────┬─────────┘
+        │                               │
+        ▼                               ▼
+ ┌──────────────┐              ┌───────────────┐
+ │index_concepts│              │ index_spatial  │
+ └──────────────┘              └───────────────┘
 
-language_patterns (independent)
 
-extract_steps ──► map_body_parts (independent branch)
+ Also depends on decompose + language:
+
+ ┌───────────────────┐
+ │ language_patterns │  (depends on decompose + language)
+ └───────────────────┘
+
+ Independent branch:
+
+ ┌──────────────┐
+ │ extract_steps │
+ └──────┬───────┘
+        │
+        ▼
+ ┌──────────────┐
+ │map_body_parts│
+ └──────────────┘
 ```
+
+### Dependencies at a glance
+
+| Step | Depends on |
+|------|-----------|
+| decompose | — |
+| somatic | decompose |
+| language | decompose |
+| concept_tags | decompose, somatic |
+| spatial | decompose, somatic |
+| condense | somatic, language |
+| embed | condense |
+| index_concepts | concept_tags |
+| index_spatial | spatial |
+| language_patterns | decompose, language |
+| extract_steps | — |
+| map_body_parts | extract_steps |
 
 ## Version Upgrade Workflow
 

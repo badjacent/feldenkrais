@@ -283,7 +283,7 @@ INSERT INTO analysis_step (name, current_version, cache_suffix, depends_on, desc
     ('decompose', 3, ':decompose_v3', '{}', 'Decomposition + VL classification'),
     ('somatic', 2, ':somatic_v2', '{decompose}', 'Step-level somatic feature extraction'),
     ('language', 1, ':language_v1', '{decompose}', 'Step-level teaching voice analysis'),
-    ('language_patterns', 3, ':language_patterns_v3', '{}', 'Full-text language analysis'),
+    ('language_patterns', 3, ':language_patterns_v3', '{decompose,language}', 'Full-text language analysis'),
     ('concept_tags', 2, ':concept_tags_v2', '{decompose,somatic}', 'Concept tagging for search'),
     ('spatial', 2, ':spatial_v2', '{decompose,somatic}', 'Body configuration extraction'),
     ('condense', 4, ':condense_v4', '{somatic,language}', 'Condensed synthesis for embeddings'),
