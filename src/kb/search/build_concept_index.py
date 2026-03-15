@@ -88,8 +88,8 @@ def find_docs_with_concepts(db: Database) -> list[dict]:
         docs = [dict(row) for row in cursor.fetchall()]
 
     results = []
-    concepts_suffix = ":pass_0b_concepts_v2"
-    spatial_suffix = ":pass_0b_spatial_v2"
+    concepts_suffix = ":concept_tags_v2"
+    spatial_suffix = ":spatial_v2"
 
     for doc in docs:
         text = doc["text"].strip()

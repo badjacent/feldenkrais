@@ -80,7 +80,7 @@ def pick_lessons(db: Database, limit: int) -> list[dict]:
         if not transcript or not transcript.strip():
             continue
 
-        condensed_key = get_cache_key(transcript.strip() + ":pass_0b_condensed_v4")
+        condensed_key = get_cache_key(transcript.strip() + ":condense_v4")
         cached = db.get_cache(condensed_key)
         if cached and cached.get("segments"):
             already_condensed += 1
@@ -231,7 +231,7 @@ def main():
 
     for lesson in lessons:
         transcript = lesson["transcript"]
-        condensed_key = get_cache_key(transcript + ":pass_0b_condensed_v4")
+        condensed_key = get_cache_key(transcript + ":condense_v4")
         condensed = db.get_cache(condensed_key)
 
         if not condensed or not condensed.get("segments"):

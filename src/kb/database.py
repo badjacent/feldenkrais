@@ -144,6 +144,28 @@ CREATE TABLE IF NOT EXISTS lesson_concept (
     PRIMARY KEY (document_id, category, value)
 );
 
+CREATE TABLE IF NOT EXISTS analysis_step (
+    name TEXT PRIMARY KEY,
+    current_version INTEGER NOT NULL DEFAULT 1,
+    cache_suffix TEXT,
+    depends_on TEXT[] NOT NULL DEFAULT '{}',
+    description TEXT,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS document_analysis_gate (
+    document_id UUID NOT NULL REFERENCES document(id) ON DELETE CASCADE,
+    step_name TEXT NOT NULL REFERENCES analysis_step(name),
+    permitted BOOLEAN NOT NULL DEFAULT FALSE,
+    completed_version INTEGER,
+    completed_at TIMESTAMPTZ,
+    upstream_hash TEXT,
+    stale BOOLEAN NOT NULL DEFAULT FALSE,
+    error TEXT,
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (document_id, step_name)
+);
+
 CREATE TABLE IF NOT EXISTS search_query_log (
     id SERIAL PRIMARY KEY,
     query TEXT NOT NULL,
@@ -248,12 +270,29 @@ CREATE INDEX IF NOT EXISTS idx_lesson_concept_value ON lesson_concept (value);
 CREATE INDEX IF NOT EXISTS idx_lesson_concept_category ON lesson_concept (category, value);
 CREATE INDEX IF NOT EXISTS idx_external_lesson_source ON external_lesson (lesson_source_id);
 CREATE INDEX IF NOT EXISTS idx_external_lesson_embedding_hnsw ON external_lesson USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX IF NOT EXISTS idx_dag_document ON document_analysis_gate (document_id);
+CREATE INDEX IF NOT EXISTS idx_dag_step ON document_analysis_gate (step_name);
+CREATE INDEX IF NOT EXISTS idx_dag_runnable ON document_analysis_gate (permitted, stale) WHERE permitted = TRUE;
 """
 
 SEED_DATA = """
 INSERT INTO document_source (id, name) VALUES (1, 'OTHER'), (2, 'YOUTUBE'), (3, 'FELDENKRAIS_MANHATTAN'), (4, 'FELDENKRAIS_PROJECT') ON CONFLICT DO NOTHING;
 INSERT INTO document_type (id, name) VALUES (1, 'TEXT'), (2, 'AUDIO'), (3, 'VIDEO') ON CONFLICT DO NOTHING;
 INSERT INTO analysis_type (id, name) VALUES (1, 'TRANSCRIPTION'), (2, 'ANNOTATION') ON CONFLICT DO NOTHING;
+INSERT INTO analysis_step (name, current_version, cache_suffix, depends_on, description) VALUES
+    ('decompose', 3, ':decompose_v3', '{}', 'Decomposition + VL classification'),
+    ('somatic', 2, ':somatic_v2', '{decompose}', 'Step-level somatic feature extraction'),
+    ('language', 1, ':language_v1', '{decompose}', 'Step-level teaching voice analysis'),
+    ('language_patterns', 3, ':language_patterns_v3', '{}', 'Full-text language analysis'),
+    ('concept_tags', 2, ':concept_tags_v2', '{decompose,somatic}', 'Concept tagging for search'),
+    ('spatial', 2, ':spatial_v2', '{decompose,somatic}', 'Body configuration extraction'),
+    ('condense', 4, ':condense_v4', '{somatic,language}', 'Condensed synthesis for embeddings'),
+    ('embed', 1, NULL, '{condense}', 'Vector embedding generation'),
+    ('index_concepts', 1, NULL, '{concept_tags}', 'Concept index build'),
+    ('index_spatial', 1, NULL, '{spatial}', 'Spatial index build'),
+    ('extract_steps', 2, ':extract_steps_v2', '{}', 'Step instruction extraction'),
+    ('map_body_parts', 3, ':map_body_parts_v3', '{extract_steps}', 'Body part mapping')
+ON CONFLICT DO NOTHING;
 """
 
 
@@ -726,9 +765,9 @@ class Database:
         transcript = self.get_document_transcription(document_id)
         if transcript and transcript.strip():
             text = transcript.strip()
-            for suffix in (":pass_0b_v2", ":pass_0b_lang_v1", ":pass_0b_word_lang_v3",
-                           ":pass_0b_concepts_v2", ":pass_0b_spatial_v2",
-                           ":pass_0b_condensed_v4"):
+            for suffix in (":somatic_v2", ":language_v1", ":language_patterns_v3",
+                           ":concept_tags_v2", ":spatial_v2",
+                           ":condense_v4"):
                 cache_keys_to_delete.append(
                     hashlib.sha256((text + suffix).encode()).hexdigest()[:16]
                 )
@@ -1729,7 +1768,7 @@ class Database:
             )
             return [dict(row) for row in cursor.fetchall()]
 
-    def get_docs_with_condensed(self, cache_suffix: str = ":pass_0b_condensed_v4") -> list[dict]:
+    def get_docs_with_condensed(self, cache_suffix: str = ":condense_v4") -> list[dict]:
         """Find docs that have condensed analysis cached.
 
         Single SQL query to get all transcripts + titles, compute cache keys in
@@ -1777,3 +1816,236 @@ class Database:
             {**doc_keys[key], "cache_key": key}
             for key in condensed_keys
         ]
+
+    # ── Analysis pipeline gate ─────────────────────────────────────────
+
+    def get_analysis_steps(self) -> list[dict]:
+        """Return all registered analysis steps."""
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute("SELECT * FROM analysis_step ORDER BY name")
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_analysis_step(self, name: str) -> Optional[dict]:
+        """Return a single analysis step by name."""
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute("SELECT * FROM analysis_step WHERE name = %s", (name,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def update_analysis_step_version(self, name: str, new_version: int):
+        """Bump an analysis step to a new version."""
+        with self.get_cursor() as cursor:
+            cursor.execute(
+                "UPDATE analysis_step SET current_version = %s, updated_at = NOW() WHERE name = %s",
+                (new_version, name),
+            )
+
+    def get_document_gates(self, document_id: str) -> list[dict]:
+        """Return all gate entries for a document, joined with step info."""
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute("""
+                SELECT g.*, s.current_version, s.depends_on, s.description, s.cache_suffix
+                FROM document_analysis_gate g
+                JOIN analysis_step s ON s.name = g.step_name
+                WHERE g.document_id = %s
+                ORDER BY s.name
+            """, (document_id,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_gate(self, document_id: str, step_name: str) -> Optional[dict]:
+        """Return a single gate entry."""
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute(
+                "SELECT * FROM document_analysis_gate WHERE document_id = %s AND step_name = %s",
+                (document_id, step_name),
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def set_gate_permitted(self, document_id: str, step_name: str, permitted: bool):
+        """Set the permitted flag for a (document, step) pair. Creates row if needed."""
+        with self.get_cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO document_analysis_gate (document_id, step_name, permitted, stale, updated_at)
+                VALUES (%s, %s, %s, TRUE, NOW())
+                ON CONFLICT (document_id, step_name)
+                DO UPDATE SET permitted = EXCLUDED.permitted, updated_at = NOW()
+            """, (document_id, step_name, permitted))
+
+    def set_gates_bulk(self, document_ids: list[str], step_name: str, permitted: bool):
+        """Set the permitted flag for multiple documents on a single step."""
+        with self.get_cursor() as cursor:
+            for doc_id in document_ids:
+                cursor.execute("""
+                    INSERT INTO document_analysis_gate (document_id, step_name, permitted, stale, updated_at)
+                    VALUES (%s, %s, %s, TRUE, NOW())
+                    ON CONFLICT (document_id, step_name)
+                    DO UPDATE SET permitted = EXCLUDED.permitted, updated_at = NOW()
+                """, (doc_id, step_name, permitted))
+
+    def mark_step_completed(self, document_id: str, step_name: str, version: int,
+                            upstream_hash: str | None = None):
+        """Record that a step completed successfully for a document."""
+        with self.get_cursor() as cursor:
+            cursor.execute("""
+                UPDATE document_analysis_gate
+                SET completed_version = %s, completed_at = NOW(), upstream_hash = %s,
+                    stale = FALSE, error = NULL, updated_at = NOW()
+                WHERE document_id = %s AND step_name = %s
+            """, (version, upstream_hash, document_id, step_name))
+            # Mark downstream steps as stale
+            step = self.get_analysis_step(step_name)
+            if step:
+                cursor.execute("""
+                    UPDATE document_analysis_gate g
+                    SET stale = TRUE, updated_at = NOW()
+                    FROM analysis_step s
+                    WHERE g.step_name = s.name
+                      AND g.document_id = %s
+                      AND %s = ANY(s.depends_on)
+                """, (document_id, step_name))
+
+    def mark_step_error(self, document_id: str, step_name: str, error: str):
+        """Record that a step failed for a document."""
+        with self.get_cursor() as cursor:
+            cursor.execute("""
+                UPDATE document_analysis_gate
+                SET error = %s, updated_at = NOW()
+                WHERE document_id = %s AND step_name = %s
+            """, (error, document_id, step_name))
+
+    def get_runnable_steps(self, document_id: str | None = None) -> list[dict]:
+        """Find all (document, step) pairs that are permitted, need work, and have deps satisfied.
+
+        A step needs work when:
+        - completed_version IS NULL (never run), OR
+        - completed_version < current_version (version behind), OR
+        - stale = TRUE (upstream changed)
+
+        Deps are satisfied when all depends_on steps have a completed_version for this document.
+        """
+        doc_filter = "AND g.document_id = %s" if document_id else ""
+        params = [document_id] if document_id else []
+
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute(f"""
+                SELECT g.document_id, g.step_name, g.completed_version, g.stale,
+                       s.current_version, s.depends_on, s.cache_suffix,
+                       d.title as document_title
+                FROM document_analysis_gate g
+                JOIN analysis_step s ON s.name = g.step_name
+                JOIN document d ON d.id = g.document_id
+                WHERE g.permitted = TRUE
+                  AND g.error IS NULL
+                  AND (g.completed_version IS NULL
+                       OR g.completed_version < s.current_version
+                       OR g.stale = TRUE)
+                  {doc_filter}
+                ORDER BY d.title, s.name
+            """, params)
+            candidates = [dict(row) for row in cursor.fetchall()]
+
+        # Filter: all depends_on must have completed_version for this document
+        runnable = []
+        for c in candidates:
+            deps = c.get("depends_on") or []
+            if not deps:
+                runnable.append(c)
+                continue
+            # Check deps
+            all_satisfied = True
+            for dep in deps:
+                gate = self.get_gate(str(c["document_id"]), dep)
+                if not gate or gate.get("completed_version") is None:
+                    all_satisfied = False
+                    break
+            if all_satisfied:
+                runnable.append(c)
+
+        return runnable
+
+    def get_analysis_dashboard(self, limit: int = 100) -> list[dict]:
+        """Return documents with their gate states for the analysis dashboard.
+
+        Returns one row per document, with a 'gates' dict keyed by step name.
+        """
+        steps = self.get_analysis_steps()
+        step_names = [s["name"] for s in steps]
+        step_versions = {s["name"]: s["current_version"] for s in steps}
+
+        # Get transcribed documents (have analysis type_id=1)
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute("""
+                SELECT DISTINCT d.id as document_id, d.title, d.created_at,
+                       ds.name as source_name
+                FROM document d
+                JOIN analysis a ON a.document_id = d.id AND a.type_id = 1
+                JOIN document_source ds ON ds.id = d.source_id
+                ORDER BY d.title
+                LIMIT %s
+            """, (limit,))
+            docs = [dict(row) for row in cursor.fetchall()]
+
+        if not docs:
+            return []
+
+        doc_ids = [str(d["document_id"]) for d in docs]
+
+        # Bulk fetch all gates for these documents
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute("""
+                SELECT g.document_id::text, g.step_name, g.permitted,
+                       g.completed_version, g.stale, g.error, g.completed_at
+                FROM document_analysis_gate g
+                WHERE g.document_id = ANY(%s::uuid[])
+            """, (doc_ids,))
+            gate_rows = cursor.fetchall()
+
+        # Index gates by (doc_id, step_name)
+        gate_lookup = {}
+        for row in gate_rows:
+            key = (row["document_id"], row["step_name"])
+            gate_lookup[key] = dict(row)
+
+        # Build result
+        for doc in docs:
+            doc_id = str(doc["document_id"])
+            gates = {}
+            for sn in step_names:
+                gate = gate_lookup.get((doc_id, sn))
+                if gate:
+                    cv = gate.get("completed_version")
+                    sv = step_versions[sn]
+                    needs_work = cv is None or cv < sv or gate.get("stale", False)
+                    if gate.get("permitted") and not needs_work and not gate.get("error"):
+                        state = "current"
+                    elif gate.get("permitted") and needs_work and not gate.get("error"):
+                        state = "stale"
+                    elif gate.get("error"):
+                        state = "error"
+                    elif not gate.get("permitted") and needs_work:
+                        state = "gated"
+                    else:
+                        state = "inactive"
+                    gates[sn] = {
+                        "state": state,
+                        "permitted": gate.get("permitted", False),
+                        "completed_version": cv,
+                        "current_version": sv,
+                        "stale": gate.get("stale", False),
+                        "error": gate.get("error"),
+                        "completed_at": str(gate.get("completed_at") or ""),
+                    }
+                else:
+                    gates[sn] = {
+                        "state": "inactive",
+                        "permitted": False,
+                        "completed_version": None,
+                        "current_version": step_versions[sn],
+                        "stale": False,
+                        "error": None,
+                        "completed_at": "",
+                    }
+            doc["gates"] = gates
+
+        return docs

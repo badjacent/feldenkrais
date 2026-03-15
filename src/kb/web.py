@@ -1131,6 +1131,244 @@ def _build_ingestion_page() -> str:
 """
 
 
+def _build_analysis_html() -> str:
+    """Build the analysis dashboard content HTML (the inner table)."""
+    docs = _db.get_analysis_dashboard(limit=200)
+    steps = _db.get_analysis_steps()
+    step_names = [s["name"] for s in steps]
+
+    # Short display names for column headers
+    short_names = {
+        "decompose": "dec",
+        "somatic": "som",
+        "language": "lang",
+        "language_patterns": "lpat",
+        "concept_tags": "ctag",
+        "spatial": "spat",
+        "condense": "cond",
+        "embed": "emb",
+        "index_concepts": "cidx",
+        "index_spatial": "sidx",
+        "extract_steps": "extr",
+        "map_body_parts": "map",
+    }
+
+    # State → cell display
+    def cell_html(gate, doc_id, step_name):
+        state = gate["state"]
+        cv = gate.get("completed_version")
+        sv = gate.get("current_version")
+        err = gate.get("error")
+        permitted = gate.get("permitted", False)
+
+        if state == "current":
+            label = f"v{cv}"
+            bg, fg = "#d4edda", "#155724"
+            title = f"Current (v{cv})"
+        elif state == "stale":
+            label = f"v{cv}" if cv else "new"
+            bg, fg = "#fff3cd", "#856404"
+            title = f"Stale — will run (current: v{sv})"
+        elif state == "error":
+            label = "err"
+            bg, fg = "#f8d7da", "#721c24"
+            title = f"Error: {err or 'unknown'}"
+        elif state == "gated":
+            label = "off"
+            bg, fg = "#e2e3e5", "#6c757d"
+            title = f"Gated — needs permission (v{sv})"
+        else:  # inactive
+            label = "—"
+            bg, fg = "#f8f9fa", "#adb5bd"
+            title = "No gate entry"
+
+        onclick = (
+            f"toggleGate('{doc_id}', '{step_name}', {str(not permitted).lower()})"
+        )
+        return (
+            f'<td style="text-align:center;padding:4px 6px;cursor:pointer;" '
+            f'title="{title}" onclick="{onclick}">'
+            f'<span style="padding:2px 6px;border-radius:8px;font-size:0.75em;'
+            f'background:{bg};color:{fg};">{label}</span></td>'
+        )
+
+    # Table header
+    header_cells = "".join(
+        f'<th style="text-align:center;padding:4px 6px;font-size:0.8em;" title="{sn}">'
+        f'{short_names.get(sn, sn)}</th>'
+        for sn in step_names
+    )
+
+    # Table rows
+    rows = []
+    for doc in docs:
+        doc_id = str(doc["document_id"])
+        title = doc.get("title", "")
+        if len(title) > 50:
+            title = title[:47] + "..."
+        source = doc.get("source_name", "")
+
+        gate_cells = "".join(
+            cell_html(doc["gates"].get(sn, {"state": "inactive"}), doc_id, sn)
+            for sn in step_names
+        )
+
+        rows.append(
+            f'<tr data-docid="{doc_id}">'
+            f'<td style="font-size:0.85em;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{html_mod.escape(doc.get("title", ""))}">{html_mod.escape(title)}</td>'
+            f'<td style="font-size:0.8em;color:#666;">{html_mod.escape(source)}</td>'
+            f'{gate_cells}'
+            f'</tr>'
+        )
+
+    rows_html = "\n".join(rows) if rows else (
+        f'<tr><td colspan="{2 + len(step_names)}" style="text-align:center;color:#999;">No transcribed documents found</td></tr>'
+    )
+
+    # Runnable count
+    runnable = _db.get_runnable_steps()
+    runnable_count = len(runnable)
+
+    return f"""
+    <div style="display:flex;gap:16px;margin-bottom:16px;align-items:center;">
+        <div style="background:#f0f7ff;padding:8px 16px;border-radius:8px;">
+            <strong>{len(docs)}</strong> transcribed documents
+        </div>
+        <div style="background:{'#fff3cd' if runnable_count > 0 else '#d4edda'};padding:8px 16px;border-radius:8px;">
+            <strong>{runnable_count}</strong> runnable steps
+        </div>
+        <button onclick="runPipeline()" style="padding:6px 16px;background:#007bff;color:white;border:none;border-radius:4px;cursor:pointer;"
+                {'disabled' if runnable_count == 0 else ''}>
+            Run Pipeline
+        </button>
+        <button onclick="refreshDashboard()" style="padding:6px 16px;background:#6c757d;color:white;border:none;border-radius:4px;cursor:pointer;">
+            Refresh
+        </button>
+    </div>
+
+    <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;">
+        <thead>
+            <tr style="border-bottom:2px solid #dee2e6;">
+                <th style="text-align:left;padding:4px 6px;">Document</th>
+                <th style="text-align:left;padding:4px 6px;font-size:0.8em;">Source</th>
+                {header_cells}
+            </tr>
+        </thead>
+        <tbody>
+            {rows_html}
+        </tbody>
+    </table>
+    </div>
+
+    <div style="margin-top:16px;font-size:0.8em;color:#999;">
+        Click a cell to toggle permission. Colors:
+        <span style="background:#d4edda;padding:1px 6px;border-radius:4px;">current</span>
+        <span style="background:#fff3cd;padding:1px 6px;border-radius:4px;">stale (will run)</span>
+        <span style="background:#f8d7da;padding:1px 6px;border-radius:4px;">error</span>
+        <span style="background:#e2e3e5;padding:1px 6px;border-radius:4px;">gated</span>
+        <span style="background:#f8f9fa;padding:1px 6px;border-radius:4px;color:#adb5bd;">inactive</span>
+    </div>
+    """
+
+
+def _build_analysis_page() -> str:
+    """Build the full analysis dashboard HTML page."""
+    if not _db:
+        return """
+<!DOCTYPE html><html><head><title>Analysis Pipeline</title>
+<style>body { font-family: -apple-system, sans-serif; max-width: 1400px; margin: 0 auto; padding: 20px; }</style>
+</head><body><h1>Analysis Pipeline</h1><p>Database not configured.</p></body></html>"""
+
+    content = _build_analysis_html()
+
+    return f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Analysis Pipeline - Feldenkrais</title>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }}
+        h1 {{ color: #333; }}
+        .nav {{ margin-bottom: 20px; }}
+        .nav a {{ color: #007bff; text-decoration: none; margin-right: 16px; }}
+        .nav a:hover {{ text-decoration: underline; }}
+        table {{ border-collapse: collapse; }}
+        th, td {{ border-bottom: 1px solid #eee; }}
+        th {{ position: sticky; top: 0; background: white; z-index: 1; }}
+        tr:hover {{ background: #f8f9fa; }}
+    </style>
+</head>
+<body>
+    <div class="nav">
+        <a href="/">&larr; Home</a>
+        <a href="/ingestion">Ingestion</a>
+        <a href="/pipeline">Book Pipeline</a>
+    </div>
+    <h1>Analysis Pipeline</h1>
+
+    <div id="analysis-content">
+        {content}
+    </div>
+
+    <script>
+    function toggleGate(docId, stepName, newPermitted) {{
+        fetch('/api/analysis/gate', {{
+            method: 'POST',
+            headers: {{'Content-Type': 'application/json'}},
+            body: JSON.stringify({{document_id: docId, step_name: stepName, permitted: newPermitted}})
+        }})
+        .then(r => r.json())
+        .then(data => {{
+            if (data.status === 'ok') refreshDashboard();
+            else alert(data.error || 'Error');
+        }})
+        .catch(err => alert('Error: ' + err));
+    }}
+
+    function refreshDashboard() {{
+        fetch('/api/analysis/dashboard')
+            .then(r => r.text())
+            .then(html => {{
+                document.getElementById('analysis-content').innerHTML = html;
+            }});
+    }}
+
+    function runPipeline() {{
+        if (!confirm('Run all permitted + stale analysis steps?')) return;
+        const btn = event.target;
+        btn.disabled = true;
+        btn.textContent = 'Running...';
+        fetch('/api/analysis/run', {{
+            method: 'POST',
+            headers: {{'Content-Type': 'application/json'}},
+            body: '{{}}'
+        }})
+        .then(r => r.json())
+        .then(data => {{
+            btn.textContent = 'Run Pipeline';
+            btn.disabled = false;
+            alert('Done: ' + data.success + '/' + data.total + ' succeeded');
+            refreshDashboard();
+        }})
+        .catch(err => {{
+            btn.textContent = 'Run Pipeline';
+            btn.disabled = false;
+            alert('Error: ' + err);
+        }});
+    }}
+    </script>
+</body>
+</html>
+"""
+
+
 def build_pipeline_html() -> str:
     """Build the pipeline dashboard HTML page (book pipeline only)."""
     if not _db:
@@ -1849,7 +2087,7 @@ async def api_lesson_concepts(document_id: str):
         extra = {}
         if text:
             from cache_helpers import get_cache_key
-            cache_key = get_cache_key(text.strip() + ":pass_0b_concepts_v2")
+            cache_key = get_cache_key(text.strip() + ":concept_tags_v2")
             cached = _db.get_cache(cache_key)
             if cached:
                 extra["distinctive_summary"] = cached.get("distinctive_summary", "")
@@ -2175,8 +2413,8 @@ async def api_lesson_chat(request: Request):
     lang_result = None
     condensed_result = None
 
-    # Somatic (pass_0b_v2)
-    som_suffix = ":pass_0b_v2"
+    # Somatic (somatic_v2)
+    som_suffix = ":somatic_v2"
     if provider_key and provider_key != DEFAULT_LLM:
         som_suffix += f":{provider_key}"
     som_cached = load_cached_analysis(get_cache_key(lesson_text + som_suffix))
@@ -2189,8 +2427,8 @@ async def api_lesson_chat(request: Request):
             "summary": som_cached.get("summary", {}),
         }
 
-    # Language (pass_0b_lang_v1)
-    lang_suffix = ":pass_0b_lang_v1"
+    # Language (language_v1)
+    lang_suffix = ":language_v1"
     if provider_key and provider_key != DEFAULT_LLM:
         lang_suffix += f":{provider_key}"
     lang_cached = load_cached_analysis(get_cache_key(lesson_text + lang_suffix))
@@ -2200,8 +2438,8 @@ async def api_lesson_chat(request: Request):
             "summary": lang_cached.get("summary", {}),
         }
 
-    # Condensed (pass_0b_condensed_v4)
-    cond_suffix = ":pass_0b_condensed_v4"
+    # Condensed (condense_v4)
+    cond_suffix = ":condense_v4"
     if provider_key and provider_key != DEFAULT_LLM:
         cond_suffix += f":{provider_key}"
     cond_cached = load_cached_analysis(get_cache_key(lesson_text + cond_suffix))
@@ -3118,7 +3356,7 @@ def _auto_analyze_worker(max_docs: int = 3) -> dict:
         return {"status": "skipped", "reason": "LLM disabled"}
 
     # Find candidates: transcribed docs without condensed analysis
-    cache_suffix = ":pass_0b_condensed_v4"
+    cache_suffix = ":condense_v4"
     all_keys = _db.get_cache_keys()
 
     # Get all docs with transcriptions
@@ -3207,6 +3445,98 @@ async def auto_analyze(request: Request):
     return JSONResponse({"status": "started"})
 
 
+
+
+# ── Analysis pipeline gate ────────────────────────────────────────────
+
+
+@app.get("/analysis", response_class=HTMLResponse)
+async def analysis_dashboard(request: Request):
+    """Analysis pipeline dashboard with gate management."""
+    if IS_LAMBDA and _auth_mod.get_access_tier(request) != "admin":
+        return RedirectResponse("/")
+    return _build_analysis_page()
+
+
+@app.get("/api/analysis/dashboard")
+async def analysis_dashboard_data():
+    """Return analysis dashboard HTML for AJAX refresh."""
+    if not _db:
+        return HTMLResponse("<p>Database not configured.</p>", status_code=503)
+    try:
+        html = _build_analysis_html()
+        return HTMLResponse(html)
+    except Exception as e:
+        return HTMLResponse(f"<p style='color: red;'>Error: {e}</p>", status_code=500)
+
+
+@app.post("/api/analysis/gate")
+async def update_analysis_gate(request: Request):
+    """Toggle permitted flag for a (document, step) pair."""
+    if not _db:
+        return JSONResponse({"error": "Database not configured"}, status_code=500)
+    body = await request.json()
+    document_id = body.get("document_id")
+    step_name = body.get("step_name")
+    permitted = body.get("permitted")
+    if not document_id or not step_name or permitted is None:
+        return JSONResponse({"error": "Missing document_id, step_name, or permitted"}, status_code=400)
+    try:
+        _db.set_gate_permitted(document_id, step_name, permitted)
+        return JSONResponse({"status": "ok"})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/analysis/gate/bulk")
+async def update_analysis_gate_bulk(request: Request):
+    """Set permitted flag for multiple documents on a step."""
+    if not _db:
+        return JSONResponse({"error": "Database not configured"}, status_code=500)
+    body = await request.json()
+    document_ids = body.get("document_ids", [])
+    step_name = body.get("step_name")
+    permitted = body.get("permitted")
+    if not document_ids or not step_name or permitted is None:
+        return JSONResponse({"error": "Missing document_ids, step_name, or permitted"}, status_code=400)
+    try:
+        _db.set_gates_bulk(document_ids, step_name, permitted)
+        return JSONResponse({"status": "ok", "count": len(document_ids)})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/analysis/run")
+async def run_analysis_pipeline(request: Request):
+    """Run all runnable analysis steps (or for a specific document)."""
+    if not _db:
+        return JSONResponse({"error": "Database not configured"}, status_code=500)
+    body = await request.json() if request.headers.get("content-type") == "application/json" else {}
+    document_id = body.get("document_id")
+
+    from pipeline.analysis import run_pipeline
+    try:
+        result = await asyncio.to_thread(run_pipeline, _db, document_id)
+        return JSONResponse(result)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/analysis/clear-error")
+async def clear_analysis_error(request: Request):
+    """Clear the error on a gate entry so it can be retried."""
+    if not _db:
+        return JSONResponse({"error": "Database not configured"}, status_code=500)
+    body = await request.json()
+    document_id = body.get("document_id")
+    step_name = body.get("step_name")
+    if not document_id or not step_name:
+        return JSONResponse({"error": "Missing document_id or step_name"}, status_code=400)
+    try:
+        _db.mark_step_error(document_id, step_name, None)
+        return JSONResponse({"status": "ok"})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 @app.post("/admin/clear-cache")

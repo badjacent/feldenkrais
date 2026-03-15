@@ -90,7 +90,7 @@ def bulk_load_condensed(db: Database, doc_ids: set[str]) -> dict[str, dict]:
 
     Returns {doc_id: {"condensed": data, "title": title}} for docs that have condensed data.
     """
-    cache_suffix = ":pass_0b_condensed_v4"
+    cache_suffix = ":condense_v4"
 
     # Round-trip 1: get transcript text for all needed doc_ids
     placeholders = ",".join(["%s"] * len(doc_ids))

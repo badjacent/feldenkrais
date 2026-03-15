@@ -115,7 +115,7 @@ def find_docs_with_spatial(db: Database) -> list[dict]:
         docs = [dict(row) for row in cursor.fetchall()]
 
     results = []
-    cache_suffix = ":pass_0b_spatial_v2"
+    cache_suffix = ":spatial_v2"
 
     for doc in docs:
         text = doc["text"].strip()

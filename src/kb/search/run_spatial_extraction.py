@@ -43,7 +43,7 @@ def find_lessons_needing_extraction(db: Database, source_id: int | None = None) 
         """)
         docs = [dict(row) for row in cursor.fetchall()]
 
-    cache_suffix = ":pass_0b_spatial_v2"
+    cache_suffix = ":spatial_v2"
     needs_extraction = []
     already_cached = 0
 

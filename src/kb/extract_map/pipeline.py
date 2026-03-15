@@ -52,7 +52,7 @@ def run_extraction(lesson_text: str, provider_key: str | None = None,
         "When ambiguous between move and attend, default to attend."
     )
 
-    cache_suffix = ":extraction_v2"
+    cache_suffix = ":extract_steps_v2"
     if provider_key and provider_key != DEFAULT_LLM:
         cache_suffix += f":{provider_key}"
     cache_key = get_cache_key(lesson_text.strip() + cache_suffix)
@@ -131,7 +131,7 @@ def run_mapping(lesson_text: str, extraction_result: dict | None = None,
         "Do not invent canonical terms. Include low-confidence mappings — flag them, do not omit them."
     )
 
-    cache_suffix = ":mapping_v3"
+    cache_suffix = ":map_body_parts_v3"
     if provider_key and provider_key != DEFAULT_LLM:
         cache_suffix += f":{provider_key}"
     cache_key = get_cache_key(lesson_text.strip() + cache_suffix)

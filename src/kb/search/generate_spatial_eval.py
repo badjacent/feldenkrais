@@ -97,7 +97,7 @@ def find_fp_free_docs_with_spatial(db: Database, source_id: int | None = None) -
         docs = [dict(row) for row in cursor.fetchall()]
 
     results = []
-    cache_suffix = ":pass_0b_spatial_v2"
+    cache_suffix = ":spatial_v2"
 
     for doc in docs:
         text = doc["text"].strip()

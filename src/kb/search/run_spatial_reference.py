@@ -44,7 +44,7 @@ lessons = [d for d in all_docs if d["doc_id"] in ref_doc_ids]
 print(f"Found transcripts: {len(lessons)}")
 
 # Check which already cached
-cache_suffix = ":pass_0b_spatial_v2"
+cache_suffix = ":spatial_v2"
 to_extract = []
 already = 0
 for doc in lessons:

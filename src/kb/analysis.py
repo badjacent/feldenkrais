@@ -311,7 +311,7 @@ def load_pass_a(framework_version: str | None = None) -> tuple[str, dict]:
 
 def _pass_a_cache_key(lesson_text: str, provider_key: str | None = None, framework_version: str | None = None) -> str:
     """Cache key for Pass A results, independent of Pass B provider."""
-    suffix = ":pass_a_v3" + _framework_version_suffix(framework_version)
+    suffix = ":decompose_v3" + _framework_version_suffix(framework_version)
     if provider_key and provider_key != DEFAULT_LLM:
         suffix += f":{provider_key}"
     return get_cache_key(lesson_text + suffix)
@@ -810,7 +810,7 @@ def run_pass_0b(lesson_text: str, provider_key: str | None = None, debug_log: li
     )
 
     # Check cache (v2 suffix breaks from old segment-level cache)
-    cache_suffix = ":pass_0b_v2"
+    cache_suffix = ":somatic_v2"
     if provider_key and provider_key != DEFAULT_LLM:
         cache_suffix += f":{provider_key}"
     cache_key = get_cache_key(lesson_text.strip() + cache_suffix)
@@ -921,7 +921,7 @@ def run_pass_0b_lang(lesson_text: str, provider_key: str | None = None, debug_lo
     )
 
     # Check cache
-    cache_suffix = ":pass_0b_lang_v1"
+    cache_suffix = ":language_v1"
     if provider_key and provider_key != DEFAULT_LLM:
         cache_suffix += f":{provider_key}"
     cache_key = get_cache_key(lesson_text.strip() + cache_suffix)
@@ -1035,7 +1035,7 @@ def run_pass_0b_word_lang(lesson_text: str, provider_key: str | None = None, deb
     )
 
     # Check cache
-    cache_suffix = ":pass_0b_word_lang_v3"
+    cache_suffix = ":language_patterns_v3"
     if provider_key and provider_key != DEFAULT_LLM:
         cache_suffix += f":{provider_key}"
     cache_key = get_cache_key(lesson_text.strip() + cache_suffix)
@@ -1404,7 +1404,7 @@ def run_pass_0b_concepts(
     )
 
     # Check cache
-    cache_suffix = ":pass_0b_concepts_v2"
+    cache_suffix = ":concept_tags_v2"
     if provider_key and provider_key != DEFAULT_LLM:
         cache_suffix += f":{provider_key}"
     cache_key = get_cache_key(lesson_text.strip() + cache_suffix)
@@ -1566,7 +1566,7 @@ def run_pass_0b_spatial(
     )
 
     # Check cache
-    cache_suffix = ":pass_0b_spatial_v2"
+    cache_suffix = ":spatial_v2"
     if provider_key and provider_key != DEFAULT_LLM:
         cache_suffix += f":{provider_key}"
     cache_key = get_cache_key(lesson_text.strip() + cache_suffix)
@@ -1665,7 +1665,7 @@ def run_pass_0b_condensed(
     lang_summary = lang_result.get("summary", {})
 
     # Check cache (v4 — segmented output with foreground/background framing)
-    cache_suffix = ":pass_0b_condensed_v4"
+    cache_suffix = ":condense_v4"
     if provider_key and provider_key != DEFAULT_LLM:
         cache_suffix += f":{provider_key}"
     hint_suffix = f":hint:{hint.strip()}" if hint and hint.strip() else ""
