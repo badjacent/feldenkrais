@@ -780,10 +780,6 @@ def _build_ingestion_html() -> str:
     # Check for permanent failures
     perm_failures = _db.get_pipeline_log(limit=20, event="permanent_failure")
 
-    # Count analyzed / embedded from pipeline_stage
-    analyzed_count = sum(1 for d in documents if d.get("pipeline_stage") in ("analyzed", "embedded"))
-    embedded_count = sum(1 for d in documents if d.get("pipeline_stage") == "embedded")
-
     # Summary cards
     doc_total = summary.get("documents", {}).get("total", 0)
     transcribed = summary.get("transcribed", 0)
@@ -848,9 +844,7 @@ def _build_ingestion_html() -> str:
 
         stage = doc.get("pipeline_stage", "")
         stage_styles = {
-            "embedded": ("Embedded", "#d4edda", "#155724"),
-            "analyzed": ("Analyzed", "#cce5ff", "#004085"),
-            "transcribed": ("Transcribed", "#d1ecf1", "#0c5460"),
+            "transcribed": ("Transcribed", "#d4edda", "#155724"),
             "transcribing": ("Transcribing", "#fff3cd", "#856404"),
             "failed": ("Failed", "#f8d7da", "#721c24"),
             "awaiting_transcription": ("New", "#e2e3e5", "#383d41"),
@@ -860,7 +854,7 @@ def _build_ingestion_html() -> str:
         status_badge = f'<span style="padding: 2px 8px; border-radius: 10px; font-size: 0.8em; background: {bg}; color: {fg};"{title_attr}>{label}</span>'
 
         doc_id = str(doc.get("id", ""))
-        can_resubmit = stage in ("failed", "embedded", "analyzed", "transcribed")
+        can_resubmit = stage in ("failed", "transcribed")
         resubmit_btn = (
             f'<button class="resubmit-btn" data-docid="{doc_id}" '
             f'style="padding: 2px 8px; font-size: 0.8em; border: 1px solid #dc3545; '
@@ -917,14 +911,6 @@ def _build_ingestion_html() -> str:
             <div class="card">
                 <div class="value">{transcribed}</div>
                 <div class="label">Transcribed</div>
-            </div>
-            <div class="card">
-                <div class="value">{analyzed_count}</div>
-                <div class="label">Analyzed</div>
-            </div>
-            <div class="card">
-                <div class="value">{embedded_count}</div>
-                <div class="label">Embedded</div>
             </div>
             <div class="card">
                 <div class="value">{pending_jobs}</div>
@@ -1045,7 +1031,7 @@ def _build_ingestion_page() -> str:
     </style>
 </head>
 <body>
-    <div class="nav"><a href="/">&larr; Home</a></div>
+    <div class="nav"><a href="/">&larr; Home</a> <a href="/analysis">Analysis</a> <a href="/pipeline">Book Pipeline</a></div>
     <h1>Ingestion Dashboard</h1>
 
     <div id="ingestion-content">
@@ -1309,6 +1295,7 @@ def _build_analysis_page() -> str:
     <div class="nav">
         <a href="/">&larr; Home</a>
         <a href="/ingestion">Ingestion</a>
+        <a href="/analysis">Analysis</a>
         <a href="/pipeline">Book Pipeline</a>
     </div>
     <h1>Analysis Pipeline</h1>
@@ -3769,6 +3756,7 @@ async def landing_page(request: Request):
         links.append('<li><a href="/analyzer">Analyzer</a></li>')
         links.append('<li><a href="/explore">Explore</a></li>')
     links.append('<li><a href="/ingestion">Ingestion Dashboard</a></li>')
+    links.append('<li><a href="/analysis">Analysis Pipeline</a></li>')
     links.append('<li><a href="/pipeline">Pipeline Dashboard</a></li>')
     links.append('<li><a href="/pass0b">Pass 0b Analysis</a></li>')
     links.append('<li><a href="/pass0b-player">Pass 0b Player</a></li>')

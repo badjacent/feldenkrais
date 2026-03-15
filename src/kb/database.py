@@ -1469,8 +1469,6 @@ class Database:
                         ORDER BY j.updated_at DESC LIMIT 1) as latest_error,
                        EXISTS(SELECT 1 FROM analysis a
                               WHERE a.document_id = d.id AND a.type_id = 1) as has_transcription,
-                       EXISTS(SELECT 1 FROM lesson_embedding le
-                              WHERE le.document_id = d.id) as has_embedding,
                        COALESCE(d.transcription_retries, 0) as retry_count
                 FROM document d
                 JOIN document_source ds ON ds.id = d.source_id{source_filter}
@@ -1479,28 +1477,13 @@ class Database:
             """, params)
             rows = [dict(row) for row in cursor.fetchall()]
 
-        # Check which docs have condensed analysis cached
-        condensed_doc_ids = set()
-        try:
-            for entry in self.get_docs_with_condensed():
-                condensed_doc_ids.add(entry["doc_id"])
-        except Exception:
-            pass
-
-        # Compute pipeline_stage for each document
+        # Compute pipeline_stage for each document (ingestion only: ends at transcribed)
         for row in rows:
-            doc_id = str(row["id"])
             has_tx = row.get("has_transcription", False)
-            has_embedding = row.get("has_embedding", False)
-            has_condensed = doc_id in condensed_doc_ids
             latest_job = row.get("latest_job_status", "")
             retry_count = row.get("retry_count", 0)
 
-            if has_embedding:
-                stage = "embedded"
-            elif has_condensed:
-                stage = "analyzed"
-            elif has_tx:
+            if has_tx:
                 stage = "transcribed"
             elif latest_job == "pending":
                 stage = "transcribing"
@@ -1511,7 +1494,6 @@ class Database:
             else:
                 stage = "awaiting_transcription"
 
-            row["has_condensed"] = has_condensed
             row["pipeline_stage"] = stage
 
         return rows

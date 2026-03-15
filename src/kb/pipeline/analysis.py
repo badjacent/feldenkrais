@@ -115,20 +115,71 @@ def _run_pass_0b_condensed(db: Database, document_id: str, transcript: str) -> b
 
 def _run_embeddings(db: Database, document_id: str, transcript: str) -> bool:
     """Build embeddings from condensed analysis."""
-    from search.build_embeddings import build_embedding_for_document
-    return build_embedding_for_document(db, document_id, transcript)
+    import hashlib
+    from llm import get_embeddings
+    from cache_helpers import build_summary_from_condensed
+
+    condensed_key = get_cache_key(transcript.strip() + ":condense_v4")
+    condensed = load_cached_analysis(condensed_key)
+    if not condensed or not condensed.get("segments"):
+        logger.error(f"No condensed data for embedding: {document_id[:8]}")
+        return False
+
+    doc = db.get_document(document_id)
+    title = doc.get("title", "") if doc else ""
+    summary = build_summary_from_condensed(condensed, title)
+    summary_hash = hashlib.sha256(summary.encode()).hexdigest()[:16]
+
+    embeddings, _ = get_embeddings([summary], task_type="RETRIEVAL_DOCUMENT")
+    db.upsert_embedding(document_id, embeddings[0], summary, summary_hash)
+    return True
 
 
 def _run_concept_index(db: Database, document_id: str, transcript: str) -> bool:
     """Build concept index entries from concepts analysis."""
-    from search.build_concept_index import build_concepts_for_document
-    return build_concepts_for_document(db, document_id, transcript)
+    from search.build_concept_index import build_concept_rows, build_concept_summary
+
+    concepts_key = get_cache_key(transcript.strip() + ":concept_tags_v2")
+    concepts_data = load_cached_analysis(concepts_key)
+    if not concepts_data or not concepts_data.get("concepts"):
+        logger.error(f"No concepts data for indexing: {document_id[:8]}")
+        return False
+
+    # Upsert concept rows to lesson_concept table
+    all_rows = build_concept_rows(concepts_data)
+    db.upsert_concepts(document_id, all_rows)
+
+    # Build concept embedding
+    import hashlib
+    from llm import get_embeddings
+
+    # Check for spatial data too
+    spatial_key = get_cache_key(transcript.strip() + ":spatial_v2")
+    spatial_data = load_cached_analysis(spatial_key)
+
+    doc = db.get_document(document_id)
+    title = doc.get("title", "") if doc else ""
+    summary = build_concept_summary(concepts_data, title, spatial_data)
+    summary_hash = hashlib.sha256(summary.encode()).hexdigest()[:16]
+
+    embeddings, _ = get_embeddings([summary], task_type="RETRIEVAL_DOCUMENT")
+    db.upsert_embedding(document_id, embeddings[0], summary, summary_hash, method="concepts")
+    return True
 
 
 def _run_spatial_index(db: Database, document_id: str, transcript: str) -> bool:
     """Build spatial index entries from spatial analysis."""
-    from search.build_spatial_index import build_spatial_for_document
-    return build_spatial_for_document(db, document_id, transcript)
+    from search.build_spatial_index import build_spatial_concept_rows
+
+    spatial_key = get_cache_key(transcript.strip() + ":spatial_v2")
+    spatial_data = load_cached_analysis(spatial_key)
+    if not spatial_data or not spatial_data.get("groups"):
+        logger.error(f"No spatial data for indexing: {document_id[:8]}")
+        return False
+
+    concept_rows = build_spatial_concept_rows(spatial_data)
+    db.upsert_spatial_concepts(document_id, concept_rows)
+    return True
 
 
 def _run_extraction(db: Database, document_id: str, transcript: str) -> bool:
