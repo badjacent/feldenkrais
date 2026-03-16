@@ -1,7 +1,7 @@
 """
 Analysis pipeline runner: executes gated analysis steps for documents.
 
-Reads the document_analysis_gate table to find runnable (document, step) pairs
+Reads group gates and document_analysis_state to find runnable (document, step) pairs
 and executes them in dependency order.
 
 Usage:
@@ -23,6 +23,7 @@ import hashlib
 import logging
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 # Add parent to path for local dev
@@ -62,8 +63,8 @@ def _compute_upstream_hash(db: Database, document_id: str, depends_on: list[str]
     """Compute a hash of upstream completed versions for staleness tracking."""
     parts = []
     for dep in sorted(depends_on):
-        gate = db.get_gate(document_id, dep)
-        cv = gate.get("completed_version") if gate else None
+        state = db.get_document_state(document_id, dep)
+        cv = state.get("completed_version") if state else None
         parts.append(f"{dep}:{cv}")
     return hashlib.sha256("|".join(parts).encode()).hexdigest()[:16]
 
@@ -182,13 +183,24 @@ def _run_spatial_index(db: Database, document_id: str, transcript: str) -> bool:
     return True
 
 
+def _init_extract_map(db: Database):
+    """Ensure extract_map module is initialized."""
+    import extract_map.pipeline as em
+    if em._db is None:
+        import llm_config
+        llm_config.init(db)
+        em.init(db, llm_config.get_llm)
+
+
 def _run_extraction(db: Database, document_id: str, transcript: str) -> bool:
+    _init_extract_map(db)
     from extract_map.pipeline import run_extraction
     result = run_extraction(transcript, DEFAULT_PROVIDER)
     return result is not None
 
 
 def _run_mapping(db: Database, document_id: str, transcript: str) -> bool:
+    _init_extract_map(db)
     from extract_map.pipeline import run_mapping
     result = run_mapping(transcript, DEFAULT_PROVIDER)
     return result is not None
@@ -215,13 +227,31 @@ def run_step(db: Database, document_id: str, step_name: str) -> bool:
     """Execute a single analysis step for a document.
 
     Returns True if successful, False on failure.
-    Updates the gate table accordingly.
+    Uses a pg advisory lock to prevent concurrent execution of the same (doc, step).
     """
     executor = STEP_EXECUTORS.get(step_name)
     if not executor:
         logger.error(f"No executor for step: {step_name}")
         return False
 
+    # Advisory lock: hash (document_id, step_name) to a 64-bit int
+    lock_key = int(hashlib.sha256(f"{document_id}:{step_name}".encode()).hexdigest()[:15], 16)
+
+    with db.get_cursor() as cursor:
+        cursor.execute("SELECT pg_try_advisory_lock(%s)", (lock_key,))
+        acquired = cursor.fetchone()[0]
+    if not acquired:
+        logger.info(f"Skipping {step_name} for {document_id[:8]} — already running")
+        return True  # not an error, just skip
+
+    try:
+        return _run_step_inner(db, document_id, step_name, executor)
+    finally:
+        with db.get_cursor() as cursor:
+            cursor.execute("SELECT pg_advisory_unlock(%s)", (lock_key,))
+
+
+def _run_step_inner(db: Database, document_id: str, step_name: str, executor) -> bool:
     transcript = _get_transcript(db, document_id)
     if not transcript:
         db.mark_step_error(document_id, step_name, "No transcript available")
@@ -276,7 +306,8 @@ def run_pipeline(db: Database, document_id: str | None = None, dry_run: bool = F
         return {"total": len(runnable), "success": 0, "failed": 0, "dry_run": True}
 
     # Execute in dependency order: steps with no deps first, then their dependents
-    # Simple approach: keep running passes until nothing is runnable
+    # Each pass runs all currently-runnable steps in parallel, then re-queries
+    max_workers = 4
     success = 0
     failed = 0
     executed = set()
@@ -289,23 +320,31 @@ def run_pipeline(db: Database, document_id: str | None = None, dry_run: bool = F
         if not runnable:
             break
 
-        for r in runnable:
+        print(f"\n  Pass {_pass + 1}: {len(runnable)} steps ({max_workers} workers)")
+
+        def _exec(r):
             doc_id = str(r["document_id"])
             step = r["step_name"]
-            key = (doc_id, step)
-            executed.add(key)
-
-            print(f"  Running {step} for {r['document_title'][:40]}...", end=" ", flush=True)
             t0 = time.time()
             ok = run_step(db, doc_id, step)
             elapsed = time.time() - t0
+            return doc_id, step, r["document_title"], ok, elapsed
 
-            if ok:
-                success += 1
-                print(f"OK ({elapsed:.1f}s)")
-            else:
-                failed += 1
-                print(f"FAILED ({elapsed:.1f}s)")
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = {}
+            for r in runnable:
+                key = (str(r["document_id"]), r["step_name"])
+                executed.add(key)
+                futures[pool.submit(_exec, r)] = key
+
+            for future in as_completed(futures):
+                doc_id, step, title, ok, elapsed = future.result()
+                if ok:
+                    success += 1
+                    print(f"    OK  {step:20s} {title[:40]:40s} ({elapsed:.1f}s)")
+                else:
+                    failed += 1
+                    print(f"    ERR {step:20s} {title[:40]:40s} ({elapsed:.1f}s)")
 
     total = success + failed
     print(f"\nDone: {success}/{total} succeeded, {failed} failed")

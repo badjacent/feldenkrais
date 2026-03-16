@@ -153,10 +153,31 @@ CREATE TABLE IF NOT EXISTS analysis_step (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS document_analysis_gate (
+CREATE TABLE IF NOT EXISTS lesson_group (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    description TEXT,
+    auto_source_id INTEGER REFERENCES document_source(id),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS lesson_group_member (
+    group_id INTEGER NOT NULL REFERENCES lesson_group(id) ON DELETE CASCADE,
     document_id UUID NOT NULL REFERENCES document(id) ON DELETE CASCADE,
+    PRIMARY KEY (group_id, document_id)
+);
+
+CREATE TABLE IF NOT EXISTS group_analysis_gate (
+    group_id INTEGER NOT NULL REFERENCES lesson_group(id) ON DELETE CASCADE,
     step_name TEXT NOT NULL REFERENCES analysis_step(name),
     permitted BOOLEAN NOT NULL DEFAULT FALSE,
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (group_id, step_name)
+);
+
+CREATE TABLE IF NOT EXISTS document_analysis_state (
+    document_id UUID NOT NULL REFERENCES document(id) ON DELETE CASCADE,
+    step_name TEXT NOT NULL REFERENCES analysis_step(name),
     completed_version INTEGER,
     completed_at TIMESTAMPTZ,
     upstream_hash TEXT,
@@ -270,9 +291,11 @@ CREATE INDEX IF NOT EXISTS idx_lesson_concept_value ON lesson_concept (value);
 CREATE INDEX IF NOT EXISTS idx_lesson_concept_category ON lesson_concept (category, value);
 CREATE INDEX IF NOT EXISTS idx_external_lesson_source ON external_lesson (lesson_source_id);
 CREATE INDEX IF NOT EXISTS idx_external_lesson_embedding_hnsw ON external_lesson USING hnsw (embedding vector_cosine_ops);
-CREATE INDEX IF NOT EXISTS idx_dag_document ON document_analysis_gate (document_id);
-CREATE INDEX IF NOT EXISTS idx_dag_step ON document_analysis_gate (step_name);
-CREATE INDEX IF NOT EXISTS idx_dag_runnable ON document_analysis_gate (permitted, stale) WHERE permitted = TRUE;
+CREATE INDEX IF NOT EXISTS idx_lgm_document ON lesson_group_member (document_id);
+CREATE INDEX IF NOT EXISTS idx_gag_permitted ON group_analysis_gate (group_id, step_name) WHERE permitted = TRUE;
+CREATE INDEX IF NOT EXISTS idx_das_document ON document_analysis_state (document_id);
+CREATE INDEX IF NOT EXISTS idx_das_step ON document_analysis_state (step_name);
+CREATE INDEX IF NOT EXISTS idx_analysis_transcript ON analysis (document_id) WHERE type_id = 1;
 """
 
 SEED_DATA = """
@@ -404,6 +427,8 @@ class Database:
                 statement = statement.strip()
                 if statement:
                     cursor.execute(statement)
+        # Sync auto-groups from document sources (outside the schema transaction)
+        self.sync_auto_groups()
 
     def create_document(
         self,
@@ -1799,7 +1824,7 @@ class Database:
             for key in condensed_keys
         ]
 
-    # ── Analysis pipeline gate ─────────────────────────────────────────
+    # ── Analysis pipeline ────────────────────────────────────────────
 
     def get_analysis_steps(self) -> list[dict]:
         """Return all registered analysis steps."""
@@ -1822,206 +1847,340 @@ class Database:
                 (new_version, name),
             )
 
-    def get_document_gates(self, document_id: str) -> list[dict]:
-        """Return all gate entries for a document, joined with step info."""
+    # ── Lesson groups ─────────────────────────────────────────────
+
+    def get_lesson_groups(self) -> list[dict]:
+        """Return all lesson groups with member counts."""
         with self.get_cursor(commit=False) as cursor:
             cursor.execute("""
-                SELECT g.*, s.current_version, s.depends_on, s.description, s.cache_suffix
-                FROM document_analysis_gate g
-                JOIN analysis_step s ON s.name = g.step_name
-                WHERE g.document_id = %s
-                ORDER BY s.name
-            """, (document_id,))
+                SELECT lg.*, COUNT(lgm.document_id) as doc_count
+                FROM lesson_group lg
+                LEFT JOIN lesson_group_member lgm ON lgm.group_id = lg.id
+                GROUP BY lg.id
+                ORDER BY lg.name
+            """)
             return [dict(row) for row in cursor.fetchall()]
 
-    def get_gate(self, document_id: str, step_name: str) -> Optional[dict]:
-        """Return a single gate entry."""
+    def get_lesson_group(self, group_id: int) -> Optional[dict]:
+        """Return a single lesson group by ID."""
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute("SELECT * FROM lesson_group WHERE id = %s", (group_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def create_lesson_group(self, name: str, description: str | None = None,
+                            auto_source_id: int | None = None) -> int:
+        """Create a lesson group. Returns the new group ID."""
+        with self.get_cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO lesson_group (name, description, auto_source_id)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description
+                RETURNING id
+            """, (name, description, auto_source_id))
+            return cursor.fetchone()["id"]
+
+    def add_group_members(self, group_id: int, document_ids: list[str]):
+        """Add documents to a lesson group."""
+        with self.get_cursor() as cursor:
+            for doc_id in document_ids:
+                cursor.execute("""
+                    INSERT INTO lesson_group_member (group_id, document_id)
+                    VALUES (%s, %s)
+                    ON CONFLICT DO NOTHING
+                """, (group_id, doc_id))
+
+    def get_group_members(self, group_id: int) -> list[dict]:
+        """Return documents in a lesson group."""
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute("""
+                SELECT d.id as document_id, d.title, d.created_at,
+                       ds.name as source_name
+                FROM lesson_group_member lgm
+                JOIN document d ON d.id = lgm.document_id
+                JOIN document_source ds ON ds.id = d.source_id
+                WHERE lgm.group_id = %s
+                ORDER BY d.title
+            """, (group_id,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def sync_auto_groups(self):
+        """Sync auto-source groups: create groups for sources with documents, populate members."""
+        with self.get_cursor() as cursor:
+            # Find sources that have transcribed documents
+            cursor.execute("""
+                SELECT DISTINCT ds.id, ds.name
+                FROM document_source ds
+                JOIN document d ON d.source_id = ds.id
+                JOIN analysis a ON a.document_id = d.id AND a.type_id = 1
+            """)
+            sources = cursor.fetchall()
+
+            for src in sources:
+                # Create or get group
+                cursor.execute("""
+                    INSERT INTO lesson_group (name, auto_source_id)
+                    VALUES (%s, %s)
+                    ON CONFLICT (name) DO UPDATE SET auto_source_id = EXCLUDED.auto_source_id
+                    RETURNING id
+                """, (src["name"], src["id"]))
+                group_id = cursor.fetchone()["id"]
+
+                # Sync members: add documents from this source that have transcriptions
+                cursor.execute("""
+                    INSERT INTO lesson_group_member (group_id, document_id)
+                    SELECT %s, d.id
+                    FROM document d
+                    JOIN analysis a ON a.document_id = d.id AND a.type_id = 1
+                    WHERE d.source_id = %s
+                    ON CONFLICT DO NOTHING
+                """, (group_id, src["id"]))
+
+    # ── Group analysis gates ──────────────────────────────────────
+
+    def get_group_gates(self, group_id: int) -> list[dict]:
+        """Return all gate entries for a group."""
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute("""
+                SELECT gag.*, s.current_version, s.depends_on, s.description
+                FROM group_analysis_gate gag
+                JOIN analysis_step s ON s.name = gag.step_name
+                WHERE gag.group_id = %s
+                ORDER BY s.name
+            """, (group_id,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def set_group_gate(self, group_id: int, step_name: str, permitted: bool):
+        """Set the permitted flag for a (group, step) pair."""
+        with self.get_cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO group_analysis_gate (group_id, step_name, permitted, updated_at)
+                VALUES (%s, %s, %s, NOW())
+                ON CONFLICT (group_id, step_name)
+                DO UPDATE SET permitted = EXCLUDED.permitted, updated_at = NOW()
+            """, (group_id, step_name, permitted))
+
+    # ── Document analysis state ───────────────────────────────────
+
+    def get_document_state(self, document_id: str, step_name: str) -> Optional[dict]:
+        """Return a single document analysis state entry."""
         with self.get_cursor(commit=False) as cursor:
             cursor.execute(
-                "SELECT * FROM document_analysis_gate WHERE document_id = %s AND step_name = %s",
+                "SELECT * FROM document_analysis_state WHERE document_id = %s AND step_name = %s",
                 (document_id, step_name),
             )
             row = cursor.fetchone()
             return dict(row) if row else None
-
-    def set_gate_permitted(self, document_id: str, step_name: str, permitted: bool):
-        """Set the permitted flag for a (document, step) pair. Creates row if needed."""
-        with self.get_cursor() as cursor:
-            cursor.execute("""
-                INSERT INTO document_analysis_gate (document_id, step_name, permitted, stale, updated_at)
-                VALUES (%s, %s, %s, TRUE, NOW())
-                ON CONFLICT (document_id, step_name)
-                DO UPDATE SET permitted = EXCLUDED.permitted, updated_at = NOW()
-            """, (document_id, step_name, permitted))
-
-    def set_gates_bulk(self, document_ids: list[str], step_name: str, permitted: bool):
-        """Set the permitted flag for multiple documents on a single step."""
-        with self.get_cursor() as cursor:
-            for doc_id in document_ids:
-                cursor.execute("""
-                    INSERT INTO document_analysis_gate (document_id, step_name, permitted, stale, updated_at)
-                    VALUES (%s, %s, %s, TRUE, NOW())
-                    ON CONFLICT (document_id, step_name)
-                    DO UPDATE SET permitted = EXCLUDED.permitted, updated_at = NOW()
-                """, (doc_id, step_name, permitted))
 
     def mark_step_completed(self, document_id: str, step_name: str, version: int,
                             upstream_hash: str | None = None):
         """Record that a step completed successfully for a document."""
         with self.get_cursor() as cursor:
             cursor.execute("""
-                UPDATE document_analysis_gate
-                SET completed_version = %s, completed_at = NOW(), upstream_hash = %s,
-                    stale = FALSE, error = NULL, updated_at = NOW()
-                WHERE document_id = %s AND step_name = %s
-            """, (version, upstream_hash, document_id, step_name))
+                INSERT INTO document_analysis_state
+                    (document_id, step_name, completed_version, completed_at, upstream_hash, stale, error, updated_at)
+                VALUES (%s, %s, %s, NOW(), %s, FALSE, NULL, NOW())
+                ON CONFLICT (document_id, step_name)
+                DO UPDATE SET completed_version = EXCLUDED.completed_version,
+                             completed_at = NOW(), upstream_hash = EXCLUDED.upstream_hash,
+                             stale = FALSE, error = NULL, updated_at = NOW()
+            """, (document_id, step_name, version, upstream_hash))
             # Mark downstream steps as stale
-            step = self.get_analysis_step(step_name)
-            if step:
-                cursor.execute("""
-                    UPDATE document_analysis_gate g
-                    SET stale = TRUE, updated_at = NOW()
-                    FROM analysis_step s
-                    WHERE g.step_name = s.name
-                      AND g.document_id = %s
-                      AND %s = ANY(s.depends_on)
-                """, (document_id, step_name))
+            cursor.execute("""
+                UPDATE document_analysis_state das
+                SET stale = TRUE, updated_at = NOW()
+                FROM analysis_step s
+                WHERE das.step_name = s.name
+                  AND das.document_id = %s
+                  AND %s = ANY(s.depends_on)
+            """, (document_id, step_name))
 
     def mark_step_error(self, document_id: str, step_name: str, error: str):
         """Record that a step failed for a document."""
         with self.get_cursor() as cursor:
             cursor.execute("""
-                UPDATE document_analysis_gate
-                SET error = %s, updated_at = NOW()
+                INSERT INTO document_analysis_state (document_id, step_name, error, updated_at)
+                VALUES (%s, %s, %s, NOW())
+                ON CONFLICT (document_id, step_name)
+                DO UPDATE SET error = EXCLUDED.error, updated_at = NOW()
+            """, (document_id, step_name, error))
+
+    def clear_step_error(self, document_id: str, step_name: str):
+        """Clear the error on a document analysis state entry."""
+        with self.get_cursor() as cursor:
+            cursor.execute("""
+                UPDATE document_analysis_state
+                SET error = NULL, updated_at = NOW()
                 WHERE document_id = %s AND step_name = %s
-            """, (error, document_id, step_name))
+            """, (document_id, step_name))
 
     def get_runnable_steps(self, document_id: str | None = None) -> list[dict]:
-        """Find all (document, step) pairs that are permitted, need work, and have deps satisfied.
+        """Find all (document, step) pairs that are permitted via group gates, need work, and have deps satisfied.
 
-        A step needs work when:
-        - completed_version IS NULL (never run), OR
-        - completed_version < current_version (version behind), OR
-        - stale = TRUE (upstream changed)
-
-        Deps are satisfied when all depends_on steps have a completed_version for this document.
+        A step is runnable when:
+        1. At least one group containing the document has group_analysis_gate.permitted = TRUE
+        2. document_analysis_state has completed_version IS NULL or < current_version or stale = TRUE
+        3. error IS NULL
+        4. All depends_on steps have completed_version IS NOT NULL for this document
         """
-        doc_filter = "AND g.document_id = %s" if document_id else ""
+        doc_filter = "AND d.id = %s" if document_id else ""
         params = [document_id] if document_id else []
 
         with self.get_cursor(commit=False) as cursor:
             cursor.execute(f"""
-                SELECT g.document_id, g.step_name, g.completed_version, g.stale,
-                       s.current_version, s.depends_on, s.cache_suffix,
-                       d.title as document_title
-                FROM document_analysis_gate g
-                JOIN analysis_step s ON s.name = g.step_name
-                JOIN document d ON d.id = g.document_id
-                WHERE g.permitted = TRUE
-                  AND g.error IS NULL
-                  AND (g.completed_version IS NULL
-                       OR g.completed_version < s.current_version
-                       OR g.stale = TRUE)
-                  {doc_filter}
-                ORDER BY d.title, s.name
+                WITH candidates AS (
+                    SELECT DISTINCT d.id as document_id, d.title as document_title,
+                           s.name as step_name, s.current_version, s.depends_on, s.cache_suffix,
+                           das.completed_version, das.stale
+                    FROM lesson_group_member lgm
+                    JOIN group_analysis_gate gag ON gag.group_id = lgm.group_id AND gag.permitted = TRUE
+                    JOIN analysis_step s ON s.name = gag.step_name
+                    JOIN document d ON d.id = lgm.document_id
+                    LEFT JOIN document_analysis_state das ON das.document_id = d.id AND das.step_name = s.name
+                    WHERE (das.completed_version IS NULL
+                           OR das.completed_version < s.current_version
+                           OR das.stale = TRUE)
+                      AND (das.error IS NULL)
+                      {doc_filter}
+                )
+                SELECT c.*
+                FROM candidates c
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM unnest(c.depends_on) dep(name)
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM document_analysis_state das2
+                        WHERE das2.document_id = c.document_id
+                          AND das2.step_name = dep.name
+                          AND das2.completed_version IS NOT NULL
+                    )
+                )
+                ORDER BY c.document_title, c.step_name
             """, params)
-            candidates = [dict(row) for row in cursor.fetchall()]
+            return [dict(row) for row in cursor.fetchall()]
 
-        # Filter: all depends_on must have completed_version for this document
-        runnable = []
-        for c in candidates:
-            deps = c.get("depends_on") or []
-            if not deps:
-                runnable.append(c)
-                continue
-            # Check deps
-            all_satisfied = True
-            for dep in deps:
-                gate = self.get_gate(str(c["document_id"]), dep)
-                if not gate or gate.get("completed_version") is None:
-                    all_satisfied = False
-                    break
-            if all_satisfied:
-                runnable.append(c)
+    def count_runnable_steps(self) -> int:
+        """Fast count of runnable steps (no dep check — just permitted + needs work)."""
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute("""
+                SELECT COUNT(DISTINCT (lgm.document_id, gag.step_name))
+                FROM lesson_group_member lgm
+                JOIN group_analysis_gate gag ON gag.group_id = lgm.group_id AND gag.permitted = TRUE
+                JOIN analysis_step s ON s.name = gag.step_name
+                LEFT JOIN document_analysis_state das ON das.document_id = lgm.document_id AND das.step_name = s.name
+                WHERE (das.completed_version IS NULL
+                       OR das.completed_version < s.current_version
+                       OR das.stale = TRUE)
+                  AND (das.error IS NULL)
+            """)
+            return cursor.fetchone()["count"]
 
-        return runnable
+    # ── Analysis dashboard ────────────────────────────────────────
 
-    def get_analysis_dashboard(self, limit: int = 100) -> list[dict]:
-        """Return documents with their gate states for the analysis dashboard.
+    def get_group_dashboard(self) -> list[dict]:
+        """Return groups with their gate states for the analysis dashboard.
 
-        Returns one row per document, with a 'gates' dict keyed by step name.
+        Returns one row per group with permitted state per step and member count.
+        """
+        steps = self.get_analysis_steps()
+        step_names = [s["name"] for s in steps]
+
+        groups = self.get_lesson_groups()
+
+        if not groups:
+            return []
+
+        group_ids = [g["id"] for g in groups]
+
+        # Bulk fetch all group gates
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute("""
+                SELECT group_id, step_name, permitted
+                FROM group_analysis_gate
+                WHERE group_id = ANY(%s)
+            """, (group_ids,))
+            gate_rows = cursor.fetchall()
+
+        gate_lookup = {}
+        for row in gate_rows:
+            gate_lookup[(row["group_id"], row["step_name"])] = row["permitted"]
+
+        for group in groups:
+            gates = {}
+            for sn in step_names:
+                gates[sn] = gate_lookup.get((group["id"], sn), False)
+            group["gates"] = gates
+
+        return groups
+
+    def get_document_dashboard(self, group_id: int) -> list[dict]:
+        """Return documents in a group with their analysis states for drill-down view.
+
+        Returns one row per document with completion state per step.
         """
         steps = self.get_analysis_steps()
         step_names = [s["name"] for s in steps]
         step_versions = {s["name"]: s["current_version"] for s in steps}
 
-        # Get transcribed documents (have analysis type_id=1)
-        with self.get_cursor(commit=False) as cursor:
-            cursor.execute("""
-                SELECT DISTINCT d.id as document_id, d.title, d.created_at,
-                       ds.name as source_name
-                FROM document d
-                JOIN analysis a ON a.document_id = d.id AND a.type_id = 1
-                JOIN document_source ds ON ds.id = d.source_id
-                ORDER BY d.title
-                LIMIT %s
-            """, (limit,))
-            docs = [dict(row) for row in cursor.fetchall()]
-
-        if not docs:
+        members = self.get_group_members(group_id)
+        if not members:
             return []
 
-        doc_ids = [str(d["document_id"]) for d in docs]
+        doc_ids = [str(m["document_id"]) for m in members]
 
-        # Bulk fetch all gates for these documents
+        # Bulk fetch all states for these documents
         with self.get_cursor(commit=False) as cursor:
             cursor.execute("""
-                SELECT g.document_id::text, g.step_name, g.permitted,
-                       g.completed_version, g.stale, g.error, g.completed_at
-                FROM document_analysis_gate g
-                WHERE g.document_id = ANY(%s::uuid[])
+                SELECT das.document_id::text, das.step_name,
+                       das.completed_version, das.stale, das.error, das.completed_at
+                FROM document_analysis_state das
+                WHERE das.document_id = ANY(%s::uuid[])
             """, (doc_ids,))
-            gate_rows = cursor.fetchall()
+            state_rows = cursor.fetchall()
 
-        # Index gates by (doc_id, step_name)
-        gate_lookup = {}
-        for row in gate_rows:
-            key = (row["document_id"], row["step_name"])
-            gate_lookup[key] = dict(row)
+        state_lookup = {}
+        for row in state_rows:
+            state_lookup[(row["document_id"], row["step_name"])] = dict(row)
 
-        # Build result
-        for doc in docs:
+        # Check which steps are permitted for this group
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute("""
+                SELECT step_name, permitted FROM group_analysis_gate
+                WHERE group_id = %s AND permitted = TRUE
+            """, (group_id,))
+            permitted_steps = {row["step_name"] for row in cursor.fetchall()}
+
+        for doc in members:
             doc_id = str(doc["document_id"])
             gates = {}
             for sn in step_names:
-                gate = gate_lookup.get((doc_id, sn))
-                if gate:
-                    cv = gate.get("completed_version")
+                s = state_lookup.get((doc_id, sn))
+                permitted = sn in permitted_steps
+                if s:
+                    cv = s.get("completed_version")
                     sv = step_versions[sn]
-                    needs_work = cv is None or cv < sv or gate.get("stale", False)
-                    if gate.get("permitted") and not needs_work and not gate.get("error"):
-                        state = "current"
-                    elif gate.get("permitted") and needs_work and not gate.get("error"):
-                        state = "stale"
-                    elif gate.get("error"):
+                    needs_work = cv is None or cv < sv or s.get("stale", False)
+                    if s.get("error"):
                         state = "error"
-                    elif not gate.get("permitted") and needs_work:
-                        state = "gated"
+                    elif not needs_work:
+                        state = "current"
+                    elif permitted and needs_work:
+                        state = "stale"
                     else:
                         state = "inactive"
                     gates[sn] = {
                         "state": state,
-                        "permitted": gate.get("permitted", False),
+                        "permitted": permitted,
                         "completed_version": cv,
                         "current_version": sv,
-                        "stale": gate.get("stale", False),
-                        "error": gate.get("error"),
-                        "completed_at": str(gate.get("completed_at") or ""),
+                        "stale": s.get("stale", False),
+                        "error": s.get("error"),
+                        "completed_at": str(s.get("completed_at") or ""),
                     }
                 else:
                     gates[sn] = {
                         "state": "inactive",
-                        "permitted": False,
+                        "permitted": permitted,
                         "completed_version": None,
                         "current_version": step_versions[sn],
                         "stale": False,
@@ -2030,4 +2189,56 @@ class Database:
                     }
             doc["gates"] = gates
 
-        return docs
+        return members
+
+    def clear_all_errors(self) -> int:
+        """Clear all errors in document_analysis_state. Returns count cleared."""
+        with self.get_cursor() as cursor:
+            cursor.execute("""
+                UPDATE document_analysis_state
+                SET error = NULL, updated_at = NOW()
+                WHERE error IS NOT NULL
+            """)
+            return cursor.rowcount
+
+    def get_pipeline_progress(self) -> list[dict]:
+        """Return per-group, per-step completion counts for permitted steps.
+
+        Returns rows with: group_id, group_name, step_name, total, completed, stale, errors
+        """
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute("""
+                SELECT lg.id as group_id, lg.name as group_name,
+                       gag.step_name,
+                       s.current_version,
+                       COUNT(lgm.document_id) as total,
+                       COUNT(CASE WHEN das.completed_version = s.current_version
+                                   AND NOT COALESCE(das.stale, FALSE)
+                                   AND das.error IS NULL THEN 1 END) as completed,
+                       COUNT(CASE WHEN das.stale = TRUE AND das.error IS NULL THEN 1 END) as stale,
+                       COUNT(CASE WHEN das.error IS NOT NULL THEN 1 END) as errors
+                FROM lesson_group lg
+                JOIN group_analysis_gate gag ON gag.group_id = lg.id AND gag.permitted = TRUE
+                JOIN analysis_step s ON s.name = gag.step_name
+                JOIN lesson_group_member lgm ON lgm.group_id = lg.id
+                LEFT JOIN document_analysis_state das
+                    ON das.document_id = lgm.document_id AND das.step_name = gag.step_name
+                GROUP BY lg.id, lg.name, gag.step_name, s.current_version
+                ORDER BY lg.name, gag.step_name
+            """)
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_pipeline_errors(self, limit: int = 50) -> list[dict]:
+        """Return documents with errors across all steps."""
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute("""
+                SELECT das.document_id, d.title, das.step_name, das.error, das.updated_at,
+                       ds.name as source_name
+                FROM document_analysis_state das
+                JOIN document d ON d.id = das.document_id
+                JOIN document_source ds ON ds.id = d.source_id
+                WHERE das.error IS NOT NULL
+                ORDER BY das.updated_at DESC
+                LIMIT %s
+            """, (limit,))
+            return [dict(row) for row in cursor.fetchall()]

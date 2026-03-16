@@ -1094,135 +1094,83 @@ def _build_ingestion_page() -> str:
 """
 
 
-def _build_analysis_html() -> str:
-    """Build the analysis dashboard content HTML (the inner table)."""
-    docs = _db.get_analysis_dashboard(limit=2000)
+def _analysis_step_names():
+    """Return step names in display order, filtered to those in DB."""
     steps = _db.get_analysis_steps()
     step_lookup = {s["name"]: s for s in steps}
-
-    # Display order: dependency order (roots first, leaves last)
-    step_names = [
-        "decompose",
-        "somatic",
-        "language",
-        "condense",
-        "embed",
-        "concept_tags",
-        "index_concepts",
-        "spatial",
-        "index_spatial",
-        "language_patterns",
-        "extract_steps",
-        "map_body_parts",
+    ordered = [
+        "decompose", "somatic", "language", "condense", "embed",
+        "concept_tags", "index_concepts", "spatial", "index_spatial",
+        "language_patterns", "extract_steps", "map_body_parts",
     ]
-    # Filter to only steps that exist in the DB
-    step_names = [sn for sn in step_names if sn in step_lookup]
+    return [sn for sn in ordered if sn in step_lookup], step_lookup
 
-    # Display names for column headers (longer, readable)
-    display_names = {
-        "decompose": "decompose",
-        "somatic": "somatic",
-        "language": "language",
-        "language_patterns": "lang-pat",
-        "concept_tags": "concepts",
-        "spatial": "spatial",
-        "condense": "condense",
-        "embed": "embed",
-        "index_concepts": "idx-conc",
-        "index_spatial": "idx-spat",
-        "extract_steps": "extract",
-        "map_body_parts": "map-body",
-    }
 
-    # Tooltips: name + description + deps
+_STEP_DISPLAY_NAMES = {
+    "decompose": "decompose", "somatic": "somatic", "language": "language",
+    "language_patterns": "lang-pat", "concept_tags": "concepts", "spatial": "spatial",
+    "condense": "condense", "embed": "embed", "index_concepts": "idx-conc",
+    "index_spatial": "idx-spat", "extract_steps": "extract", "map_body_parts": "map-body",
+}
+
+
+def _build_analysis_html() -> str:
+    """Build the group-level analysis dashboard content HTML."""
+    groups = _db.get_group_dashboard()
+    step_names, step_lookup = _analysis_step_names()
+
     def step_tooltip(sn):
         s = step_lookup[sn]
         deps = ", ".join(s.get("depends_on") or []) or "none"
         desc = s.get("description") or ""
         return f"{sn} (v{s['current_version']}): {desc}. Depends on: {deps}"
 
-    # State → cell display
-    def cell_html(gate, doc_id, step_name):
-        state = gate["state"]
-        cv = gate.get("completed_version")
-        sv = gate.get("current_version")
-        err = gate.get("error")
-        permitted = gate.get("permitted", False)
-
-        if state == "current":
-            label = f"v{cv}"
-            bg, fg = "#d4edda", "#155724"
-            title = f"Current (v{cv})"
-        elif state == "stale":
-            label = f"v{cv}" if cv else "new"
-            bg, fg = "#fff3cd", "#856404"
-            title = f"Stale — will run (current: v{sv})"
-        elif state == "error":
-            label = "err"
-            bg, fg = "#f8d7da", "#721c24"
-            err_safe = (err or 'unknown').replace('"', '&quot;').replace("'", "\\'")[:200]
-            title = f"Error: {err_safe} (click to clear)"
-        elif state == "gated":
-            label = "off"
-            bg, fg = "#e2e3e5", "#6c757d"
-            title = f"Gated — needs permission (v{sv})"
-        else:  # inactive
-            label = "—"
-            bg, fg = "#f8f9fa", "#adb5bd"
-            title = "No gate entry"
-
-        if state == "error":
-            onclick = f"clearError('{doc_id}', '{step_name}')"
-        else:
-            onclick = f"toggleGate('{doc_id}', '{step_name}', {str(not permitted).lower()})"
-        return (
-            f'<td style="text-align:center;padding:4px 6px;cursor:pointer;" '
-            f'title="{title}" onclick="{onclick}">'
-            f'<span style="padding:2px 6px;border-radius:8px;font-size:0.75em;'
-            f'background:{bg};color:{fg};">{label}</span></td>'
-        )
-
-    # Table header
     header_cells = "".join(
         f'<th style="text-align:center;padding:4px 6px;font-size:0.8em;cursor:help;" title="{step_tooltip(sn)}">'
-        f'{display_names.get(sn, sn)}</th>'
+        f'{_STEP_DISPLAY_NAMES.get(sn, sn)}</th>'
         for sn in step_names
     )
 
-    # Table rows
     rows = []
-    for doc in docs:
-        doc_id = str(doc["document_id"])
-        title = doc.get("title", "")
-        if len(title) > 50:
-            title = title[:47] + "..."
-        source = doc.get("source_name", "")
-
-        gate_cells = "".join(
-            cell_html(doc["gates"].get(sn, {"state": "inactive"}), doc_id, sn)
-            for sn in step_names
-        )
+    for group in groups:
+        group_id = group["id"]
+        name = html_mod.escape(group.get("name", ""))
+        doc_count = group.get("doc_count", 0)
+        gate_cells = ""
+        for sn in step_names:
+            permitted = group["gates"].get(sn, False)
+            sv = step_lookup[sn]["current_version"]
+            if permitted:
+                label, bg, fg = f"v{sv}", "#d4edda", "#155724"
+                title = f"Permitted (v{sv}) — click to disable"
+            else:
+                label, bg, fg = "off", "#e2e3e5", "#6c757d"
+                title = f"Click to permit v{sv}"
+            onclick = f"toggleGroupGate({group_id}, '{sn}', {str(not permitted).lower()})"
+            gate_cells += (
+                f'<td style="text-align:center;padding:4px 6px;cursor:pointer;" title="{title}" onclick="{onclick}">'
+                f'<span style="padding:2px 6px;border-radius:8px;font-size:0.75em;'
+                f'background:{bg};color:{fg};">{label}</span></td>'
+            )
 
         rows.append(
-            f'<tr data-docid="{doc_id}">'
-            f'<td style="font-size:0.85em;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{html_mod.escape(doc.get("title", ""))}">{html_mod.escape(title)}</td>'
-            f'<td style="font-size:0.8em;color:#666;">{html_mod.escape(source)}</td>'
+            f'<tr>'
+            f'<td style="font-size:0.85em;"><a href="/analysis?group={group_id}" style="color:#007bff;text-decoration:none;">{name}</a></td>'
+            f'<td style="text-align:center;font-size:0.85em;color:#666;">{doc_count}</td>'
             f'{gate_cells}'
             f'</tr>'
         )
 
     rows_html = "\n".join(rows) if rows else (
-        f'<tr><td colspan="{2 + len(step_names)}" style="text-align:center;color:#999;">No transcribed documents found</td></tr>'
+        f'<tr><td colspan="{2 + len(step_names)}" style="text-align:center;color:#999;">No groups found. Run sync to create groups from sources.</td></tr>'
     )
 
-    # Runnable count
-    runnable = _db.get_runnable_steps()
-    runnable_count = len(runnable)
+    runnable_count = _db.count_runnable_steps()
 
     return f"""
     <div style="display:flex;gap:16px;margin-bottom:16px;align-items:center;">
         <div style="background:#f0f7ff;padding:8px 16px;border-radius:8px;">
-            <strong>{len(docs)}</strong> transcribed documents
+            <strong>{len(groups)}</strong> groups
         </div>
         <div style="background:{'#fff3cd' if runnable_count > 0 else '#d4edda'};padding:8px 16px;border-radius:8px;">
             <strong>{runnable_count}</strong> runnable steps
@@ -1240,8 +1188,8 @@ def _build_analysis_html() -> str:
     <table style="width:100%;border-collapse:collapse;">
         <thead>
             <tr style="border-bottom:2px solid #dee2e6;">
-                <th style="text-align:left;padding:4px 6px;">Document</th>
-                <th style="text-align:left;padding:4px 6px;font-size:0.8em;">Source</th>
+                <th style="text-align:left;padding:4px 6px;">Group</th>
+                <th style="text-align:center;padding:4px 6px;font-size:0.8em;">docs</th>
                 {header_cells}
             </tr>
         </thead>
@@ -1252,17 +1200,122 @@ def _build_analysis_html() -> str:
     </div>
 
     <div style="margin-top:16px;font-size:0.8em;color:#999;">
-        Click a cell to toggle permission. Colors:
-        <span style="background:#d4edda;padding:1px 6px;border-radius:4px;">current</span>
-        <span style="background:#fff3cd;padding:1px 6px;border-radius:4px;">stale (will run)</span>
-        <span style="background:#f8d7da;padding:1px 6px;border-radius:4px;">error</span>
-        <span style="background:#e2e3e5;padding:1px 6px;border-radius:4px;">gated</span>
-        <span style="background:#f8f9fa;padding:1px 6px;border-radius:4px;color:#adb5bd;">inactive</span>
+        Click a cell to toggle permission for the group. Click a group name to see document details.
     </div>
     """
 
 
-def _build_analysis_page() -> str:
+def _build_analysis_group_html(group_id: int) -> str:
+    """Build the document drill-down view for a specific group."""
+    group = _db.get_lesson_group(group_id)
+    if not group:
+        return "<p>Group not found.</p>"
+
+    docs = _db.get_document_dashboard(group_id)
+    step_names, step_lookup = _analysis_step_names()
+
+    def step_tooltip(sn):
+        s = step_lookup[sn]
+        deps = ", ".join(s.get("depends_on") or []) or "none"
+        desc = s.get("description") or ""
+        return f"{sn} (v{s['current_version']}): {desc}. Depends on: {deps}"
+
+    header_cells = "".join(
+        f'<th style="text-align:center;padding:4px 6px;font-size:0.8em;cursor:help;" title="{step_tooltip(sn)}">'
+        f'{_STEP_DISPLAY_NAMES.get(sn, sn)}</th>'
+        for sn in step_names
+    )
+
+    rows = []
+    for doc in docs:
+        doc_id = str(doc["document_id"])
+        title = doc.get("title", "")
+        if len(title) > 50:
+            title = title[:47] + "..."
+
+        gate_cells = ""
+        for sn in step_names:
+            gate = doc["gates"].get(sn, {"state": "inactive"})
+            state = gate["state"]
+            cv = gate.get("completed_version")
+            sv = gate.get("current_version")
+            err = gate.get("error")
+
+            if state == "current":
+                label = f"v{cv}"
+                bg, fg = "#d4edda", "#155724"
+                title_attr = f"Current (v{cv})"
+            elif state == "stale":
+                label = f"v{cv}" if cv else "new"
+                bg, fg = "#fff3cd", "#856404"
+                title_attr = f"Stale — will run (current: v{sv})"
+            elif state == "error":
+                label = "err"
+                bg, fg = "#f8d7da", "#721c24"
+                err_safe = (err or 'unknown').replace('"', '&quot;').replace("'", "\\'")[:200]
+                title_attr = f"Error: {err_safe} (click to clear)"
+            else:
+                label = "—"
+                bg, fg = "#f8f9fa", "#adb5bd"
+                title_attr = "Not started"
+
+            if state == "error":
+                onclick = f" onclick=\"clearError('{doc_id}', '{sn}')\" style=\"cursor:pointer;\""
+            else:
+                onclick = ""
+
+            gate_cells += (
+                f'<td style="text-align:center;padding:4px 6px;{"cursor:pointer;" if state == "error" else ""}" '
+                f'title="{title_attr}"{onclick}>'
+                f'<span style="padding:2px 6px;border-radius:8px;font-size:0.75em;'
+                f'background:{bg};color:{fg};">{label}</span></td>'
+            )
+
+        rows.append(
+            f'<tr>'
+            f'<td style="font-size:0.85em;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{html_mod.escape(doc.get("title", ""))}">{html_mod.escape(title)}</td>'
+            f'{gate_cells}'
+            f'</tr>'
+        )
+
+    rows_html = "\n".join(rows) if rows else (
+        f'<tr><td colspan="{1 + len(step_names)}" style="text-align:center;color:#999;">No documents in this group</td></tr>'
+    )
+
+    group_name = html_mod.escape(group.get("name", ""))
+
+    return f"""
+    <div style="margin-bottom:16px;">
+        <a href="/analysis" style="color:#007bff;text-decoration:none;">&larr; Back to groups</a>
+        <h2 style="margin:8px 0;">{group_name}</h2>
+        <span style="color:#666;font-size:0.9em;">{len(docs)} documents</span>
+    </div>
+
+    <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;">
+        <thead>
+            <tr style="border-bottom:2px solid #dee2e6;">
+                <th style="text-align:left;padding:4px 6px;">Document</th>
+                {header_cells}
+            </tr>
+        </thead>
+        <tbody>
+            {rows_html}
+        </tbody>
+    </table>
+    </div>
+
+    <div style="margin-top:16px;font-size:0.8em;color:#999;">
+        Colors:
+        <span style="background:#d4edda;padding:1px 6px;border-radius:4px;">current</span>
+        <span style="background:#fff3cd;padding:1px 6px;border-radius:4px;">stale (will run)</span>
+        <span style="background:#f8d7da;padding:1px 6px;border-radius:4px;">error (click to clear)</span>
+        <span style="background:#f8f9fa;padding:1px 6px;border-radius:4px;color:#adb5bd;">not started</span>
+    </div>
+    """
+
+
+def _build_analysis_page(group_id: int | None = None) -> str:
     """Build the full analysis dashboard HTML page."""
     if not _db:
         return """
@@ -1270,7 +1323,12 @@ def _build_analysis_page() -> str:
 <style>body { font-family: -apple-system, sans-serif; max-width: 1400px; margin: 0 auto; padding: 20px; }</style>
 </head><body><h1>Analysis Pipeline</h1><p>Database not configured.</p></body></html>"""
 
-    content = _build_analysis_html()
+    if group_id is not None:
+        content = _build_analysis_group_html(group_id)
+        status_panels = ""
+    else:
+        content = _build_analysis_html()
+        status_panels = _build_pipeline_status_html()
 
     return f"""
 <!DOCTYPE html>
@@ -1304,9 +1362,8 @@ def _build_analysis_page() -> str:
     </div>
     <h1>Analysis Pipeline</h1>
     <p style="color:#666;font-size:0.9em;margin-bottom:16px;">
-        Each cell is a (document, step) gate. Click a cell to permit or unpermit that step for that document.
-        Only permitted + stale steps will run when you click "Run Pipeline".
-        When a step completes, its downstream steps become stale but won't run unless also permitted.
+        Toggle steps at the group level. Click a group name to see per-document completion states.
+        Only permitted + pending steps will run when you click "Run Pipeline".
     </p>
     <details style="margin-bottom:16px;font-size:0.85em;">
         <summary style="cursor:pointer;color:#007bff;">Show step dependency graph</summary>
@@ -1323,33 +1380,47 @@ decompose ──┬──► somatic ──┬──► condense ──► embed
 
 language_patterns (depends on decompose + language)
 extract_steps ──► map_body_parts (independent)</pre>
-        <table style="margin-top:8px;font-size:0.85em;">
-            <tr><th style="text-align:left;padding:2px 8px;">Step</th><th style="text-align:left;padding:2px 8px;">Depends on</th><th style="text-align:left;padding:2px 8px;">What it does</th></tr>
-            <tr><td style="padding:2px 8px;">decompose</td><td style="padding:2px 8px;">—</td><td style="padding:2px 8px;">Break lesson into steps + groups, classify by VL framework</td></tr>
-            <tr><td style="padding:2px 8px;">somatic</td><td style="padding:2px 8px;">decompose</td><td style="padding:2px 8px;">Somatic features per step (differentiation, activation, etc.)</td></tr>
-            <tr><td style="padding:2px 8px;">language</td><td style="padding:2px 8px;">decompose</td><td style="padding:2px 8px;">Teaching voice per step (attention cues, imagery, phrasing)</td></tr>
-            <tr><td style="padding:2px 8px;">condense</td><td style="padding:2px 8px;">somatic, language</td><td style="padding:2px 8px;">Merge somatic + language into condensed segments</td></tr>
-            <tr><td style="padding:2px 8px;">embed</td><td style="padding:2px 8px;">condense</td><td style="padding:2px 8px;">Vector embedding for semantic search</td></tr>
-            <tr><td style="padding:2px 8px;">concept_tags</td><td style="padding:2px 8px;">decompose, somatic</td><td style="padding:2px 8px;">Category/value concept tags for search</td></tr>
-            <tr><td style="padding:2px 8px;">spatial</td><td style="padding:2px 8px;">decompose, somatic</td><td style="padding:2px 8px;">Body configurations, holds, constraints</td></tr>
-            <tr><td style="padding:2px 8px;">index_concepts</td><td style="padding:2px 8px;">concept_tags</td><td style="padding:2px 8px;">Write concept tags to search index</td></tr>
-            <tr><td style="padding:2px 8px;">index_spatial</td><td style="padding:2px 8px;">spatial</td><td style="padding:2px 8px;">Write spatial configs to search index</td></tr>
-            <tr><td style="padding:2px 8px;">language_patterns</td><td style="padding:2px 8px;">decompose, language</td><td style="padding:2px 8px;">Full-text language patterns and vocabulary</td></tr>
-            <tr><td style="padding:2px 8px;">extract_steps</td><td style="padding:2px 8px;">—</td><td style="padding:2px 8px;">Extract step instructions from transcript</td></tr>
-            <tr><td style="padding:2px 8px;">map_body_parts</td><td style="padding:2px 8px;">extract_steps</td><td style="padding:2px 8px;">Map steps to body parts</td></tr>
-        </table>
     </details>
 
     <div id="analysis-content">
         {content}
     </div>
 
+    <div id="analysis-status">
+        {status_panels}
+    </div>
+
     <script>
-    function toggleGate(docId, stepName, newPermitted) {{
+    function clearAllErrors() {{
+        if (!confirm('Clear all errors? These steps will become runnable again.')) return;
+        fetch('/api/analysis/clear-all-errors', {{
+            method: 'POST',
+            headers: {{'Content-Type': 'application/json'}},
+            body: '{{}}'
+        }})
+        .then(r => r.json())
+        .then(data => {{
+            if (data.status === 'ok') {{
+                refreshDashboard();
+            }} else alert(data.error || 'Error');
+        }})
+        .catch(err => alert('Error: ' + err));
+    }}
+
+    function refreshStatus() {{
+        const el = document.getElementById('analysis-status');
+        if (el) {{
+            fetch('/api/analysis/status')
+                .then(r => r.text())
+                .then(html => {{ el.innerHTML = html; }});
+        }}
+    }}
+
+    function toggleGroupGate(groupId, stepName, newPermitted) {{
         fetch('/api/analysis/gate', {{
             method: 'POST',
             headers: {{'Content-Type': 'application/json'}},
-            body: JSON.stringify({{document_id: docId, step_name: stepName, permitted: newPermitted}})
+            body: JSON.stringify({{group_id: groupId, step_name: stepName, permitted: newPermitted}})
         }})
         .then(r => r.json())
         .then(data => {{
@@ -1374,15 +1445,27 @@ extract_steps ──► map_body_parts (independent)</pre>
     }}
 
     function refreshDashboard() {{
-        fetch('/api/analysis/dashboard')
+        const url = new URL(window.location);
+        const groupId = url.searchParams.get('group');
+        const endpoint = groupId
+            ? '/api/analysis/group/' + groupId
+            : '/api/analysis/dashboard';
+        fetch(endpoint)
             .then(r => r.text())
             .then(html => {{
                 document.getElementById('analysis-content').innerHTML = html;
             }});
+        // Refresh status panels (only on group view)
+        const statusEl = document.getElementById('analysis-status');
+        if (statusEl && !groupId) {{
+            fetch('/api/analysis/status')
+                .then(r => r.text())
+                .then(html => {{ statusEl.innerHTML = html; }});
+        }}
     }}
 
     function runPipeline() {{
-        if (!confirm('Run all permitted + stale analysis steps?')) return;
+        if (!confirm('Run all permitted + pending analysis steps?')) return;
         const btn = event.target;
         btn.disabled = true;
         btn.textContent = 'Running...';
@@ -1408,6 +1491,155 @@ extract_steps ──► map_body_parts (independent)</pre>
 </body>
 </html>
 """
+
+
+def _build_pipeline_status_html() -> str:
+    """Build the pipeline progress + errors panels."""
+    progress = _db.get_pipeline_progress()
+    errors = _db.get_pipeline_errors()
+
+    # Progress table: group × step with completion bars
+    if progress:
+        # Collect unique groups and steps in order
+        groups_seen = {}
+        steps_seen = []
+        for row in progress:
+            if row["group_id"] not in groups_seen:
+                groups_seen[row["group_id"]] = row["group_name"]
+            if row["step_name"] not in steps_seen:
+                steps_seen.append(row["step_name"])
+
+        # Build a lookup
+        lookup = {}
+        for row in progress:
+            lookup[(row["group_id"], row["step_name"])] = row
+
+        header = "".join(
+            f'<th style="text-align:center;padding:4px 8px;font-size:0.8em;">'
+            f'{_STEP_DISPLAY_NAMES.get(sn, sn)}</th>'
+            for sn in steps_seen
+        )
+
+        rows = []
+        for gid, gname in groups_seen.items():
+            cells = ""
+            for sn in steps_seen:
+                r = lookup.get((gid, sn))
+                if not r:
+                    cells += '<td style="text-align:center;color:#ccc;">—</td>'
+                    continue
+                total = r["total"]
+                done = r["completed"]
+                stale = r["stale"]
+                errs = r["errors"]
+                pending = total - done - stale - errs
+                pct = int(100 * done / total) if total > 0 else 0
+
+                if errs > 0:
+                    color = "#dc3545"
+                    label = f"{done}/{total} ({errs} err)"
+                elif done == total:
+                    color = "#28a745"
+                    label = f"{done}/{total}"
+                elif done > 0 or stale > 0:
+                    color = "#ffc107"
+                    label = f"{done}/{total}"
+                else:
+                    color = "#6c757d"
+                    label = f"0/{total}"
+
+                cells += (
+                    f'<td style="text-align:center;padding:4px 8px;font-size:0.8em;">'
+                    f'<div style="background:#e9ecef;border-radius:4px;overflow:hidden;height:18px;position:relative;">'
+                    f'<div style="background:{color};height:100%;width:{pct}%;"></div>'
+                    f'<span style="position:absolute;top:0;left:0;right:0;text-align:center;font-size:0.75em;line-height:18px;">{label}</span>'
+                    f'</div></td>'
+                )
+
+            rows.append(
+                f'<tr><td style="font-size:0.85em;padding:4px 8px;">{html_mod.escape(gname)}</td>{cells}</tr>'
+            )
+
+        progress_html = f"""
+        <table style="width:100%;border-collapse:collapse;">
+            <thead><tr style="border-bottom:2px solid #dee2e6;">
+                <th style="text-align:left;padding:4px 8px;">Group</th>{header}
+            </tr></thead>
+            <tbody>{"".join(rows)}</tbody>
+        </table>
+        """
+    else:
+        progress_html = '<p style="color:#999;">No steps are permitted yet. Toggle gates above to enable analysis.</p>'
+
+    # Errors list
+    if errors:
+        error_rows = []
+        for e in errors:
+            doc_id = str(e["document_id"])
+            title = html_mod.escape(e.get("title", "")[:50])
+            step = e["step_name"]
+            err_text = html_mod.escape((e.get("error") or "")[:120])
+            updated = str(e.get("updated_at") or "")[:16]
+            error_rows.append(
+                f'<tr>'
+                f'<td style="font-size:0.85em;padding:4px 8px;">{title}</td>'
+                f'<td style="font-size:0.8em;padding:4px 8px;">{step}</td>'
+                f'<td style="font-size:0.8em;padding:4px 8px;color:#721c24;max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{err_text}">{err_text}</td>'
+                f'<td style="font-size:0.75em;padding:4px 8px;color:#999;">{updated}</td>'
+                f'<td style="padding:4px 8px;"><button onclick="clearError(\'{doc_id}\', \'{step}\')" '
+                f'style="font-size:0.75em;padding:2px 8px;border:1px solid #ccc;border-radius:4px;cursor:pointer;background:white;">clear</button></td>'
+                f'</tr>'
+            )
+        errors_html = f"""
+        <table style="width:100%;border-collapse:collapse;">
+            <thead><tr style="border-bottom:2px solid #dee2e6;">
+                <th style="text-align:left;padding:4px 8px;">Document</th>
+                <th style="text-align:left;padding:4px 8px;">Step</th>
+                <th style="text-align:left;padding:4px 8px;">Error</th>
+                <th style="text-align:left;padding:4px 8px;">When</th>
+                <th></th>
+            </tr></thead>
+            <tbody>{"".join(error_rows)}</tbody>
+        </table>
+        """
+    else:
+        errors_html = '<p style="color:#999;">No errors.</p>'
+
+    # Overall counts
+    total_steps = sum(r["total"] for r in progress)
+    completed_steps = sum(r["completed"] for r in progress)
+    error_steps = sum(r["errors"] for r in progress)
+    remaining = total_steps - completed_steps - error_steps
+
+    if total_steps > 0:
+        remaining_badge = (
+            f'<span style="font-size:0.75em;font-weight:normal;margin-left:12px;'
+            f'padding:2px 8px;border-radius:8px;'
+            f'background:{"#fff3cd" if remaining > 0 else "#d4edda"};">'
+            f'{remaining} remaining</span>'
+        )
+    else:
+        remaining_badge = ""
+
+    return f"""
+    <div style="margin-top:32px;">
+        <h2 style="font-size:1.1em;margin-bottom:12px;">Pipeline Progress{remaining_badge}
+            <button onclick="refreshStatus()" style="font-size:0.7em;padding:2px 10px;margin-left:8px;border:1px solid #ccc;border-radius:4px;cursor:pointer;background:white;vertical-align:middle;">Refresh</button>
+        </h2>
+        {progress_html}
+    </div>
+
+    <div style="margin-top:32px;">
+        <h2 style="font-size:1.1em;margin-bottom:12px;">
+            Errors
+            <span style="font-size:0.8em;color:#dc3545;font-weight:normal;">
+                {f'({len(errors)})' if errors else ''}
+            </span>
+            {f'<button onclick="clearAllErrors()" style="font-size:0.7em;padding:2px 10px;margin-left:8px;border:1px solid #ccc;border-radius:4px;cursor:pointer;background:white;vertical-align:middle;">Clear all &amp; retry</button>' if errors else ''}
+        </h2>
+        {errors_html}
+    </div>
+    """
 
 
 def build_pipeline_html() -> str:
@@ -3391,12 +3623,14 @@ async def analysis_dashboard(request: Request):
     """Analysis pipeline dashboard with gate management."""
     if IS_LAMBDA and _auth_mod.get_access_tier(request) != "admin":
         return RedirectResponse("/")
-    return _build_analysis_page()
+    group_id = request.query_params.get("group")
+    group_id = int(group_id) if group_id else None
+    return _build_analysis_page(group_id)
 
 
 @app.get("/api/analysis/dashboard")
 async def analysis_dashboard_data():
-    """Return analysis dashboard HTML for AJAX refresh."""
+    """Return group-level analysis dashboard HTML for AJAX refresh."""
     if not _db:
         return HTMLResponse("<p>Database not configured.</p>", status_code=503)
     try:
@@ -3406,38 +3640,79 @@ async def analysis_dashboard_data():
         return HTMLResponse(f"<p style='color: red;'>Error: {e}</p>", status_code=500)
 
 
+@app.get("/api/analysis/group/{group_id}")
+async def analysis_group_data(group_id: int):
+    """Return document drill-down HTML for a group."""
+    if not _db:
+        return HTMLResponse("<p>Database not configured.</p>", status_code=503)
+    try:
+        html = _build_analysis_group_html(group_id)
+        return HTMLResponse(html)
+    except Exception as e:
+        return HTMLResponse(f"<p style='color: red;'>Error: {e}</p>", status_code=500)
+
+
+@app.get("/api/analysis/status")
+async def analysis_status_data():
+    """Return pipeline progress + errors HTML for AJAX refresh."""
+    if not _db:
+        return HTMLResponse("<p>Database not configured.</p>", status_code=503)
+    try:
+        html = _build_pipeline_status_html()
+        return HTMLResponse(html)
+    except Exception as e:
+        return HTMLResponse(f"<p style='color: red;'>Error: {e}</p>", status_code=500)
+
+
 @app.post("/api/analysis/gate")
 async def update_analysis_gate(request: Request):
-    """Toggle permitted flag for a (document, step) pair."""
+    """Toggle permitted flag for a (group, step) pair."""
     if not _db:
         return JSONResponse({"error": "Database not configured"}, status_code=500)
     body = await request.json()
-    document_id = body.get("document_id")
+    group_id = body.get("group_id")
     step_name = body.get("step_name")
     permitted = body.get("permitted")
-    if not document_id or not step_name or permitted is None:
-        return JSONResponse({"error": "Missing document_id, step_name, or permitted"}, status_code=400)
+    if not group_id or not step_name or permitted is None:
+        return JSONResponse({"error": "Missing group_id, step_name, or permitted"}, status_code=400)
     try:
-        _db.set_gate_permitted(document_id, step_name, permitted)
+        _db.set_group_gate(int(group_id), step_name, permitted)
         return JSONResponse({"status": "ok"})
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
-@app.post("/api/analysis/gate/bulk")
-async def update_analysis_gate_bulk(request: Request):
-    """Set permitted flag for multiple documents on a step."""
+@app.get("/api/analysis/groups")
+async def list_analysis_groups():
+    """List all lesson groups as JSON."""
+    if not _db:
+        return JSONResponse({"error": "Database not configured"}, status_code=500)
+    try:
+        groups = _db.get_lesson_groups()
+        return JSONResponse([{
+            "id": g["id"], "name": g["name"],
+            "doc_count": g["doc_count"],
+            "auto_source_id": g.get("auto_source_id"),
+        } for g in groups])
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/analysis/groups")
+async def create_analysis_group(request: Request):
+    """Create a custom lesson group."""
     if not _db:
         return JSONResponse({"error": "Database not configured"}, status_code=500)
     body = await request.json()
+    name = body.get("name")
     document_ids = body.get("document_ids", [])
-    step_name = body.get("step_name")
-    permitted = body.get("permitted")
-    if not document_ids or not step_name or permitted is None:
-        return JSONResponse({"error": "Missing document_ids, step_name, or permitted"}, status_code=400)
+    if not name:
+        return JSONResponse({"error": "Missing name"}, status_code=400)
     try:
-        _db.set_gates_bulk(document_ids, step_name, permitted)
-        return JSONResponse({"status": "ok", "count": len(document_ids)})
+        group_id = _db.create_lesson_group(name, body.get("description"))
+        if document_ids:
+            _db.add_group_members(group_id, document_ids)
+        return JSONResponse({"status": "ok", "group_id": group_id})
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
@@ -3460,7 +3735,7 @@ async def run_analysis_pipeline(request: Request):
 
 @app.post("/api/analysis/clear-error")
 async def clear_analysis_error(request: Request):
-    """Clear the error on a gate entry so it can be retried."""
+    """Clear the error on a document analysis state entry so it can be retried."""
     if not _db:
         return JSONResponse({"error": "Database not configured"}, status_code=500)
     body = await request.json()
@@ -3469,8 +3744,20 @@ async def clear_analysis_error(request: Request):
     if not document_id or not step_name:
         return JSONResponse({"error": "Missing document_id or step_name"}, status_code=400)
     try:
-        _db.mark_step_error(document_id, step_name, None)
+        _db.clear_step_error(document_id, step_name)
         return JSONResponse({"status": "ok"})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/analysis/clear-all-errors")
+async def clear_all_analysis_errors(request: Request):
+    """Clear all errors so failed steps become runnable again."""
+    if not _db:
+        return JSONResponse({"error": "Database not configured"}, status_code=500)
+    try:
+        count = _db.clear_all_errors()
+        return JSONResponse({"status": "ok", "cleared": count})
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
