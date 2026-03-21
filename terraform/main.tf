@@ -761,9 +761,54 @@ data "archive_file" "web_lambda" {
     content  = file("${path.module}/../src/kb/llm_config.py")
     filename = "llm_config.py"
   }
+  # Analysis package (split from single analysis.py)
   source {
-    content  = file("${path.module}/../src/kb/analysis.py")
-    filename = "analysis.py"
+    content  = file("${path.module}/../src/kb/analysis/__init__.py")
+    filename = "analysis/__init__.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/analysis/core.py")
+    filename = "analysis/core.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/analysis/framework_builders.py")
+    filename = "analysis/framework_builders.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/analysis/pass0.py")
+    filename = "analysis/pass0.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/analysis/pass_a.py")
+    filename = "analysis/pass_a.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/analysis/pass0b_loaders.py")
+    filename = "analysis/pass0b_loaders.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/analysis/pass0b_formatters.py")
+    filename = "analysis/pass0b_formatters.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/analysis/pass0b_somatic.py")
+    filename = "analysis/pass0b_somatic.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/analysis/pass0b_lang.py")
+    filename = "analysis/pass0b_lang.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/analysis/pass0b_synthesis.py")
+    filename = "analysis/pass0b_synthesis.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/analysis/pass0b_concepts.py")
+    filename = "analysis/pass0b_concepts.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/analysis/pass0b_spatial.py")
+    filename = "analysis/pass0b_spatial.py"
   }
   source {
     content  = file("${path.module}/../src/kb/config.py")
