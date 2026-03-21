@@ -20,10 +20,10 @@ Usage:
 
 import argparse
 import hashlib
+import json
 import logging
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 # Add parent to path for local dev
@@ -227,31 +227,13 @@ def run_step(db: Database, document_id: str, step_name: str) -> bool:
     """Execute a single analysis step for a document.
 
     Returns True if successful, False on failure.
-    Uses a pg advisory lock to prevent concurrent execution of the same (doc, step).
+    Designed to run in its own process — no shared state.
     """
     executor = STEP_EXECUTORS.get(step_name)
     if not executor:
         logger.error(f"No executor for step: {step_name}")
         return False
 
-    # Advisory lock: hash (document_id, step_name) to a 64-bit int
-    lock_key = int(hashlib.sha256(f"{document_id}:{step_name}".encode()).hexdigest()[:15], 16)
-
-    with db.get_cursor() as cursor:
-        cursor.execute("SELECT pg_try_advisory_lock(%s)", (lock_key,))
-        acquired = cursor.fetchone()[0]
-    if not acquired:
-        logger.info(f"Skipping {step_name} for {document_id[:8]} — already running")
-        return True  # not an error, just skip
-
-    try:
-        return _run_step_inner(db, document_id, step_name, executor)
-    finally:
-        with db.get_cursor() as cursor:
-            cursor.execute("SELECT pg_advisory_unlock(%s)", (lock_key,))
-
-
-def _run_step_inner(db: Database, document_id: str, step_name: str, executor) -> bool:
     transcript = _get_transcript(db, document_id)
     if not transcript:
         db.mark_step_error(document_id, step_name, "No transcript available")
@@ -279,76 +261,41 @@ def _run_step_inner(db: Database, document_id: str, step_name: str, executor) ->
         return False
 
 
-def run_pipeline(db: Database, document_id: str | None = None, dry_run: bool = False) -> dict:
-    """Run all runnable steps, respecting dependency order.
+def run_one(document_id: str, step_name: str) -> bool:
+    """Run a single step in its own process. Called via CLI.
 
-    Returns summary dict with counts.
+    Exits with code 0 on success, 1 on failure.
+    Prints JSON result to stdout.
     """
-    runnable = db.get_runnable_steps(document_id)
+    import os
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).parent.parent.parent.parent / ".env")
 
-    if not runnable:
-        print("Nothing to run.")
-        return {"total": 0, "success": 0, "failed": 0}
+    db_url = os.environ.get("DATABASE_URL")
+    if not db_url:
+        print(json.dumps({"ok": False, "error": "DATABASE_URL not set"}))
+        return False
 
-    # Group by document for display
-    by_doc = {}
-    for r in runnable:
-        doc_id = str(r["document_id"])
-        if doc_id not in by_doc:
-            by_doc[doc_id] = {"title": r["document_title"], "steps": []}
-        by_doc[doc_id]["steps"].append(r["step_name"])
+    db = Database(db_url)
 
-    print(f"\n{'[DRY RUN] ' if dry_run else ''}Runnable steps: {len(runnable)}")
-    for doc_id, info in by_doc.items():
-        print(f"  {info['title'][:50]:50s} → {', '.join(info['steps'])}")
+    # Initialize modules that analysis steps depend on
+    import cache_helpers
+    import llm_config
+    import analysis as analysis_mod
 
-    if dry_run:
-        return {"total": len(runnable), "success": 0, "failed": 0, "dry_run": True}
+    cache_helpers.init(db)
+    llm_config.init(db)
 
-    # Execute in dependency order: steps with no deps first, then their dependents
-    # Each pass runs all currently-runnable steps in parallel, then re-queries
-    max_workers = 4
-    success = 0
-    failed = 0
-    executed = set()
+    data_dir = Path(__file__).parent.parent.parent.parent / "data"
+    analysis_mod.init(db, data_dir, llm_config.get_llm)
 
-    for _pass in range(10):  # max 10 passes to avoid infinite loops
-        runnable = db.get_runnable_steps(document_id)
-        # Filter out already-attempted steps
-        runnable = [r for r in runnable
-                    if (str(r["document_id"]), r["step_name"]) not in executed]
-        if not runnable:
-            break
+    t0 = time.time()
+    ok = run_step(db, document_id, step_name)
+    elapsed = time.time() - t0
+    db.close()
 
-        print(f"\n  Pass {_pass + 1}: {len(runnable)} steps ({max_workers} workers)")
-
-        def _exec(r):
-            doc_id = str(r["document_id"])
-            step = r["step_name"]
-            t0 = time.time()
-            ok = run_step(db, doc_id, step)
-            elapsed = time.time() - t0
-            return doc_id, step, r["document_title"], ok, elapsed
-
-        with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            futures = {}
-            for r in runnable:
-                key = (str(r["document_id"]), r["step_name"])
-                executed.add(key)
-                futures[pool.submit(_exec, r)] = key
-
-            for future in as_completed(futures):
-                doc_id, step, title, ok, elapsed = future.result()
-                if ok:
-                    success += 1
-                    print(f"    OK  {step:20s} {title[:40]:40s} ({elapsed:.1f}s)")
-                else:
-                    failed += 1
-                    print(f"    ERR {step:20s} {title[:40]:40s} ({elapsed:.1f}s)")
-
-    total = success + failed
-    print(f"\nDone: {success}/{total} succeeded, {failed} failed")
-    return {"total": total, "success": success, "failed": failed}
+    print(json.dumps({"ok": ok, "elapsed": round(elapsed, 1)}))
+    return ok
 
 
 def show_status(db: Database):
@@ -378,30 +325,28 @@ def main():
     parser = argparse.ArgumentParser(description="Analysis pipeline runner")
     sub = parser.add_subparsers(dest="command")
 
-    run_parser = sub.add_parser("run", help="Run analysis steps")
-    run_parser.add_argument("--document", help="Run for a specific document ID")
-    run_parser.add_argument("--dry-run", action="store_true", help="Show what would run")
+    one_parser = sub.add_parser("run-one", help="Run a single step (for subprocess use)")
+    one_parser.add_argument("document_id", help="Document UUID")
+    one_parser.add_argument("step_name", help="Analysis step name")
 
     sub.add_parser("status", help="Show pipeline status")
 
     args = parser.parse_args()
 
-    db_url = os.environ.get("DATABASE_URL")
-    if not db_url:
-        print("ERROR: DATABASE_URL not set")
-        sys.exit(1)
-
-    db = Database(db_url)
-    db.initialize()
-
-    if args.command == "run":
-        run_pipeline(db, document_id=args.document, dry_run=args.dry_run)
+    if args.command == "run-one":
+        ok = run_one(args.document_id, args.step_name)
+        sys.exit(0 if ok else 1)
     elif args.command == "status":
+        db_url = os.environ.get("DATABASE_URL")
+        if not db_url:
+            print("ERROR: DATABASE_URL not set")
+            sys.exit(1)
+        db = Database(db_url)
         show_status(db)
+        db.close()
     else:
         parser.print_help()
-
-    db.close()
+        sys.exit(1)
 
 
 if __name__ == "__main__":

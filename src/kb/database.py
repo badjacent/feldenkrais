@@ -2060,18 +2060,30 @@ class Database:
             return [dict(row) for row in cursor.fetchall()]
 
     def count_runnable_steps(self) -> int:
-        """Fast count of runnable steps (no dep check — just permitted + needs work)."""
+        """Count of runnable steps including dep check."""
         with self.get_cursor(commit=False) as cursor:
             cursor.execute("""
-                SELECT COUNT(DISTINCT (lgm.document_id, gag.step_name))
-                FROM lesson_group_member lgm
-                JOIN group_analysis_gate gag ON gag.group_id = lgm.group_id AND gag.permitted = TRUE
-                JOIN analysis_step s ON s.name = gag.step_name
-                LEFT JOIN document_analysis_state das ON das.document_id = lgm.document_id AND das.step_name = s.name
-                WHERE (das.completed_version IS NULL
-                       OR das.completed_version < s.current_version
-                       OR das.stale = TRUE)
-                  AND (das.error IS NULL)
+                WITH candidates AS (
+                    SELECT DISTINCT lgm.document_id, s.name as step_name, s.depends_on
+                    FROM lesson_group_member lgm
+                    JOIN group_analysis_gate gag ON gag.group_id = lgm.group_id AND gag.permitted = TRUE
+                    JOIN analysis_step s ON s.name = gag.step_name
+                    LEFT JOIN document_analysis_state das ON das.document_id = lgm.document_id AND das.step_name = s.name
+                    WHERE (das.completed_version IS NULL
+                           OR das.completed_version < s.current_version
+                           OR das.stale = TRUE)
+                      AND (das.error IS NULL)
+                )
+                SELECT COUNT(*) as count FROM candidates c
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM unnest(c.depends_on) dep(name)
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM document_analysis_state das2
+                        WHERE das2.document_id = c.document_id
+                          AND das2.step_name = dep.name
+                          AND das2.completed_version IS NOT NULL
+                    )
+                )
             """)
             return cursor.fetchone()["count"]
 
@@ -2204,7 +2216,9 @@ class Database:
     def get_pipeline_progress(self) -> list[dict]:
         """Return per-group, per-step completion counts for permitted steps.
 
-        Returns rows with: group_id, group_name, step_name, total, completed, stale, errors
+        - total: number of docs in the group (same across all steps in a row)
+        - completed: docs where this step AND all its deps are completed at current version
+        - stale/errors: as before
         """
         with self.get_cursor(commit=False) as cursor:
             cursor.execute("""
@@ -2214,7 +2228,17 @@ class Database:
                        COUNT(lgm.document_id) as total,
                        COUNT(CASE WHEN das.completed_version = s.current_version
                                    AND NOT COALESCE(das.stale, FALSE)
-                                   AND das.error IS NULL THEN 1 END) as completed,
+                                   AND das.error IS NULL
+                                   AND NOT EXISTS (
+                                       SELECT 1 FROM unnest(s.depends_on) dep(name)
+                                       WHERE NOT EXISTS (
+                                           SELECT 1 FROM document_analysis_state das2
+                                           WHERE das2.document_id = lgm.document_id
+                                             AND das2.step_name = dep.name
+                                             AND das2.completed_version IS NOT NULL
+                                       )
+                                   )
+                                   THEN 1 END) as completed,
                        COUNT(CASE WHEN das.stale = TRUE AND das.error IS NULL THEN 1 END) as stale,
                        COUNT(CASE WHEN das.error IS NOT NULL THEN 1 END) as errors
                 FROM lesson_group lg
@@ -2227,6 +2251,17 @@ class Database:
                 ORDER BY lg.name, gag.step_name
             """)
             return [dict(row) for row in cursor.fetchall()]
+
+    def get_recent_completion_rate(self, minutes: int = 5) -> float:
+        """Return steps completed per minute over the last N minutes."""
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute("""
+                SELECT COUNT(*) as cnt
+                FROM document_analysis_state
+                WHERE completed_at > NOW() - INTERVAL '%s minutes'
+            """ % minutes)  # safe: minutes is always an int from our code
+            count = cursor.fetchone()["cnt"]
+            return count / minutes if minutes > 0 else 0
 
     def get_pipeline_errors(self, limit: int = 50) -> list[dict]:
         """Return documents with errors across all steps."""
