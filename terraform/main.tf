@@ -948,6 +948,43 @@ data "archive_file" "web_lambda" {
     content  = file("${path.module}/../src/kb/schemas.py")
     filename = "schemas.py"
   }
+  # Route modules (extracted from web.py)
+  source {
+    content  = file("${path.module}/../src/kb/routes/__init__.py")
+    filename = "routes/__init__.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/routes/auth.py")
+    filename = "routes/auth.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/routes/ingestion.py")
+    filename = "routes/ingestion.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/routes/analysis_routes.py")
+    filename = "routes/analysis_routes.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/routes/pass0b.py")
+    filename = "routes/pass0b.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/routes/search.py")
+    filename = "routes/search.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/routes/finder.py")
+    filename = "routes/finder.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/routes/admin.py")
+    filename = "routes/admin.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/routes/pages.py")
+    filename = "routes/pages.py"
+  }
   # Note: Lesson files are loaded dynamically from S3 or user input
 }
 
