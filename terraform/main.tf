@@ -669,10 +669,79 @@ data "archive_file" "web_lambda" {
     content  = file("${path.module}/data/frameworks/v1/vl5.md")
     filename = "data/frameworks/v1/vl5.md"
   }
-  # Database module
+  # Database module (thin re-export)
   source {
     content  = file("${path.module}/../src/kb/database.py")
     filename = "database.py"
+  }
+  # Database package (domain mixins)
+  source {
+    content  = file("${path.module}/../src/kb/db/__init__.py")
+    filename = "db/__init__.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/db/core.py")
+    filename = "db/core.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/db/documents.py")
+    filename = "db/documents.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/db/transcription.py")
+    filename = "db/transcription.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/db/cache.py")
+    filename = "db/cache.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/db/auth.py")
+    filename = "db/auth.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/db/embeddings.py")
+    filename = "db/embeddings.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/db/pipeline_state.py")
+    filename = "db/pipeline_state.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/db/lesson_groups.py")
+    filename = "db/lesson_groups.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/db/dashboard.py")
+    filename = "db/dashboard.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/db/logging.py")
+    filename = "db/logging.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/db/youtube.py")
+    filename = "db/youtube.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/db/fm_lessons.py")
+    filename = "db/fm_lessons.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/db/lesson_metadata.py")
+    filename = "db/lesson_metadata.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/db/analysis.py")
+    filename = "db/analysis.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/db/locks.py")
+    filename = "db/locks.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/db/external_lessons.py")
+    filename = "db/external_lessons.py"
   }
   # Storage module
   source {
