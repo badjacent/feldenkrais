@@ -21,7 +21,7 @@ class TestPass0bPage:
         The pass0b route calls build_pass0b_html with get_lessons_fn parameter
         which provides the lesson dropdown options."""
         import inspect
-        from kb.web import pass0b_page
+        from kb.routes.pass0b import pass0b_page
         source = inspect.getsource(pass0b_page)
         assert "get_available_lessons" in source or "get_lessons_fn" in source
 
@@ -36,7 +36,7 @@ class TestPass0bRunAPI:
     def test_run_returns_results(self):
         """Response should include result_html, elapsed, cached, step_count."""
         import inspect
-        from kb.web import api_pass0b
+        from kb.routes.pass0b import api_pass0b
         source = inspect.getsource(api_pass0b)
         expected_keys = ["result_html", "elapsed", "cached", "step_count"]
         for key in expected_keys:

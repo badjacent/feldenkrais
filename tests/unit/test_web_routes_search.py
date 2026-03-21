@@ -36,7 +36,7 @@ class TestSearchAPI:
         The database layer then filters results based on allowed_source_ids."""
         # Verify _set_source_access is called in the route
         import inspect
-        from kb.web import api_search
+        from kb.routes.search import api_search
         source = inspect.getsource(api_search)
         assert "_set_source_access" in source
 

@@ -41,7 +41,7 @@ class TestRetryAPI:
     def test_retry_single_document_calls_resubmit(self):
         """The resubmit route calls _db.resubmit_document(document_id)."""
         import inspect
-        from kb.web import resubmit_document
+        from kb.routes.ingestion import resubmit_document
         source = inspect.getsource(resubmit_document)
         assert "resubmit_document" in source
         assert "log_event" in source
@@ -55,7 +55,7 @@ class TestRetryAPI:
     def test_retry_all_failed_filters_by_stage(self):
         """Should only resubmit documents in 'failed' pipeline stage."""
         import inspect
-        from kb.web import retry_all_failed
+        from kb.routes.ingestion import retry_all_failed
         source = inspect.getsource(retry_all_failed)
         assert '"failed"' in source
         assert "pipeline_stage" in source

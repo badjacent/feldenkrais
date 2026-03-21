@@ -36,7 +36,7 @@ class TestFinderSearchAPI:
                            "content_type", "source_name", "similarity"]
         # Verify the response format by inspecting the route source
         import inspect
-        from kb.web import finder_search
+        from kb.routes.finder import finder_search
         source = inspect.getsource(finder_search)
         for field in expected_fields:
             assert f'"{field}"' in source, f"Field {field} should be in response"
@@ -46,7 +46,7 @@ class TestFinderSearchAPI:
         # The finder search route doesn't have an explicit empty query guard —
         # it passes the query to the embedding model directly.
         import inspect
-        from kb.web import finder_search
+        from kb.routes.finder import finder_search
         source = inspect.getsource(finder_search)
         # No "empty query" error handling in finder_search
         assert "Empty query" not in source
@@ -62,7 +62,7 @@ class TestFinderStatsAPI:
     def test_stats_response_format(self):
         """Response should include total and sources counts."""
         import inspect
-        from kb.web import finder_stats
+        from kb.routes.finder import finder_stats
         source = inspect.getsource(finder_stats)
         assert '"total"' in source
         assert '"sources"' in source
