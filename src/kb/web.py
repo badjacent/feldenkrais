@@ -20,11 +20,6 @@ import sys
 import uuid
 from pathlib import Path
 
-# Add private/src/ to sys.path so we can import modules from the submodule
-_private_src = Path(__file__).parent.parent.parent / "private" / "src"
-if _private_src.exists():
-    sys.path.insert(0, str(_private_src))
-
 from dotenv import load_dotenv
 
 # Load .env from project root

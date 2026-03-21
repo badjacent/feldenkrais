@@ -874,6 +874,35 @@ data "archive_file" "web_lambda" {
     content  = file("${path.module}/../private/docs/interiority/index.html")
     filename = "private/docs/interiority/index.html"
   }
+  # Book/pipeline modules (migrated from private submodule)
+  source {
+    content  = file("${path.module}/../src/kb/web_book.py")
+    filename = "web_book.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/pipeline_graph.py")
+    filename = "pipeline_graph.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/cross_query.py")
+    filename = "cross_query.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/critics.py")
+    filename = "critics.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/review_agent.py")
+    filename = "review_agent.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/query_agent.py")
+    filename = "query_agent.py"
+  }
+  source {
+    content  = file("${path.module}/../src/kb/schemas.py")
+    filename = "schemas.py"
+  }
   # Note: Lesson files are loaded dynamically from S3 or user input
 }
 

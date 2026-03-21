@@ -936,11 +936,6 @@ def main():
     if kb_dir not in sys.path:
         sys.path.insert(0, kb_dir)
 
-    # Add private/src/ to sys.path for submodule imports
-    _private_src = Path(__file__).resolve().parent.parent.parent.parent / "private" / "src"
-    if _private_src.exists():
-        sys.path.insert(0, str(_private_src))
-
     load_dotenv()
 
     try:
@@ -955,10 +950,7 @@ def main():
 
     db = Database(db_url)
 
-    try:
-        from pipeline_graph import build_book_pipeline, build_lesson_pipeline, get_book_lessons
-    except ImportError:
-        from src.kb.pipeline_graph import build_book_pipeline, build_lesson_pipeline, get_book_lessons
+    from pipeline_graph import build_book_pipeline, build_lesson_pipeline, get_book_lessons
 
     def _build_graph(lesson_id=None):
         """Build graph: single lesson if specified, otherwise full book pipeline."""
