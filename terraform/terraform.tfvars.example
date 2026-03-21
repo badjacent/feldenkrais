@@ -1,0 +1,19 @@
+# Copy to terraform.tfvars and fill in values.
+# terraform.tfvars is gitignored and auto-loaded by terraform apply.
+
+environment              = "prod"
+database_url             = ""
+google_api_key           = ""
+anthropic_api_key        = ""
+openai_api_key           = ""
+google_oauth_client_id   = ""
+google_oauth_client_secret = ""
+cookie_secret            = ""
+
+# domain_name defaults to "aionyourside.net"
+# domain_name = "aionyourside.net"
+
+# Subdomains (leave empty to skip)
+search_domain_name       = ""
+finder_domain_name       = ""
+interiority_domain_name  = ""

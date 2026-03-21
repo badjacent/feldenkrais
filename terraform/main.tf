@@ -800,6 +800,11 @@ data "archive_file" "web_lambda" {
     content  = file("${path.module}/../src/kb/pipeline/engine.py")
     filename = "pipeline/engine.py"
   }
+  # Interiority research booklet
+  source {
+    content  = file("${path.module}/../private/docs/interiority/index.html")
+    filename = "private/docs/interiority/index.html"
+  }
   # Note: Lesson files are loaded dynamically from S3 or user input
 }
 
@@ -828,6 +833,7 @@ resource "aws_lambda_function" "web" {
       DEPLOY_SHA                    = var.deploy_sha
       SEARCH_DOMAIN                 = var.search_domain_name
       FINDER_DOMAIN                 = var.finder_domain_name
+      INTERIORITY_DOMAIN            = var.interiority_domain_name
       GITHUB_CLIENT_ID              = var.github_client_id
       GITHUB_CLIENT_SECRET          = var.github_client_secret
       GOOGLE_OAUTH_CLIENT_ID        = var.google_oauth_client_id
@@ -1085,6 +1091,84 @@ resource "aws_route53_record" "finder" {
   alias {
     name                   = aws_apigatewayv2_domain_name.finder[0].domain_name_configuration[0].target_domain_name
     zone_id                = aws_apigatewayv2_domain_name.finder[0].domain_name_configuration[0].hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+# -----------------------------------------------------------------------------
+# Interiority Subdomain (Route 53 + ACM + API Gateway) — research booklet
+# -----------------------------------------------------------------------------
+
+locals {
+  interiority_parent_domain = var.interiority_domain_name != "" ? join(".", slice(split(".", var.interiority_domain_name), 1, length(split(".", var.interiority_domain_name)))) : ""
+}
+
+data "aws_route53_zone" "interiority" {
+  count = var.interiority_domain_name != "" ? 1 : 0
+  name  = local.interiority_parent_domain
+}
+
+resource "aws_acm_certificate" "interiority" {
+  count             = var.interiority_domain_name != "" ? 1 : 0
+  domain_name       = var.interiority_domain_name
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_route53_record" "interiority_cert_validation" {
+  for_each = var.interiority_domain_name != "" ? {
+    for dvo in aws_acm_certificate.interiority[0].domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      record = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
+  } : {}
+
+  zone_id = data.aws_route53_zone.interiority[0].zone_id
+  name    = each.value.name
+  type    = each.value.type
+  records = [each.value.record]
+  ttl     = 60
+
+  allow_overwrite = true
+}
+
+resource "aws_acm_certificate_validation" "interiority" {
+  count                   = var.interiority_domain_name != "" ? 1 : 0
+  certificate_arn         = aws_acm_certificate.interiority[0].arn
+  validation_record_fqdns = [for record in aws_route53_record.interiority_cert_validation : record.fqdn]
+}
+
+resource "aws_apigatewayv2_domain_name" "interiority" {
+  count       = var.interiority_domain_name != "" ? 1 : 0
+  domain_name = var.interiority_domain_name
+
+  domain_name_configuration {
+    certificate_arn = aws_acm_certificate_validation.interiority[0].certificate_arn
+    endpoint_type   = "REGIONAL"
+    security_policy = "TLS_1_2"
+  }
+}
+
+resource "aws_apigatewayv2_api_mapping" "interiority" {
+  count       = var.interiority_domain_name != "" ? 1 : 0
+  api_id      = aws_apigatewayv2_api.web.id
+  domain_name = aws_apigatewayv2_domain_name.interiority[0].domain_name
+  stage       = "$default"
+}
+
+resource "aws_route53_record" "interiority" {
+  count   = var.interiority_domain_name != "" ? 1 : 0
+  zone_id = data.aws_route53_zone.interiority[0].zone_id
+  name    = var.interiority_domain_name
+  type    = "A"
+
+  alias {
+    name                   = aws_apigatewayv2_domain_name.interiority[0].domain_name_configuration[0].target_domain_name
+    zone_id                = aws_apigatewayv2_domain_name.interiority[0].domain_name_configuration[0].hosted_zone_id
     evaluate_target_health = false
   }
 }

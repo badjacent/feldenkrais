@@ -100,6 +100,8 @@ cython_debug/
 terraform/**/.terraform/
 terraform/**/*.tfstate
 terraform/**/*.tfstate.*
+terraform/*.tfvars
+!terraform/*.tfvars.example
 # Commit lock file for CI reproducibility
 # terraform/.terraform.lock.hcl
 terraform/*.zip

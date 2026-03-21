@@ -41,6 +41,7 @@ from storage import Storage
 # ── Subdomain detection ───────────────────────────────────────────────
 SEARCH_DOMAIN = os.environ.get("SEARCH_DOMAIN", "")
 FINDER_DOMAIN = os.environ.get("FINDER_DOMAIN", "")
+INTERIORITY_DOMAIN = os.environ.get("INTERIORITY_DOMAIN", "")
 
 
 def _is_search_site(request: Request) -> bool:
@@ -57,6 +58,14 @@ def _is_finder_site(request: Request) -> bool:
         return False
     host = request.headers.get("host", "")
     return host == FINDER_DOMAIN or host.startswith(FINDER_DOMAIN + ":")
+
+
+def _is_interiority_site(request: Request) -> bool:
+    """True when served from the interiority subdomain."""
+    if not INTERIORITY_DOMAIN:
+        return False
+    host = request.headers.get("host", "")
+    return host == INTERIORITY_DOMAIN or host.startswith(INTERIORITY_DOMAIN + ":")
 
 
 # ── Source access helpers ─────────────────────────────────────────────
@@ -168,6 +177,16 @@ def _run_pipeline_for_lesson(lesson_id: str):
         print(f"[pipeline] lesson {lesson_id[:8]}... complete: {fresh} succeeded, {errors} errors out of {len(results)} nodes")
 
 
+async def _periodic_group_sync():
+    """Periodically sync auto-groups so newly transcribed lessons enter the analysis pipeline."""
+    while True:
+        await asyncio.sleep(300)  # every 5 minutes
+        try:
+            _db.sync_auto_groups()
+        except Exception as e:
+            print(f"[sync] auto-group sync error: {e}")
+
+
 @asynccontextmanager
 async def _lifespan(app):
     if _db and not IS_LAMBDA:
@@ -177,7 +196,15 @@ async def _lifespan(app):
                 "UPDATE pipeline_node_state SET status = 'stale' WHERE status = 'running'"
             )
         print("[pipeline] on-demand mode (no background runner)")
-    yield
+    sync_task = None
+    if _db and not IS_LAMBDA:
+        sync_task = asyncio.create_task(_periodic_group_sync())
+        print("[sync] auto-group sync running every 5 minutes")
+    try:
+        yield
+    finally:
+        if sync_task:
+            sync_task.cancel()
 
 
 app = FastAPI(title="Feldenkrais Lesson Analyzer", lifespan=_lifespan)
@@ -245,6 +272,12 @@ async def search_site_guard(request: Request, call_next):
             or path.startswith("/api/finder")
         )
         if not allowed:
+            return RedirectResponse("/")
+        return await call_next(request)
+
+    # Interiority subdomain is public — serves research booklet
+    if _is_interiority_site(request):
+        if path != "/":
             return RedirectResponse("/")
         return await call_next(request)
 
@@ -345,6 +378,135 @@ if DATABASE_URL:
     from database import Database
     _db = Database(DATABASE_URL)
     _db.initialize()
+
+# Pipeline runner state — uses DB cache key for cross-process coordination
+import subprocess
+import threading
+
+_PIPELINE_KEY = "pipeline:analysis_running"
+_PIPELINE_ACTIVE_KEY = "pipeline:active_steps"
+_PIPELINE_PYTHON = str(Path(__file__).parent.parent.parent / ".venv" / "bin" / "python")
+_PIPELINE_MODULE = "pipeline.analysis"
+_PIPELINE_CWD = str(Path(__file__).parent)
+
+def _pipeline_is_running() -> bool:
+    """Check if pipeline is marked as running in DB."""
+    if not _db:
+        return False
+    row = _db.get_cache(_PIPELINE_KEY)
+    return bool(row and row.get("running"))
+
+def _pipeline_set_running(running: bool):
+    """Set pipeline running state in DB."""
+    if _db:
+        _db.set_cache(_PIPELINE_KEY, {"running": running})
+
+def _pipeline_update_active(active: list[dict]):
+    """Update the active steps list in DB. Preserves start times for ongoing steps."""
+    import datetime
+    # Merge with existing to preserve start times
+    existing = (_db.get_cache(_PIPELINE_ACTIVE_KEY) or {}).get("steps", [])
+    existing_lookup = {(s["step"], s["title"]): s.get("started") for s in existing}
+    now = datetime.datetime.utcnow().isoformat()
+    for s in active:
+        s["started"] = existing_lookup.get((s["step"], s["title"]), now)
+    _db.set_cache(_PIPELINE_ACTIVE_KEY, {"steps": active})
+
+def _run_step_subprocess(doc_id: str, step_name: str, title: str, timeout: int = 300) -> dict:
+    """Run a single step in a subprocess. Returns result dict."""
+    try:
+        result = subprocess.run(
+            [_PIPELINE_PYTHON, "-m", _PIPELINE_MODULE, "run-one", doc_id, step_name],
+            capture_output=True, text=True, timeout=timeout,
+            cwd=_PIPELINE_CWD,
+        )
+        if result.returncode == 0:
+            return {"ok": True, "doc_id": doc_id, "step": step_name, "title": title}
+        else:
+            return {"ok": False, "doc_id": doc_id, "step": step_name, "title": title,
+                    "error": result.stderr[:200] if result.stderr else "exit code " + str(result.returncode)}
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "doc_id": doc_id, "step": step_name, "title": title,
+                "error": f"Timed out after {timeout}s"}
+
+def _pipeline_worker():
+    """Background pipeline worker using subprocesses.
+
+    Each step runs in its own process with a hard timeout.
+    Up to 4 steps run concurrently via a thread pool that manages subprocesses.
+    Each pass gets a fresh pool so timed-out threads don't block future work.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    max_workers = 4
+    step_timeout = 300  # 5 minutes per step
+
+    try:
+        while _pipeline_is_running():
+            runnable = _db.get_runnable_steps()
+            if not runnable:
+                break
+
+            with ThreadPoolExecutor(max_workers=max_workers) as pool:
+                pending = {}  # future -> info dict
+                idx = 0
+
+                # Seed initial batch
+                while idx < len(runnable) and len(pending) < max_workers:
+                    if not _pipeline_is_running():
+                        break
+                    r = runnable[idx]
+                    idx += 1
+                    doc_id = str(r["document_id"])
+                    step = r["step_name"]
+                    title = r["document_title"][:50]
+                    f = pool.submit(_run_step_subprocess, doc_id, step, title, step_timeout)
+                    pending[f] = {"step": step, "title": title, "doc_id": doc_id}
+
+                _pipeline_update_active(list(pending.values()))
+
+                # Process completions
+                while pending:
+                    if not _pipeline_is_running():
+                        break
+                    try:
+                        done = next(as_completed(pending, timeout=step_timeout + 30))
+                    except (StopIteration, TimeoutError):
+                        # Pool-level timeout — mark remaining as errors
+                        for f, info in list(pending.items()):
+                            if not f.done():
+                                _db.mark_step_error(info["doc_id"], info["step"],
+                                                    f"Timed out after {step_timeout}s")
+                        break
+                    info = pending.pop(done)
+                    try:
+                        result = done.result()
+                        if not result["ok"] and "Timed out" in result.get("error", ""):
+                            _db.mark_step_error(result["doc_id"], result["step"], result["error"])
+                    except Exception:
+                        pass
+
+                    # Feed next item
+                    if idx < len(runnable) and _pipeline_is_running():
+                        r = runnable[idx]
+                        idx += 1
+                        doc_id = str(r["document_id"])
+                        step = r["step_name"]
+                        title = r["document_title"][:50]
+                        f = pool.submit(_run_step_subprocess, doc_id, step, title, step_timeout)
+                        pending[f] = {"step": step, "title": title, "doc_id": doc_id}
+
+                    _pipeline_update_active(list(pending.values()))
+            # Pool closes here — any hung threads get abandoned, subprocesses get killed
+    finally:
+        _pipeline_update_active([])
+        _pipeline_set_running(False)
+
+# On startup, if pipeline was running, restart the worker thread
+if _db:
+    _pipeline_update_active([])
+    if _pipeline_is_running():
+        _t = threading.Thread(target=_pipeline_worker, daemon=True)
+        _t.start()
 
 # ── Initialize extracted modules ──────────────────────────────────────────
 import auth as _auth_mod
@@ -788,6 +950,8 @@ def _build_ingestion_html() -> str:
     pending_jobs = jobs.get("pending", 0)
     failed_jobs = jobs.get("failed", 0)
 
+    failed_count = sum(1 for d in documents if d.get("pipeline_stage") == "failed")
+
     # Events table rows
     event_rows = []
     for ev in events:
@@ -900,6 +1064,7 @@ def _build_ingestion_html() -> str:
         {pf_banner}
         <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
             <button id="refresh-ingestion" style="padding: 4px 12px; border: 1px solid #007bff; background: white; color: #007bff; border-radius: 4px; cursor: pointer; font-size: 0.85em;">Refresh</button>
+            {f'<button id="retry-all-failed" style="padding: 4px 12px; border: 1px solid #dc3545; background: white; color: #dc3545; border-radius: 4px; cursor: pointer; font-size: 0.85em;">Retry all failed ({failed_count})</button>' if failed_count else ''}
             <span id="refresh-status" style="font-size: 0.8em; color: #999;"></span>
         </div>
         <div class="cards">
@@ -1056,6 +1221,35 @@ def _build_ingestion_page() -> str:
                         btn.textContent = 'Refresh';
                     }});
             }}
+            if (e.target && e.target.id === 'retry-all-failed') {{
+                var btn = e.target;
+                if (!confirm('Retry all failed documents? Their transcription state will be cleared for reprocessing.')) return;
+                btn.disabled = true;
+                btn.textContent = 'Retrying...';
+                fetch('/api/ingestion/retry-all-failed', {{ method: 'POST' }})
+                    .then(function(r) {{ return r.json(); }})
+                    .then(function(data) {{
+                        if (data.status === 'ok') {{
+                            btn.textContent = 'Retried ' + data.count;
+                            btn.style.color = '#28a745';
+                            btn.style.borderColor = '#28a745';
+                            setTimeout(function() {{
+                                fetch('/api/pipeline/ingestion')
+                                    .then(function(r) {{ return r.text(); }})
+                                    .then(function(html) {{
+                                        document.getElementById('ingestion-content').innerHTML = html;
+                                    }});
+                            }}, 500);
+                        }} else {{
+                            btn.textContent = data.error || 'Error';
+                            btn.disabled = false;
+                        }}
+                    }})
+                    .catch(function(err) {{
+                        btn.textContent = 'Error';
+                        btn.disabled = false;
+                    }});
+            }}
             if (e.target && e.target.classList.contains('resubmit-btn')) {{
                 var btn = e.target;
                 var docId = btn.dataset.docid;
@@ -1175,9 +1369,10 @@ def _build_analysis_html() -> str:
         <div style="background:{'#fff3cd' if runnable_count > 0 else '#d4edda'};padding:8px 16px;border-radius:8px;">
             <strong>{runnable_count}</strong> runnable steps
         </div>
-        <button onclick="runPipeline()" style="padding:6px 16px;background:#007bff;color:white;border:none;border-radius:4px;cursor:pointer;"
-                {'disabled' if runnable_count == 0 else ''}>
-            Run Pipeline
+        <button id="pipeline-toggle" onclick="togglePipeline()"
+                style="padding:6px 16px;background:{'#dc3545' if _pipeline_is_running() else '#007bff'};color:white;border:none;border-radius:4px;cursor:pointer;"
+                {'disabled' if runnable_count == 0 and not _pipeline_is_running() else ''}>
+            {'Stop Pipeline' if _pipeline_is_running() else 'Start Pipeline'}
         </button>
         <button onclick="refreshDashboard()" style="padding:6px 16px;background:#6c757d;color:white;border:none;border-radius:4px;cursor:pointer;">
             Refresh
@@ -1407,15 +1602,6 @@ extract_steps ──► map_body_parts (independent)</pre>
         .catch(err => alert('Error: ' + err));
     }}
 
-    function refreshStatus() {{
-        const el = document.getElementById('analysis-status');
-        if (el) {{
-            fetch('/api/analysis/status')
-                .then(r => r.text())
-                .then(html => {{ el.innerHTML = html; }});
-        }}
-    }}
-
     function toggleGroupGate(groupId, stepName, newPermitted) {{
         fetch('/api/analysis/gate', {{
             method: 'POST',
@@ -1462,13 +1648,29 @@ extract_steps ──► map_body_parts (independent)</pre>
                 .then(r => r.text())
                 .then(html => {{ statusEl.innerHTML = html; }});
         }}
+        // Update pipeline button state
+        fetch('/api/analysis/pipeline-status')
+            .then(r => r.json())
+            .then(data => {{
+                const btn = document.getElementById('pipeline-toggle');
+                if (btn) {{
+                    btn.style.background = data.running ? '#dc3545' : '#007bff';
+                    btn.textContent = data.running ? 'Stop Pipeline' : 'Start Pipeline';
+                    btn.disabled = false;
+                }}
+            }});
     }}
 
-    function runPipeline() {{
-        if (!confirm('Run all permitted + pending analysis steps?')) return;
-        const btn = event.target;
-        btn.disabled = true;
-        btn.textContent = 'Running...';
+    // Auto-refresh every 10s when pipeline is running
+    setInterval(() => {{
+        fetch('/api/analysis/pipeline-status')
+            .then(r => r.json())
+            .then(data => {{
+                if (data.running) refreshDashboard();
+            }});
+    }}, 10000);
+
+    function togglePipeline() {{
         fetch('/api/analysis/run', {{
             method: 'POST',
             headers: {{'Content-Type': 'application/json'}},
@@ -1476,16 +1678,9 @@ extract_steps ──► map_body_parts (independent)</pre>
         }})
         .then(r => r.json())
         .then(data => {{
-            btn.textContent = 'Run Pipeline';
-            btn.disabled = false;
-            alert('Done: ' + data.success + '/' + data.total + ' succeeded');
             refreshDashboard();
         }})
-        .catch(err => {{
-            btn.textContent = 'Run Pipeline';
-            btn.disabled = false;
-            alert('Error: ' + err);
-        }});
+        .catch(err => alert('Error: ' + err));
     }}
     </script>
 </body>
@@ -1611,23 +1806,58 @@ def _build_pipeline_status_html() -> str:
     error_steps = sum(r["errors"] for r in progress)
     remaining = total_steps - completed_steps - error_steps
 
-    if total_steps > 0:
+    if progress:
+        rate = _db.get_recent_completion_rate(5)
+        if rate > 0 and remaining > 0:
+            eta_minutes = remaining / rate
+            if eta_minutes >= 60:
+                eta_str = f" — ~{int(eta_minutes // 60)}h{int(eta_minutes % 60)}m"
+            else:
+                eta_str = f" — ~{int(eta_minutes)}m"
+        else:
+            eta_str = ""
         remaining_badge = (
             f'<span style="font-size:0.75em;font-weight:normal;margin-left:12px;'
             f'padding:2px 8px;border-radius:8px;'
             f'background:{"#fff3cd" if remaining > 0 else "#d4edda"};">'
-            f'{remaining} remaining</span>'
+            f'{remaining} remaining{eta_str}</span>'
         )
     else:
         remaining_badge = ""
 
+    # Active steps
+    import datetime
+    active_data = _db.get_cache(_PIPELINE_ACTIVE_KEY) if _db else None
+    active_steps = (active_data or {}).get("steps", [])
+    now = datetime.datetime.utcnow()
+    if active_steps and _pipeline_is_running():
+        active_items = ""
+        for s in active_steps:
+            started = s.get("started")
+            if started:
+                try:
+                    elapsed = (now - datetime.datetime.fromisoformat(started)).total_seconds()
+                    if elapsed >= 60:
+                        elapsed_str = f"{int(elapsed // 60)}m{int(elapsed % 60)}s"
+                    else:
+                        elapsed_str = f"{int(elapsed)}s"
+                except (ValueError, TypeError):
+                    elapsed_str = ""
+            else:
+                elapsed_str = ""
+            time_span = f' <span style="color:#999;font-size:0.8em;">({elapsed_str})</span>' if elapsed_str else ""
+            active_items += f'<li style="font-size:0.85em;"><strong>{html_mod.escape(s["step"])}</strong> — {html_mod.escape(s["title"])}{time_span}</li>'
+        active_html = f'<ul style="margin:0;padding-left:20px;">{active_items}</ul>'
+    else:
+        active_html = ""
+
     return f"""
     <div style="margin-top:32px;">
-        <h2 style="font-size:1.1em;margin-bottom:12px;">Pipeline Progress{remaining_badge}
-            <button onclick="refreshStatus()" style="font-size:0.7em;padding:2px 10px;margin-left:8px;border:1px solid #ccc;border-radius:4px;cursor:pointer;background:white;vertical-align:middle;">Refresh</button>
-        </h2>
+        <h2 style="font-size:1.1em;margin-bottom:12px;">Pipeline Progress{remaining_badge}</h2>
         {progress_html}
     </div>
+
+    {f'<div style="margin-top:32px;"><h2 style="font-size:1.1em;margin-bottom:8px;">Currently Running</h2>{active_html}</div>' if active_html else ''}
 
     <div style="margin-top:32px;">
         <h2 style="font-size:1.1em;margin-bottom:12px;">
@@ -3612,6 +3842,27 @@ async def resubmit_document(document_id: str):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+@app.post("/api/ingestion/retry-all-failed")
+async def retry_all_failed():
+    """Resubmit all documents in 'failed' pipeline stage."""
+    if not _db:
+        return JSONResponse({"error": "Database not configured"}, status_code=500)
+    try:
+        documents = _db.get_document_pipeline_view(limit=500)
+        failed = [d for d in documents if d.get("pipeline_stage") == "failed"]
+        results = []
+        for doc in failed:
+            doc_id = str(doc["id"])
+            cleared = _db.resubmit_document(doc_id)
+            results.append({"document_id": doc_id, "title": doc.get("title"), "cleared": cleared})
+        if results:
+            _db.log_event("retry_all_failed", detail={"count": len(results),
+                          "documents": [r["title"] for r in results]})
+        return JSONResponse({"status": "ok", "count": len(results), "results": results})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 
 
 
@@ -3719,18 +3970,26 @@ async def create_analysis_group(request: Request):
 
 @app.post("/api/analysis/run")
 async def run_analysis_pipeline(request: Request):
-    """Run all runnable analysis steps (or for a specific document)."""
+    """Toggle the pipeline on/off. Non-blocking — runs in background thread."""
     if not _db:
         return JSONResponse({"error": "Database not configured"}, status_code=500)
-    body = await request.json() if request.headers.get("content-type") == "application/json" else {}
-    document_id = body.get("document_id")
 
-    from pipeline.analysis import run_pipeline
-    try:
-        result = await asyncio.to_thread(run_pipeline, _db, document_id)
-        return JSONResponse(result)
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+    if _pipeline_is_running():
+        # Stop — set DB flag, worker will notice and exit
+        _pipeline_set_running(False)
+        return JSONResponse({"status": "stopping"})
+    else:
+        # Start — set DB flag and launch worker thread
+        _pipeline_set_running(True)
+        t = threading.Thread(target=_pipeline_worker, daemon=True)
+        t.start()
+        return JSONResponse({"status": "started"})
+
+
+@app.get("/api/analysis/pipeline-status")
+async def pipeline_status():
+    """Return whether the pipeline is currently running."""
+    return JSONResponse({"running": _pipeline_is_running()})
 
 
 @app.post("/api/analysis/clear-error")
@@ -3973,6 +4232,19 @@ async def finder_stats():
 @app.get("/", response_class=HTMLResponse)
 async def landing_page(request: Request):
     """Landing page: search home, plus dev tools for admin or local dev."""
+    # Interiority subdomain serves the research booklet
+    if _is_interiority_site(request):
+        # Lambda: file is bundled at private/docs/interiority/index.html
+        # Local: relative to repo root
+        candidates = [
+            Path(__file__).parent / "private" / "docs" / "interiority" / "index.html",
+            Path(__file__).parent.parent.parent / "private" / "docs" / "interiority" / "index.html",
+        ]
+        for p in candidates:
+            if p.exists():
+                return HTMLResponse(p.read_text(encoding="utf-8"))
+        return HTMLResponse("<h1>Coming soon</h1>", status_code=404)
+
     # Finder subdomain gets its own UI
     if _is_finder_site(request):
         return HTMLResponse(_build_finder_html())

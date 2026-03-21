@@ -87,6 +87,12 @@ variable "finder_domain_name" {
   default     = ""
 }
 
+variable "interiority_domain_name" {
+  description = "Subdomain for the interiority language research booklet"
+  type        = string
+  default     = ""
+}
+
 variable "github_client_id" {
   description = "GitHub OAuth app client ID"
   type        = string
