@@ -2057,13 +2057,8 @@ async function sendChat() {{
             document.getElementById('card-placeholder').innerHTML = 'No lesson text available.';
             return;
         }}
-        showStatus('<span class="spinner-inline"></span> Running analysis...');
-        const form = new FormData();
-        form.append('lesson_text', lessonText);
-        form.append('selected_category', 'db:0');
-        form.append('selected_lesson', DOCUMENT_ID);
-        form.append('provider', PROVIDER);
-        const res = await fetch('/api/pass0b-combined-json', {{ method: 'POST', body: form }});
+        showStatus('<span class="spinner-inline"></span> Loading analysis...');
+        const res = await fetch('/api/lesson/' + encodeURIComponent(DOCUMENT_ID) + '/combined');
         const data = await res.json();
         if (data.error) {{
             showStatus('Error: ' + data.error, true);
