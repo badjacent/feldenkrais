@@ -489,9 +489,8 @@ PROMPTS_DIR = _analysis_mod.PROMPTS_DIR
 # ── Page builders (extracted to web_pages.py) ─────────────────────────────
 from web_pages import (  # noqa: E402
     _AUTH_BAR_CSS, _auth_bar_html,
-    build_pass0b_html, build_search_home_html,
-    build_lesson_page_html, build_pass0b_player_html,
-    build_pass0b_lang_html,
+    build_search_home_html,
+    build_lesson_page_html,
 )
 
 
@@ -767,8 +766,7 @@ def invoke_lambda_async(job_id: str) -> None:
 
 # ── Renderers (extracted to renderers.py) ──────────────────────────────
 from renderers import (  # noqa: E402
-    render_debug_log, render_pass0b_result,
-    render_pass0b_lang_result, render_pass0b_combined_result,
+    render_debug_log,
 )
 
 # ── HTML builders (extracted to html_builders.py) ──────────────────────
@@ -1004,7 +1002,6 @@ except ImportError:
 from routes.auth import router as auth_router
 from routes.ingestion import router as ingestion_router
 from routes.analysis_routes import router as analysis_router
-from routes.pass0b import router as pass0b_router
 from routes.search import router as search_router
 from routes.finder import router as finder_router
 from routes.admin import router as admin_router
@@ -1014,7 +1011,6 @@ from routes.lesson_data import router as lesson_data_router
 app.include_router(auth_router)
 app.include_router(ingestion_router)
 app.include_router(analysis_router)
-app.include_router(pass0b_router)
 app.include_router(search_router)
 app.include_router(finder_router)
 app.include_router(admin_router)

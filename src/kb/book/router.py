@@ -16,7 +16,6 @@ def create_book_router(db, data_dir) -> APIRouter:
     init_state(db, data_dir)
 
     # Import route modules (they register decorators on import)
-    from book import analyzer_routes
     from book import explore
     from book import booklet_routes
     from book import book_page
@@ -25,14 +24,6 @@ def create_book_router(db, data_dir) -> APIRouter:
 
     # Build a fresh router and include all sub-routes
     router = APIRouter()
-
-    # Analyzer routes
-    router.add_api_route("/analyzer", analyzer_routes.home, methods=["GET"], response_class=analyzer_routes.HTMLResponse)
-    router.add_api_route("/api/lesson/{category}/{filename}", analyzer_routes.get_lesson_text, methods=["GET"])
-    router.add_api_route("/analyze", analyzer_routes.analyze_redirect, methods=["GET"])
-    router.add_api_route("/api/analyze", analyzer_routes.api_analyze, methods=["POST"])
-    router.add_api_route("/api/status/{job_id}", analyzer_routes.api_status, methods=["GET"])
-    router.add_api_route("/analyze", analyzer_routes.analyze, methods=["POST"], response_class=analyzer_routes.HTMLResponse)
 
     # Review
     router.add_api_route("/review", review_routes.review_page, methods=["GET"], response_class=review_routes.HTMLResponse)

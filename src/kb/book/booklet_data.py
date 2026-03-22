@@ -1,9 +1,30 @@
 """Booklet query type definitions and helper functions."""
 
 import json
+import re
 
 from book.analysis import get_vl_booklet_intros
-from book.analyzer_html import _parse_seq_to_steps
+
+
+def _parse_seq_to_steps(seq_val: str, pass_a_steps: dict) -> list:
+    """Parse a Seq column value (e.g., '1-2', '3', '4-6') and return matching Pass A steps."""
+    matched = []
+    # Handle ranges like "1-3" and single numbers like "4", and combos like "1-2, 4"
+    for part in re.split(r'[,;]\s*', str(seq_val)):
+        part = part.strip()
+        range_match = re.match(r'(\d+)\s*[-\u2013]\s*(\d+)', part)
+        if range_match:
+            start, end = int(range_match.group(1)), int(range_match.group(2))
+            for n in range(start, end + 1):
+                if n in pass_a_steps:
+                    matched.append(pass_a_steps[n])
+        else:
+            num_match = re.match(r'(\d+)', part)
+            if num_match:
+                n = int(num_match.group(1))
+                if n in pass_a_steps:
+                    matched.append(pass_a_steps[n])
+    return matched
 
 
 # VL_BOOKLET_INTROS is loaded from frameworks.json via get_vl_booklet_intros()
