@@ -167,3 +167,20 @@ async def api_lesson_raw_io(document_id: str):
         results.append(entry)
 
     return JSONResponse({"steps": results})
+
+
+@router.get("/api/lesson-info/{document_id}")
+async def lesson_info(document_id: str):
+    """Return basic lesson metadata (title, source, whisper segments availability)."""
+    if not _web._db:
+        return JSONResponse({"error": "no database"}, status_code=503)
+    doc = _web._db.get_document(document_id)
+    if not doc:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    segments = _web._db.get_document_whisper_segments(document_id)
+    return JSONResponse({
+        "title": doc.get("title", ""),
+        "source_url": doc.get("source_url"),
+        "has_whisper_segments": bool(segments),
+        "segment_count": len(segments) if segments else 0,
+    })
