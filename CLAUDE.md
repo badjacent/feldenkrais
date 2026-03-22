@@ -1,22 +1,26 @@
 # Claude Code Context
 
-## Stale Plan Files
-The plan file at `~/.claude/plans/immutable-percolating-goblet.md` (SQLite to Neon migration) is **completed** - ignore it.
-
 ## Project Overview
 
 Feldenkrais lesson analysis system with:
 - Knowledge base pipeline (transcription, analysis, storage)
 - LLM abstraction layer supporting Anthropic, OpenAI, and Gemini
 - Web interface for structured lesson analysis
+- Book pipeline (per-lesson analysis, booklets, cross-query synthesis)
 
 ## Public/Private Repo Split
 
-This repo is the **public** part. Private/proprietary content lives in a separate repo
-(`feldenkrais-private`) mounted as a git submodule at `private/`.
+Most code is in the **public** repo. The **private** submodule at `private/` contains only paywalled content scrapers, the Chrome capture extension, lesson text files, and framework prompt data.
 
-- **Public repo** (`feldenkrais`): Core infrastructure (web.py, analysis.py, llm.py, pipeline.py, database.py, etc.), pass0b analysis, terraform, scrapers
-- **Private submodule** (`private/`): Book features (web_book.py, pipeline_graph.py, cross_query.py, critics.py, review_agent.py, query_agent.py), frameworks data, lesson files, schemas, scripts
+- **Public repo** (`feldenkrais`): All infrastructure, web app, book pipeline, analysis engine, tests, terraform, discovery tools
+- **Private submodule** (`private/`): Scrapers for paywalled sources (FM, FP, Kinesophics, etc.), Chrome extension for FF capture, lesson text files, framework prompts (VL v1)
+
+### What's in the private submodule
+- Scrapers: `src/feldenkrais_manhattan_scraper.py`, `src/feldenkrais_project_scraper.py`, `src/kinesophics_scraper.py`, etc.
+- Chrome extension: `tools/extension/` (captures from Feldenkrais First)
+- Capture server: `tools/server.py`
+- Lesson texts: `data/lessons/*.txt`
+- Framework prompts: `data/frameworks/v1/vl1.md` through `vl5.md`
 
 ### Working with the submodule
 ```bash
@@ -31,10 +35,10 @@ git submodule update --remote
 ```
 
 ### How the split works
-- `web.py` adds `private/src/` to sys.path and conditionally imports `web_book.py` (try/except ImportError)
+- `web.py` conditionally imports `web_book.py` (try/except ImportError) for book features
 - `analysis.py` checks `private/data/` first via `_resolve_data_path()`, falls back to public `data/`
-- Without the submodule: landing page, pipeline batch (pass0b), search work; book/analyzer/explore features are hidden
-- With the submodule: full /book, /booklet, /analyzer, /explore features appear
+- Without the submodule: all features work except VL framework prompts need to be in public `data/`
+- Framework prompt files (`vl1.md`-`vl5.md`) live in `private/data/frameworks/v1/`
 
 ## Key Documentation
 
@@ -49,25 +53,34 @@ See `terraform/OPERATIONS.md` for:
 - Lambda trigger management
 - FM loader usage
 
-## Key Files
+## Code Structure
 
-### Infrastructure (at src/kb/ root — imported everywhere)
-- `src/kb/web.py` - FastAPI web interface (Lambda handler)
-- `src/kb/analysis.py` - Analysis engine (pass0b, pass_a, frameworks)
-- `src/kb/database.py` - PostgreSQL, cache, embeddings, pgvector
-- `src/kb/llm.py` - LLM abstraction (Anthropic, OpenAI, Gemini)
-- `src/kb/agent.py` - Agent with LLM-powered transform layer
-- `src/kb/auth.py` - OAuth + cookie sessions
+### Core packages (src/kb/)
+- `web.py` — FastAPI app, middleware, shared state, HTML builders
+- `routes/` — Route modules (auth, ingestion, analysis, pass0b, search, finder, admin, pages)
+- `db/` — Database mixin package (17 domain modules: documents, cache, auth, embeddings, pipeline_state, etc.)
+- `analysis/` — Analysis package (12 modules: core, pass0, pass_a, pass0b variants, framework builders)
+- `llm.py` — LLM abstraction (Anthropic, OpenAI, Gemini)
+- `agent.py` — Agent with LLM-powered transform layer
+- `auth.py` — OAuth + cookie sessions
 
-### Workflow packages (in subdirectories)
-- `src/kb/pipeline/` - DAG engine (`engine.py`) + batch CLI (`batch.py`)
-- `src/kb/ingest/` - Lambda handlers: loader, transcribe, youtube, scraper + load_fp_free CLI
-- `src/kb/search/` - Embeddings, search eval, judge, search doc iteration
-- `src/kb/ops/` - Monitoring scripts
+### Book pipeline (src/kb/)
+- `web_book.py` — Book/booklet/analyzer/explore routes
+- `pipeline_graph.py` — Per-lesson pipeline DAG
+- `cross_query.py` — Cross-lesson queries with cache
+- `critics.py` — Multi-critic review architecture
+- `review_agent.py` — Automated book improvement agent
+- `query_agent.py` — LLM-powered lesson exploration
 
-### Private submodule
-- `private/src/web_book.py` - Book/analyzer routes (private)
-- `private/src/pipeline_graph.py` - Book pipeline DAG (private)
+### Workflow packages (src/kb/ subdirectories)
+- `pipeline/` — DAG engine (`engine.py`) + batch CLI (`batch.py`)
+- `ingest/` — Lambda handlers: loader, transcribe, youtube, scraper + load_fp_free CLI
+- `search/` — Embeddings, search eval, judge, search doc iteration
+- `ops/` — Monitoring scripts
+
+### Tests
+- `tests/unit/` — 184 unit tests covering database, analysis, web, LLM, pipeline engine
+- `tests/integration/` — Integration tests for loader, scraper, transcription
 
 ## VL Framework Data (Single Source of Truth)
 
@@ -99,6 +112,18 @@ Requires `.env` with `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `GOOGLE_API_KEY` 
 
 Uses Neon PostgreSQL. Connection string in `.env` as `DATABASE_URL`.
 
+Database class is a mixin assembly in `src/kb/db/` — 17 domain modules (documents, cache, auth, embeddings, pipeline_state, lesson_groups, dashboard, etc.). `src/kb/database.py` is a thin re-export for backward compatibility.
+
+## Deploying
+
+```bash
+cd terraform
+./gen_tfvars.sh   # Generate terraform.tfvars from .env
+terraform apply   # Auto-loads terraform.tfvars
+```
+
+Or first time: `./build_web_layer.sh` to build the deps layer.
+
 ## Practical Notes
 
 ### Package Management
@@ -119,17 +144,3 @@ Uses Neon PostgreSQL. Connection string in `.env` as `DATABASE_URL`.
 ### Lesson Files
 - Stored in `private/data/lessons/*.txt`
 - Filename becomes display name (underscores/hyphens → spaces, title-cased)
-
-### Web App
-- Requires `python-dotenv` to load `.env`
-- Run with `--reload` for auto-reload on file changes
-- GET `/analyze` redirects to home (handles browser refresh after POST)
-- Lambda deployment via Function URL (see `terraform/OPERATIONS.md`)
-
-### Deploying Web Lambda
-```bash
-cd terraform
-./build_web_layer.sh  # First time or when dependencies change
-terraform apply -var="google_api_key=$GOOGLE_API_KEY" ...
-terraform output web_function_url  # Get public URL
-```
