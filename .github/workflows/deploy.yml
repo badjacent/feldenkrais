@@ -46,6 +46,9 @@ jobs:
         if: steps.web-cache.outputs.cache-hit != 'true'
         run: cd terraform && ./build_web_layer.sh
 
+      - name: Build web Lambda package
+        run: cd terraform && ./build_web_lambda.sh
+
       - name: Terraform Init
         run: cd terraform && terraform init
 
@@ -57,6 +60,7 @@ jobs:
             -var="domain_name=aionyourside.net" \
             -var="search_domain_name=search.aionyourside.net" \
             -var="finder_domain_name=finder.becomecomfortable.com" \
+            -var="interiority_domain_name=interiority.aionyourside.net" \
             -var="deploy_sha=${{ github.sha }}"
         env:
           TF_VAR_groq_api_key: ${{ secrets.GROQ_API_KEY }}
