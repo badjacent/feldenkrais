@@ -1728,10 +1728,7 @@ async function loadCondensed() {{
     condensedLoaded = true;
     showStatus('<span class="spinner-inline"></span> Generating condensed lesson cards...');
     try {{
-        const form = new FormData();
-        form.append('lesson_text', lessonText);
-        form.append('provider', PROVIDER);
-        const res = await fetch('/api/pass0b-condensed', {{ method: 'POST', body: form }});
+        const res = await fetch('/api/lesson/' + encodeURIComponent(DOCUMENT_ID) + '/condensed');
         const data = await res.json();
         if (data.error) {{ showStatus('Error: ' + data.error, true); return; }}
         renderCondensedCards(data);

@@ -68,6 +68,26 @@ async def api_lesson_language(document_id: str):
     })
 
 
+@router.get("/api/lesson/{document_id}/condensed")
+async def api_lesson_condensed(document_id: str):
+    """Return cached condensed analysis for a lesson."""
+    if not _web._db:
+        return JSONResponse({"error": "No database connection"}, status_code=500)
+    text = _get_lesson_text(document_id)
+    if not text:
+        return JSONResponse({"error": "No transcript available"}, status_code=404)
+
+    cache_key = _web.get_cache_key(text + ":condense_v4")
+    cached = _web.load_cached_analysis(cache_key)
+    if not cached:
+        return JSONResponse({"error": "Condensed analysis not yet available. Run the analysis pipeline first."}, status_code=404)
+
+    return JSONResponse({
+        "segments": cached.get("segments", []),
+        "cached": True,
+    })
+
+
 @router.get("/api/lesson/{document_id}/classification")
 async def api_lesson_classification(document_id: str):
     """Return cached Pass A (decomposition/classification) analysis for a lesson."""

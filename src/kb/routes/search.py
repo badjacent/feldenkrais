@@ -115,7 +115,7 @@ async def api_lesson_concepts(document_id: str):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
-@router.get("/api/lesson/{category}/{filename}")
+@router.get("/api/lesson-text/{category}/{filename}")
 async def api_lesson_text(category: str, filename: str):
     """Return lesson text for a given category and lesson key."""
     text = _web.load_lesson(category, filename)
