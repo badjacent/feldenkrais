@@ -311,9 +311,14 @@ async def lesson_info(document_id: str):
         return JSONResponse({"error": "not found"}, status_code=404)
     segments = _web._db.get_document_whisper_segments(document_id)
     text = _web._db.get_document_transcription(document_id)
-    # Get source name
-    source = _web._db.get_source(doc.get("source_id")) if doc.get("source_id") else None
-    source_name = (source.get("category_name") or source.get("name", "")) if source else ""
+    # Get source name via query
+    source_name = ""
+    if doc.get("source_id"):
+        with _web._db.get_cursor(commit=False) as cur:
+            cur.execute("SELECT category_name, name FROM document_source WHERE id = %s", (doc["source_id"],))
+            row = cur.fetchone()
+            if row:
+                source_name = row.get("category_name") or row.get("name", "")
     return JSONResponse({
         "title": doc.get("title", ""),
         "source_url": doc.get("source_url"),
