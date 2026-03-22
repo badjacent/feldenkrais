@@ -16,8 +16,8 @@ async def landing_page(request: Request):
     # Interiority subdomain serves the research booklet
     if _web._is_interiority_site(request):
         candidates = [
-            Path(__file__).parent.parent / "private" / "docs" / "interiority" / "index.html",
-            Path(__file__).parent.parent.parent.parent / "private" / "docs" / "interiority" / "index.html",
+            Path(__file__).parent.parent / "docs" / "interiority" / "index.html",
+            Path(__file__).parent.parent.parent.parent / "docs" / "interiority" / "index.html",
         ]
         for p in candidates:
             if p.exists():

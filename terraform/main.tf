@@ -916,8 +916,8 @@ data "archive_file" "web_lambda" {
   }
   # Interiority research booklet
   source {
-    content  = file("${path.module}/../private/docs/interiority/index.html")
-    filename = "private/docs/interiority/index.html"
+    content  = file("${path.module}/../docs/interiority/index.html")
+    filename = "docs/interiority/index.html"
   }
   # Book/pipeline modules (migrated from private submodule)
   source {
