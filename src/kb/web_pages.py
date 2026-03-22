@@ -745,7 +745,7 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
 
         /* Tabs */
         .tab-bar {{
-            display: flex; gap: 0; border-bottom: 2px solid #e0e0e0; margin-bottom: 16px;
+            display: flex; flex-wrap: wrap; gap: 0; border-bottom: 2px solid #e0e0e0; margin-bottom: 16px;
         }}
         .tab-bar button {{
             padding: 10px 24px; font-size: 14px; font-weight: 600;
@@ -1028,9 +1028,14 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
     <div class="tab-bar" id="tab-bar">
         <button class="active" onclick="switchTab('steps')">Step by Step</button>
         <button onclick="switchTab('condensed')">Overview</button>
+        <button onclick="switchTab('somatic')">Somatic</button>
+        <button onclick="switchTab('language')">Language</button>
+        <button onclick="switchTab('classification')">Classification</button>
+        <button onclick="switchTab('pipeline')">Pipeline</button>
         <button onclick="switchTab('concepts')">Search Specifics</button>
         <button onclick="switchTab('transcript')">Transcript</button>
         <button onclick="switchTab('chat')">Q&amp;A</button>
+        <button onclick="switchTab('rawio')">Raw I/O</button>
         <button onclick="switchTab('detailed')">All Details</button>
     </div>
     <div id="status-area"></div>
@@ -1078,6 +1083,38 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
         <div id="condensed-setting-card"></div>
         <div id="condensed-group-cards"></div>
         <div class="progress-bar" id="condensed-progress"></div>
+    </div>
+
+    <!-- Somatic tab -->
+    <div id="tab-somatic" style="display:none;">
+        <div class="tab-intro">Per-step biomechanical analysis: differentiation, activation, inhibition, transmission route, and ground push.</div>
+        <div id="somatic-tab-content">
+            <div style="color:#999; padding:16px;"><span class="spinner-inline"></span> Loading somatic analysis...</div>
+        </div>
+    </div>
+
+    <!-- Language tab -->
+    <div id="tab-language" style="display:none;">
+        <div class="tab-intro">Per-step language analysis: explanatory language, attention cues, effort descriptors, imagery, and distinctive phrasing.</div>
+        <div id="language-tab-content">
+            <div style="color:#999; padding:16px;"><span class="spinner-inline"></span> Loading language analysis...</div>
+        </div>
+    </div>
+
+    <!-- Classification tab -->
+    <div id="tab-classification" style="display:none;">
+        <div class="tab-intro">Pass A decomposition and framework classification for this lesson.</div>
+        <div id="classification-tab-content">
+            <div style="color:#999; padding:16px;"><span class="spinner-inline"></span> Loading classification data...</div>
+        </div>
+    </div>
+
+    <!-- Pipeline tab -->
+    <div id="tab-pipeline" style="display:none;">
+        <div class="tab-intro">Pipeline analysis status: which steps have been completed, their versions, and any errors.</div>
+        <div id="pipeline-tab-content">
+            <div style="color:#999; padding:16px;"><span class="spinner-inline"></span> Loading pipeline status...</div>
+        </div>
     </div>
 
     <!-- Search Specifics tab -->
@@ -1149,6 +1186,14 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
         <div class="progress-bar" id="annotated-progress"></div>
     </div>
 
+    <!-- Raw I/O tab -->
+    <div id="tab-rawio" style="display:none;">
+        <div class="tab-intro">Raw LLM prompts and responses for each analysis step. Useful for debugging and understanding what data was produced.</div>
+        <div id="rawio-tab-content">
+            <div style="color:#999; padding:16px;"><span class="spinner-inline"></span> Loading raw I/O data...</div>
+        </div>
+    </div>
+
     <!-- Detailed tab -->
     <div id="tab-detailed" style="display:none;">
         <div class="tab-intro">The full structured analysis output with all fields, tables, and raw data.</div>
@@ -1181,9 +1226,14 @@ const audioContainer = document.getElementById('audio-container');
 
 // ── Tab switching ──
 
-const TAB_ORDER = ['steps', 'condensed', 'concepts', 'transcript', 'chat', 'detailed'];
+const TAB_ORDER = ['steps', 'condensed', 'somatic', 'language', 'classification', 'pipeline', 'concepts', 'transcript', 'chat', 'rawio', 'detailed'];
 let conceptsLoaded = false;
 let transcriptRendered = false;
+let somaticTabLoaded = false;
+let languageTabLoaded = false;
+let classificationTabLoaded = false;
+let pipelineTabLoaded = false;
+let rawioTabLoaded = false;
 
 function switchTab(tab) {{
     activeTab = tab;
@@ -1202,6 +1252,11 @@ function switchTab(tab) {{
     if (tab === 'detailed' && !detailedRendered && analysisData) renderDetailed();
     if (tab === 'steps' && analysisData) renderCard();
     if (tab === 'chat') document.getElementById('chat-input').focus();
+    if (tab === 'somatic' && !somaticTabLoaded) loadSomaticTab();
+    if (tab === 'language' && !languageTabLoaded) loadLanguageTab();
+    if (tab === 'classification' && !classificationTabLoaded) loadClassificationTab();
+    if (tab === 'pipeline' && !pipelineTabLoaded) loadPipelineTab();
+    if (tab === 'rawio' && !rawioTabLoaded) loadRawIOTab();
 }}
 
 // ── Transcript rendering ──
@@ -1393,6 +1448,314 @@ function escConcept(str) {{
     const d = document.createElement('div');
     d.textContent = str;
     return d.innerHTML;
+}}
+
+// ── Somatic tab ──
+
+async function loadSomaticTab() {{
+    somaticTabLoaded = true;
+    const div = document.getElementById('somatic-tab-content');
+    try {{
+        const res = await fetch('/api/lesson/' + DOCUMENT_ID + '/somatic');
+        const data = await res.json();
+        if (data.error) {{
+            div.innerHTML = '<div style="color:#999;padding:16px;">' + escHtml(data.error) + '</div>';
+            return;
+        }}
+        let html = '';
+        // Summary section
+        const summary = data.summary || {{}};
+        if (summary.lesson_intent || summary.overall_transmission_route) {{
+            html += '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
+            html += '<div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#1a73e8;margin-bottom:8px;">Somatic Summary</div>';
+            if (summary.lesson_intent) html += '<p style="margin:0 0 8px 0;"><strong>Lesson Intent:</strong> ' + escHtml(summary.lesson_intent) + '</p>';
+            if (summary.overall_transmission_route) html += '<p style="margin:0 0 8px 0;"><strong>Overall Transmission Route:</strong> ' + escHtml(summary.overall_transmission_route) + '</p>';
+            if (summary.primary_differentiation) html += '<p style="margin:0;"><strong>Primary Differentiation:</strong> ' + escHtml(summary.primary_differentiation) + '</p>';
+            html += '</div>';
+        }}
+        // Per-step cards
+        const steps = data.enriched_steps || [];
+        const paSteps = (data.pass_a && data.pass_a.steps) || [];
+        const paLookup = {{}};
+        paSteps.forEach(s => {{ paLookup[s.step_number] = s; }});
+        steps.forEach(step => {{
+            const pa = paLookup[step.step_number] || {{}};
+            html += '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:14px 18px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
+            html += '<div style="font-size:0.75em;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Step ' + step.step_number + '</div>';
+            if (pa.instruction) html += '<div style="font-style:italic;color:#444;margin-bottom:8px;font-size:0.9em;">' + escHtml(pa.instruction) + '</div>';
+            const fields = [
+                ['Clarified', 'clarified'], ['Intent', 'intent'],
+                ['Differentiation', 'differentiation'], ['Activation', 'activation'],
+                ['Inhibition', 'inhibition'], ['Transmission Route', 'transmission_route'],
+                ['Ground Push', 'ground_push'], ['Mechanical Directive', 'mechanical_directive'],
+                ['Attentional Cue', 'attentional_cue'],
+            ];
+            let bullets = '';
+            fields.forEach(([label, key]) => {{
+                const val = step[key];
+                if (val && val.toLowerCase() !== 'none') {{
+                    bullets += '<li><strong>' + label + ':</strong> ' + escHtml(val) + '</li>';
+                }}
+            }});
+            if (bullets) html += '<ul style="margin:0;padding-left:18px;font-size:0.9em;color:#444;line-height:1.5;">' + bullets + '</ul>';
+            else html += '<div style="color:#999;font-size:0.9em;">No somatic data for this step.</div>';
+            html += '</div>';
+        }});
+        if (!steps.length) html += '<div style="color:#999;padding:16px;">No somatic step data available.</div>';
+        div.innerHTML = html;
+    }} catch (e) {{
+        div.innerHTML = '<div style="color:#999;padding:16px;">Failed to load somatic data.</div>';
+    }}
+}}
+
+// ── Language tab ──
+
+async function loadLanguageTab() {{
+    languageTabLoaded = true;
+    const div = document.getElementById('language-tab-content');
+    try {{
+        const res = await fetch('/api/lesson/' + DOCUMENT_ID + '/language');
+        const data = await res.json();
+        if (data.error) {{
+            div.innerHTML = '<div style="color:#999;padding:16px;">' + escHtml(data.error) + '</div>';
+            return;
+        }}
+        let html = '';
+        // Summary
+        const summary = data.summary || {{}};
+        if (summary.dominant_language_type || summary.recurring_imagery) {{
+            html += '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
+            html += '<div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#9c27b0;margin-bottom:8px;">Language Summary</div>';
+            if (summary.dominant_language_type) html += '<p style="margin:0 0 8px 0;"><strong>Dominant Language Type:</strong> ' + escHtml(summary.dominant_language_type) + '</p>';
+            if (summary.recurring_imagery) html += '<p style="margin:0 0 8px 0;"><strong>Recurring Imagery:</strong> ' + escHtml(summary.recurring_imagery) + '</p>';
+            if (summary.attention_pattern) html += '<p style="margin:0;"><strong>Attention Pattern:</strong> ' + escHtml(summary.attention_pattern) + '</p>';
+            html += '</div>';
+        }}
+        // Per-step cards
+        const steps = data.enriched_steps || [];
+        const paSteps = (data.pass_a && data.pass_a.steps) || [];
+        const paLookup = {{}};
+        paSteps.forEach(s => {{ paLookup[s.step_number] = s; }});
+        steps.forEach(step => {{
+            const pa = paLookup[step.step_number] || {{}};
+            html += '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:14px 18px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
+            html += '<div style="font-size:0.75em;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Step ' + step.step_number + '</div>';
+            if (pa.instruction) html += '<div style="font-style:italic;color:#444;margin-bottom:8px;font-size:0.9em;">' + escHtml(pa.instruction) + '</div>';
+            const fields = [
+                ['Explanatory', 'explanatory_language'], ['Attention Cues', 'attention_cues'],
+                ['Effort', 'effort_language'], ['Imagery', 'image_language'],
+                ['Distinctive Phrasing', 'distinctive_phrasing'], ['Sensory Inquiry', 'sensory_inquiry'],
+            ];
+            let bullets = '';
+            fields.forEach(([label, key]) => {{
+                const val = step[key];
+                if (val && val.toLowerCase() !== 'none') {{
+                    bullets += '<li><strong>' + label + ':</strong> ' + escHtml(val) + '</li>';
+                }}
+            }});
+            if (bullets) html += '<ul style="margin:0;padding-left:18px;font-size:0.9em;color:#444;line-height:1.5;">' + bullets + '</ul>';
+            else html += '<div style="color:#999;font-size:0.9em;">No language data for this step.</div>';
+            html += '</div>';
+        }});
+        if (!steps.length) html += '<div style="color:#999;padding:16px;">No language step data available.</div>';
+        div.innerHTML = html;
+    }} catch (e) {{
+        div.innerHTML = '<div style="color:#999;padding:16px;">Failed to load language data.</div>';
+    }}
+}}
+
+// ── Classification tab ──
+
+async function loadClassificationTab() {{
+    classificationTabLoaded = true;
+    const div = document.getElementById('classification-tab-content');
+    try {{
+        const res = await fetch('/api/lesson/' + DOCUMENT_ID + '/classification');
+        const data = await res.json();
+        if (data.error) {{
+            div.innerHTML = '<div style="color:#999;padding:16px;">' + escHtml(data.error) + '</div>';
+            return;
+        }}
+        let html = '';
+        // Framework classification if present
+        if (data.primary_framework || data.classification) {{
+            html += '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
+            html += '<div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#e65100;margin-bottom:8px;">Framework Classification</div>';
+            if (data.primary_framework) html += '<p style="margin:0 0 8px 0;"><strong>Primary Framework:</strong> ' + escHtml(data.primary_framework) + '</p>';
+            if (data.rationale) html += '<p style="margin:0 0 12px 0;color:#555;font-size:0.9em;">' + escHtml(data.rationale) + '</p>';
+            // Bar chart for classification scores
+            const scores = data.classification || {{}};
+            const entries = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+            if (entries.length) {{
+                const maxVal = Math.max(...entries.map(e => e[1]), 1);
+                html += '<div style="margin-top:8px;">';
+                entries.forEach(([name, score]) => {{
+                    const pct = Math.round((score / maxVal) * 100);
+                    const barColor = name === data.primary_framework ? '#e65100' : '#90a4ae';
+                    html += '<div style="display:flex;align-items:center;margin-bottom:6px;">';
+                    html += '<div style="width:140px;font-size:0.85em;color:#333;font-weight:500;flex-shrink:0;">' + escHtml(name) + '</div>';
+                    html += '<div style="flex:1;height:20px;background:#f0f0f0;border-radius:4px;overflow:hidden;margin:0 10px;">';
+                    html += '<div style="width:' + pct + '%;height:100%;background:' + barColor + ';border-radius:4px;transition:width 0.3s;"></div>';
+                    html += '</div>';
+                    html += '<div style="width:40px;text-align:right;font-size:0.85em;color:#666;">' + (typeof score === 'number' ? score.toFixed(2) : score) + '</div>';
+                    html += '</div>';
+                }});
+                html += '</div>';
+            }}
+            html += '</div>';
+        }}
+        // Groups summary
+        const groups = data.groups || [];
+        if (groups.length) {{
+            html += '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
+            html += '<div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#1a73e8;margin-bottom:8px;">Movement Groups (' + groups.length + ')</div>';
+            groups.forEach(g => {{
+                html += '<div style="padding:8px 0;border-bottom:1px solid #f0f0f0;">';
+                html += '<strong>Group ' + g.group_number + ':</strong> ' + escHtml(g.label || '');
+                if (g.starting_position) html += ' <span style="color:#888;font-size:0.85em;">(' + escHtml(g.starting_position) + ')</span>';
+                if (g.description) html += '<div style="color:#555;font-size:0.9em;margin-top:2px;">' + escHtml(g.description) + '</div>';
+                html += '</div>';
+            }});
+            html += '</div>';
+        }}
+        // Steps count
+        const steps = data.steps || [];
+        if (steps.length) {{
+            html += '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
+            html += '<div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#333;margin-bottom:8px;">Steps (' + steps.length + ')</div>';
+            html += '<div style="font-size:0.9em;color:#555;">Pass A decomposed this lesson into ' + steps.length + ' steps across ' + groups.length + ' groups.</div>';
+            html += '</div>';
+        }}
+        if (!html) html = '<div style="color:#999;padding:16px;">No classification data available.</div>';
+        div.innerHTML = html;
+    }} catch (e) {{
+        div.innerHTML = '<div style="color:#999;padding:16px;">Failed to load classification data.</div>';
+    }}
+}}
+
+// ── Pipeline tab ──
+
+async function loadPipelineTab() {{
+    pipelineTabLoaded = true;
+    const div = document.getElementById('pipeline-tab-content');
+    try {{
+        const res = await fetch('/api/lesson/' + DOCUMENT_ID + '/pipeline-status');
+        const data = await res.json();
+        if (data.error) {{
+            div.innerHTML = '<div style="color:#999;padding:16px;">' + escHtml(data.error) + '</div>';
+            return;
+        }}
+        let html = '';
+        // Document metadata
+        const doc = data.document || {{}};
+        html += '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
+        html += '<div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#333;margin-bottom:8px;">Document Metadata</div>';
+        html += '<table style="font-size:0.9em;color:#444;border-collapse:collapse;width:100%;">';
+        html += '<tr><td style="padding:4px 12px 4px 0;font-weight:600;color:#666;white-space:nowrap;">Document ID</td><td style="padding:4px 0;font-family:monospace;font-size:0.9em;">' + escHtml(doc.document_id || '') + '</td></tr>';
+        html += '<tr><td style="padding:4px 12px 4px 0;font-weight:600;color:#666;">Title</td><td style="padding:4px 0;">' + escHtml(doc.title || '') + '</td></tr>';
+        html += '<tr><td style="padding:4px 12px 4px 0;font-weight:600;color:#666;">Created</td><td style="padding:4px 0;">' + escHtml(doc.created_at || 'N/A') + '</td></tr>';
+        html += '<tr><td style="padding:4px 12px 4px 0;font-weight:600;color:#666;">Status</td><td style="padding:4px 0;">' + escHtml(doc.status || 'N/A') + '</td></tr>';
+        if (doc.s3_key) html += '<tr><td style="padding:4px 12px 4px 0;font-weight:600;color:#666;">Media</td><td style="padding:4px 0;font-family:monospace;font-size:0.85em;">' + escHtml(doc.s3_key) + '</td></tr>';
+        html += '</table></div>';
+        // Pipeline steps
+        const steps = data.steps || [];
+        html += '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
+        html += '<div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#333;margin-bottom:12px;">Analysis Steps</div>';
+        html += '<table style="font-size:0.85em;border-collapse:collapse;width:100%;">';
+        html += '<tr style="border-bottom:2px solid #e0e0e0;">';
+        html += '<th style="text-align:left;padding:6px 10px;color:#666;font-weight:600;">Step</th>';
+        html += '<th style="text-align:center;padding:6px 10px;color:#666;font-weight:600;">Status</th>';
+        html += '<th style="text-align:center;padding:6px 10px;color:#666;font-weight:600;">Version</th>';
+        html += '<th style="text-align:left;padding:6px 10px;color:#666;font-weight:600;">Completed</th>';
+        html += '<th style="text-align:left;padding:6px 10px;color:#666;font-weight:600;">Details</th>';
+        html += '</tr>';
+        steps.forEach(step => {{
+            let statusBadge, statusColor;
+            if (step.error) {{
+                statusBadge = 'Error';
+                statusColor = '#c62828';
+            }} else if (step.stale) {{
+                statusBadge = 'Stale';
+                statusColor = '#f57f17';
+            }} else if (step.completed_version != null) {{
+                if (step.completed_version < step.current_version) {{
+                    statusBadge = 'Outdated';
+                    statusColor = '#f57f17';
+                }} else {{
+                    statusBadge = 'Done';
+                    statusColor = '#2e7d32';
+                }}
+            }} else {{
+                statusBadge = 'Pending';
+                statusColor = '#757575';
+            }}
+            const versionStr = step.completed_version != null ? 'v' + step.completed_version + ' / v' + step.current_version : '- / v' + step.current_version;
+            const completedStr = step.completed_at ? new Date(step.completed_at).toLocaleString() : '-';
+            let detailStr = '';
+            if (step.error) detailStr = '<span style="color:#c62828;">' + escHtml(step.error) + '</span>';
+            else if (step.depends_on && step.depends_on.length) detailStr = '<span style="color:#888;font-size:0.9em;">depends: ' + step.depends_on.join(', ') + '</span>';
+            html += '<tr style="border-bottom:1px solid #f0f0f0;">';
+            html += '<td style="padding:8px 10px;font-weight:500;">' + escHtml(step.step_name) + '</td>';
+            html += '<td style="padding:8px 10px;text-align:center;"><span style="display:inline-block;padding:2px 10px;border-radius:10px;font-size:0.8em;font-weight:600;color:#fff;background:' + statusColor + ';">' + statusBadge + '</span></td>';
+            html += '<td style="padding:8px 10px;text-align:center;font-family:monospace;font-size:0.85em;">' + versionStr + '</td>';
+            html += '<td style="padding:8px 10px;">' + completedStr + '</td>';
+            html += '<td style="padding:8px 10px;">' + detailStr + '</td>';
+            html += '</tr>';
+        }});
+        html += '</table></div>';
+        div.innerHTML = html;
+    }} catch (e) {{
+        div.innerHTML = '<div style="color:#999;padding:16px;">Failed to load pipeline status.</div>';
+    }}
+}}
+
+// ── Raw I/O tab ──
+
+async function loadRawIOTab() {{
+    rawioTabLoaded = true;
+    const div = document.getElementById('rawio-tab-content');
+    try {{
+        const res = await fetch('/api/lesson/' + DOCUMENT_ID + '/raw-io');
+        const data = await res.json();
+        if (data.error) {{
+            div.innerHTML = '<div style="color:#999;padding:16px;">' + escHtml(data.error) + '</div>';
+            return;
+        }}
+        const steps = data.steps || [];
+        if (!steps.length) {{
+            div.innerHTML = '<div style="color:#999;padding:16px;">No analysis data found for this lesson.</div>';
+            return;
+        }}
+        let html = '';
+        steps.forEach(step => {{
+            html += '<details style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
+            html += '<summary style="padding:14px 18px;cursor:pointer;font-weight:600;color:#333;font-size:0.95em;">';
+            html += escHtml(step.name);
+            if (step.has_data) {{
+                html += ' <span style="display:inline-block;padding:1px 8px;border-radius:8px;font-size:0.75em;font-weight:600;color:#fff;background:#2e7d32;margin-left:8px;">cached</span>';
+                if (step.raw_json_length) html += ' <span style="color:#888;font-size:0.8em;font-weight:400;">(' + (step.raw_json_length / 1024).toFixed(1) + ' KB)</span>';
+            }} else {{
+                html += ' <span style="display:inline-block;padding:1px 8px;border-radius:8px;font-size:0.75em;font-weight:600;color:#fff;background:#757575;margin-left:8px;">not cached</span>';
+            }}
+            html += '</summary>';
+            html += '<div style="padding:0 18px 14px 18px;">';
+            if (step.has_data) {{
+                if (step.top_level_keys && step.top_level_keys.length) {{
+                    html += '<div style="margin-bottom:8px;font-size:0.85em;color:#666;">Keys: <code>' + step.top_level_keys.join(', ') + '</code></div>';
+                }}
+                html += '<div style="font-size:0.8em;color:#888;margin-bottom:4px;">Cache key: <code>' + escHtml(step.cache_key) + '</code>';
+                if (step.truncated) html += ' <span style="color:#f57f17;">(truncated to 50KB)</span>';
+                html += '</div>';
+                html += '<pre style="background:#f8f9fa;border:1px solid #e9ecef;border-radius:6px;padding:12px;font-size:0.8em;overflow-x:auto;max-height:500px;overflow-y:auto;white-space:pre-wrap;word-break:break-word;">' + escHtml(step.raw_json || '') + '</pre>';
+            }} else {{
+                html += '<div style="color:#999;font-size:0.9em;">No cached data. Run the analysis pipeline to populate this step.</div>';
+            }}
+            html += '</div></details>';
+        }});
+        div.innerHTML = html;
+    }} catch (e) {{
+        div.innerHTML = '<div style="color:#999;padding:16px;">Failed to load raw I/O data.</div>';
+    }}
 }}
 
 // ── Card rendering ──
