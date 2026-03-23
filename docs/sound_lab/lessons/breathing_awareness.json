@@ -1,0 +1,410 @@
+{
+  "lesson_id": "breathing_awareness_01",
+  "title": "Breathing Awareness: The Cycle of Breath",
+  "blocks": [
+    {
+      "id": "ba01",
+      "name": "inhale_arrival_lower",
+      "target_region": "lower_abdomen",
+      "target_event": "inhale_onset",
+      "timing": {
+        "anchor": "inhale_onset",
+        "offset_ms": -80,
+        "duration_ms": 1500,
+        "peak_ms_relative_to_anchor": 400,
+        "repeat_count": 4,
+        "silence_after_ms": 2000
+      },
+      "voice": {
+        "speaker_identity": "warm_low_male",
+        "pitch_hz_center": 105.0,
+        "pitch_variability_semitones": 0.9,
+        "tempo_wpm": 68.0,
+        "pause_ms_between_phrases": 1000,
+        "breathiness": 0.28,
+        "roughness": 0.01,
+        "brightness": 0.18,
+        "intimacy": 0.8,
+        "authority": 0.22,
+        "smile_tone": 0.06,
+        "prosody_shape": "gentle_rise_then_fall",
+        "phrase_final_drop_semitones": 2.5,
+        "emphasis_words": [
+          "arrives",
+          "first"
+        ]
+      },
+      "sound": {
+        "waveform": "sine",
+        "attack_ms": 200,
+        "decay_ms": 150,
+        "sustain_level": 0.25,
+        "release_ms": 500,
+        "amplitude_db": -26.0,
+        "pan": 0.0,
+        "spatialization": "below_navel",
+        "haptic_enabled": true,
+        "fundamental_hz": 80.0,
+        "partials": [
+          [
+            160.0,
+            0.2
+          ]
+        ],
+        "bandwidth_hz": null,
+        "vibrato_hz": 0.0,
+        "vibrato_depth_cents": 0.0,
+        "tremolo_hz": 0.0,
+        "tremolo_depth": 0.0,
+        "repetition_hz": null,
+        "modulation_target": "breath_in",
+        "haptic_freq_hz": 80.0,
+        "haptic_amp": 0.12
+      },
+      "prompt": {
+        "phrase": "As the inhale arrives, where does the breath land first? Does it drop into the belly, or does the chest begin to open?",
+        "perceptual_dimension": "directionality",
+        "resolution_level": "coarse",
+        "comparison_mode": "which_first",
+        "allowed_answers": [
+          "belly",
+          "chest",
+          "both_together",
+          "unclear"
+        ]
+      },
+      "fallback_prompt": {
+        "phrase": "Simply notice the very beginning of the inhale. Something moves \u2014 where?",
+        "perceptual_dimension": "directionality",
+        "resolution_level": "coarse",
+        "comparison_mode": "first_thing",
+        "allowed_answers": [
+          "low",
+          "high",
+          "unclear"
+        ]
+      },
+      "notes": "Establish breath awareness with a coarse question."
+    },
+    {
+      "id": "ba02",
+      "name": "exhale_release_softening",
+      "target_region": "upper_abdomen",
+      "target_event": "exhale_onset",
+      "timing": {
+        "anchor": "exhale_onset",
+        "offset_ms": 100,
+        "duration_ms": 1800,
+        "peak_ms_relative_to_anchor": 400,
+        "repeat_count": 4,
+        "silence_after_ms": 2200
+      },
+      "voice": {
+        "speaker_identity": "warm_low_male",
+        "pitch_hz_center": 100.0,
+        "pitch_variability_semitones": 0.8,
+        "tempo_wpm": 64.0,
+        "pause_ms_between_phrases": 1100,
+        "breathiness": 0.32,
+        "roughness": 0.01,
+        "brightness": 0.16,
+        "intimacy": 0.85,
+        "authority": 0.18,
+        "smile_tone": 0.05,
+        "prosody_shape": "falling",
+        "phrase_final_drop_semitones": 3.0,
+        "emphasis_words": [
+          "letting",
+          "soften"
+        ]
+      },
+      "sound": {
+        "waveform": "bowed_tone",
+        "attack_ms": 180,
+        "decay_ms": 120,
+        "sustain_level": 0.22,
+        "release_ms": 600,
+        "amplitude_db": -25.0,
+        "pan": 0.0,
+        "spatialization": "below_sternum",
+        "haptic_enabled": true,
+        "fundamental_hz": 98.0,
+        "partials": [
+          [
+            196.0,
+            0.18
+          ]
+        ],
+        "bandwidth_hz": null,
+        "vibrato_hz": 0.0,
+        "vibrato_depth_cents": 0.0,
+        "tremolo_hz": 0.08,
+        "tremolo_depth": 0.1,
+        "repetition_hz": null,
+        "modulation_target": "breath_out",
+        "haptic_freq_hz": 80.0,
+        "haptic_amp": 0.14
+      },
+      "prompt": {
+        "phrase": "As the exhale begins, notice the letting go. Does the belly soften toward the spine, or does it simply get quiet?",
+        "perceptual_dimension": "softening",
+        "resolution_level": "medium",
+        "comparison_mode": "either_or",
+        "allowed_answers": [
+          "softens_inward",
+          "gets_quiet",
+          "both",
+          "unclear"
+        ]
+      },
+      "fallback_prompt": null,
+      "notes": "Exhale phase. Falling prosody mirrors the release."
+    },
+    {
+      "id": "ba03",
+      "name": "rib_expansion_inhale",
+      "target_region": "lower_ribs",
+      "target_event": "mid_inhale",
+      "timing": {
+        "anchor": "mid_inhale",
+        "offset_ms": 0,
+        "duration_ms": 1400,
+        "peak_ms_relative_to_anchor": 350,
+        "repeat_count": 5,
+        "silence_after_ms": 2400
+      },
+      "voice": {
+        "speaker_identity": "warm_neutral_female",
+        "pitch_hz_center": 178.0,
+        "pitch_variability_semitones": 1.1,
+        "tempo_wpm": 72.0,
+        "pause_ms_between_phrases": 900,
+        "breathiness": 0.3,
+        "roughness": 0.02,
+        "brightness": 0.25,
+        "intimacy": 0.72,
+        "authority": 0.3,
+        "smile_tone": 0.1,
+        "prosody_shape": "wide_arc",
+        "phrase_final_drop_semitones": 2.0,
+        "emphasis_words": [
+          "ribs",
+          "three-dimensional"
+        ]
+      },
+      "sound": {
+        "waveform": "bandpassed_noise",
+        "attack_ms": 160,
+        "decay_ms": 100,
+        "sustain_level": 0.3,
+        "release_ms": 400,
+        "amplitude_db": -23.0,
+        "pan": 0.0,
+        "spatialization": "chest_like",
+        "haptic_enabled": false,
+        "fundamental_hz": null,
+        "partials": [],
+        "bandwidth_hz": [
+          300.0,
+          900.0
+        ],
+        "vibrato_hz": 0.0,
+        "vibrato_depth_cents": 0.0,
+        "tremolo_hz": 0.0,
+        "tremolo_depth": 0.0,
+        "repetition_hz": null,
+        "modulation_target": "breath_in",
+        "haptic_freq_hz": null,
+        "haptic_amp": null
+      },
+      "prompt": {
+        "phrase": "In the middle of the inhale, the ribs are expanding. Is the movement more front-to-back, or side-to-side? Or is it truly three-dimensional?",
+        "perceptual_dimension": "expansion",
+        "resolution_level": "medium",
+        "comparison_mode": "categorical",
+        "allowed_answers": [
+          "front_back",
+          "side_to_side",
+          "three_dimensional",
+          "unclear"
+        ]
+      },
+      "fallback_prompt": null,
+      "notes": "Mid-inhale rib awareness. Slightly finer discrimination."
+    },
+    {
+      "id": "ba04",
+      "name": "post_exhale_pause_stillness",
+      "target_region": "whole_trunk",
+      "target_event": "post_exhale_pause",
+      "timing": {
+        "anchor": "post_exhale_pause",
+        "offset_ms": 300,
+        "duration_ms": 2200,
+        "peak_ms_relative_to_anchor": 600,
+        "repeat_count": 4,
+        "silence_after_ms": 2800
+      },
+      "voice": {
+        "speaker_identity": "warm_low_male",
+        "pitch_hz_center": 98.0,
+        "pitch_variability_semitones": 0.7,
+        "tempo_wpm": 60.0,
+        "pause_ms_between_phrases": 1300,
+        "breathiness": 0.35,
+        "roughness": 0.01,
+        "brightness": 0.14,
+        "intimacy": 0.88,
+        "authority": 0.15,
+        "smile_tone": 0.04,
+        "prosody_shape": "falling",
+        "phrase_final_drop_semitones": 3.5,
+        "emphasis_words": [
+          "pause",
+          "still"
+        ]
+      },
+      "sound": {
+        "waveform": "sine",
+        "attack_ms": 300,
+        "decay_ms": 200,
+        "sustain_level": 0.18,
+        "release_ms": 800,
+        "amplitude_db": -28.0,
+        "pan": 0.0,
+        "spatialization": "full_body",
+        "haptic_enabled": true,
+        "fundamental_hz": 65.0,
+        "partials": [
+          [
+            130.0,
+            0.15
+          ],
+          [
+            195.0,
+            0.05
+          ]
+        ],
+        "bandwidth_hz": null,
+        "vibrato_hz": 0.0,
+        "vibrato_depth_cents": 0.0,
+        "tremolo_hz": 0.0,
+        "tremolo_depth": 0.0,
+        "repetition_hz": null,
+        "modulation_target": "free",
+        "haptic_freq_hz": 65.0,
+        "haptic_amp": 0.08
+      },
+      "prompt": {
+        "phrase": "In the pause after the exhale, before the next breath wants to come \u2014 what remains? Is everything still, or is there a quiet pulse somewhere?",
+        "perceptual_dimension": "pulse",
+        "resolution_level": "fine",
+        "comparison_mode": "either_or",
+        "allowed_answers": [
+          "all_still",
+          "quiet_pulse",
+          "restless",
+          "unclear"
+        ]
+      },
+      "fallback_prompt": {
+        "phrase": "Just wait in the pause. There is no need to do anything. Notice when the next breath begins on its own.",
+        "perceptual_dimension": "continuity",
+        "resolution_level": "coarse",
+        "comparison_mode": "first_thing",
+        "allowed_answers": [
+          "noticed",
+          "unclear"
+        ]
+      },
+      "notes": "The gap between breaths. Most intimate moment. Slowest voice."
+    },
+    {
+      "id": "ba05",
+      "name": "full_cycle_asymmetry",
+      "target_region": "whole_trunk",
+      "target_event": "inhale_onset",
+      "timing": {
+        "anchor": "inhale_onset",
+        "offset_ms": 0,
+        "duration_ms": 2000,
+        "peak_ms_relative_to_anchor": 700,
+        "repeat_count": 5,
+        "silence_after_ms": 3000
+      },
+      "voice": {
+        "speaker_identity": "warm_neutral_female",
+        "pitch_hz_center": 175.0,
+        "pitch_variability_semitones": 1.0,
+        "tempo_wpm": 70.0,
+        "pause_ms_between_phrases": 1000,
+        "breathiness": 0.32,
+        "roughness": 0.02,
+        "brightness": 0.22,
+        "intimacy": 0.75,
+        "authority": 0.25,
+        "smile_tone": 0.08,
+        "prosody_shape": "wide_arc",
+        "phrase_final_drop_semitones": 2.0,
+        "emphasis_words": [
+          "left",
+          "right",
+          "symmetry"
+        ]
+      },
+      "sound": {
+        "waveform": "filtered_noise_plus_sine",
+        "attack_ms": 220,
+        "decay_ms": 160,
+        "sustain_level": 0.24,
+        "release_ms": 550,
+        "amplitude_db": -24.0,
+        "pan": 0.0,
+        "spatialization": "full_body",
+        "haptic_enabled": false,
+        "fundamental_hz": 90.0,
+        "partials": [],
+        "bandwidth_hz": [
+          200.0,
+          600.0
+        ],
+        "vibrato_hz": 0.0,
+        "vibrato_depth_cents": 0.0,
+        "tremolo_hz": 0.0,
+        "tremolo_depth": 0.0,
+        "repetition_hz": null,
+        "modulation_target": "breath_cycle",
+        "haptic_freq_hz": null,
+        "haptic_amp": null
+      },
+      "prompt": {
+        "phrase": "Follow one full breath \u2014 in and out. Does the left side of your trunk participate the same way as the right? Where is the difference most clear?",
+        "perceptual_dimension": "asymmetry",
+        "resolution_level": "medium",
+        "comparison_mode": "left_right",
+        "allowed_answers": [
+          "left_more",
+          "right_more",
+          "quite_equal",
+          "different_regions",
+          "unclear"
+        ]
+      },
+      "fallback_prompt": null,
+      "notes": "Integration through asymmetry awareness. Full breath cycle modulation."
+    }
+  ],
+  "description": "A 5-minute breath-focused lesson exploring the phases of the breath cycle. Each block attends to a different moment in the breath \u2014 arrival, release, expansion, pause, and the whole cycle. Begin lying on your back with eyes closed.",
+  "default_audio_bus": {
+    "master_gain_db": -10.0,
+    "voice_gain_db": -5.0,
+    "sound_gain_db": -13.0,
+    "haptic_gain": 0.14
+  },
+  "sensors": {
+    "breath": true,
+    "heartbeat": false,
+    "touch": false,
+    "motion": false
+  }
+}

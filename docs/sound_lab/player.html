@@ -4,14 +4,70 @@
 <title>Sound Slipper — Lesson Player</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+
 * { box-sizing: border-box; }
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    max-width: 800px; margin: 0 auto; padding: 20px;
+    max-width: 1000px; margin: 0 auto; padding: 20px;
     background: #1a1a2e; color: #e0e0e0;
 }
 h1 { font-size: 1.4em; margin-bottom: 2px; }
 .subtitle { color: #888; font-size: 0.85em; margin-bottom: 20px; }
+
+/* ── Lesson selector ── */
+.lesson-selector {
+    display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;
+}
+.lesson-selector-btn {
+    background: #0f3460; border: 1px solid #533483; border-radius: 8px;
+    padding: 8px 18px; cursor: pointer; font-size: 0.85em; color: #aaa;
+    font-weight: 600; transition: all 0.15s;
+}
+.lesson-selector-btn:hover { border-color: #e94560; color: #e0e0e0; }
+.lesson-selector-btn.active { background: #533483; color: #e0e0e0; border-color: #e94560; }
+.lesson-selector-btn.loading { opacity: 0.5; cursor: wait; }
+.lesson-selector-btn.error { border-color: #c0392b; color: #c0392b; }
+
+/* ── Breath pacer ── */
+.breath-section {
+    display: flex; align-items: center; gap: 20px;
+    background: #16213e; border-radius: 12px; padding: 14px 20px;
+    margin-bottom: 16px; border: 1px solid #0f3460;
+}
+.breath-circle-container {
+    width: 60px; height: 60px; display: flex;
+    align-items: center; justify-content: center; flex-shrink: 0;
+}
+.breath-circle {
+    width: 20px; height: 20px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(83,52,131,0.8) 0%, rgba(83,52,131,0.2) 70%, transparent 100%);
+    border: 1px solid rgba(83,52,131,0.5);
+    transition: width 0.3s ease, height 0.3s ease;
+}
+.breath-circle.inhale {
+    width: 52px; height: 52px;
+    background: radial-gradient(circle, rgba(83,52,131,0.9) 0%, rgba(83,52,131,0.3) 70%, transparent 100%);
+    border-color: rgba(233,69,96,0.4);
+    box-shadow: 0 0 16px rgba(83,52,131,0.4);
+}
+.breath-label {
+    font-size: 0.75em; text-transform: uppercase; letter-spacing: 1px;
+    color: #888; min-width: 60px; text-align: center;
+}
+.breath-controls {
+    display: flex; align-items: center; gap: 10px; flex: 1;
+}
+.breath-controls label {
+    font-size: 0.8em; color: #888; white-space: nowrap;
+}
+.breath-controls input[type="range"] {
+    width: 120px; accent-color: #e94560; height: 4px;
+}
+.breath-controls .breath-val {
+    font-size: 0.8em; color: #e94560; min-width: 50px;
+    font-variant-numeric: tabular-nums;
+}
 
 .lesson-header {
     background: #16213e; border-radius: 12px; padding: 16px 20px;
@@ -34,38 +90,57 @@ h1 { font-size: 1.4em; margin-bottom: 2px; }
 .transport-btn:disabled { opacity: 0.4; cursor: default; }
 .transport-status { color: #888; font-size: 0.85em; }
 
-/* Block display */
+/* ── Block display with body map layout ── */
+.block-layout {
+    display: flex; gap: 24px; align-items: flex-start;
+    min-height: 340px;
+}
 .block-area {
-    min-height: 300px; display: flex; flex-direction: column;
+    flex: 1; display: flex; flex-direction: column;
     align-items: center; justify-content: center;
+    min-height: 300px;
 }
 .block-region {
-    font-size: 0.75em; text-transform: uppercase; letter-spacing: 1.5px;
-    color: #533483; margin-bottom: 8px; font-weight: 700;
+    font-size: 0.8em; text-transform: uppercase; letter-spacing: 2px;
+    color: #533483; margin-bottom: 12px; font-weight: 700;
 }
 .block-prompt {
-    font-size: 1.3em; line-height: 1.6; text-align: center;
-    max-width: 600px; color: #e0e0e0; margin-bottom: 20px;
-    transition: opacity 0.5s;
+    font-family: 'Lora', Georgia, 'Times New Roman', serif;
+    font-size: 1.6em; line-height: 1.7; text-align: center;
+    max-width: 520px; color: #e0e0e0; margin-bottom: 24px;
+    opacity: 1;
+    transition: opacity 0.8s ease;
 }
-.block-prompt.fading { opacity: 0.3; }
+.block-prompt.fading { opacity: 0; }
+.block-prompt.entering {
+    opacity: 0;
+    animation: fadeIn 0.8s ease forwards;
+}
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
 .block-answers {
     display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;
 }
 .answer-btn {
+    font-family: 'Lora', Georgia, serif;
     background: #0f3460; border: 1px solid #533483; border-radius: 20px;
-    padding: 8px 20px; cursor: pointer; font-size: 0.85em; color: #aaa;
+    padding: 10px 22px; cursor: pointer; font-size: 0.9em; color: #aaa;
     transition: all 0.15s;
 }
 .answer-btn:hover { border-color: #e94560; color: #e0e0e0; }
 .answer-btn.selected { background: #533483; color: #e0e0e0; border-color: #e94560; }
 
 .block-meta {
-    margin-top: 20px; font-size: 0.75em; color: #555; text-align: center;
+    margin-top: 24px; font-size: 0.75em; color: #555; text-align: center;
 }
-.block-counter { color: #888; font-size: 0.8em; margin-top: 8px; }
+.block-counter {
+    font-family: 'Lora', Georgia, serif;
+    color: #888; font-size: 0.85em; margin-top: 10px;
+}
 
-/* Sound indicator */
+/* ── Sound indicator ── */
 .sound-indicator {
     width: 12px; height: 12px; border-radius: 50%;
     background: #333; display: inline-block; margin-right: 6px;
@@ -73,7 +148,46 @@ h1 { font-size: 1.4em; margin-bottom: 2px; }
 }
 .sound-indicator.active { background: #e94560; box-shadow: 0 0 8px rgba(233,69,96,0.4); }
 
-/* Timeline */
+/* ── Body map ── */
+.body-map-container {
+    width: 180px; flex-shrink: 0;
+    display: flex; flex-direction: column; align-items: center;
+}
+.body-map-label {
+    font-size: 0.7em; text-transform: uppercase; letter-spacing: 1px;
+    color: #555; margin-bottom: 8px;
+}
+.body-map-svg {
+    width: 160px; height: 320px;
+}
+.body-map-svg .body-outline {
+    fill: none; stroke: #2a2a4e; stroke-width: 1.5;
+}
+.body-map-svg .body-centerline {
+    stroke: #1e1e3e; stroke-width: 0.8; stroke-dasharray: 4 4;
+}
+.body-map-svg .body-region {
+    fill: transparent; stroke: none;
+    transition: fill 0.6s ease, filter 0.6s ease;
+}
+.body-map-svg .body-region.highlighted {
+    fill: rgba(83, 52, 131, 0.35);
+    filter: url(#glow);
+    animation: regionPulse 2.5s ease-in-out infinite;
+}
+@keyframes regionPulse {
+    0%, 100% { fill: rgba(83, 52, 131, 0.25); }
+    50% { fill: rgba(83, 52, 131, 0.5); }
+}
+.body-map-svg .region-label {
+    font-size: 7px; fill: #555; text-anchor: middle;
+    pointer-events: none;
+}
+.body-map-svg .region-label.highlighted {
+    fill: #b080e0;
+}
+
+/* ── Timeline ── */
 .timeline {
     background: #16213e; border-radius: 8px; padding: 12px 16px;
     margin-top: 20px; border: 1px solid #0f3460;
@@ -96,7 +210,15 @@ h1 { font-size: 1.4em; margin-bottom: 2px; }
 }
 
 .idle-message {
-    color: #555; font-size: 1.1em; font-style: italic;
+    font-family: 'Lora', Georgia, serif;
+    color: #555; font-size: 1.2em; font-style: italic;
+}
+
+@media (max-width: 700px) {
+    .block-layout { flex-direction: column-reverse; align-items: center; }
+    .body-map-container { width: 140px; }
+    .body-map-svg { width: 120px; height: 240px; }
+    .block-prompt { font-size: 1.3em; }
 }
 </style>
 </head>
@@ -104,6 +226,22 @@ h1 { font-size: 1.4em; margin-bottom: 2px; }
 
 <h1>Sound Slipper</h1>
 <div class="subtitle">Lesson player with synthesized sound cues</div>
+
+<!-- Lesson selector -->
+<div class="lesson-selector" id="lesson-selector"></div>
+
+<!-- Breath pacer -->
+<div class="breath-section">
+    <div class="breath-circle-container">
+        <div class="breath-circle" id="breath-circle"></div>
+    </div>
+    <div class="breath-label" id="breath-label">--</div>
+    <div class="breath-controls">
+        <label>Breath Rate</label>
+        <input type="range" id="breath-rate" min="6" max="20" value="12" step="1">
+        <span class="breath-val" id="breath-val">12 bpm</span>
+    </div>
+</div>
 
 <div class="lesson-header">
     <div class="lesson-title" id="lesson-title">No lesson loaded</div>
@@ -116,8 +254,90 @@ h1 { font-size: 1.4em; margin-bottom: 2px; }
     <span class="transport-status" id="transport-status"></span>
 </div>
 
-<div class="block-area" id="block-area">
-    <div class="idle-message">Press Play to begin</div>
+<div class="block-layout">
+    <div class="block-area" id="block-area">
+        <div class="idle-message">Choose a lesson, then press Play</div>
+    </div>
+    <div class="body-map-container">
+        <div class="body-map-label">Body map</div>
+        <svg class="body-map-svg" viewBox="0 0 120 260" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur"/>
+                    <feMerge>
+                        <feMergeNode in="blur"/>
+                        <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                </filter>
+            </defs>
+
+            <!-- Centerline -->
+            <line class="body-centerline" x1="60" y1="30" x2="60" y2="230"/>
+
+            <!-- Head -->
+            <ellipse class="body-outline" cx="60" cy="22" rx="16" ry="18"/>
+
+            <!-- Neck -->
+            <rect class="body-outline" x="52" y="40" width="16" height="12" rx="3"/>
+
+            <!-- Shoulders -->
+            <line class="body-outline" x1="24" y1="55" x2="52" y2="52"/>
+            <line class="body-outline" x1="68" y1="52" x2="96" y2="55"/>
+
+            <!-- Ribcage outline -->
+            <path class="body-outline" d="M 30,58 C 28,80 30,110 38,125 L 60,132 L 82,125 C 90,110 92,80 90,58 Z"/>
+
+            <!-- Abdomen -->
+            <path class="body-outline" d="M 38,125 C 36,145 37,160 40,170 L 60,175 L 80,170 C 83,160 84,145 82,125"/>
+
+            <!-- Pelvis -->
+            <path class="body-outline" d="M 40,170 C 34,178 30,190 32,200 L 60,205 L 88,200 C 90,190 86,178 80,170"/>
+
+            <!-- Highlightable regions -->
+
+            <!-- throat region -->
+            <rect class="body-region" id="region-throat"
+                  x="48" y="38" width="24" height="16" rx="4"/>
+            <text class="region-label" id="label-throat" x="60" y="50">throat</text>
+
+            <!-- jaw region -->
+            <ellipse class="body-region" id="region-jaw"
+                     cx="60" cy="32" rx="14" ry="8"/>
+            <text class="region-label" id="label-jaw" x="60" y="35">jaw</text>
+
+            <!-- upper_chest region -->
+            <path class="body-region" id="region-upper_chest"
+                  d="M 34,58 C 32,68 32,82 34,92 L 60,95 L 86,92 C 88,82 88,68 86,58 Z"/>
+            <text class="region-label" id="label-upper_chest" x="60" y="78">chest</text>
+
+            <!-- lower_ribs region -->
+            <path class="body-region" id="region-lower_ribs"
+                  d="M 34,92 C 32,105 34,118 38,125 L 60,132 L 82,125 C 86,118 88,105 86,92 Z"/>
+            <text class="region-label" id="label-lower_ribs" x="60" y="114">ribs</text>
+
+            <!-- back_ribs region (shown as side accents) -->
+            <path class="body-region" id="region-back_ribs"
+                  d="M 28,65 C 24,80 24,105 30,120 L 36,118 C 30,105 30,80 32,65 Z"/>
+            <path class="body-region" id="region-back_ribs_r"
+                  d="M 92,65 C 96,80 96,105 90,120 L 84,118 C 90,105 90,80 88,65 Z"/>
+            <text class="region-label" id="label-back_ribs" x="60" y="70">back</text>
+
+            <!-- upper_abdomen region -->
+            <path class="body-region" id="region-upper_abdomen"
+                  d="M 38,125 C 37,135 37,145 38,152 L 60,155 L 82,152 C 83,145 83,135 82,125 Z"/>
+            <text class="region-label" id="label-upper_abdomen" x="60" y="142">u.abd</text>
+
+            <!-- lower_abdomen region -->
+            <path class="body-region" id="region-lower_abdomen"
+                  d="M 38,152 C 37,160 37,165 40,170 L 60,175 L 80,170 C 83,165 83,160 82,152 Z"/>
+            <text class="region-label" id="label-lower_abdomen" x="60" y="166">l.abd</text>
+
+            <!-- whole_trunk region (covers ribs through pelvis) -->
+            <path class="body-region" id="region-whole_trunk"
+                  d="M 30,58 C 28,80 28,140 34,178 C 30,190 32,200 32,200 L 60,205 L 88,200 C 88,200 90,190 86,178 C 92,140 92,80 90,58 Z"
+                  style="display:none"/>
+        </svg>
+    </div>
 </div>
 
 <div class="timeline">
@@ -134,10 +354,84 @@ let currentBlockIdx = -1;
 let currentRepeat = 0;
 let abortController = null;
 
+// Breath state
+let breathPhase = 'exhale'; // 'inhale' or 'exhale'
+let breathCycleStart = 0;
+let breathAnimFrame = null;
+
 function getCtx() {
     if (!audioCtx) audioCtx = new AudioContext();
     return audioCtx;
 }
+
+// ── Breath pacer ──
+
+function getBreathCycleMs() {
+    const bpm = parseInt(document.getElementById('breath-rate').value);
+    return 60000 / bpm;
+}
+
+function getInhaleDurationMs() {
+    return getBreathCycleMs() / 2;
+}
+
+function getExhaleDurationMs() {
+    return getBreathCycleMs() / 2;
+}
+
+function getCurrentBreathPhase() {
+    return breathPhase;
+}
+
+function startBreathPacer() {
+    breathCycleStart = performance.now();
+    updateBreath();
+}
+
+function updateBreath() {
+    const now = performance.now();
+    const cycleMs = getBreathCycleMs();
+    const inhaleMs = cycleMs / 2;
+    const elapsed = (now - breathCycleStart) % cycleMs;
+
+    const circle = document.getElementById('breath-circle');
+    const label = document.getElementById('breath-label');
+
+    if (elapsed < inhaleMs) {
+        breathPhase = 'inhale';
+        circle.classList.add('inhale');
+        // Scale circle size based on progress through inhale
+        const progress = elapsed / inhaleMs;
+        const size = 20 + 32 * progress;
+        circle.style.width = size + 'px';
+        circle.style.height = size + 'px';
+        label.textContent = 'Inhale';
+    } else {
+        breathPhase = 'exhale';
+        circle.classList.remove('inhale');
+        const progress = (elapsed - inhaleMs) / (cycleMs - inhaleMs);
+        const size = 52 - 32 * progress;
+        circle.style.width = size + 'px';
+        circle.style.height = size + 'px';
+        label.textContent = 'Exhale';
+    }
+
+    breathAnimFrame = requestAnimationFrame(updateBreath);
+}
+
+function stopBreathPacer() {
+    if (breathAnimFrame) cancelAnimationFrame(breathAnimFrame);
+    const circle = document.getElementById('breath-circle');
+    circle.classList.remove('inhale');
+    circle.style.width = '20px';
+    circle.style.height = '20px';
+    document.getElementById('breath-label').textContent = '--';
+}
+
+// Breath rate slider
+document.getElementById('breath-rate').addEventListener('input', function() {
+    document.getElementById('breath-val').textContent = this.value + ' bpm';
+});
 
 // ── Tissue properties (from sound lab) ──
 const TISSUE_ATTEN = {
@@ -215,11 +509,9 @@ function synthesize(spec, durationMs) {
             }
             phase += 2 * Math.PI * f / RATE;
             let val = Math.sin(phase);
-            // Add harmonics for bowed_tone
             if (wf === 'bowed_tone') {
                 val += 0.5 * Math.sin(2*phase) + 0.25 * Math.sin(3*phase) + 0.12 * Math.sin(4*phase);
             }
-            // Tremolo
             if (spec.tremolo_hz > 0) {
                 val *= 1 - spec.tremolo_depth * 0.5 * (1 + Math.sin(2 * Math.PI * spec.tremolo_hz * t));
             }
@@ -228,7 +520,6 @@ function synthesize(spec, durationMs) {
     } else if (wf === 'bandpassed_noise' || wf === 'filtered_noise' || wf === 'diffuse_noise') {
         const low = spec.bandwidth_hz ? spec.bandwidth_hz[0] : 200;
         const high = spec.bandwidth_hz ? spec.bandwidth_hz[1] : 2000;
-        // Simple bandpass via running average
         const centerHz = (low + high) / 2;
         const rc = 1 / (2 * Math.PI * centerHz);
         const dt = 1 / RATE;
@@ -237,7 +528,7 @@ function synthesize(spec, durationMs) {
         for (let i = 0; i < n; i++) {
             const noise = Math.random() * 2 - 1;
             prev = prev + alpha * (noise - prev);
-            audio[i] = prev * env[i] * 3; // boost filtered noise
+            audio[i] = prev * env[i] * 3;
         }
     } else if (wf === 'soft_click' || wf === 'low_tap') {
         let phase = 0;
@@ -248,7 +539,6 @@ function synthesize(spec, durationMs) {
             audio[i] = Math.sin(phase) * Math.exp(-t * 12) * env[i];
         }
     } else {
-        // Default: sine at resonant frequency
         let phase = 0;
         for (let i = 0; i < n; i++) {
             phase += 2 * Math.PI * resonantHz / RATE;
@@ -290,31 +580,93 @@ function synthesize(spec, durationMs) {
     return audio;
 }
 
+// ── Audio playback with crossfade support ──
+
+let activeGainNode = null;  // For crossfade between blocks
+
 function playAudio(audio) {
     const ctx = getCtx();
     const buffer = ctx.createBuffer(1, audio.length, RATE);
     buffer.getChannelData(0).set(audio);
     const source = ctx.createBufferSource();
     source.buffer = buffer;
-    source.connect(ctx.destination);
+
+    const gainNode = ctx.createGain();
+    gainNode.gain.setValueAtTime(1.0, ctx.currentTime);
+    source.connect(gainNode);
+    gainNode.connect(ctx.destination);
+
+    // Fade out the previous sound if still playing
+    if (activeGainNode) {
+        try {
+            activeGainNode.gain.setValueAtTime(activeGainNode.gain.value, ctx.currentTime);
+            activeGainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + 1.0);
+        } catch(e) {}
+    }
+
+    // Fade in this sound
+    gainNode.gain.setValueAtTime(0, ctx.currentTime);
+    gainNode.gain.linearRampToValueAtTime(1.0, ctx.currentTime + 1.0);
+
+    activeGainNode = gainNode;
     source.start();
     return source;
 }
 
+// ── Body map highlighting ──
+
+const REGION_IDS = [
+    'lower_ribs', 'upper_chest', 'throat', 'jaw',
+    'upper_abdomen', 'lower_abdomen', 'back_ribs', 'whole_trunk'
+];
+
+function clearBodyMap() {
+    REGION_IDS.forEach(id => {
+        const el = document.getElementById('region-' + id);
+        if (el) {
+            el.classList.remove('highlighted');
+            if (id === 'whole_trunk') el.style.display = 'none';
+        }
+        // Also clear the right-side back_ribs
+        const elR = document.getElementById('region-' + id + '_r');
+        if (elR) elR.classList.remove('highlighted');
+        const label = document.getElementById('label-' + id);
+        if (label) label.classList.remove('highlighted');
+    });
+}
+
+function highlightRegion(regionName) {
+    clearBodyMap();
+    if (!regionName) return;
+
+    const el = document.getElementById('region-' + regionName);
+    if (el) {
+        if (regionName === 'whole_trunk') el.style.display = '';
+        el.classList.add('highlighted');
+    }
+    // Handle back_ribs right side
+    const elR = document.getElementById('region-' + regionName + '_r');
+    if (elR) elR.classList.add('highlighted');
+
+    const label = document.getElementById('label-' + regionName);
+    if (label) label.classList.add('highlighted');
+}
+
 // ── UI ──
 
-function renderBlock(block, repeatIdx, totalRepeats) {
+function renderBlock(block, repeatIdx, totalRepeats, entering) {
     const area = document.getElementById('block-area');
     const regionLabel = (block.target_region || '').replace(/_/g, ' ');
+    const promptClass = entering ? 'block-prompt entering' : 'block-prompt';
 
     area.innerHTML = `
         <div class="block-region">${regionLabel}</div>
-        <div class="block-prompt" id="prompt-text">${block.prompt.phrase}</div>
+        <div class="${promptClass}" id="prompt-text">${block.prompt.phrase}</div>
         <div class="block-answers" id="answer-btns"></div>
         <div class="block-counter">${repeatIdx + 1} / ${totalRepeats}</div>
         <div class="block-meta">
             <span class="sound-indicator" id="sound-dot"></span>
-            ${block.sound ? block.sound.waveform + ' · ' + block.sound.spatialization : 'no sound'}
+            ${block.sound ? block.sound.waveform + ' &middot; ' + block.sound.spatialization : 'no sound'}
         </div>
     `;
 
@@ -326,10 +678,12 @@ function renderBlock(block, repeatIdx, totalRepeats) {
         btn.onclick = () => {
             btnContainer.querySelectorAll('.answer-btn').forEach(b => b.classList.remove('selected'));
             btn.classList.add('selected');
-            // Store answer (could send to server)
         };
         btnContainer.appendChild(btn);
     });
+
+    // Highlight body map region
+    highlightRegion(block.target_region);
 }
 
 function renderTimeline(blocks, currentIdx) {
@@ -348,6 +702,7 @@ function renderTimeline(blocks, currentIdx) {
 
 function showIdle(msg) {
     document.getElementById('block-area').innerHTML = `<div class="idle-message">${msg}</div>`;
+    clearBodyMap();
 }
 
 // ── Lesson runner ──
@@ -365,6 +720,8 @@ async function runLesson() {
     document.getElementById('stop-btn').disabled = false;
     abortController = new AbortController();
 
+    startBreathPacer();
+
     const blocks = lesson.blocks;
 
     for (let bi = 0; bi < blocks.length; bi++) {
@@ -380,9 +737,9 @@ async function runLesson() {
             if (!running) break;
             currentRepeat = r;
 
-            renderBlock(block, r, repeats);
+            renderBlock(block, r, repeats, true);
 
-            // Play sound
+            // Play sound with crossfade
             if (block.sound) {
                 const dot = document.getElementById('sound-dot');
                 if (dot) dot.classList.add('active');
@@ -391,22 +748,24 @@ async function runLesson() {
             }
 
             document.getElementById('transport-status').textContent =
-                `Block ${bi+1}/${blocks.length} · Rep ${r+1}/${repeats}`;
+                `Block ${bi+1}/${blocks.length} \u00b7 Rep ${r+1}/${repeats} \u00b7 ${breathPhase}`;
 
             // Wait for duration + silence
             const waitMs = (block.timing?.duration_ms || 2000) + (block.timing?.silence_after_ms || 1000);
             await sleep(waitMs);
 
-            // Fade prompt
+            // Fade prompt out
             const promptEl = document.getElementById('prompt-text');
             if (promptEl) promptEl.classList.add('fading');
-            await sleep(500);
+            await sleep(800);
         }
     }
 
     // Done
     running = false;
     currentBlockIdx = -1;
+    activeGainNode = null;
+    stopBreathPacer();
     renderTimeline(lesson.blocks, lesson.blocks.length);
     showIdle('Lesson complete');
     document.getElementById('play-btn').textContent = 'Play';
@@ -418,6 +777,7 @@ async function runLesson() {
 function togglePlay() {
     if (running) {
         running = false;
+        stopBreathPacer();
         document.getElementById('play-btn').textContent = 'Play';
         document.getElementById('play-btn').classList.remove('active');
         showIdle('Paused');
@@ -429,6 +789,8 @@ function togglePlay() {
 function stopLesson() {
     running = false;
     currentBlockIdx = -1;
+    activeGainNode = null;
+    stopBreathPacer();
     document.getElementById('play-btn').textContent = 'Play';
     document.getElementById('play-btn').classList.remove('active');
     document.getElementById('stop-btn').disabled = true;
@@ -439,12 +801,64 @@ function stopLesson() {
 
 // ── Load lesson ──
 
-function loadLesson(data) {
+function loadLesson(data, btnEl) {
+    // Stop any running lesson first
+    if (running) stopLesson();
+
     lesson = data;
     document.getElementById('lesson-title').textContent = data.title || 'Untitled';
     document.getElementById('lesson-desc').textContent = data.description || '';
     renderTimeline(data.blocks || [], -1);
     showIdle('Press Play to begin');
+
+    // Update selector button states
+    document.querySelectorAll('.lesson-selector-btn').forEach(b => b.classList.remove('active'));
+    if (btnEl) btnEl.classList.add('active');
+}
+
+// ── Lesson selector ──
+
+const LESSON_SOURCES = [
+    { label: 'Demo: Lower ribs', type: 'builtin', data: null },
+    { label: 'Torso Scan', type: 'fetch', url: 'lessons/torso_scan.json' },
+    { label: 'Breathing Awareness', type: 'fetch', url: 'lessons/breathing_awareness.json' },
+];
+
+function initLessonSelector() {
+    const container = document.getElementById('lesson-selector');
+
+    LESSON_SOURCES.forEach((src, idx) => {
+        const btn = document.createElement('button');
+        btn.className = 'lesson-selector-btn';
+        btn.textContent = src.label;
+        btn.dataset.idx = idx;
+
+        btn.onclick = async () => {
+            if (src.type === 'builtin') {
+                loadLesson(DEMO_LESSON, btn);
+                return;
+            }
+
+            // Fetch-based loading
+            btn.classList.add('loading');
+            btn.classList.remove('error');
+            try {
+                const resp = await fetch(src.url);
+                if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
+                const data = await resp.json();
+                loadLesson(data, btn);
+            } catch (err) {
+                console.warn(`Could not load ${src.url}:`, err.message);
+                btn.classList.add('error');
+                btn.title = `Failed to load: ${err.message}`;
+                setTimeout(() => btn.classList.remove('error'), 3000);
+            } finally {
+                btn.classList.remove('loading');
+            }
+        };
+
+        container.appendChild(btn);
+    });
 }
 
 // ── Demo lesson (matches sound_slipper.py build_demo_lesson) ──
@@ -500,7 +914,8 @@ const DEMO_LESSON = {
 };
 
 // Init
-loadLesson(DEMO_LESSON);
+initLessonSelector();
+loadLesson(DEMO_LESSON, document.querySelector('.lesson-selector-btn'));
 </script>
 </body>
 </html>
