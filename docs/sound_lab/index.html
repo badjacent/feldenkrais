@@ -1,0 +1,1174 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Wave Sound Lab</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+* { box-sizing: border-box; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    max-width: 1000px; margin: 0 auto; padding: 20px;
+    background: #1a1a2e; color: #e0e0e0;
+}
+h1 { color: #e0e0e0; font-size: 1.5em; margin-bottom: 4px; }
+.subtitle { color: #888; font-size: 0.9em; margin-bottom: 24px; }
+
+.panel {
+    background: #16213e; border-radius: 12px; padding: 20px;
+    margin-bottom: 16px; border: 1px solid #0f3460;
+}
+.section-label {
+    font-size: 0.75em; text-transform: uppercase; letter-spacing: 1px;
+    color: #533483; margin: 16px 0 8px 0; font-weight: 700;
+}
+.section-label:first-child { margin-top: 0; }
+
+/* Path presets */
+.preset-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.preset-btn {
+    background: #0f3460; border: 1px solid #533483; border-radius: 6px;
+    padding: 6px 14px; cursor: pointer; font-size: 0.8em; color: #aaa;
+    transition: all 0.15s;
+}
+.preset-btn:hover { border-color: #e94560; color: #e0e0e0; }
+.preset-btn.active { background: #533483; color: #e0e0e0; border-color: #e94560; }
+
+/* Path editor */
+.path-table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
+.path-table th {
+    text-align: left; padding: 6px 8px; color: #888;
+    border-bottom: 1px solid #0f3460; font-weight: 600;
+}
+.path-table td { padding: 4px 8px; }
+.path-table tr:hover { background: #1a1a4e; }
+.path-table input, .path-table select {
+    background: #0f3460; color: #e0e0e0; border: 1px solid #333;
+    padding: 4px 8px; border-radius: 4px; font-size: 0.9em; width: 100%;
+}
+.path-table input[type="number"] { width: 70px; }
+.path-table .remove-btn {
+    background: none; border: none; color: #e94560; cursor: pointer;
+    font-size: 1.1em; padding: 2px 6px;
+}
+.path-table .remove-btn:hover { color: #ff6b8a; }
+.add-seg-btn {
+    background: #0f3460; border: 1px solid #533483; border-radius: 6px;
+    padding: 4px 12px; cursor: pointer; font-size: 0.8em; color: #aaa;
+    margin-top: 8px;
+}
+.add-seg-btn:hover { border-color: #e94560; color: #e0e0e0; }
+.path-total { font-size: 0.8em; color: #888; margin-top: 6px; }
+
+/* Path visualization */
+.path-vis {
+    height: 40px; border-radius: 6px; overflow: hidden;
+    display: flex; margin: 12px 0; position: relative;
+}
+.path-seg {
+    height: 100%; display: flex; align-items: center; justify-content: center;
+    font-size: 0.7em; font-weight: 600; color: rgba(255,255,255,0.8);
+    border-right: 1px solid #1a1a2e; transition: all 0.2s;
+    overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+    padding: 0 4px;
+}
+.path-playhead {
+    position: absolute; top: 0; bottom: 0; width: 2px;
+    background: #e94560; box-shadow: 0 0 8px rgba(233,69,96,0.6);
+    transition: left 0.05s linear; display: none;
+}
+
+/* Sound controls */
+.control-row {
+    display: flex; align-items: center; gap: 16px;
+    margin-bottom: 10px; flex-wrap: wrap;
+}
+label.ctrl {
+    font-size: 0.85em; color: #aaa; min-width: 120px;
+    font-weight: 600; letter-spacing: 0.3px;
+}
+input[type="range"] { flex: 1; min-width: 180px; accent-color: #e94560; height: 6px; }
+.value {
+    font-size: 0.85em; color: #e94560; min-width: 60px;
+    text-align: right; font-variant-numeric: tabular-nums;
+}
+
+/* Sound grid */
+.sound-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;
+}
+@media (max-width: 700px) { .sound-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 450px) { .sound-grid { grid-template-columns: 1fr; } }
+.sound-btn {
+    background: #0f3460; border: 1px solid #533483; border-radius: 8px;
+    padding: 12px 14px; cursor: pointer; transition: all 0.15s;
+    text-align: left;
+}
+.sound-btn:hover { background: #1a1a4e; border-color: #e94560; }
+.sound-btn.playing { background: #2a1a3e; border-color: #e94560; box-shadow: 0 0 12px rgba(233,69,96,0.3); }
+.sound-name { font-weight: 600; font-size: 0.9em; color: #e0e0e0; }
+.sound-desc { font-size: 0.75em; color: #888; margin-top: 2px; }
+.sound-status { font-size: 0.7em; color: #e94560; margin-top: 3px; min-height: 1em; }
+</style>
+</head>
+<body>
+
+<h1>Wave Sound Lab</h1>
+<div class="subtitle">Tissue-attenuated wave-of-movement sounds &mdash; path mode</div>
+
+<!-- Path panel -->
+<div class="panel">
+    <div class="section-label">Linear Paths</div>
+    <div class="preset-row" id="path-presets"></div>
+    <div class="section-label">2D Trajectories</div>
+    <div class="preset-row" id="traj-presets"></div>
+    <div class="path-vis" id="path-vis"><div class="path-playhead" id="playhead"></div></div>
+    <table class="path-table" id="path-table">
+        <thead><tr>
+            <th>Tissue</th><th>Length (cm)</th><th>Atten (dB/cm/MHz)</th><th></th>
+        </tr></thead>
+        <tbody id="path-body"></tbody>
+    </table>
+    <button class="add-seg-btn" onclick="addSegment()">+ Add Segment</button>
+    <div class="path-total" id="path-total"></div>
+</div>
+
+<!-- Sound controls -->
+<div class="panel">
+    <div class="section-label">Sound Parameters</div>
+    <div class="control-row">
+        <label class="ctrl">Exaggeration</label>
+        <input type="range" id="exaggeration" min="1" max="5000" value="1000" step="50">
+        <span class="value" id="exaggeration-val">1000×</span>
+    </div>
+    <div class="control-row">
+        <label class="ctrl">Pitch</label>
+        <input type="range" id="pitch" min="-24" max="24" value="0" step="1">
+        <span class="value" id="pitch-val">0 st</span>
+    </div>
+    <div class="control-row">
+        <label class="ctrl">Duration</label>
+        <input type="range" id="duration" min="1.0" max="120.0" value="3.0" step="1.0">
+        <span class="value" id="duration-val">3.0 s</span>
+    </div>
+    <div class="control-row">
+        <label class="ctrl">Reverb</label>
+        <input type="range" id="reverb" min="0" max="0.8" value="0.2" step="0.05">
+        <span class="value" id="reverb-val">0.20</span>
+    </div>
+</div>
+
+<!-- Sound buttons -->
+<div class="sound-grid" id="sounds"></div>
+<div style="margin-top:16px;text-align:center;">
+    <button class="preset-btn" onclick="copyShareLink()" id="share-btn" style="padding:8px 20px;">
+        Copy link to these settings
+    </button>
+</div>
+
+<script>
+function copyShareLink() {
+    const url = window.location.origin + getShareURL();
+    navigator.clipboard.writeText(url).then(() => {
+        document.getElementById('share-btn').textContent = 'Copied!';
+        setTimeout(() => { document.getElementById('share-btn').textContent = 'Copy link to these settings'; }, 2000);
+    }).catch(() => {
+        // Fallback for file:// protocol
+        const full = window.location.href.split('?')[0] + '?' + getStateAsParams();
+        prompt('Copy this URL:', full);
+    });
+}
+</script>
+
+<script>
+const RATE = 44100;
+let audioCtx = null;
+
+function getCtx() {
+    if (!audioCtx) audioCtx = new AudioContext();
+    return audioCtx;
+}
+
+// ── Tissue types with physical properties ──
+const TISSUE = {
+    fat:       { label: 'Fat',       atten: 0.6, color: '#f0c040' },
+    muscle:    { label: 'Muscle',    atten: 0.8, color: '#c0392b' },
+    bone:      { label: 'Bone',      atten: 12,  color: '#ecf0f1' },
+    cartilage: { label: 'Cartilage', atten: 1.5, color: '#3498db' },
+    tendon:    { label: 'Tendon',    atten: 1.2, color: '#95a5a6' },
+    fluid:     { label: 'Fluid',     atten: 0.05,color: '#2ecc71' },
+    organ:     { label: 'Organ',     atten: 0.5, color: '#8e44ad' },
+    skin:      { label: 'Skin',      atten: 1.0, color: '#d4a574' },
+    nerve:     { label: 'Nerve',     atten: 0.7, color: '#e67e22' },
+};
+
+// ── Path presets ──
+const PATH_PRESETS = {
+    'Heel → Hip': [
+        { tissue: 'fat', cm: 2 },
+        { tissue: 'bone', cm: 4 },
+        { tissue: 'cartilage', cm: 3 },
+        { tissue: 'muscle', cm: 35 },
+        { tissue: 'cartilage', cm: 4 },
+        { tissue: 'muscle', cm: 35 },
+        { tissue: 'bone', cm: 4 },
+    ],
+    'Sole → Crown': [
+        { tissue: 'fat', cm: 2 },
+        { tissue: 'bone', cm: 4 },
+        { tissue: 'muscle', cm: 35 },
+        { tissue: 'cartilage', cm: 4 },
+        { tissue: 'muscle', cm: 35 },
+        { tissue: 'cartilage', cm: 3 },
+        { tissue: 'bone', cm: 3 },
+        { tissue: 'muscle', cm: 30 },
+        { tissue: 'bone', cm: 5 },
+        { tissue: 'organ', cm: 15 },
+        { tissue: 'bone', cm: 1 },
+    ],
+    'Hand → Shoulder': [
+        { tissue: 'skin', cm: 1 },
+        { tissue: 'bone', cm: 3 },
+        { tissue: 'tendon', cm: 5 },
+        { tissue: 'muscle', cm: 25 },
+        { tissue: 'cartilage', cm: 3 },
+        { tissue: 'muscle', cm: 25 },
+    ],
+    'Sternum → Spine': [
+        { tissue: 'bone', cm: 2 },
+        { tissue: 'cartilage', cm: 1 },
+        { tissue: 'organ', cm: 12 },
+        { tissue: 'fluid', cm: 2 },
+        { tissue: 'bone', cm: 3 },
+    ],
+    'Ribs → Pelvis': [
+        { tissue: 'bone', cm: 1 },
+        { tissue: 'muscle', cm: 8 },
+        { tissue: 'organ', cm: 15 },
+        { tissue: 'muscle', cm: 10 },
+        { tissue: 'bone', cm: 3 },
+    ],
+    'Temple → Temple': [
+        { tissue: 'bone', cm: 1 },
+        { tissue: 'organ', cm: 14 },
+        { tissue: 'bone', cm: 1 },
+    ],
+    'Muscle only': [
+        { tissue: 'muscle', cm: 80 },
+    ],
+    'No effect': [
+        { tissue: 'fluid', cm: 5 },
+    ],
+};
+
+let currentPath = [...PATH_PRESETS['Heel → Hip']];
+
+// ── Path UI ──
+
+function renderPath() {
+    const tbody = document.getElementById('path-body');
+    tbody.innerHTML = '';
+    currentPath.forEach((seg, i) => {
+        const tr = document.createElement('tr');
+        const tissueOpts = Object.entries(TISSUE).map(([k, v]) =>
+            `<option value="${k}" ${k === seg.tissue ? 'selected' : ''}>${v.label}</option>`
+        ).join('');
+        tr.innerHTML = `
+            <td><select onchange="updateSeg(${i},'tissue',this.value)">${tissueOpts}</select></td>
+            <td><input type="number" value="${seg.cm}" min="1" max="100" onchange="updateSeg(${i},'cm',+this.value)"></td>
+            <td style="color:#888;font-size:0.85em">${TISSUE[seg.tissue].atten}</td>
+            <td><button class="remove-btn" onclick="removeSeg(${i})">×</button></td>
+        `;
+        tbody.appendChild(tr);
+    });
+    renderPathVis();
+    updatePathTotal();
+}
+
+function renderPathVis() {
+    const vis = document.getElementById('path-vis');
+    // Keep playhead
+    const playhead = document.getElementById('playhead');
+    vis.innerHTML = '';
+    vis.appendChild(playhead);
+
+    const totalCm = currentPath.reduce((s, seg) => s + seg.cm, 0);
+    currentPath.forEach(seg => {
+        const div = document.createElement('div');
+        div.className = 'path-seg';
+        div.style.width = (seg.cm / totalCm * 100) + '%';
+        div.style.background = TISSUE[seg.tissue].color;
+        div.textContent = TISSUE[seg.tissue].label;
+        vis.appendChild(div);
+    });
+}
+
+function updatePathTotal() {
+    const total = currentPath.reduce((s, seg) => s + seg.cm, 0);
+    document.getElementById('path-total').textContent = `Total path: ${total} cm`;
+}
+
+function updateSeg(i, field, val) {
+    currentPath[i][field] = val;
+    renderPath();
+}
+
+function removeSeg(i) {
+    if (currentPath.length <= 1) return;
+    currentPath.splice(i, 1);
+    renderPath();
+}
+
+function addSegment() {
+    currentPath.push({ tissue: 'muscle', cm: 10 });
+    renderPath();
+}
+
+function applyPathPreset(name) {
+    currentPath = PATH_PRESETS[name].map(s => ({...s}));
+    currentPathPresetName = name;
+    renderPath();
+    document.querySelectorAll('#path-presets .preset-btn').forEach(b =>
+        b.classList.toggle('active', b.textContent === name)
+    );
+}
+
+function initPathPresets() {
+    const row = document.getElementById('path-presets');
+    Object.keys(PATH_PRESETS).forEach(name => {
+        const btn = document.createElement('button');
+        btn.className = 'preset-btn' + (name === 'Heel → Hip' ? ' active' : '');
+        btn.textContent = name;
+        btn.onclick = () => { currentTrajectory = null; applyPathPreset(name); clearTrajActive(); };
+        row.appendChild(btn);
+    });
+
+    const trajRow = document.getElementById('traj-presets');
+    Object.keys(TRAJECTORIES).forEach(name => {
+        const btn = document.createElement('button');
+        btn.className = 'preset-btn';
+        btn.textContent = name;
+        btn.onclick = () => applyTrajectory(name, btn);
+        trajRow.appendChild(btn);
+    });
+}
+
+function clearTrajActive() {
+    document.querySelectorAll('#traj-presets .preset-btn').forEach(b => b.classList.remove('active'));
+}
+
+function applyTrajectory(name, btn) {
+    currentTrajectory = name;
+    // Deactivate path presets
+    document.querySelectorAll('#path-presets .preset-btn').forEach(b => b.classList.remove('active'));
+    clearTrajActive();
+    btn.classList.add('active');
+
+    // Build a path from the trajectory for the path table/vis
+    const wps = TRAJECTORIES[name].waypoints;
+    currentPath = [];
+    for (let i = 0; i < wps.length - 1; i++) {
+        const dx = wps[i+1].x - wps[i].x;
+        const dy = wps[i+1].y - wps[i].y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        currentPath.push({ tissue: wps[i].tissue, cm: Math.max(1, Math.round(dist)) });
+    }
+    renderPath();
+}
+
+// ── Path-based tissue attenuation ──
+
+// Body position mapping (cm from feet, supine, 71 inches / 180cm tall)
+const BODY_POS = {
+    'sole':     0,
+    'heel':     0,
+    'ankle':    8,
+    'knee':     48,
+    'hip':      88,
+    'pelvis':   92,
+    'navel':    105,
+    'sternum':  128,
+    'ribs':     120,
+    'shoulder': 145,
+    'hand':     90,   // hanging at side
+    'neck':     158,
+    'temple':   170,
+    'crown':    180,
+    'spine':    92,   // starts at sacrum
+};
+
+// Map path presets to starting body position
+const PATH_START_POS = {
+    'Heel → Hip':       BODY_POS.heel,
+    'Sole → Crown':     BODY_POS.sole,
+    'Hand → Shoulder':  BODY_POS.hand,
+    'Sternum → Spine':  BODY_POS.sternum,
+    'Ribs → Pelvis':    BODY_POS.ribs,
+    'Temple → Temple':  BODY_POS.temple,
+    'Muscle only':      BODY_POS.heel,
+    'No effect':        BODY_POS.navel,
+};
+
+let currentPathPresetName = 'Heel → Hip';
+
+function getPathStartCm() {
+    return PATH_START_POS[currentPathPresetName] || 0;
+}
+
+// ── Angle-based trajectory interpolation ──
+// Maps progress (0→1) to (x, y) position along a trajectory
+// using constant angular speed from the shape's centroid.
+
+function trajectoryPositionAt(wps, progress) {
+    if (!wps || wps.length < 2) return { x: 0, y: 100 };
+
+    // Compute centroid
+    let cx = 0, cy = 0;
+    for (const w of wps) { cx += w.x; cy += w.y; }
+    cx /= wps.length; cy /= wps.length;
+
+    // Compute angle from centroid for each waypoint
+    const angles = wps.map(w => Math.atan2(w.y - cy, w.x - cx));
+
+    // Unwrap angles to be monotonically increasing
+    const unwrapped = [angles[0]];
+    for (let i = 1; i < angles.length; i++) {
+        let a = angles[i];
+        while (a < unwrapped[i-1] - Math.PI) a += 2 * Math.PI;
+        while (a > unwrapped[i-1] + Math.PI) a -= 2 * Math.PI;
+        // Force forward: if angle didn't advance, nudge it
+        if (a <= unwrapped[i-1]) a = unwrapped[i-1] + 0.001;
+        unwrapped.push(a);
+    }
+
+    // Total angular span
+    const totalAngle = unwrapped[unwrapped.length - 1] - unwrapped[0];
+    if (Math.abs(totalAngle) < 0.01) {
+        // Degenerate (straight line) — fall back to distance-based
+        return trajectoryPositionByDistance(wps, progress);
+    }
+
+    // Target angle for this progress
+    const targetAngle = unwrapped[0] + progress * totalAngle;
+
+    // Find surrounding waypoints
+    let wpIdx = 0;
+    for (let w = 0; w < unwrapped.length - 1; w++) {
+        if (targetAngle <= unwrapped[w + 1]) { wpIdx = w; break; }
+        wpIdx = w;
+    }
+    const nextIdx = Math.min(wpIdx + 1, wps.length - 1);
+    const segAngle = unwrapped[nextIdx] - unwrapped[wpIdx];
+    const t = segAngle > 0.0001 ? (targetAngle - unwrapped[wpIdx]) / segAngle : 0;
+    const tc = Math.max(0, Math.min(1, t));
+
+    return {
+        x: wps[wpIdx].x + (wps[nextIdx].x - wps[wpIdx].x) * tc,
+        y: wps[wpIdx].y + (wps[nextIdx].y - wps[wpIdx].y) * tc,
+        tissue: wps[wpIdx].tissue,
+    };
+}
+
+function trajectoryPositionByDistance(wps, progress) {
+    const segDists = [];
+    let totalDist = 0;
+    for (let w = 0; w < wps.length - 1; w++) {
+        const dx = wps[w+1].x - wps[w].x;
+        const dy = wps[w+1].y - wps[w].y;
+        segDists.push(Math.sqrt(dx*dx + dy*dy));
+        totalDist += segDists[segDists.length - 1];
+    }
+    if (totalDist === 0) return { x: wps[0].x, y: wps[0].y, tissue: wps[0].tissue };
+
+    const targetDist = progress * totalDist;
+    let cumDist = 0, wpIdx = 0;
+    for (let w = 0; w < segDists.length; w++) {
+        if (cumDist + segDists[w] >= targetDist) { wpIdx = w; break; }
+        cumDist += segDists[w]; wpIdx = w;
+    }
+    const nextIdx = Math.min(wpIdx + 1, wps.length - 1);
+    const segLen = segDists[wpIdx] || 1;
+    const t = Math.min((targetDist - cumDist) / segLen, 1);
+    return {
+        x: wps[wpIdx].x + (wps[nextIdx].x - wps[wpIdx].x) * t,
+        y: wps[wpIdx].y + (wps[nextIdx].y - wps[wpIdx].y) * t,
+        tissue: wps[wpIdx].tissue,
+    };
+}
+
+// ── 2D Trajectory system ──
+// Each waypoint: { y: cm from feet, x: cm from midline (+ = right), tissue, label }
+
+const TRAJECTORIES = {
+    'Navel → T6 Rectangle': {
+        // Beveled rectangle: navel (105cm) to ~T6 (130cm)
+        // Width at bottom: 2/3 rib width at navel ≈ 19cm (±9.5cm)
+        // Extra waypoints along bottom for dwell
+        waypoints: [
+            // Bottom edge — dwell with many close waypoints
+            { y: 104, x: -9.5, tissue: 'muscle', label: 'L navel' },
+            { y: 103, x: -7.0, tissue: 'organ',  label: '' },
+            { y: 102, x: -4.0, tissue: 'organ',  label: '' },
+            { y: 101, x: -1.0, tissue: 'organ',  label: 'deep navel' },
+            { y: 102, x:  2.0, tissue: 'organ',  label: '' },
+            { y: 103, x:  5.0, tissue: 'organ',  label: '' },
+            { y: 104, x:  7.0, tissue: 'muscle', label: 'navel' },
+            { y: 104, x:  9.5, tissue: 'muscle', label: '' },
+            // Right side, ascending
+            { y: 107, x:  9.5, tissue: 'muscle', label: '' },
+            { y: 112, x:  9.5, tissue: 'muscle', label: 'R oblique' },
+            { y: 120, x:  9.0, tissue: 'muscle', label: 'R ribs' },
+            { y: 127, x:  8.5, tissue: 'cartilage', label: '' },
+            { y: 129, x:  8.0, tissue: 'bone', label: '' },
+            // Top edge, right to left (~T6 level)
+            { y: 130, x:  7.0, tissue: 'bone', label: 'R T6' },
+            { y: 130, x:  0.0, tissue: 'bone', label: 'T6 spine' },
+            { y: 130, x: -7.0, tissue: 'bone', label: 'L T6' },
+            // Left side, descending
+            { y: 129, x: -8.0, tissue: 'bone', label: '' },
+            { y: 127, x: -8.5, tissue: 'cartilage', label: '' },
+            { y: 120, x: -9.0, tissue: 'muscle', label: 'L ribs' },
+            { y: 112, x: -9.5, tissue: 'muscle', label: 'L oblique' },
+            { y: 107, x: -9.5, tissue: 'muscle', label: '' },
+            { y: 104, x: -9.5, tissue: 'muscle', label: 'L navel' },
+        ],
+    },
+    'Spine Crawl (S1→C7)': {
+        waypoints: [
+            { y: 92,  x: 0, tissue: 'bone', label: 'Sacrum' },
+            { y: 100, x: 0, tissue: 'bone', label: 'L5' },
+            { y: 108, x: 0, tissue: 'bone', label: 'L3' },
+            { y: 115, x: 0, tissue: 'bone', label: 'L1' },
+            { y: 120, x: 0, tissue: 'bone', label: 'T12' },
+            { y: 130, x: 0, tissue: 'bone', label: 'T8' },
+            { y: 140, x: 0, tissue: 'bone', label: 'T3' },
+            { y: 148, x: 0, tissue: 'bone', label: 'T1' },
+            { y: 155, x: 0, tissue: 'bone', label: 'C7' },
+        ],
+    },
+    'Ribcage Sweep': {
+        waypoints: [
+            { y: 120, x: -16, tissue: 'bone', label: 'L floating rib' },
+            { y: 122, x: -14, tissue: 'bone', label: '' },
+            { y: 128, x: -10, tissue: 'cartilage', label: 'L costal' },
+            { y: 133, x: -5,  tissue: 'cartilage', label: '' },
+            { y: 135, x:  0,  tissue: 'bone', label: 'sternum' },
+            { y: 133, x:  5,  tissue: 'cartilage', label: '' },
+            { y: 128, x:  10, tissue: 'cartilage', label: 'R costal' },
+            { y: 122, x:  14, tissue: 'bone', label: '' },
+            { y: 120, x:  16, tissue: 'bone', label: 'R floating rib' },
+        ],
+    },
+    'Pelvis Circle': {
+        waypoints: [
+            { y: 92, x: 0,   tissue: 'bone', label: 'pubis' },
+            { y: 90, x: 8,   tissue: 'bone', label: 'R ASIS' },
+            { y: 88, x: 14,  tissue: 'bone', label: 'R iliac crest' },
+            { y: 90, x: 10,  tissue: 'muscle', label: 'R hip' },
+            { y: 92, x: 6,   tissue: 'bone', label: 'R sacrum' },
+            { y: 93, x: 0,   tissue: 'bone', label: 'sacrum' },
+            { y: 92, x: -6,  tissue: 'bone', label: 'L sacrum' },
+            { y: 90, x: -10, tissue: 'muscle', label: 'L hip' },
+            { y: 88, x: -14, tissue: 'bone', label: 'L iliac crest' },
+            { y: 90, x: -8,  tissue: 'bone', label: 'L ASIS' },
+            { y: 92, x: 0,   tissue: 'bone', label: 'pubis' },
+        ],
+    },
+};
+
+let currentTrajectory = null; // null = use path mode, string = trajectory name
+
+function getTrajectoryWaypoints() {
+    if (!currentTrajectory) return null;
+    return TRAJECTORIES[currentTrajectory]?.waypoints || null;
+}
+
+function pathAttenuation(audio) {
+    const n = audio.length;
+    const out = new Float32Array(n);
+    const totalCm = currentPath.reduce((s, seg) => s + seg.cm, 0);
+    const exag = parseFloat(document.getElementById('exaggeration').value);
+
+    // Build segment boundaries in sample space
+    const boundaries = [];
+    let cumCm = 0;
+    for (const seg of currentPath) {
+        const startFrac = cumCm / totalCm;
+        cumCm += seg.cm;
+        const endFrac = cumCm / totalCm;
+        boundaries.push({
+            startSample: Math.floor(startFrac * n),
+            endSample: Math.floor(endFrac * n),
+            tissue: seg.tissue,
+            cm: seg.cm,
+            atten: TISSUE[seg.tissue].atten,
+            cumStartCm: cumCm - seg.cm,
+        });
+    }
+
+    // Cumulative tissue filtering: the sound at any point has traveled
+    // through ALL tissues between the origin and that point.
+    // We compute the cumulative attenuation at each sample by summing
+    // the (atten * distance) product of all tissues traversed so far.
+    const dt = 1 / RATE;
+    let prev = 0;
+
+    for (let i = 0; i < n; i++) {
+        // Find which segment this sample is in
+        let currentSegIdx = 0;
+        for (let b = 0; b < boundaries.length; b++) {
+            if (i >= boundaries[b].startSample && i < boundaries[b].endSample) {
+                currentSegIdx = b;
+                break;
+            }
+        }
+
+        // Cumulative attenuation: sum of (atten * cm) for all completed segments
+        // plus partial contribution of current segment
+        let cumAttenProduct = 0;
+        for (let b = 0; b < currentSegIdx; b++) {
+            cumAttenProduct += boundaries[b].atten * boundaries[b].cm;
+        }
+        // Add partial current segment
+        const seg = boundaries[currentSegIdx];
+        const segSamples = seg.endSample - seg.startSample;
+        const localProgress = segSamples > 0 ? (i - seg.startSample) / segSamples : 0;
+        cumAttenProduct += seg.atten * seg.cm * localProgress;
+
+        // Apply exaggeration
+        cumAttenProduct *= exag;
+
+        // Convert to cutoff frequency
+        // Higher cumAttenProduct = more filtering = lower cutoff
+        const cutoffHz = cumAttenProduct > 0.01
+            ? Math.max(80, Math.min(20000, (20 / cumAttenProduct) * 1e6))
+            : 20000;
+
+        const rc = 1 / (2 * Math.PI * cutoffHz);
+        const alpha = dt / (rc + dt);
+
+        prev = prev + alpha * (audio[i] - prev);
+        out[i] = prev;
+    }
+    return out;
+}
+
+// ── Base sound generators ──
+
+function envelope(n, attackFrac, releaseFrac) {
+    const env = new Float32Array(n);
+    const aN = Math.floor(attackFrac * n);
+    const rN = Math.floor(releaseFrac * n);
+    for (let i = 0; i < n; i++) {
+        let v = 1;
+        if (i < aN) v = (i / aN) ** 2;
+        else if (i > n - rN) v = ((n - i) / rN) ** 2;
+        env[i] = v;
+    }
+    return env;
+}
+
+function genDrumHit(dur) {
+    const n = Math.floor(dur * RATE);
+    const audio = new Float32Array(n);
+    let phase = 0;
+    for (let i = 0; i < n; i++) {
+        const t = i / RATE;
+        const freq = 60 + 140 * Math.exp(-t * 15);
+        phase += 2 * Math.PI * freq / RATE;
+        audio[i] = Math.sin(phase) * Math.exp(-t * 8) + (Math.random()*2-1) * Math.exp(-t*30) * 0.3;
+    }
+    return audio;
+}
+
+function genBreath(dur) {
+    const n = Math.floor(dur * RATE);
+    const audio = new Float32Array(n);
+    for (let i = 0; i < n; i++) audio[i] = (Math.random() * 2 - 1);
+    const env = envelope(n, 0.3, 0.5);
+    for (let i = 0; i < n; i++) audio[i] *= env[i] * 0.3;
+    return audio;
+}
+
+function genSlide(dur) {
+    const n = Math.floor(dur * RATE);
+    const audio = new Float32Array(n);
+    for (let i = 0; i < n; i++) audio[i] = (Math.random() * 2 - 1) * 0.5;
+    const env = envelope(n, 0.2, 0.4);
+    for (let i = 0; i < n; i++) audio[i] *= env[i];
+    return audio;
+}
+
+function genCello(dur, freq) {
+    const n = Math.floor(dur * RATE);
+    const audio = new Float32Array(n);
+    let phase = 0;
+    const env = envelope(n, 0.15, 0.4);
+    for (let i = 0; i < n; i++) {
+        const t = i / RATE;
+        const f = freq * (1 + 0.005 * Math.sin(2 * Math.PI * 5.5 * t));
+        phase += 2 * Math.PI * f / RATE;
+        audio[i] = (Math.sin(phase) + 0.5*Math.sin(2*phase) +
+                    0.25*Math.sin(3*phase) + 0.12*Math.sin(4*phase)) * env[i];
+    }
+    return audio;
+}
+
+function genCombined(dur) {
+    const drum = timeStretch(genDrumHit(0.3), dur);
+    const breath = genBreath(dur);
+    const cello = genCello(dur, 82);
+    const n = Math.min(drum.length, breath.length, cello.length);
+    const out = new Float32Array(n);
+    for (let i = 0; i < n; i++) out[i] = drum[i]*0.5 + breath[i]*0.3 + cello[i]*0.3;
+    return out;
+}
+
+function genGranular(dur) {
+    const hit = genDrumHit(0.3);
+    const stretched = timeStretch(hit, dur);
+    const n = stretched.length;
+    const out = new Float32Array(n);
+    const grainN = Math.floor(0.025 * RATE);
+    const scatterN = Math.floor(0.06 * RATE);
+    const grainEnv = new Float32Array(grainN);
+    for (let i = 0; i < grainN; i++) grainEnv[i] = 0.5 - 0.5 * Math.cos(2*Math.PI*i/grainN);
+    for (let g = 0; g < 250; g++) {
+        const srcPos = Math.floor(Math.random() * Math.max(1, n - grainN));
+        let outPos = srcPos + Math.floor((Math.random()*2-1) * scatterN);
+        outPos = Math.max(0, Math.min(outPos, n - grainN));
+        for (let i = 0; i < grainN && outPos+i < n; i++)
+            out[outPos+i] += stretched[srcPos+i] * grainEnv[i];
+    }
+    return out;
+}
+
+// ── Transforms ──
+
+function timeStretch(audio, targetDur) {
+    const nOut = Math.floor(targetDur * RATE);
+    const out = new Float32Array(nOut);
+    for (let i = 0; i < nOut; i++) {
+        const srcIdx = (i / nOut) * (audio.length - 1);
+        const lo = Math.floor(srcIdx);
+        const frac = srcIdx - lo;
+        out[i] = audio[lo] * (1-frac) + audio[Math.min(lo+1, audio.length-1)] * frac;
+    }
+    return out;
+}
+
+function pitchShift(audio, semitones) {
+    if (semitones === 0) return audio;
+    const factor = 2 ** (semitones / 12);
+    const n = audio.length;
+    const out = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+        const srcIdx = (i * factor) % (n - 1);
+        const lo = Math.floor(srcIdx);
+        const frac = srcIdx - lo;
+        out[i] = audio[lo] * (1-frac) + audio[Math.min(lo+1, n-1)] * frac;
+    }
+    return out;
+}
+
+function addReverb(audio, decay, delayMs, nEchoes) {
+    const out = new Float32Array(audio.length);
+    for (let i = 0; i < audio.length; i++) out[i] = audio[i];
+    const ds = Math.floor(delayMs * RATE / 1000);
+    for (let e = 1; e <= nEchoes; e++) {
+        const g = decay ** e;
+        for (let i = e*ds; i < audio.length; i++) out[i] += audio[i - e*ds] * g;
+    }
+    return out;
+}
+
+function normalize(audio) {
+    let peak = 0;
+    for (let i = 0; i < audio.length; i++) peak = Math.max(peak, Math.abs(audio[i]));
+    if (peak > 0) for (let i = 0; i < audio.length; i++) audio[i] *= 0.9 / peak;
+    return audio;
+}
+
+// ── Sound definitions ──
+
+function genSustainedCello(dur, freq) {
+    const n = Math.floor(dur * RATE);
+    const audio = new Float32Array(n);
+    let phase = 0;
+    const env = envelope(n, 0.05, 0.05);
+    for (let i = 0; i < n; i++) {
+        const t = i / RATE;
+        const f = freq * (1 + 0.004 * Math.sin(2 * Math.PI * 5 * t));
+        phase += 2 * Math.PI * f / RATE;
+        audio[i] = (Math.sin(phase) + 0.5*Math.sin(2*phase) +
+                    0.25*Math.sin(3*phase) + 0.12*Math.sin(4*phase) +
+                    0.06*Math.sin(5*phase)) * env[i];
+    }
+    // Crossfade for seamless looping
+    const xfadeN = Math.min(Math.floor(0.05 * RATE), Math.floor(n / 4));
+    for (let i = 0; i < xfadeN; i++) {
+        const t = i / xfadeN;
+        audio[n - xfadeN + i] = audio[n - xfadeN + i] * (1 - t) + audio[i] * t;
+    }
+    return audio;
+}
+
+// Resonant frequency by body region (cm from feet, supine 71in/180cm)
+// Returns Hz — lower = deeper in soft tissue, higher = near bone/rigid structure
+function bodyResonanceFreq(yCmFromFeet, xCmFromMidline) {
+    // Continuous interpolation along body height
+    // Defined as control points: [yCm, baseFreqHz]
+    // Range kept narrow (40-70) to stay in deep body resonance zone
+    const curve = [
+        [0,   60],   // feet
+        [50,  60],   // knees
+        [88,  55],   // hip joint
+        [100, 48],   // pelvis/lower abdomen
+        [108, 40],   // navel — deepest, softest
+        [118, 52],   // obliques
+        [130, 62],   // ribcage
+        [142, 70],   // T3 / upper chest
+        [155, 80],   // neck
+        [170, 95],   // head
+        [180, 95],   // crown
+    ];
+
+    // Find surrounding control points and lerp
+    let freq;
+    if (yCmFromFeet <= curve[0][0]) {
+        freq = curve[0][1];
+    } else if (yCmFromFeet >= curve[curve.length-1][0]) {
+        freq = curve[curve.length-1][1];
+    } else {
+        for (let c = 0; c < curve.length - 1; c++) {
+            if (yCmFromFeet >= curve[c][0] && yCmFromFeet <= curve[c+1][0]) {
+                const t = (yCmFromFeet - curve[c][0]) / (curve[c+1][0] - curve[c][0]);
+                freq = curve[c][1] + t * (curve[c+1][1] - curve[c][1]);
+                break;
+            }
+        }
+    }
+
+    // Lateral offset: further from midline = more bone (ribs), slightly higher
+    freq += Math.abs(xCmFromMidline) * 0.5;
+
+    return freq;
+}
+
+function genSustainedResonant(dur) {
+    // Generate a sustained tone whose pitch follows the body resonance
+    // along the current trajectory or path
+    // Uses crossfade at loop boundary for seamless looping
+    const n = Math.floor(dur * RATE);
+    const audio = new Float32Array(n);
+    let phase = 0;
+    // No attack/release envelope — crossfade handles loop seam
+    const env = new Float32Array(n).fill(1.0);
+
+    const wps = getTrajectoryWaypoints();
+
+    if (wps && wps.length >= 2) {
+        // Equal angular speed with a dwell at the bottom.
+        // Dwell: 10 degrees out of 360 = ~2.8% of cycle, spent stationary
+        // at the starting position (bottom of navel).
+        const DWELL_FRAC = 10 / 360; // fraction of cycle to dwell
+
+        // Pre-compute the starting frequency for seamless loop
+        const startPos = trajectoryPositionAt(wps, 0);
+        const startFreq = bodyResonanceFreq(startPos.y, startPos.x);
+
+        for (let i = 0; i < n; i++) {
+            const timeFrac = i / n;
+            let freq;
+
+            if (timeFrac < DWELL_FRAC) {
+                // Dwell phase: stay at start position
+                freq = startFreq;
+            } else {
+                // Moving phase: map remaining time to full trajectory
+                const movingProgress = (timeFrac - DWELL_FRAC) / (1 - DWELL_FRAC);
+                const pos = trajectoryPositionAt(wps, movingProgress);
+                const targetFreq = bodyResonanceFreq(pos.y, pos.x);
+
+                // Smooth the return to start freq near the end of the cycle
+                // to avoid a frequency jump at the loop point
+                const fadeZone = 0.05; // last 5% of moving phase
+                if (movingProgress > (1 - fadeZone)) {
+                    const fadeProg = (movingProgress - (1 - fadeZone)) / fadeZone;
+                    freq = targetFreq + (startFreq - targetFreq) * fadeProg;
+                } else {
+                    freq = targetFreq;
+                }
+            }
+            const vibrato = 1 + 0.003 * Math.sin(2 * Math.PI * 4.5 * (i / RATE));
+            phase += 2 * Math.PI * freq * vibrato / RATE;
+            audio[i] = (Math.sin(phase) + 0.5*Math.sin(2*phase) +
+                        0.25*Math.sin(3*phase) + 0.12*Math.sin(4*phase) +
+                        0.06*Math.sin(5*phase)) * env[i];
+        }
+    } else {
+        // Linear path mode: interpolate y position along path
+        const totalCm = currentPath.reduce((s, seg) => s + seg.cm, 0) || 1;
+        const startCm = getPathStartCm();
+        for (let i = 0; i < n; i++) {
+            const y = startCm + (i / n) * totalCm;
+            const freq = bodyResonanceFreq(y, 0);
+            const vibrato = 1 + 0.003 * Math.sin(2 * Math.PI * 4.5 * (i / RATE));
+            phase += 2 * Math.PI * freq * vibrato / RATE;
+            audio[i] = (Math.sin(phase) + 0.5*Math.sin(2*phase) +
+                        0.25*Math.sin(3*phase) + 0.12*Math.sin(4*phase) +
+                        0.06*Math.sin(5*phase)) * env[i];
+        }
+    }
+    // Crossfade for seamless looping: blend tail into head
+    const xfadeN = Math.min(Math.floor(0.15 * RATE), Math.floor(n / 4)); // 150ms
+    for (let i = 0; i < xfadeN; i++) {
+        const t = i / xfadeN; // 0→1
+        const headVal = audio[i];
+        const tailVal = audio[n - xfadeN + i];
+        // Fade out tail, fade in head
+        audio[n - xfadeN + i] = tailVal * (1 - t) + headVal * t;
+    }
+    return audio;
+}
+
+const SOUNDS = [
+    { name: 'Drum Wave', desc: 'Low hit → stretch', gen: d => addReverb(timeStretch(genDrumHit(0.3),d), 0.3, 40, 6) },
+    { name: 'Breath', desc: 'Exhale texture', gen: d => addReverb(genBreath(d), 0.25, 35, 6) },
+    { name: 'Slide', desc: 'Surface → scatter', gen: d => addReverb(genSlide(d), 0.3, 25, 6) },
+    { name: 'Cello', desc: 'Low tone (decays)', gen: d => genCello(d, 98) },
+    { name: 'Sustained', desc: 'Constant cello tone', gen: d => genSustainedCello(d, 98) },
+    { name: 'Resonant', desc: 'Pitch follows body resonance', gen: d => genSustainedResonant(d) },
+    { name: 'Granular', desc: 'Impact → particles', gen: d => addReverb(genGranular(d), 0.35, 30, 6) },
+    { name: 'Combined', desc: 'Drum+breath+cello', gen: d => addReverb(genCombined(d), 0.3, 35, 6) },
+];
+
+// ── Playback — modal toggle, looping, superimposable ──
+
+// Each active sound gets an entry: { source, gainNode, btn, timer, soundId }
+const activeSounds = new Map(); // soundId → { source, gainNode, btn, timer }
+
+function buildStereoBuffer(audio) {
+    const ctx = getCtx();
+    const stereoBuffer = ctx.createBuffer(2, audio.length, RATE);
+    const leftChan = stereoBuffer.getChannelData(0);
+    const rightChan = stereoBuffer.getChannelData(1);
+    const wps = getTrajectoryWaypoints();
+
+    if (wps && wps.length >= 2) {
+        const MAX_X = 20;
+        const DWELL_FRAC = 10 / 360;
+        const startPos = trajectoryPositionAt(wps, 0);
+
+        for (let i = 0; i < audio.length; i++) {
+            const timeFrac = i / audio.length;
+            let pos;
+            if (timeFrac < DWELL_FRAC) {
+                pos = startPos;
+            } else {
+                const movingProgress = (timeFrac - DWELL_FRAC) / (1 - DWELL_FRAC);
+                pos = trajectoryPositionAt(wps, movingProgress);
+                // Smooth return to start position near end
+                const fadeZone = 0.05;
+                if (movingProgress > (1 - fadeZone)) {
+                    const fadeProg = (movingProgress - (1 - fadeZone)) / fadeZone;
+                    pos = {
+                        x: pos.x + (startPos.x - pos.x) * fadeProg,
+                        y: pos.y + (startPos.y - pos.y) * fadeProg,
+                    };
+                }
+            }
+            const pan = Math.max(-1, Math.min(1, pos.x / MAX_X));
+            const angle = pan * Math.PI / 4;
+            leftChan[i] = audio[i] * Math.cos(angle + Math.PI/4);
+            rightChan[i] = audio[i] * Math.sin(angle + Math.PI/4);
+        }
+    } else {
+        const EARS_CM = 170;
+        const totalCm = currentPath.reduce((s, seg) => s + seg.cm, 0) || 1;
+        const startCm = getPathStartCm();
+        for (let i = 0; i < audio.length; i++) {
+            const pos = startCm + (i / audio.length) * totalCm;
+            const dist = Math.abs(EARS_CM - pos);
+            const w = Math.min(dist / EARS_CM, 1.0);
+            const side = pos < EARS_CM ? 1 : -1;
+            const angle = side * w * Math.PI / 4;
+            leftChan[i] = audio[i] * Math.cos(angle + Math.PI/4);
+            rightChan[i] = audio[i] * Math.sin(angle + Math.PI/4);
+        }
+    }
+    return stereoBuffer;
+}
+
+function stopSound(soundId) {
+    const active = activeSounds.get(soundId);
+    if (!active) return;
+    try {
+        // Fade out over 50ms to avoid click
+        active.gainNode.gain.setValueAtTime(active.gainNode.gain.value, getCtx().currentTime);
+        active.gainNode.gain.linearRampToValueAtTime(0, getCtx().currentTime + 0.05);
+        setTimeout(() => { try { active.source.stop(); } catch(e) {} }, 60);
+    } catch(e) { try { active.source.stop(); } catch(e2) {} }
+    if (active.timer) clearInterval(active.timer);
+    active.btn.classList.remove('playing');
+    active.btn.querySelector('.sound-status').textContent = '';
+    activeSounds.delete(soundId);
+}
+
+function toggleSound(soundDef, btn, soundId) {
+    // If already playing, stop it
+    if (activeSounds.has(soundId)) {
+        stopSound(soundId);
+        return;
+    }
+
+    const ctx = getCtx();
+    const dur = parseFloat(document.getElementById('duration').value);
+    const pitch = parseInt(document.getElementById('pitch').value);
+    const rev = parseFloat(document.getElementById('reverb').value);
+
+    btn.querySelector('.sound-status').textContent = 'Generating...';
+
+    setTimeout(() => {
+      try {
+        let audio = soundDef.gen(dur);
+        if (pitch !== 0) audio = pitchShift(audio, pitch);
+        audio = pathAttenuation(audio);
+        if (rev > 0) audio = addReverb(audio, rev, 35, 8);
+        audio = normalize(audio);
+
+        const stereoBuffer = buildStereoBuffer(audio);
+
+        const source = ctx.createBufferSource();
+        source.buffer = stereoBuffer;
+        source.loop = true; // All sounds loop
+
+        const gainNode = ctx.createGain();
+        gainNode.gain.value = 1.0;
+        source.connect(gainNode);
+        gainNode.connect(ctx.destination);
+
+        source.start();
+
+        btn.classList.add('playing');
+        btn.querySelector('.sound-status').textContent = 'On (click to stop)';
+
+        // Animate playhead (uses first active sound's timing)
+        const ph = document.getElementById('playhead');
+        ph.style.display = 'block';
+        const startTime = ctx.currentTime;
+        const timer = setInterval(() => {
+            const elapsed = (ctx.currentTime - startTime) % dur;
+            ph.style.left = ((elapsed / dur) * 100) + '%';
+        }, 30);
+
+        activeSounds.set(soundId, { source, gainNode, btn, timer });
+
+        source.onended = () => {
+            // Only fires if stopped externally
+            if (activeSounds.has(soundId)) stopSound(soundId);
+        };
+      } catch(err) {
+        console.error('Sound generation error:', err);
+        btn.querySelector('.sound-status').textContent = 'Error: ' + err.message;
+      }
+    }, 10);
+}
+
+// ── UI setup ──
+
+function updateLabels() {
+    document.getElementById('exaggeration-val').textContent = document.getElementById('exaggeration').value + '×';
+    document.getElementById('pitch-val').textContent = document.getElementById('pitch').value + ' st';
+    document.getElementById('duration-val').textContent = parseFloat(document.getElementById('duration').value).toFixed(1) + ' s';
+    document.getElementById('reverb-val').textContent = parseFloat(document.getElementById('reverb').value).toFixed(2);
+}
+
+// ── URL parameter sync ──
+// Params: exag, pitch, dur, reverb, path (preset name), traj (trajectory name)
+
+function getStateAsParams() {
+    const p = new URLSearchParams();
+    p.set('exag', document.getElementById('exaggeration').value);
+    p.set('pitch', document.getElementById('pitch').value);
+    p.set('dur', document.getElementById('duration').value);
+    p.set('reverb', document.getElementById('reverb').value);
+    if (currentTrajectory) {
+        p.set('traj', currentTrajectory);
+    } else {
+        p.set('path', currentPathPresetName);
+    }
+    return p.toString();
+}
+
+function getShareURL() {
+    return window.location.pathname + '?' + getStateAsParams();
+}
+
+function updateURL() {
+    const url = getShareURL();
+    history.replaceState(null, '', url);
+}
+
+function applyURLParams() {
+    const p = new URLSearchParams(window.location.search);
+    if (p.has('exag')) document.getElementById('exaggeration').value = p.get('exag');
+    if (p.has('pitch')) document.getElementById('pitch').value = p.get('pitch');
+    if (p.has('dur')) document.getElementById('duration').value = p.get('dur');
+    if (p.has('reverb')) document.getElementById('reverb').value = p.get('reverb');
+    if (p.has('traj')) {
+        const name = p.get('traj');
+        if (TRAJECTORIES[name]) {
+            // Find the button and apply
+            const btns = document.querySelectorAll('#traj-presets .preset-btn');
+            btns.forEach(btn => {
+                if (btn.textContent === name) applyTrajectory(name, btn);
+            });
+        }
+    } else if (p.has('path')) {
+        const name = p.get('path');
+        if (PATH_PRESETS[name]) applyPathPreset(name);
+    }
+}
+
+function init() {
+    initPathPresets();
+    renderPath();
+
+    // Apply URL params before rendering labels
+    applyURLParams();
+
+    document.querySelectorAll('input[type="range"]').forEach(el => {
+        el.addEventListener('input', () => { updateLabels(); updateURL(); });
+    });
+    updateLabels();
+
+    const grid = document.getElementById('sounds');
+    SOUNDS.forEach((s, idx) => {
+        const btn = document.createElement('div');
+        btn.className = 'sound-btn';
+        btn.innerHTML = `<div class="sound-name">${s.name}</div><div class="sound-desc">${s.desc}</div><div class="sound-status"></div>`;
+        btn.onclick = () => toggleSound(s, btn, 'sound_' + idx);
+        grid.appendChild(btn);
+    });
+
+    // Update URL when path/trajectory changes
+    const origApplyPath = applyPathPreset;
+    // Already handled in applyPathPreset/applyTrajectory via updateURL
+}
+
+// Patch preset functions to update URL
+const _origApplyPathPreset = applyPathPreset;
+applyPathPreset = function(name) {
+    _origApplyPathPreset(name);
+    updateURL();
+};
+const _origApplyTrajectory = applyTrajectory;
+applyTrajectory = function(name, btn) {
+    _origApplyTrajectory(name, btn);
+    updateURL();
+};
+
+init();
+</script>
+</body>
+</html>

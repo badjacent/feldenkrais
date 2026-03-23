@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Sound Slipper — Lesson Player</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+* { box-sizing: border-box; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    max-width: 800px; margin: 0 auto; padding: 20px;
+    background: #1a1a2e; color: #e0e0e0;
+}
+h1 { font-size: 1.4em; margin-bottom: 2px; }
+.subtitle { color: #888; font-size: 0.85em; margin-bottom: 20px; }
+
+.lesson-header {
+    background: #16213e; border-radius: 12px; padding: 16px 20px;
+    margin-bottom: 16px; border: 1px solid #0f3460;
+}
+.lesson-title { font-size: 1.1em; font-weight: 700; }
+.lesson-desc { color: #888; font-size: 0.85em; margin-top: 4px; }
+
+.transport {
+    display: flex; gap: 12px; align-items: center;
+    margin-bottom: 20px;
+}
+.transport-btn {
+    background: #0f3460; border: 1px solid #533483; border-radius: 8px;
+    padding: 10px 24px; cursor: pointer; font-size: 0.95em; color: #e0e0e0;
+    font-weight: 600; transition: all 0.15s;
+}
+.transport-btn:hover { border-color: #e94560; }
+.transport-btn.active { background: #533483; border-color: #e94560; }
+.transport-btn:disabled { opacity: 0.4; cursor: default; }
+.transport-status { color: #888; font-size: 0.85em; }
+
+/* Block display */
+.block-area {
+    min-height: 300px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+}
+.block-region {
+    font-size: 0.75em; text-transform: uppercase; letter-spacing: 1.5px;
+    color: #533483; margin-bottom: 8px; font-weight: 700;
+}
+.block-prompt {
+    font-size: 1.3em; line-height: 1.6; text-align: center;
+    max-width: 600px; color: #e0e0e0; margin-bottom: 20px;
+    transition: opacity 0.5s;
+}
+.block-prompt.fading { opacity: 0.3; }
+.block-answers {
+    display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;
+}
+.answer-btn {
+    background: #0f3460; border: 1px solid #533483; border-radius: 20px;
+    padding: 8px 20px; cursor: pointer; font-size: 0.85em; color: #aaa;
+    transition: all 0.15s;
+}
+.answer-btn:hover { border-color: #e94560; color: #e0e0e0; }
+.answer-btn.selected { background: #533483; color: #e0e0e0; border-color: #e94560; }
+
+.block-meta {
+    margin-top: 20px; font-size: 0.75em; color: #555; text-align: center;
+}
+.block-counter { color: #888; font-size: 0.8em; margin-top: 8px; }
+
+/* Sound indicator */
+.sound-indicator {
+    width: 12px; height: 12px; border-radius: 50%;
+    background: #333; display: inline-block; margin-right: 6px;
+    transition: background 0.15s;
+}
+.sound-indicator.active { background: #e94560; box-shadow: 0 0 8px rgba(233,69,96,0.4); }
+
+/* Timeline */
+.timeline {
+    background: #16213e; border-radius: 8px; padding: 12px 16px;
+    margin-top: 20px; border: 1px solid #0f3460;
+}
+.timeline-label { font-size: 0.7em; color: #555; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+.timeline-blocks {
+    display: flex; gap: 4px; height: 24px;
+}
+.timeline-block {
+    flex: 1; border-radius: 4px; background: #0f3460;
+    transition: background 0.3s;
+    position: relative;
+}
+.timeline-block.done { background: #1a4a3a; }
+.timeline-block.current { background: #533483; box-shadow: 0 0 6px rgba(83,52,131,0.5); }
+.timeline-block .tl-label {
+    position: absolute; bottom: -16px; left: 0; right: 0;
+    font-size: 0.6em; color: #555; text-align: center;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.idle-message {
+    color: #555; font-size: 1.1em; font-style: italic;
+}
+</style>
+</head>
+<body>
+
+<h1>Sound Slipper</h1>
+<div class="subtitle">Lesson player with synthesized sound cues</div>
+
+<div class="lesson-header">
+    <div class="lesson-title" id="lesson-title">No lesson loaded</div>
+    <div class="lesson-desc" id="lesson-desc"></div>
+</div>
+
+<div class="transport">
+    <button class="transport-btn" id="play-btn" onclick="togglePlay()">Play</button>
+    <button class="transport-btn" id="stop-btn" onclick="stopLesson()" disabled>Stop</button>
+    <span class="transport-status" id="transport-status"></span>
+</div>
+
+<div class="block-area" id="block-area">
+    <div class="idle-message">Press Play to begin</div>
+</div>
+
+<div class="timeline">
+    <div class="timeline-label">Lesson progress</div>
+    <div class="timeline-blocks" id="timeline-blocks"></div>
+</div>
+
+<script>
+const RATE = 44100;
+let audioCtx = null;
+let lesson = null;
+let running = false;
+let currentBlockIdx = -1;
+let currentRepeat = 0;
+let abortController = null;
+
+function getCtx() {
+    if (!audioCtx) audioCtx = new AudioContext();
+    return audioCtx;
+}
+
+// ── Tissue properties (from sound lab) ──
+const TISSUE_ATTEN = {
+    fat: 0.6, muscle: 0.8, bone: 12, cartilage: 1.5,
+    tendon: 1.2, fluid: 0.05, organ: 0.5, skin: 1.0, nerve: 0.7,
+};
+
+const SPATIAL_PATHS = {
+    center: [{t:'muscle',cm:5}],
+    chest_like: [{t:'skin',cm:1},{t:'muscle',cm:3},{t:'bone',cm:1},{t:'muscle',cm:5},{t:'organ',cm:8}],
+    throat_like: [{t:'skin',cm:0.5},{t:'cartilage',cm:2},{t:'muscle',cm:3}],
+    below_sternum: [{t:'skin',cm:1},{t:'bone',cm:2},{t:'cartilage',cm:1},{t:'organ',cm:10}],
+    below_navel: [{t:'skin',cm:1},{t:'fat',cm:2},{t:'muscle',cm:4},{t:'organ',cm:12}],
+    face: [{t:'skin',cm:0.5},{t:'bone',cm:1},{t:'muscle',cm:2}],
+    diffuse: [{t:'muscle',cm:20}],
+    full_body: [{t:'muscle',cm:40}],
+};
+
+const SPATIAL_BODY_POS = {
+    center: {y:120,x:0}, chest_like: {y:130,x:0}, throat_like: {y:158,x:0},
+    below_sternum: {y:125,x:0}, below_navel: {y:100,x:0}, face: {y:168,x:0},
+    diffuse: {y:120,x:0}, full_body: {y:100,x:0},
+};
+
+// Body resonance (from sound lab)
+function bodyResonanceFreq(y) {
+    const curve = [[0,60],[50,60],[88,55],[100,48],[108,40],[118,52],[130,62],[142,70],[155,80],[170,95],[180,95]];
+    if (y <= curve[0][0]) return curve[0][1];
+    if (y >= curve[curve.length-1][0]) return curve[curve.length-1][1];
+    for (let c = 0; c < curve.length - 1; c++) {
+        if (y >= curve[c][0] && y <= curve[c+1][0]) {
+            const t = (y - curve[c][0]) / (curve[c+1][0] - curve[c][0]);
+            return curve[c][1] + t * (curve[c+1][1] - curve[c][1]);
+        }
+    }
+    return 60;
+}
+
+// ── Sound synthesis ──
+
+function envelope(n, attackMs, decayMs, sustainLevel, releaseMs) {
+    const env = new Float32Array(n);
+    const aS = Math.floor(attackMs * RATE / 1000);
+    const dS = Math.floor(decayMs * RATE / 1000);
+    const rS = Math.floor(releaseMs * RATE / 1000);
+    const sStart = aS + dS;
+    const sEnd = n - rS;
+    for (let i = 0; i < n; i++) {
+        if (i < aS) env[i] = i / aS;
+        else if (i < sStart) env[i] = 1.0 - (1.0 - sustainLevel) * ((i - aS) / dS);
+        else if (i < sEnd) env[i] = sustainLevel;
+        else env[i] = sustainLevel * (1 - (i - sEnd) / rS);
+    }
+    return env;
+}
+
+function synthesize(spec, durationMs) {
+    const n = Math.floor(durationMs * RATE / 1000);
+    const audio = new Float32Array(n);
+    const env = envelope(n, spec.attack_ms, spec.decay_ms, spec.sustain_level, spec.release_ms);
+    const wf = spec.waveform;
+
+    // Get body-appropriate frequency
+    const spatial = spec.spatialization || 'center';
+    const bodyPos = SPATIAL_BODY_POS[spatial] || {y:120,x:0};
+    const resonantHz = spec.fundamental_hz || bodyResonanceFreq(bodyPos.y);
+
+    if (wf === 'sine' || wf === 'bowed_tone') {
+        let phase = 0;
+        for (let i = 0; i < n; i++) {
+            const t = i / RATE;
+            let f = resonantHz;
+            if (spec.vibrato_hz > 0) {
+                f *= 1 + (spec.vibrato_depth_cents / 1200) * Math.sin(2 * Math.PI * spec.vibrato_hz * t);
+            }
+            phase += 2 * Math.PI * f / RATE;
+            let val = Math.sin(phase);
+            // Add harmonics for bowed_tone
+            if (wf === 'bowed_tone') {
+                val += 0.5 * Math.sin(2*phase) + 0.25 * Math.sin(3*phase) + 0.12 * Math.sin(4*phase);
+            }
+            // Tremolo
+            if (spec.tremolo_hz > 0) {
+                val *= 1 - spec.tremolo_depth * 0.5 * (1 + Math.sin(2 * Math.PI * spec.tremolo_hz * t));
+            }
+            audio[i] = val * env[i];
+        }
+    } else if (wf === 'bandpassed_noise' || wf === 'filtered_noise' || wf === 'diffuse_noise') {
+        const low = spec.bandwidth_hz ? spec.bandwidth_hz[0] : 200;
+        const high = spec.bandwidth_hz ? spec.bandwidth_hz[1] : 2000;
+        // Simple bandpass via running average
+        const centerHz = (low + high) / 2;
+        const rc = 1 / (2 * Math.PI * centerHz);
+        const dt = 1 / RATE;
+        const alpha = dt / (rc + dt);
+        let prev = 0;
+        for (let i = 0; i < n; i++) {
+            const noise = Math.random() * 2 - 1;
+            prev = prev + alpha * (noise - prev);
+            audio[i] = prev * env[i] * 3; // boost filtered noise
+        }
+    } else if (wf === 'soft_click' || wf === 'low_tap') {
+        let phase = 0;
+        for (let i = 0; i < n; i++) {
+            const t = i / RATE;
+            const freq = (wf === 'low_tap' ? 60 : 200) + 100 * Math.exp(-t * 20);
+            phase += 2 * Math.PI * freq / RATE;
+            audio[i] = Math.sin(phase) * Math.exp(-t * 12) * env[i];
+        }
+    } else {
+        // Default: sine at resonant frequency
+        let phase = 0;
+        for (let i = 0; i < n; i++) {
+            phase += 2 * Math.PI * resonantHz / RATE;
+            audio[i] = Math.sin(phase) * env[i];
+        }
+    }
+
+    // Apply tissue attenuation based on spatialization
+    const path = SPATIAL_PATHS[spatial] || SPATIAL_PATHS.center;
+    const exag = 800;
+    const totalCm = path.reduce((s, seg) => s + seg.cm, 0);
+    let cumCm = 0;
+    for (const seg of path) {
+        const startFrac = cumCm / totalCm;
+        cumCm += seg.cm;
+        const endFrac = cumCm / totalCm;
+        const startSample = Math.floor(startFrac * n);
+        const endSample = Math.floor(endFrac * n);
+        const effAtten = (TISSUE_ATTEN[seg.t] || 0.8) * exag;
+        const cutoffHz = Math.max(80, Math.min(20000, (20 / (effAtten * seg.cm)) * 1e6));
+        const rc2 = 1 / (2 * Math.PI * cutoffHz);
+        const alpha2 = (1/RATE) / (rc2 + 1/RATE);
+        let prev2 = startSample > 0 ? audio[startSample - 1] : 0;
+        for (let i = startSample; i < endSample; i++) {
+            prev2 = prev2 + alpha2 * (audio[i] - prev2);
+            audio[i] = prev2;
+        }
+    }
+
+    // Apply amplitude
+    const ampScale = Math.pow(10, (spec.amplitude_db || -20) / 20);
+    for (let i = 0; i < n; i++) audio[i] *= ampScale;
+
+    // Normalize
+    let peak = 0;
+    for (let i = 0; i < n; i++) peak = Math.max(peak, Math.abs(audio[i]));
+    if (peak > 0) for (let i = 0; i < n; i++) audio[i] *= 0.9 / peak;
+
+    return audio;
+}
+
+function playAudio(audio) {
+    const ctx = getCtx();
+    const buffer = ctx.createBuffer(1, audio.length, RATE);
+    buffer.getChannelData(0).set(audio);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.start();
+    return source;
+}
+
+// ── UI ──
+
+function renderBlock(block, repeatIdx, totalRepeats) {
+    const area = document.getElementById('block-area');
+    const regionLabel = (block.target_region || '').replace(/_/g, ' ');
+
+    area.innerHTML = `
+        <div class="block-region">${regionLabel}</div>
+        <div class="block-prompt" id="prompt-text">${block.prompt.phrase}</div>
+        <div class="block-answers" id="answer-btns"></div>
+        <div class="block-counter">${repeatIdx + 1} / ${totalRepeats}</div>
+        <div class="block-meta">
+            <span class="sound-indicator" id="sound-dot"></span>
+            ${block.sound ? block.sound.waveform + ' · ' + block.sound.spatialization : 'no sound'}
+        </div>
+    `;
+
+    const btnContainer = document.getElementById('answer-btns');
+    (block.prompt.allowed_answers || []).forEach(ans => {
+        const btn = document.createElement('button');
+        btn.className = 'answer-btn';
+        btn.textContent = ans.replace(/_/g, ' ');
+        btn.onclick = () => {
+            btnContainer.querySelectorAll('.answer-btn').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            // Store answer (could send to server)
+        };
+        btnContainer.appendChild(btn);
+    });
+}
+
+function renderTimeline(blocks, currentIdx) {
+    const container = document.getElementById('timeline-blocks');
+    container.innerHTML = '';
+    blocks.forEach((block, i) => {
+        const div = document.createElement('div');
+        div.className = 'timeline-block' + (i < currentIdx ? ' done' : '') + (i === currentIdx ? ' current' : '');
+        const label = document.createElement('div');
+        label.className = 'tl-label';
+        label.textContent = (block.target_region || '').replace(/_/g, ' ');
+        div.appendChild(label);
+        container.appendChild(div);
+    });
+}
+
+function showIdle(msg) {
+    document.getElementById('block-area').innerHTML = `<div class="idle-message">${msg}</div>`;
+}
+
+// ── Lesson runner ──
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function runLesson() {
+    if (!lesson || !lesson.blocks) return;
+
+    running = true;
+    document.getElementById('play-btn').textContent = 'Pause';
+    document.getElementById('play-btn').classList.add('active');
+    document.getElementById('stop-btn').disabled = false;
+    abortController = new AbortController();
+
+    const blocks = lesson.blocks;
+
+    for (let bi = 0; bi < blocks.length; bi++) {
+        if (!running) break;
+
+        const block = blocks[bi];
+        currentBlockIdx = bi;
+        renderTimeline(blocks, bi);
+
+        const repeats = block.timing?.repeat_count || 1;
+
+        for (let r = 0; r < repeats; r++) {
+            if (!running) break;
+            currentRepeat = r;
+
+            renderBlock(block, r, repeats);
+
+            // Play sound
+            if (block.sound) {
+                const dot = document.getElementById('sound-dot');
+                if (dot) dot.classList.add('active');
+                const audio = synthesize(block.sound, block.timing.duration_ms);
+                playAudio(audio);
+            }
+
+            document.getElementById('transport-status').textContent =
+                `Block ${bi+1}/${blocks.length} · Rep ${r+1}/${repeats}`;
+
+            // Wait for duration + silence
+            const waitMs = (block.timing?.duration_ms || 2000) + (block.timing?.silence_after_ms || 1000);
+            await sleep(waitMs);
+
+            // Fade prompt
+            const promptEl = document.getElementById('prompt-text');
+            if (promptEl) promptEl.classList.add('fading');
+            await sleep(500);
+        }
+    }
+
+    // Done
+    running = false;
+    currentBlockIdx = -1;
+    renderTimeline(lesson.blocks, lesson.blocks.length);
+    showIdle('Lesson complete');
+    document.getElementById('play-btn').textContent = 'Play';
+    document.getElementById('play-btn').classList.remove('active');
+    document.getElementById('stop-btn').disabled = true;
+    document.getElementById('transport-status').textContent = '';
+}
+
+function togglePlay() {
+    if (running) {
+        running = false;
+        document.getElementById('play-btn').textContent = 'Play';
+        document.getElementById('play-btn').classList.remove('active');
+        showIdle('Paused');
+    } else {
+        runLesson();
+    }
+}
+
+function stopLesson() {
+    running = false;
+    currentBlockIdx = -1;
+    document.getElementById('play-btn').textContent = 'Play';
+    document.getElementById('play-btn').classList.remove('active');
+    document.getElementById('stop-btn').disabled = true;
+    document.getElementById('transport-status').textContent = '';
+    if (lesson) renderTimeline(lesson.blocks, -1);
+    showIdle('Press Play to begin');
+}
+
+// ── Load lesson ──
+
+function loadLesson(data) {
+    lesson = data;
+    document.getElementById('lesson-title').textContent = data.title || 'Untitled';
+    document.getElementById('lesson-desc').textContent = data.description || '';
+    renderTimeline(data.blocks || [], -1);
+    showIdle('Press Play to begin');
+}
+
+// ── Demo lesson (matches sound_slipper.py build_demo_lesson) ──
+
+const DEMO_LESSON = {
+    lesson_id: "lesson_10min_breath_frontline_01",
+    title: "Lower ribs and exhale settling",
+    description: "Minimal example lesson using phase-locked cues. Breath timing is simulated.",
+    blocks: [
+        {
+            id: "b1", name: "lower_rib_inhale_onset",
+            target_region: "lower_ribs", target_event: "inhale_onset",
+            timing: { anchor: "inhale_onset", offset_ms: -120, duration_ms: 1200,
+                      peak_ms_relative_to_anchor: 300, repeat_count: 3, silence_after_ms: 2200 },
+            voice: null,
+            sound: {
+                waveform: "bandpassed_noise", fundamental_hz: null,
+                bandwidth_hz: [350, 900], attack_ms: 180, decay_ms: 120,
+                sustain_level: 0.35, release_ms: 450, amplitude_db: -18,
+                pan: 0, spatialization: "chest_like", haptic_enabled: false,
+                vibrato_hz: 0, vibrato_depth_cents: 0, tremolo_hz: 0, tremolo_depth: 0,
+            },
+            prompt: {
+                phrase: "Only notice the first hint of widening. Where does it begin?",
+                perceptual_dimension: "expansion", resolution_level: "fine",
+                comparison_mode: "first_thing",
+                allowed_answers: ["side ribs", "front ribs", "back ribs", "unclear"],
+            },
+            fallback_prompt: null,
+        },
+        {
+            id: "b2", name: "upper_abdomen_exhale_settling",
+            target_region: "upper_abdomen", target_event: "exhale_onset",
+            timing: { anchor: "exhale_onset", offset_ms: 0, duration_ms: 1800,
+                      peak_ms_relative_to_anchor: 0, repeat_count: 3, silence_after_ms: 2500 },
+            voice: null,
+            sound: {
+                waveform: "sine", fundamental_hz: 196, bandwidth_hz: null,
+                attack_ms: 40, decay_ms: 100, sustain_level: 0.22, release_ms: 700,
+                amplitude_db: -20, pan: 0, spatialization: "below_sternum",
+                haptic_enabled: false,
+                vibrato_hz: 0, vibrato_depth_cents: 0, tremolo_hz: 0.12, tremolo_depth: 0.18,
+            },
+            prompt: {
+                phrase: "As the air leaves, what softens first: throat, breastbone, or upper belly?",
+                perceptual_dimension: "softening", resolution_level: "medium",
+                comparison_mode: "which_first",
+                allowed_answers: ["throat", "breastbone", "upper belly", "unclear"],
+            },
+            fallback_prompt: null,
+        },
+    ],
+};
+
+// Init
+loadLesson(DEMO_LESSON);
+</script>
+</body>
+</html>
