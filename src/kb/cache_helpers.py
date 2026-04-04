@@ -34,6 +34,18 @@ def save_cached_analysis(cache_key: str, data: dict) -> None:
         _db.set_cache(cache_key, data)
 
 
+def save_prompt_io(cache_key: str, prompt: str, system: str, schema: dict | None = None) -> None:
+    """Save the prompt/system/schema used to produce a cached result.
+
+    Stored under ``{cache_key}:prompt`` so it lives next to the result.
+    """
+    if _db:
+        payload: dict = {"prompt": prompt, "system": system}
+        if schema:
+            payload["schema"] = schema
+        _db.set_cache(cache_key + ":prompt", payload)
+
+
 def build_summary_from_condensed(condensed: dict, title: str) -> str:
     """Build a summary string from condensed card data for embedding."""
     parts = [title]

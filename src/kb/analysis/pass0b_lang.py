@@ -89,6 +89,7 @@ def run_pass_0b_lang(lesson_text: str, provider_key: str | None = None, debug_lo
 
         usage = llm.last_usage if llm.last_usage else {}
         save_cached_analysis(cache_key, {"enriched_steps": enriched, "summary": summary, "usage": usage})
+        _pkg.save_prompt_io(cache_key, prompt, system_prompt, schema)
 
         return {
             "pass_a": pass_a_result,
@@ -186,6 +187,7 @@ def run_pass_0b_word_lang(lesson_text: str, provider_key: str | None = None, deb
         truncation_warning = None
         usage = llm.last_usage if llm.last_usage else {}
         save_cached_analysis(cache_key, {"word_annotations": word_annotations, "usage": usage})
+        _pkg.save_prompt_io(cache_key, prompt, system_prompt, schema)
 
         return {
             "pass_a": pass_a_result,

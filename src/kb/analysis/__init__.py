@@ -63,7 +63,7 @@ from .pass0b_concepts import run_pass_0b_concepts
 from .pass0b_spatial import run_pass_0b_spatial
 
 # ── Re-exported cache helpers (pipeline/analysis.py imports these from analysis) ──
-from cache_helpers import get_cache_key, load_cached_analysis, save_cached_analysis
+from cache_helpers import get_cache_key, load_cached_analysis, save_cached_analysis, save_prompt_io
 
 
 # ── Dynamic attribute access for mutable module state ─────────────────────

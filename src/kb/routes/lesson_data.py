@@ -1,6 +1,7 @@
 """Lesson data API routes: somatic, language, classification, pipeline status, raw I/O."""
 
 import json
+import logging
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
@@ -8,6 +9,7 @@ from fastapi.responses import JSONResponse
 import web as _web
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _get_lesson_text(document_id: str) -> str | None:
@@ -16,6 +18,154 @@ def _get_lesson_text(document_id: str) -> str | None:
         return None
     text = _web._db.get_document_transcription(document_id)
     return text.strip() if text else None
+
+
+# ── Prompt reconstruction (system prompts must match analysis code) ──────
+
+_SYSTEM_PROMPTS = {
+    ":decompose_v3": None,  # uses ROUTER_SYSTEM_PROMPT from analysis
+    ":somatic_v2": (
+        "You are an expert Feldenkrais practitioner enriching lesson steps. "
+        "Process every step. Do not skip, merge, or split steps."
+    ),
+    ":language_v1": (
+        "You are an expert in Feldenkrais pedagogy and language analysis. "
+        "Analyze the teacher's language choices at each step. "
+        "Process every step. Do not skip, merge, or split steps."
+    ),
+    ":concept_tags_v2": (
+        "You are an expert Feldenkrais practitioner tagging a lesson with "
+        "searchable concepts. Be specific and distinctive — avoid generic terms "
+        "that apply to every lesson."
+    ),
+    ":spatial_v2": (
+        "You are a factual observer describing the physical geometry of body "
+        "positions and configurations. Report only what is stated — no "
+        "interpretation, no biomechanical analysis, no pedagogical language."
+    ),
+    ":condense_v4": (
+        "You are an expert Feldenkrais practitioner creating condensed lesson cards. "
+        "Preserve all five points of view. Generate group cards first, then the setting card."
+    ),
+}
+
+
+def _ensure_prompt_io(text: str, io_steps: list) -> None:
+    """Reconstruct and cache any missing prompt IO entries for a lesson.
+
+    Uses current prompt templates + cached upstream data to re-assemble prompts.
+    No LLM calls — purely local formatting.
+    """
+    try:
+        import analysis as _analysis
+    except ImportError:
+        return
+
+    # Check which steps need prompt reconstruction
+    missing = []
+    for step in io_steps:
+        cache_key = _web.get_cache_key(text + step["suffix"])
+        result = _web.load_cached_analysis(cache_key)
+        prompt = _web.load_cached_analysis(cache_key + ":prompt")
+        if result and not prompt:
+            missing.append(step)
+
+    if not missing:
+        return
+
+    missing_suffixes = {s["suffix"] for s in missing}
+
+    try:
+        # Load Pass A data (needed by most steps)
+        pa_key = _web.get_cache_key(text + ":decompose_v3")
+        pa_data = _web.load_cached_analysis(pa_key)
+
+        # --- Decompose ---
+        if ":decompose_v3" in missing_suffixes and pa_data:
+            pass_0_result = _analysis.run_pass_0(text)
+            segmented_text = _analysis.format_text_with_segments(pass_0_result)
+            pa_prompt_template, pa_schema = _analysis.load_pass_a()
+            if pa_prompt_template:
+                prompt = pa_prompt_template + "\n\n---\n\n## Lesson to Analyze:\n\n" + segmented_text
+                _web.save_cached_analysis(pa_key + ":prompt", {
+                    "prompt": prompt,
+                    "system": _analysis.ROUTER_SYSTEM_PROMPT,
+                    "schema": pa_schema,
+                })
+
+        if not pa_data:
+            return
+
+        # --- Somatic ---
+        som_key = _web.get_cache_key(text.strip() + ":somatic_v2")
+        som_data = _web.load_cached_analysis(som_key)
+        if ":somatic_v2" in missing_suffixes and som_data:
+            steps_text = _analysis.format_steps_for_0b(pa_data)
+            tmpl, schema = _analysis.load_pass_0b()
+            _web.save_cached_analysis(som_key + ":prompt", {
+                "prompt": tmpl + steps_text,
+                "system": _SYSTEM_PROMPTS[":somatic_v2"],
+                "schema": schema,
+            })
+
+        # --- Language ---
+        lang_key = _web.get_cache_key(text.strip() + ":language_v1")
+        lang_data = _web.load_cached_analysis(lang_key)
+        if ":language_v1" in missing_suffixes and lang_data:
+            steps_text = _analysis.format_steps_for_0b(pa_data)
+            tmpl, schema = _analysis.load_pass_0b_lang()
+            _web.save_cached_analysis(lang_key + ":prompt", {
+                "prompt": tmpl + steps_text,
+                "system": _SYSTEM_PROMPTS[":language_v1"],
+                "schema": schema,
+            })
+
+        # --- Concepts ---
+        ct_key = _web.get_cache_key(text.strip() + ":concept_tags_v2")
+        ct_data = _web.load_cached_analysis(ct_key)
+        if ":concept_tags_v2" in missing_suffixes and ct_data and som_data:
+            somatic_steps = som_data.get("enriched_steps", [])
+            concept_input = _analysis.format_input_for_concepts(pa_data, somatic_steps)
+            tmpl, schema = _analysis.load_pass_0b_concepts()
+            _web.save_cached_analysis(ct_key + ":prompt", {
+                "prompt": tmpl + concept_input,
+                "system": _SYSTEM_PROMPTS[":concept_tags_v2"],
+                "schema": schema,
+            })
+
+        # --- Spatial ---
+        sp_key = _web.get_cache_key(text.strip() + ":spatial_v2")
+        sp_data = _web.load_cached_analysis(sp_key)
+        if ":spatial_v2" in missing_suffixes and sp_data and som_data:
+            somatic_steps = som_data.get("enriched_steps", [])
+            spatial_input = _analysis.format_input_for_spatial(pa_data, somatic_steps)
+            tmpl, schema = _analysis.load_pass_0b_spatial()
+            _web.save_cached_analysis(sp_key + ":prompt", {
+                "prompt": tmpl + spatial_input,
+                "system": _SYSTEM_PROMPTS[":spatial_v2"],
+                "schema": schema,
+            })
+
+        # --- Condensed ---
+        cond_key = _web.get_cache_key(text.strip() + ":condense_v4")
+        cond_data = _web.load_cached_analysis(cond_key)
+        if ":condense_v4" in missing_suffixes and cond_data and som_data and lang_data:
+            somatic_enriched = som_data.get("enriched_steps", [])
+            somatic_summary = som_data.get("summary", {})
+            lang_enriched = lang_data.get("enriched_steps", [])
+            lang_summary = lang_data.get("summary", {})
+            cond_input = _analysis.format_input_for_0b_condensed(
+                pa_data, somatic_enriched, somatic_summary, lang_enriched, lang_summary,
+            )
+            tmpl, schema = _analysis.load_pass_0b_condensed()
+            _web.save_cached_analysis(cond_key + ":prompt", {
+                "prompt": tmpl + cond_input,
+                "system": _SYSTEM_PROMPTS[":condense_v4"],
+                "schema": schema,
+            })
+
+    except Exception:
+        logger.exception("Failed to reconstruct prompt IO")
 
 
 @router.get("/api/lesson/{document_id}/combined")
@@ -279,6 +429,9 @@ async def api_lesson_raw_io(document_id: str):
         {"name": "Spatial", "suffix": ":spatial_v2"},
     ]
 
+    # Reconstruct missing prompts on demand from templates + cached upstream data
+    _ensure_prompt_io(text, io_steps)
+
     results = []
     for step in io_steps:
         cache_key = _web.get_cache_key(text + step["suffix"])
@@ -296,6 +449,18 @@ async def api_lesson_raw_io(document_id: str):
             entry["truncated"] = len(raw_json) > 50000
             # Extract top-level keys for summary
             entry["top_level_keys"] = list(cached.keys()) if isinstance(cached, dict) else []
+
+        # Load prompt IO if available (stored under {cache_key}:prompt)
+        prompt_data = _web.load_cached_analysis(cache_key + ":prompt")
+        if prompt_data:
+            entry["has_prompt"] = True
+            entry["prompt"] = prompt_data.get("prompt", "")
+            entry["system"] = prompt_data.get("system", "")
+            if prompt_data.get("schema"):
+                entry["schema"] = json.dumps(prompt_data["schema"], indent=2)
+        else:
+            entry["has_prompt"] = False
+
         results.append(entry)
 
     return JSONResponse({"steps": results})

@@ -82,6 +82,11 @@ def _set_source_access(request: Request) -> dict | None:
     """
     if not _db:
         return None
+    # Localhost gets full access (no filtering)
+    host = request.headers.get("host", "")
+    if host.startswith("localhost") or host.startswith("127.0.0.1"):
+        _db.allowed_source_ids = None
+        return _auth_mod.get_current_user(request)
     user = _auth_mod.get_current_user(request)
     if user and user.get("tier") == "admin":
         _db.allowed_source_ids = None

@@ -76,6 +76,7 @@ def run_pass_0b_spatial(
         usage = llm.last_usage if llm.last_usage else {}
 
         save_cached_analysis(cache_key, {"groups": groups, "usage": usage})
+        _pkg.save_prompt_io(cache_key, prompt, system_prompt, schema)
 
         return {
             "groups": groups,

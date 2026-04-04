@@ -1257,6 +1257,8 @@ async function loadRawIOTab() {{
             return;
         }}
         let html = '';
+        const preStyle = 'background:#f8f9fa;border:1px solid #e9ecef;border-radius:6px;padding:12px;font-size:0.8em;overflow-x:auto;max-height:500px;overflow-y:auto;white-space:pre-wrap;word-break:break-word;';
+        const sectionLabel = 'display:inline-block;padding:2px 8px;border-radius:6px;font-size:0.75em;font-weight:600;margin-bottom:4px;';
         steps.forEach(step => {{
             html += '<details style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
             html += '<summary style="padding:14px 18px;cursor:pointer;font-weight:600;color:#333;font-size:0.95em;">';
@@ -1267,16 +1269,44 @@ async function loadRawIOTab() {{
             }} else {{
                 html += ' <span style="display:inline-block;padding:1px 8px;border-radius:8px;font-size:0.75em;font-weight:600;color:#fff;background:#757575;margin-left:8px;">not cached</span>';
             }}
+            if (step.has_prompt) {{
+                html += ' <span style="display:inline-block;padding:1px 8px;border-radius:8px;font-size:0.75em;font-weight:600;color:#fff;background:#1565c0;margin-left:4px;">prompt</span>';
+            }}
             html += '</summary>';
             html += '<div style="padding:0 18px 14px 18px;">';
+
+            // --- Prompt / System / Schema section ---
+            if (step.has_prompt) {{
+                html += '<div style="margin-bottom:12px;">';
+                html += '<div style="' + sectionLabel + 'color:#1565c0;background:#e3f2fd;">System Prompt</div>';
+                html += '<pre style="' + preStyle + 'max-height:200px;border-color:#bbdefb;">' + escHtml(step.system || '') + '</pre>';
+                html += '</div>';
+
+                html += '<details style="margin-bottom:12px;">';
+                html += '<summary style="cursor:pointer;font-size:0.85em;font-weight:600;color:#1565c0;">User Prompt <span style="color:#888;font-weight:400;">(' + (step.prompt.length / 1024).toFixed(1) + ' KB)</span></summary>';
+                html += '<pre style="' + preStyle + 'max-height:600px;border-color:#bbdefb;">' + escHtml(step.prompt || '') + '</pre>';
+                html += '</details>';
+
+                if (step.schema) {{
+                    html += '<details style="margin-bottom:12px;">';
+                    html += '<summary style="cursor:pointer;font-size:0.85em;font-weight:600;color:#1565c0;">JSON Schema</summary>';
+                    html += '<pre style="' + preStyle + 'max-height:400px;border-color:#bbdefb;">' + escHtml(step.schema) + '</pre>';
+                    html += '</details>';
+                }}
+
+                html += '<hr style="border:none;border-top:1px solid #e0e0e0;margin:12px 0;">';
+            }}
+
+            // --- Output section ---
             if (step.has_data) {{
+                html += '<div style="' + sectionLabel + 'color:#2e7d32;background:#e8f5e9;">Output</div>';
                 if (step.top_level_keys && step.top_level_keys.length) {{
                     html += '<div style="margin-bottom:8px;font-size:0.85em;color:#666;">Keys: <code>' + step.top_level_keys.join(', ') + '</code></div>';
                 }}
                 html += '<div style="font-size:0.8em;color:#888;margin-bottom:4px;">Cache key: <code>' + escHtml(step.cache_key) + '</code>';
                 if (step.truncated) html += ' <span style="color:#f57f17;">(truncated to 50KB)</span>';
                 html += '</div>';
-                html += '<pre style="background:#f8f9fa;border:1px solid #e9ecef;border-radius:6px;padding:12px;font-size:0.8em;overflow-x:auto;max-height:500px;overflow-y:auto;white-space:pre-wrap;word-break:break-word;">' + escHtml(step.raw_json || '') + '</pre>';
+                html += '<pre style="' + preStyle + '">' + escHtml(step.raw_json || '') + '</pre>';
             }} else {{
                 html += '<div style="color:#999;font-size:0.9em;">No cached data. Run the analysis pipeline to populate this step.</div>';
             }}

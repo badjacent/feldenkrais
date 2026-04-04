@@ -85,6 +85,7 @@ def run_pass_0b_concepts(
             "search_terms": search_terms,
             "usage": usage,
         })
+        _pkg.save_prompt_io(cache_key, prompt, system_prompt, schema)
 
         return {
             "concepts": concepts,

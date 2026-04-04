@@ -109,6 +109,7 @@ def run_pass_0b(lesson_text: str, provider_key: str | None = None, debug_log: li
 
         # Cache the result
         save_cached_analysis(cache_key, {"enriched_steps": enriched, "summary": summary, "usage": usage})
+        _pkg.save_prompt_io(cache_key, prompt, system_prompt, schema)
 
         return {
             "pass_a": pass_a_result,

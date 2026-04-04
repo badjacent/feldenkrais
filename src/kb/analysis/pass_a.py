@@ -139,5 +139,6 @@ def run_pass_a(lesson_text: str, provider_key: str | None = None, debug_log: lis
 
     # Cache Pass A result independently
     save_cached_analysis(pa_cache_key, result)
+    _pkg.save_prompt_io(pa_cache_key, prompt, ROUTER_SYSTEM_PROMPT, pass_a_schema)
 
     return result

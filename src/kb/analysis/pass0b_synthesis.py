@@ -80,6 +80,7 @@ def run_segmentation_query(
         usage = llm.last_usage if llm.last_usage else {}
 
         save_cached_analysis(cache_key, {"segments": segments, "usage": usage})
+        _pkg.save_prompt_io(cache_key, prompt, system_prompt, schema)
 
         return {"segments": segments, "elapsed": elapsed, "cached": False, "usage": usage}
 
@@ -176,6 +177,9 @@ def _run_condensed_for_groups(
             "group_cards": result.get("group_cards", []),
             "setting": result.get("setting", {}),
             "usage": usage,
+            "_prompt": prompt,
+            "_system": system_prompt,
+            "_schema": schema,
         }
 
     except Exception as e:
@@ -286,6 +290,16 @@ def run_pass_0b_condensed(
 
     elapsed = round(time.time() - t0, 1)
     save_cached_analysis(cache_key, {"segments": output_segments})
+
+    # Save prompt IO from the condensed calls (use first call's prompt as representative)
+    if output_segments:
+        # Collect prompts from _run_condensed_for_groups via the _prompt/_system/_schema keys
+        # These were added to the condensed return dict above
+        condensed_prompts = []
+        # Re-retrieve from the last condensed call — we need to capture during the loop
+        # For now, save the last prompt available from the condensed variable
+        if condensed and condensed.get("_prompt"):
+            _pkg.save_prompt_io(cache_key, condensed["_prompt"], condensed.get("_system", ""), condensed.get("_schema"))
 
     return {
         "segments": output_segments,
