@@ -1,6 +1,6 @@
 # Behind the Bone
 
-## Exploration 001 — Clavicle, ribs, interiority/exteriority
+## Exploration 001 — breastbone, ribs, interiority/exteriority
 
 ---
 
@@ -10,75 +10,64 @@ Lie on your back. Let your arms rest at your sides, or wherever they're comforta
 
 ...
 
-<!-- CLAVICLE — finding it from the front -->
+<!-- breastbone — finding it from the front -->
 
-Think of a clavicle. Either one. Interesting to note which side your attention went to.
+Choose one of your breastbones. Either one - the right one, or the left one. Slowly move your hand to touch yuour breastbone, and to firmly grasp it for a second. Take a moment to feel this - the solidness of the bone, the softness of the tissue. On your next breath, let your hand monitor the breastbone to see if it moves.
+
+...
+...
+
+Now slowly move your hand toward your center. Find the place where that breastbone meets your sternum. Leave your attention at that point where your breastbone meets your sternum as you let your hand lower, back to the floor, back by your side.
 
 ...
 
-Find the place where that clavicle meets your sternum. Not with your hand — with your attention. Just find that junction.
+Ask yourself a question about your attention. Is it on the front surface of the bone? The part closest to the ceiling? The surface open to the world?
 
 ...
 
-Notice where your attention landed. Was it on the front surface of the bone? The part closest to the ceiling?
+<!-- breastbone — moving to the interior -->
+
+Now see if you can bring your attention, inward. Silently bring your attention to the underside of that same bone. The part that faces inward. The side you never see.
 
 ...
 
-<!-- CLAVICLE — moving to the interior -->
-
-Now see if you can move your attention to the underside of that same bone. The part that faces inward. The side you never see.
+Stay there for a moment. The back of the breastbone. The side that faces your lungs. For a moment, stay in that place in your imagination and take look around. See in three dimensions beneath the breastbone.
 
 ...
 
-Stay there for a moment. The back of the clavicle. The side that faces your lungs.
+From there — from the underside — follow the bone outward. Toward your shoulder. Let your attention travel along the bottom edge of the breastbone, slowly, as if you were reading it with your eyes closed.
 
 ...
 
-From there — from the underside — follow the bone outward. Toward your shoulder. Let your attention travel along the bottom edge of the clavicle, slowly, as if you were reading it with your eyes closed.
+When you reach the outer end, pause. You're at the place where the breastbone meets the shoulder. Notice what that shoulder feels like from this side — from underneath the bone, looking out.
 
 ...
-
-When you reach the outer end, pause. You're at the place where the clavicle meets the shoulder. Notice what that shoulder feels like from this side — from underneath the bone, looking out.
-
 ...
 
 <!-- FIRST RIB — exterior to interior -->
 
-Now let your attention drop lower. Find a rib on that same side. Whichever one presents itself.
+Now with your hand, on the same side, touch one of your ribs. Touch any rib. Whichever rib presents itself. Leave your attention there, and let your arm go back to resting at your side.
 
 ...
 
-Where are you on the rib? Most likely the front. The part facing outward.
+Now, where is your attention? Where on your rib are you attending? Most likely the front. The part facing outward.
 
 ...
 
-See if you can get to the inside of that rib. The surface that faces the space within your chest. As if you could press your attention against the inner wall.
+See if you can drop your attention inward toward the inside of that rib. The surface that faces the space within your chest. As if you were looking from the inside pressing your attention against the inner wall. Let the eyes of your imagination rest against the inner surface of the bone.
 
 ...
 
-<!-- FIRST RIB — eyes inside, hand outside -->
+And now imagine your hand resting on the outside of the rib on the outer surface. So in your imagination, your eyes on the inside, your hand on the outside. Put a small white line between them. Through the bone. A line from your eyes to your hand.
 
-Now let your eyes, behind your closed lids, look toward that rib from the inside. As if your eyes could rest against the inner surface of the bone.
+...
+...
+
+Now, with your imagined hand, gently take hold. Check your grip. And very, very slowly, pull the rib outward. Outward just a tiny amount. Pause a second. Then let it come back... out...back...  ... out...back. Soft and slow. Your eyes stay inside, watching. Your hand pulls gently from the outside. As if you were massaging the rib between them.
 
 ...
 
-And imagine your hand resting on the outside of the rib. The outer surface. Your eyes on the inside, your hand on the outside.
-
-...
-
-Put a line between them. Through the bone. A line from your eyes to your hand.
-
-...
-
-Now, with your hand, gently take hold. And very slowly pull the rib outward. Just a tiny amount. Then let it come back. Out, and back. Out, and back.
-
-...
-
-Soft and slow. Your eyes stay inside, watching. Your hand pulls gently from the outside. As if you were massaging the rib between them.
-
-...
-
-Let it go. Release the hand. Let your eyes rest.
+Let it go. Release your hand and eyes in your imagination. Let your real eyes rest.
 
 ...
 
@@ -88,7 +77,7 @@ Now reverse it. Imagine your hand on the inside of the rib. Resting against the 
 
 ...
 
-Put a line between them again. Hand inside, eyes outside.
+Now imagine a line between them again. Hand inside, eyes outside.
 
 ...
 
@@ -106,7 +95,7 @@ Let it go. Release everything. Hand, eyes, line.
 
 ...
 
-Let the space breathe. The rib opening a little, returning. Opening, returning.
+Let the space breathe on its own. The rib opening a little, returning. Opening, returning.
 
 ...
 
@@ -114,45 +103,17 @@ Let that movement become a little smaller in your awareness. Not by doing anythi
 
 ...
 
-<!-- RECONNECTING — clavicle to rib, interior line -->
+<!-- SECOND RIB — same side, different location -->
 
-Come back to the clavicle. The underside again. Imagine a line from the inside of the clavicle straight down to the inside of the rib you were just visiting.
-
-...
-
-It's not a real line. It's a relationship. Two bones, both felt from the inside, and a space between them.
+Now find another rib on the same side. Not the one next to it — skip one or two. A rib higher up, or lower down. Whichever one calls your attention.
 
 ...
 
-Let your eyes look along that line. From the clavicle down to the rib.
+Find the outside first. Then let your attention slip to the inside. The inner wall of this new rib.
 
 ...
 
-Now forget the line. Just rest with whatever is left. That side of your chest has an inside now.
-
-...
-
-<!-- COMPARISON — noticing the difference -->
-
-Notice the other side. You haven't done anything there. Just notice the difference.
-
-...
-
-There's nothing to fix on that side. You're just noticing that the two sides are different right now. One has been visited from the inside. One hasn't.
-
-...
-
-<!-- SECOND SIDE — abbreviated repeat -->
-
-Now find a rib on this other side. The side you haven't touched yet.
-
-...
-
-Find the outside of the rib. Then find the inside.
-
-...
-
-Let your eyes rest on the inside. Imagine your hand on the outside. Put a line between them.
+Place your eyes on the inside. Your hand on the outside. Put a line between them.
 
 ...
 
@@ -160,22 +121,54 @@ With your hand, gently pull outward. Out, and back. Out, and back.
 
 ...
 
-Release. Now reverse — hand inside, eyes outside. The hand pulls inward. In, and back. In, and back.
+Now reverse. Hand inside, eyes outside. Pull inward. In, and back. In, and back.
 
+...
+
+Let it go. Let the space around this rib breathe on its own.
+
+...
+...
+
+<!-- THIRD RIB — same side, third location -->
+
+One more rib on this same side. Again, not the neighbor. Find a rib in a different region of your chest. Perhaps the lowest rib you can sense. Perhaps one near the top.
+
+...
+
+Outside first. Then inside. Eyes on the inner surface.
+
+...
+
+Hand on the outside. Line between them. Pull outward, gently. Out, and back.
+
+...
+
+Reverse. Hand inside, eyes outside. In, and back. In, and back.
+
+...
+
+Let it go. Release everything.
+
+...
+
+Now you have three ribs on this side that have been visited from the inside. Three points of interiority. Rest with that for a moment.
+
+...
+...
+
+<!-- COMPARISON — noticing the difference -->
+
+Notice the other side. You haven't done anything there. Just notice the difference.
+Just notice that the two sides are different right now. One has been visited from the inside. One hasn't.
+
+...
+...
 ...
 
 Let it go. Let the space breathe.
 
 ...
-
-Find the clavicle on this side. The underside. Imagine a line from the inside of the clavicle down to the inside of the rib.
-
-...
-
-Two bones, both felt from the inside, and a space between them.
-
-...
-
 <!-- CLOSING -->
 
 Now forget the lines. Forget the sides. Just rest with whatever is left. Both sides of your chest, visited from within.

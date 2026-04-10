@@ -484,9 +484,19 @@ async def lesson_info(document_id: str):
             row = cur.fetchone()
             if row:
                 source_name = row.get("category_name") or row.get("name", "")
+    # Use source_url if available; fall back to presigned S3 URL for audio
+    source_url = doc.get("source_url")
+    if not source_url and doc.get("s3_key") and _web.KB_BUCKET:
+        try:
+            from storage import Storage
+            storage = Storage(_web.KB_BUCKET)
+            source_url = storage.generate_presigned_url(doc["s3_key"], expiry_seconds=7200)
+        except Exception:
+            pass
+
     return JSONResponse({
         "title": doc.get("title", ""),
-        "source_url": doc.get("source_url"),
+        "source_url": source_url,
         "source_name": source_name,
         "has_audio": bool(doc.get("s3_key")),
         "has_whisper_segments": bool(segments),
