@@ -38,9 +38,46 @@ def get_storage(bucket: str):
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-# YouTube source ID (matches database seed)
+# Fallback YouTube source ID (used only if channel source can't be resolved)
 YOUTUBE_SOURCE_ID = 2
 AUDIO_TYPE_ID = 2
+
+# Cache of channel_name -> source_id (populated at runtime)
+_channel_source_cache: dict[str, int] = {}
+
+
+def resolve_channel_source(db: Database, channel_name: str) -> int:
+    """Resolve a YouTube channel to a document_source, creating one if needed.
+
+    Source name format: {CHANNEL_NAME}_YOUTUBE (e.g. RUTH_KNILL_YOUTUBE)
+    Category name format: {Channel Name} (YouTube)
+    """
+    if channel_name in _channel_source_cache:
+        return _channel_source_cache[channel_name]
+
+    source_name = sanitize_filename(channel_name).upper().replace(" ", "_") + "_YOUTUBE"
+    category_display = f"{channel_name} (YouTube)"
+
+    with db.get_cursor() as cursor:
+        # Try to find existing source
+        cursor.execute(
+            "SELECT id FROM document_source WHERE name = %s", (source_name,)
+        )
+        row = cursor.fetchone()
+        if row:
+            source_id = row["id"]
+        else:
+            # Create new source for this channel
+            cursor.execute(
+                "INSERT INTO document_source (name, category_name, visible) "
+                "VALUES (%s, %s, TRUE) RETURNING id",
+                (source_name, category_display),
+            )
+            source_id = cursor.fetchone()["id"]
+            logger.info(f"Created source {source_name} (id={source_id}) for channel: {channel_name}")
+
+    _channel_source_cache[channel_name] = source_id
+    return source_id
 
 
 @dataclass
@@ -188,12 +225,19 @@ def stage_video(
     audio_path: str,
     source_url: str,
     tags: Optional[list[str]] = None,
+    db: Optional[Database] = None,
 ) -> str:
     """
     Stage a downloaded video's audio file with sidecar JSON.
 
     Returns the staging key.
     """
+    # Resolve per-channel source (falls back to generic YOUTUBE if no db)
+    if db and video_info.channel_name:
+        source_id = resolve_channel_source(db, video_info.channel_name)
+    else:
+        source_id = YOUTUBE_SOURCE_ID
+
     # Create a filename from channel and title
     filename = f"{sanitize_filename(video_info.channel_name)}_{sanitize_filename(video_info.title)}.mp3"
     staging_key = f"staging/{filename}"
@@ -202,7 +246,7 @@ def stage_video(
     sidecar = {
         "title": video_info.title,
         "source_url": source_url,
-        "source_id": YOUTUBE_SOURCE_ID,
+        "source_id": source_id,
         "type_id": AUDIO_TYPE_ID,
         "tags": tags or [],
         "youtube_metadata": {
@@ -277,6 +321,7 @@ def process_url(
                 audio_path=audio_path,
                 source_url=url,
                 tags=tags,
+                db=db,
             )
 
             result["staging_key"] = staging_key

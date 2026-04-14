@@ -40,7 +40,8 @@ CREATE TABLE IF NOT EXISTS document (
     tags JSONB,
     metadata JSONB,
     lesson_date DATE,
-    lesson_index TEXT
+    lesson_index TEXT,
+    audio_fingerprint TEXT
 );
 
 CREATE TABLE IF NOT EXISTS analysis_type (
@@ -281,6 +282,7 @@ CREATE INDEX IF NOT EXISTS idx_youtube_queue_status ON youtube_queue(status);
 CREATE INDEX IF NOT EXISTS idx_fm_lesson_status ON fm_lesson_status(status);
 CREATE INDEX IF NOT EXISTS idx_fm_lesson_youtube ON fm_lesson_status(youtube_id);
 CREATE INDEX IF NOT EXISTS idx_document_lesson_date ON document(lesson_date);
+CREATE INDEX IF NOT EXISTS idx_document_audio_fingerprint ON document(audio_fingerprint);
 CREATE INDEX IF NOT EXISTS idx_pipeline_log_event ON pipeline_log(event);
 CREATE INDEX IF NOT EXISTS idx_pipeline_log_created ON pipeline_log(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_pipeline_log_document ON pipeline_log(document_id);
@@ -381,6 +383,7 @@ class DatabaseCore:
                 ("document_source", "public", "BOOLEAN NOT NULL DEFAULT TRUE"),
                 ("document", "category_name", "TEXT"),
                 ("document", "transcription_retries", "INTEGER DEFAULT 0"),
+                ("document", "audio_fingerprint", "TEXT"),
                 ("users", "superuser_eligible", "BOOLEAN NOT NULL DEFAULT FALSE"),
             ]:
                 cursor.execute(

@@ -5,7 +5,8 @@ import asyncio
 from fastapi import Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
-from book.state import _db, load_lesson, _pipeline_run_lock, _run_pipeline_for_lesson
+import book.state as _state
+from book.state import load_lesson, _pipeline_run_lock, _run_pipeline_for_lesson
 from book.pipeline import _build_book_pipeline_section
 from book.analysis import _run_analysis
 
@@ -42,7 +43,7 @@ async def admin_precache(request: Request):
 
 async def pipeline_status():
     """Return the pipeline status section HTML for polling updates."""
-    if not _db:
+    if not _state._db:
         return HTMLResponse("<p>Database not configured.</p>", status_code=503)
     try:
         html = _build_book_pipeline_section()
@@ -53,13 +54,13 @@ async def pipeline_status():
 
 async def toggle_pipeline_node(node_name: str):
     """Toggle the enabled/disabled state of a pipeline node."""
-    if not _db:
+    if not _state._db:
         return JSONResponse({"error": "Database not configured"}, status_code=500)
     try:
         from pipeline import PipelineStateStore
     except ImportError:
         return JSONResponse({"error": "Pipeline not available"}, status_code=503)
-    store = PipelineStateStore(_db)
+    store = PipelineStateStore(_state._db)
     store.initialize()
     current = store.is_enabled(node_name)
     store.set_enabled(node_name, not current)
@@ -68,14 +69,14 @@ async def toggle_pipeline_node(node_name: str):
 
 async def rebuild_pipeline_node(node_name: str):
     """Invalidate a pipeline node, marking it and its downstream as stale."""
-    if not _db:
+    if not _state._db:
         return JSONResponse({"error": "Database not configured"}, status_code=500)
     try:
         from pipeline import PipelineStateStore
     except ImportError:
         return JSONResponse({"error": "Pipeline not available"}, status_code=503)
 
-    store = PipelineStateStore(_db)
+    store = PipelineStateStore(_state._db)
     store.initialize()
     store.invalidate(node_name)
     return JSONResponse({"status": "invalidated", "node": node_name})
@@ -83,7 +84,7 @@ async def rebuild_pipeline_node(node_name: str):
 
 async def run_pipeline_for_lesson(lesson_id: str):
     """Trigger an on-demand pipeline run for a single lesson."""
-    if not _db:
+    if not _state._db:
         return JSONResponse({"error": "Database not configured"}, status_code=500)
     if _pipeline_run_lock.locked():
         return JSONResponse({"status": "already_running", "message": "A pipeline run is already in progress"})
@@ -98,7 +99,7 @@ async def run_pipeline_for_lesson(lesson_id: str):
 
 async def add_book_lesson(request: Request):
     """Add a lesson to the book registry."""
-    if not _db:
+    if not _state._db:
         return JSONResponse({"error": "Database not configured"}, status_code=500)
     try:
         from pipeline_graph import get_book_lessons, set_book_lessons
@@ -111,19 +112,19 @@ async def add_book_lesson(request: Request):
     if not lesson_id:
         return JSONResponse({"error": "lesson_id required"}, status_code=400)
 
-    lessons = get_book_lessons(_db)
+    lessons = get_book_lessons(_state._db)
     # Don't add duplicates
     if any(e["lesson_id"] == lesson_id for e in lessons):
         return JSONResponse({"status": "already_exists", "lessons": lessons})
 
     lessons.append({"lesson_id": lesson_id, "title": title})
-    set_book_lessons(_db, lessons)
+    set_book_lessons(_state._db, lessons)
     return JSONResponse({"status": "added", "lessons": lessons})
 
 
 async def remove_book_lesson(request: Request):
     """Remove a lesson from the book registry."""
-    if not _db:
+    if not _state._db:
         return JSONResponse({"error": "Database not configured"}, status_code=500)
     try:
         from pipeline_graph import get_book_lessons, set_book_lessons
@@ -135,22 +136,22 @@ async def remove_book_lesson(request: Request):
     if not lesson_id:
         return JSONResponse({"error": "lesson_id required"}, status_code=400)
 
-    lessons = get_book_lessons(_db)
+    lessons = get_book_lessons(_state._db)
     lessons = [e for e in lessons if e["lesson_id"] != lesson_id]
-    set_book_lessons(_db, lessons)
+    set_book_lessons(_state._db, lessons)
     return JSONResponse({"status": "removed", "lessons": lessons})
 
 
 async def list_book_lessons():
     """List all lessons in the book registry."""
-    if not _db:
+    if not _state._db:
         return JSONResponse({"error": "Database not configured"}, status_code=500)
     try:
         from pipeline_graph import get_book_lessons
     except ImportError:
         return JSONResponse({"error": "Pipeline not available"}, status_code=503)
 
-    lessons = get_book_lessons(_db)
+    lessons = get_book_lessons(_state._db)
     return JSONResponse({"lessons": lessons})
 
 

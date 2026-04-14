@@ -1,6 +1,6 @@
 """Pipeline dashboard section builder."""
 
-from book.state import _db
+import book.state as _state
 
 
 def _build_book_pipeline_section() -> str:
@@ -8,9 +8,10 @@ def _build_book_pipeline_section() -> str:
     from pipeline_graph import build_book_pipeline, get_book_lessons
     from pipeline import PipelineStateStore, PipelineExecutor, NodeStatus
 
-    lessons = get_book_lessons(_db)
-    graph = build_book_pipeline(_db, lesson_entries=lessons)
-    store = PipelineStateStore(_db)
+    db = _state._db
+    lessons = get_book_lessons(db)
+    graph = build_book_pipeline(db, lesson_entries=lessons)
+    store = PipelineStateStore(db)
     store.initialize()
 
     # Handle empty graph (no lessons)
