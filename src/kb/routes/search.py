@@ -19,7 +19,7 @@ async def api_search(request: Request, query: str = Form(""), method: str = Form
         return JSONResponse({"error": "Empty query"}, status_code=400)
     if not _web._db:
         return JSONResponse({"error": "No database connection"}, status_code=500)
-    if method not in ("default", "concepts", "tags", "combined"):
+    if method not in ("default", "concepts", "positions", "tags", "combined"):
         return JSONResponse({"error": f"Unknown method: {method}"}, status_code=400)
     _web._set_source_access(request)
     try:
@@ -111,6 +111,171 @@ async def api_lesson_concepts(document_id: str):
                 extra["distinctive_summary"] = cached.get("distinctive_summary", "")
                 extra["search_terms"] = cached.get("search_terms", [])
         return JSONResponse({"concepts": concepts, **extra})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+def _convert_v2_to_v3(v2: dict, pa: dict | None) -> tuple[list, list]:
+    """Convert spatial v2 (group-level) to v3-like (step-level) format.
+
+    Uses v2 structured data + pass_a steps to produce a best-effort
+    step-level position sequence. Less detailed than native v3 but
+    ensures all lessons with v2 data show positions.
+    """
+    groups_v2 = v2.get("groups", [])
+    v2_by_group = {g.get("group_number"): g for g in groups_v2}
+
+    steps_out = []
+    seen_positions = []
+    seen_set = set()
+
+    # Build step-level data from pass_a if available
+    if pa:
+        pa_groups = pa.get("groups", [])
+        pa_steps = {s["step_number"]: s for s in pa.get("steps", [])}
+
+        # Map step → group number
+        step_to_group = {}
+        for g in pa_groups:
+            for sn in g.get("steps", []):
+                step_to_group[sn] = g.get("group_number", 0)
+
+        for g in pa_groups:
+            gnum = g.get("group_number", 0)
+            v2g = v2_by_group.get(gnum, {})
+            group_pos = _v2_group_to_position(v2g, g)
+
+            for sn in g.get("steps", []):
+                s = pa_steps.get(sn, {})
+                # Use step's own starting_position if available, else group position
+                step_pos = s.get("starting_position") or group_pos
+                is_home = s.get("is_home", False)
+                tags = s.get("tags", [])
+
+                steps_out.append({
+                    "step_number": sn,
+                    "group_number": gnum,
+                    "position": step_pos,
+                    "action": s.get("instruction", ""),
+                    "is_transition": False,
+                    "is_rest": is_home or "P" in tags,
+                })
+
+                if step_pos and step_pos not in seen_set:
+                    seen_set.add(step_pos)
+                    seen_positions.append({"position": step_pos, "alternates": []})
+    else:
+        # No pass_a — just produce group-level entries
+        for g in groups_v2:
+            gnum = g.get("group_number", 0)
+            pos = _v2_group_to_position(g)
+            movements = g.get("primary_movements", [])
+            action = "; ".join(movements) if movements else ""
+
+            steps_out.append({
+                "step_number": gnum,
+                "group_number": gnum,
+                "position": pos,
+                "action": action,
+                "is_transition": False,
+                "is_rest": False,
+            })
+
+            if pos and pos not in seen_set:
+                seen_set.add(pos)
+                seen_positions.append({"position": pos, "alternates": []})
+
+    return steps_out, seen_positions
+
+
+def _v2_group_to_position(v2g: dict, pa_group: dict | None = None) -> str:
+    """Convert a v2 spatial group to a plain-language position string."""
+    parts = []
+
+    # Base position
+    pos = v2g.get("position", "")
+    pos_map = {
+        "supine": "Lying on back",
+        "prone": "Lying on stomach",
+        "side_lying_left": "Lying on left side",
+        "side_lying_right": "Lying on right side",
+        "sitting": "Sitting",
+        "standing": "Standing",
+        "kneeling": "Kneeling",
+        "all_fours": "On hands and knees",
+    }
+    parts.append(pos_map.get(pos, pos or "Unknown position"))
+
+    # Holds
+    for h in v2g.get("holds", []):
+        a, b = h.get("part_a", ""), h.get("part_b", "")
+        if a and b:
+            parts.append(f"{a} on {b}")
+
+    # Key contacts (skip generic floor contacts)
+    for c in v2g.get("contacts", []):
+        qualifier = c.get("qualifier", "")
+        if qualifier:
+            parts.append(f"{c.get('part', '')} {qualifier}")
+
+    # Constraints
+    for c in v2g.get("constraints", []):
+        parts.append(f"{c.get('part', '')}: {c.get('rule', '')}")
+
+    # If we have a pa_group starting_position, prefer it for the base
+    if pa_group and pa_group.get("starting_position"):
+        base = pa_group["starting_position"]
+        # Append any structured details not already in the base
+        extras = parts[1:]  # skip the position we're replacing
+        if extras:
+            return f"{base}, {', '.join(extras)}"
+        return base
+
+    return ", ".join(parts)
+
+
+@router.get("/api/lesson/{document_id}/positions")
+async def api_lesson_positions(document_id: str):
+    """Get step-level position sequence (spatial v3) for a lesson.
+
+    Falls back to converting spatial v2 data if v3 isn't available.
+    """
+    if not _web._db:
+        return JSONResponse({"error": "No database connection"}, status_code=500)
+    try:
+        text = _web._db.get_document_transcription(document_id)
+        if not text:
+            return JSONResponse({"error": "No transcript"}, status_code=404)
+        from cache_helpers import get_cache_key
+
+        # Try v3 first
+        v3_key = get_cache_key(text.strip() + ":spatial_v3")
+        cached = _web._db.get_cache(v3_key)
+        if cached:
+            return JSONResponse({
+                "steps": cached.get("steps", []),
+                "position_summary": cached.get("position_summary", []),
+                "available": True,
+                "version": "v3",
+            })
+
+        # Fall back to v2 → convert to v3-like format
+        v2_key = get_cache_key(text.strip() + ":spatial_v2")
+        v2 = _web._db.get_cache(v2_key)
+        if not v2:
+            return JSONResponse({"steps": [], "position_summary": [], "available": False})
+
+        # Also load pass_a for step-level data
+        pa_key = get_cache_key(text.strip() + ":decompose_v3")
+        pa = _web._db.get_cache(pa_key)
+
+        steps, summary = _convert_v2_to_v3(v2, pa)
+        return JSONResponse({
+            "steps": steps,
+            "position_summary": summary,
+            "available": True,
+            "version": "v2-converted",
+        })
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 

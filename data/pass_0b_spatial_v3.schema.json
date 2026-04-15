@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SpatialV3Result",
+  "description": "Step-level position sequence for a Feldenkrais lesson",
+  "type": "object",
+  "properties": {
+    "steps": {
+      "type": "array",
+      "description": "Position and action for each step in the lesson",
+      "items": {
+        "type": "object",
+        "properties": {
+          "step_number": {
+            "type": "integer",
+            "description": "Step number from the decomposition"
+          },
+          "group_number": {
+            "type": "integer",
+            "description": "Group this step belongs to"
+          },
+          "position": {
+            "type": "string",
+            "description": "Full body configuration in plain language (e.g., 'Lying on back, both knees bent, feet flat on floor, right knee crossed over left, arms reaching to ceiling with palms together')"
+          },
+          "action": {
+            "type": "string",
+            "description": "What the student does in this position (e.g., 'Tilt both arms to the left, head follows')"
+          },
+          "is_transition": {
+            "type": "boolean",
+            "description": "True if this step is primarily about changing to a new position"
+          },
+          "is_rest": {
+            "type": "boolean",
+            "description": "True if this step is primarily rest or scanning"
+          }
+        },
+        "required": ["step_number", "group_number", "position", "action", "is_transition", "is_rest"]
+      }
+    },
+    "position_summary": {
+      "type": "array",
+      "description": "Deduplicated list of distinct body configurations used in the lesson, in order of first appearance, with alternate phrasings",
+      "items": {
+        "type": "object",
+        "properties": {
+          "position": {
+            "type": "string",
+            "description": "Primary plain-language description of the body configuration"
+          },
+          "alternates": {
+            "type": "array",
+            "description": "Other ways a student might describe or remember this position — visual, kinesthetic, common names, simpler phrasings",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["position", "alternates"]
+      }
+    }
+  },
+  "required": ["steps", "position_summary"]
+}

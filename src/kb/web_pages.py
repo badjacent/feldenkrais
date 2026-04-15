@@ -911,8 +911,13 @@ async function loadConcepts() {{
     conceptsLoaded = true;
     const div = document.getElementById('concepts-content');
     try {{
-        const res = await fetch('/api/lesson/' + DOCUMENT_ID + '/concepts');
+        // Load concepts and positions in parallel
+        const [res, posRes] = await Promise.all([
+            fetch('/api/lesson/' + DOCUMENT_ID + '/concepts'),
+            fetch('/api/lesson/' + DOCUMENT_ID + '/positions'),
+        ]);
         const data = await res.json();
+        const posData = await posRes.json();
         if (data.error) {{
             div.innerHTML = '<div style="color:#999;padding:16px;">No concept data available for this lesson.</div>';
             return;
@@ -934,6 +939,52 @@ async function loadConcepts() {{
                 html += '<span style="padding:4px 12px;background:#fff3e0;border:1px solid #ffe0b2;border-radius:14px;font-size:0.85em;color:#e65100;">' + escConcept(t) + '</span>';
             }});
             html += '</div></div>';
+        }}
+        // Position sequence (spatial v3)
+        if (posData.available && posData.steps && posData.steps.length) {{
+            html += '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
+            html += '<div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#00695c;margin-bottom:8px;">Positions Through the Lesson</div>';
+            if (posData.position_summary && posData.position_summary.length) {{
+                html += '<div style="margin-bottom:12px;">';
+                posData.position_summary.forEach((p, i) => {{
+                    const pos = typeof p === 'string' ? p : p.position;
+                    const alts = (typeof p === 'object' && p.alternates) ? p.alternates : [];
+                    html += '<div style="margin-bottom:6px;">';
+                    html += '<span style="padding:4px 10px;background:#e0f2f1;border:1px solid #b2dfdb;border-radius:14px;font-size:0.82em;color:#00695c;">' + escConcept(pos) + '</span>';
+                    if (alts.length) {{
+                        html += '<div style="margin-left:16px;margin-top:3px;display:flex;flex-wrap:wrap;gap:4px;">';
+                        alts.forEach(a => {{
+                            html += '<span style="padding:2px 8px;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:10px;font-size:0.75em;color:#888;">' + escConcept(a) + '</span>';
+                        }});
+                        html += '</div>';
+                    }}
+                    html += '</div>';
+                }});
+                html += '</div>';
+            }}
+            let curGroup = -1;
+            posData.steps.forEach(s => {{
+                if (s.group_number !== curGroup) {{
+                    if (curGroup !== -1) html += '</div>';
+                    curGroup = s.group_number;
+                    html += '<div style="margin-bottom:8px;">';
+                    html += '<div style="font-size:0.78em;font-weight:600;color:#666;margin-top:8px;margin-bottom:4px;">Group ' + s.group_number + '</div>';
+                }}
+                const posStyle = 'font-weight:500;color:#00796b;';
+                const actionStyle = 'color:#555;';
+                const tagStyle = 'display:inline-block;font-size:0.7em;padding:1px 5px;border-radius:3px;margin-left:4px;';
+                let tags = '';
+                if (s.is_rest) tags += '<span style="' + tagStyle + 'background:#e8eaf6;color:#5c6bc0;">rest</span>';
+                if (s.is_transition) tags += '<span style="' + tagStyle + 'background:#fff3e0;color:#e65100;">transition</span>';
+                html += '<div style="font-size:0.85em;line-height:1.5;padding:2px 0;">';
+                html += '<span style="color:#999;font-size:0.8em;margin-right:4px;">' + s.step_number + '.</span>';
+                html += '<span style="' + posStyle + '">[' + escConcept(s.position) + ']</span> ';
+                html += '<span style="' + actionStyle + '">' + escConcept(s.action) + '</span>';
+                html += tags;
+                html += '</div>';
+            }});
+            if (curGroup !== -1) html += '</div>';
+            html += '</div>';
         }}
         // Concepts by category
         if (data.concepts && data.concepts.length) {{

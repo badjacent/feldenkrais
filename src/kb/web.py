@@ -820,9 +820,10 @@ def _combined_search(query: str, embedding, limit: int = 1000):
     RRF_K = 60
     CONCEPTS_WEIGHT = 3.0
 
-    # Always run both searches (need concepts for gate check, both for RRF)
+    # Always run all available searches
     default_hits = _db.search_lessons(embedding, limit=1000, method="default")
     concepts_hits = _db.search_lessons(embedding, limit=1000, method="concepts")
+    positions_hits = _db.search_lessons(embedding, limit=1000, method="positions")
 
     # Compute concepts gap for confidence gate
     concepts_sims = [h["similarity"] for h in concepts_hits]
@@ -835,7 +836,8 @@ def _combined_search(query: str, embedding, limit: int = 1000):
         for r in results:
             r.setdefault("summary_text", "")
     else:
-        # Ambiguous — RRF merge of default + concepts (no tag boost)
+        # Ambiguous — RRF merge of default + concepts + positions
+        POSITIONS_WEIGHT = 2.0
         cascade_mode = "blended"
         scores = {}
         result_data = {}
@@ -849,6 +851,12 @@ def _combined_search(query: str, embedding, limit: int = 1000):
         for rank, hit in enumerate(concepts_hits, 1):
             doc_id = hit["document_id"]
             scores[doc_id] = scores.get(doc_id, 0) + CONCEPTS_WEIGHT / (RRF_K + rank)
+            if doc_id not in result_data:
+                result_data[doc_id] = hit
+
+        for rank, hit in enumerate(positions_hits, 1):
+            doc_id = hit["document_id"]
+            scores[doc_id] = scores.get(doc_id, 0) + POSITIONS_WEIGHT / (RRF_K + rank)
             if doc_id not in result_data:
                 result_data[doc_id] = hit
 

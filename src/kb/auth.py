@@ -95,6 +95,48 @@ def _set_session_cookie(user: dict, request: Request) -> RedirectResponse:
     return response
 
 
+# ── Guest token auth ─────────────────────────────────────────────────
+
+def generate_guest_token(user_id: int) -> str:
+    """Generate an HMAC token for guest login. Deterministic per user."""
+    return hmac.new(
+        COOKIE_SECRET.encode(), f"guest:{user_id}".encode(), hashlib.sha256
+    ).hexdigest()[:24]
+
+
+def guest_login(token: str, redirect_to: str, request: Request, db) -> RedirectResponse | None:
+    """Validate a guest token and set a session cookie.
+
+    Returns a RedirectResponse on success, None if the token is invalid.
+    """
+    # Find the guest user whose token matches
+    with db.get_cursor(commit=False) as cur:
+        cur.execute(
+            "SELECT id, login, name, email, tier, superuser_eligible FROM users WHERE provider = 'guest'"
+        )
+        for user in cur.fetchall():
+            expected = generate_guest_token(user["id"])
+            if hmac.compare_digest(token, expected):
+                cookie_data = {
+                    "user_id": user["id"],
+                    "tier": user["tier"],
+                    "login": user["login"],
+                    "superuser_eligible": bool(user.get("superuser_eligible", False)),
+                    "exp": int(time.time()) + COOKIE_MAX_AGE,
+                }
+                response = RedirectResponse(redirect_to or "/")
+                response.set_cookie(
+                    COOKIE_NAME,
+                    encode_cookie(cookie_data),
+                    max_age=COOKIE_MAX_AGE,
+                    httponly=True,
+                    samesite="lax",
+                    secure=_is_secure(request),
+                )
+                return response
+    return None
+
+
 # ── GitHub OAuth ──────────────────────────────────────────────────────
 
 def github_login_redirect(request: Request) -> RedirectResponse:

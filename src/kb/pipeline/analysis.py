@@ -37,6 +37,7 @@ from analysis import (
     run_pass_0b_word_lang,
     run_pass_0b_concepts,
     run_pass_0b_spatial,
+    run_pass_0b_spatial_v3,
     run_pass_0b_condensed,
     get_cache_key,
     load_cached_analysis,
@@ -101,6 +102,18 @@ def _run_pass_0b_spatial(db: Database, document_id: str, transcript: str) -> boo
     return result is not None
 
 
+def _run_pass_0b_spatial_v3(db: Database, document_id: str, transcript: str) -> bool:
+    result = run_pass_0b_spatial_v3(transcript, DEFAULT_PROVIDER)
+    if result is not None:
+        # Mark embed_positions as stale so it rebuilds with the richer v3 data
+        with db.get_cursor() as cur:
+            cur.execute("""
+                UPDATE document_analysis_state SET stale = TRUE, updated_at = NOW()
+                WHERE document_id = %s AND step_name = 'embed_positions'
+            """, (document_id,))
+    return result is not None
+
+
 def _run_pass_0b_condensed(db: Database, document_id: str, transcript: str) -> bool:
     # Condensed needs somatic + lang results as input
     somatic_key = get_cache_key(transcript.strip() + ":somatic_v2")
@@ -133,6 +146,59 @@ def _run_embeddings(db: Database, document_id: str, transcript: str) -> bool:
 
     embeddings, _ = get_embeddings([summary], task_type="RETRIEVAL_DOCUMENT")
     db.upsert_embedding(document_id, embeddings[0], summary, summary_hash)
+    return True
+
+
+def _run_embed_positions(db: Database, document_id: str, transcript: str) -> bool:
+    """Build position embedding from spatial_v3 data, falling back to v2."""
+    import hashlib
+    from llm import get_embeddings
+
+    # Try v3 first
+    v3_key = get_cache_key(transcript.strip() + ":spatial_v3")
+    v3_data = load_cached_analysis(v3_key)
+
+    if v3_data:
+        # Build embedding text from v3 position summary + step positions
+        parts = []
+        doc = db.get_document(document_id)
+        if doc:
+            parts.append(doc.get("title", ""))
+        for p in v3_data.get("position_summary", []):
+            if isinstance(p, dict):
+                parts.append(p["position"])
+                parts.extend(p.get("alternates", []))
+            else:
+                parts.append(p)
+        for s in v3_data.get("steps", []):
+            if not s.get("is_rest"):
+                parts.append(f"{s['position']}: {s['action']}")
+        summary = "\n".join(parts)
+    else:
+        # Fall back to v2
+        v2_key = get_cache_key(transcript.strip() + ":spatial_v2")
+        v2_data = load_cached_analysis(v2_key)
+        if not v2_data:
+            logger.error(f"No spatial data (v2 or v3) for position embedding: {document_id[:8]}")
+            return False
+
+        parts = []
+        doc = db.get_document(document_id)
+        if doc:
+            parts.append(doc.get("title", ""))
+        for g in v2_data.get("groups", []):
+            detail = g.get("config_detail", "")
+            if detail:
+                parts.append(detail)
+            for h in g.get("holds", []):
+                parts.append(f"{h.get('part_a', '')} on {h.get('part_b', '')}")
+            for m in g.get("primary_movements", []):
+                parts.append(m)
+        summary = "\n".join(parts)
+
+    summary_hash = hashlib.sha256(summary.encode()).hexdigest()[:16]
+    embeddings, _ = get_embeddings([summary], task_type="RETRIEVAL_DOCUMENT")
+    db.upsert_embedding(document_id, embeddings[0], summary, summary_hash, method="positions")
     return True
 
 
@@ -214,6 +280,8 @@ STEP_EXECUTORS = {
     "language_patterns": _run_pass_0b_word_lang,
     "concept_tags": _run_pass_0b_concepts,
     "spatial": _run_pass_0b_spatial,
+    "spatial_v3": _run_pass_0b_spatial_v3,
+    "embed_positions": _run_embed_positions,
     "condense": _run_pass_0b_condensed,
     "embed": _run_embeddings,
     "index_concepts": _run_concept_index,

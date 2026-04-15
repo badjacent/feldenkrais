@@ -33,6 +33,15 @@ async def auth_logout(request: Request):
     return _web._auth_mod.logout(request)
 
 
+@router.get("/guest/{token}")
+async def guest_login(token: str, request: Request, redirect: str = "/"):
+    """Log in as a guest user via token link."""
+    result = _web._auth_mod.guest_login(token, redirect, request, _web._db)
+    if result:
+        return result
+    return RedirectResponse("/")
+
+
 @router.get("/auth/superuser/on")
 async def superuser_on(request: Request):
     """Enable superuser mode (for eligible users only)."""

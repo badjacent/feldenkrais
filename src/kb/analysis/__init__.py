@@ -61,6 +61,7 @@ from .pass0b_lang import run_pass_0b_lang, run_pass_0b_word_lang
 from .pass0b_synthesis import run_segmentation_query, _run_condensed_for_groups, run_pass_0b_condensed
 from .pass0b_concepts import run_pass_0b_concepts
 from .pass0b_spatial import run_pass_0b_spatial
+from .pass0b_spatial_v3 import run_pass_0b_spatial_v3, load_pass_0b_spatial_v3
 
 # ── Re-exported cache helpers (pipeline/analysis.py imports these from analysis) ──
 from cache_helpers import get_cache_key, load_cached_analysis, save_cached_analysis, save_prompt_io
