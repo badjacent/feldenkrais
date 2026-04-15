@@ -106,33 +106,48 @@ class EmbeddingsMixin:
                 )
 
     def search_by_concepts(self, terms: list[str], limit: int = 10) -> list[dict]:
-        """Search lessons by matching concept values. Ranks by number of matching concepts.
+        """Search lessons by matching concept values. Ranks by weighted match count.
+
+        Full-phrase matches (all terms appearing together in one concept value)
+        are weighted 5x higher than individual term matches.
 
         Returns list of {document_id, title, match_count, matched_concepts, source_id, category_name}.
         """
         if not terms:
             return []
-        # Build ILIKE conditions for each search term
-        conditions = []
-        params = []
-        for term in terms:
-            conditions.append("lc.value ILIKE %s")
-            params.append(f"%{term}%")
 
-        where_clause = " OR ".join(conditions)
+        # Build ILIKE conditions for each individual term
+        term_conditions = []
+        term_params = []
+        for term in terms:
+            term_conditions.append("lc.value ILIKE %s")
+            term_params.append(f"%{term}%")
+
+        # Also match the full phrase (all terms together) with higher weight
+        full_phrase = " ".join(terms)
+        phrase_weight = 5
+
         if self.allowed_source_ids is not None:
             source_join = "\nJOIN document_source ds ON ds.id = d.source_id"
             source_filter = " AND ds.id = ANY(%s)"
-            params.append(list(self.allowed_source_ids))
         else:
             source_join = ""
             source_filter = ""
+
+        where_clause = " OR ".join(term_conditions)
+        phrase_pattern = f"%{full_phrase}%"
+
+        # Params: phrase_pattern, term_params..., [source_ids], phrase_pattern, limit
+        params: list = [phrase_pattern] + term_params
+        if self.allowed_source_ids is not None:
+            params.append(list(self.allowed_source_ids))
+        params.extend([phrase_pattern, limit])
 
         with self.get_cursor(commit=False) as cursor:
             cursor.execute(
                 f"""
                 SELECT lc.document_id::text, d.title,
-                       COUNT(*) as match_count,
+                       (COUNT(*) + {phrase_weight} * COUNT(*) FILTER (WHERE lc.value ILIKE %s))::integer as match_count,
                        ARRAY_AGG(DISTINCT lc.category || ':' || lc.value) as matched_concepts,
                        d.source_id,
                        d.category_name
@@ -140,10 +155,10 @@ class EmbeddingsMixin:
                 JOIN document d ON d.id = lc.document_id{source_join}
                 WHERE ({where_clause}){source_filter}
                 GROUP BY lc.document_id, d.title, d.source_id, d.category_name
-                ORDER BY COUNT(*) DESC
+                ORDER BY (COUNT(*) + {phrase_weight} * COUNT(*) FILTER (WHERE lc.value ILIKE %s)) DESC
                 LIMIT %s
                 """,
-                params + [limit],
+                params,
             )
             return [dict(row) for row in cursor.fetchall()]
 
