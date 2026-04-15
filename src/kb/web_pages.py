@@ -996,12 +996,14 @@ async function loadConcepts() {{
             const catColors = {{
                 body_region: '#2196f3', movement_pattern: '#4caf50', position: '#9c27b0',
                 feldenkrais_concept: '#ff9800', teaching_strategy: '#e91e63', theme: '#607d8b',
-                spatial_config: '#00897b', contact_point: '#5c6bc0', constraint: '#c62828', working_position: '#6a1b9a'
+                spatial_config: '#00897b', contact_point: '#5c6bc0', constraint: '#c62828', working_position: '#6a1b9a',
+                position_v3: '#00695c', position_alt: '#26a69a'
             }};
             const catLabels = {{
                 body_region: 'Body Region', movement_pattern: 'Movement Pattern', position: 'Position',
                 feldenkrais_concept: 'Feldenkrais Concept', teaching_strategy: 'Teaching Strategy', theme: 'Theme',
-                spatial_config: 'Spatial Configuration', contact_point: 'Contact Point', constraint: 'Constraint', working_position: 'Working Position'
+                spatial_config: 'Spatial Configuration', contact_point: 'Contact Point', constraint: 'Constraint', working_position: 'Working Position',
+                position_v3: 'Position (detailed)', position_alt: 'Position (alternate phrasing)'
             }};
             html += '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
             html += '<div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#333;margin-bottom:12px;">Concept Tags</div>';

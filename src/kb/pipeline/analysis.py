@@ -199,6 +199,36 @@ def _run_embed_positions(db: Database, document_id: str, transcript: str) -> boo
     summary_hash = hashlib.sha256(summary.encode()).hexdigest()[:16]
     embeddings, _ = get_embeddings([summary], task_type="RETRIEVAL_DOCUMENT")
     db.upsert_embedding(document_id, embeddings[0], summary, summary_hash, method="positions")
+
+    # Write position alternates as concept rows for tag search
+    position_concepts = []
+    seen = set()
+    source_data = v3_data if v3_data else None
+    if source_data:
+        for p in source_data.get("position_summary", []):
+            if isinstance(p, dict):
+                val = p["position"]
+                if val not in seen:
+                    position_concepts.append({"category": "position_v3", "value": val})
+                    seen.add(val)
+                for alt in p.get("alternates", []):
+                    if alt not in seen:
+                        position_concepts.append({"category": "position_alt", "value": alt})
+                        seen.add(alt)
+    if position_concepts:
+        # Remove old position_v3/position_alt rows, then insert new ones
+        with db.get_cursor() as cur:
+            cur.execute(
+                "DELETE FROM lesson_concept WHERE document_id = %s AND category IN ('position_v3', 'position_alt')",
+                (document_id,),
+            )
+            for c in position_concepts:
+                cur.execute(
+                    "INSERT INTO lesson_concept (document_id, category, value) VALUES (%s, %s, %s)",
+                    (document_id, c["category"], c["value"]),
+                )
+        logger.info(f"  Wrote {len(position_concepts)} position concept rows")
+
     return True
 
 
