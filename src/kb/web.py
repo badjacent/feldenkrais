@@ -151,37 +151,9 @@ def _is_pipeline_locked() -> bool:
     return True
 
 
-# ── Pipeline runner (on-demand only, no background loop) ─────────────────
+# ── Pipeline runner lock (used by the dormant book pipeline if mounted) ──
 
 _pipeline_run_lock = asyncio.Lock()
-
-
-def _run_pipeline_for_lesson(lesson_id: str):
-    """Run all stale nodes for a single lesson (synchronous, called from thread)."""
-    if _is_pipeline_locked():
-        print(f"[pipeline] skipping run for {lesson_id[:8]}... — global lock held")
-        return
-
-    from pipeline import PipelineStateStore, PipelineExecutor
-    from pipeline_graph import build_lesson_pipeline, get_book_lessons
-
-    # Find title from registry
-    lessons = get_book_lessons(_db)
-    title = "Unknown Lesson"
-    for entry in lessons:
-        if entry["lesson_id"] == lesson_id:
-            title = entry["title"]
-            break
-
-    graph = build_lesson_pipeline(_db, lesson_id, title)
-    store = PipelineStateStore(_db)
-    store.initialize()
-    executor = PipelineExecutor(graph, store)
-    results = executor.run_stale(total_timeout_seconds=900)
-    if isinstance(results, list) and results:
-        fresh = sum(1 for r in results if r.status.value == "fresh")
-        errors = sum(1 for r in results if r.status.value == "error")
-        print(f"[pipeline] lesson {lesson_id[:8]}... complete: {fresh} succeeded, {errors} errors out of {len(results)} nodes")
 
 
 async def _periodic_group_sync():
@@ -1022,14 +994,21 @@ app.include_router(lesson_data_router)
 
 
 # ── Conditional book router mount ─────────────────────────────────────
-# The book pipeline is dormant. Its routes mount only when explicitly
-# enabled via the BOOK_PIPELINE_ENABLED=1 env var AND the private data
-# directory is present. Production Lambda has neither, so the book routes
-# are never exposed there.
+# The book pipeline is dormant — its code lives in the private submodule
+# at private/products/book/src/. It mounts only when explicitly enabled
+# via BOOK_PIPELINE_ENABLED=1 AND the private submodule is present.
+# Production Lambda has neither, so the book routes are never exposed there.
 
 _book_available = False
-_private_data = Path(__file__).parent.parent.parent / "private" / "data"
-if os.environ.get("BOOK_PIPELINE_ENABLED") == "1" and _private_data.exists():
+_project_root = Path(__file__).parent.parent.parent
+_private_data = _project_root / "private" / "data"
+_book_src = _project_root / "private" / "products" / "book" / "src"
+if (
+    os.environ.get("BOOK_PIPELINE_ENABLED") == "1"
+    and _private_data.exists()
+    and _book_src.exists()
+):
+    sys.path.insert(0, str(_book_src))
     try:
         from web_book import create_book_router
         _book_router = create_book_router(db=_db, data_dir=_private_data)
