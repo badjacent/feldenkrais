@@ -96,6 +96,24 @@ cython_debug/
 .DS_Store
 *.db
 
+# Claude Code worktrees
+.claude/worktrees/
+
+# One-off script outputs
+scripts/*.log
+scripts/dedup_log.json
+
+# Media files (do NOT commit large binaries)
+*.mp3
+*.wav
+*.m4a
+*.mp4
+*.mov
+*.flac
+*.ogg
+*.opus
+*.webm
+
 # Terraform
 terraform/**/.terraform/
 terraform/**/*.tfstate
