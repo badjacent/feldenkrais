@@ -29,22 +29,17 @@ done
 cd "$SCRIPT_DIR"
 
 # --- Data files (prompts, schemas) from public data/ ---
+# Single source of truth: everything the Lambda needs is in public data/
 mkdir -p "$STAGING/data"
 for f in "$PROJECT_DIR"/data/pass_0*.md "$PROJECT_DIR"/data/pass_0*.schema.json \
-         "$PROJECT_DIR"/data/pass_0*.json "$PROJECT_DIR"/data/pass_a.schema.json; do
+         "$PROJECT_DIR"/data/pass_0*.json "$PROJECT_DIR"/data/pass_a.schema.json \
+         "$PROJECT_DIR"/data/frameworks.json; do
     [ -f "$f" ] && cp "$f" "$STAGING/data/"
 done
 
-# --- Data files from terraform/data/ (deployment copies) ---
-cp "$SCRIPT_DIR/data/frameworks.json" "$STAGING/data/" 2>/dev/null || true
-cp "$SCRIPT_DIR/data/pass_b.schema.json" "$STAGING/data/" 2>/dev/null || true
-cp "$SCRIPT_DIR/data/explore_init.md" "$STAGING/data/" 2>/dev/null || true
-cp "$SCRIPT_DIR/data/explore_round.md" "$STAGING/data/" 2>/dev/null || true
-cp "$SCRIPT_DIR/data/explore.schema.json" "$STAGING/data/" 2>/dev/null || true
-
-# --- Framework prompts (v1) ---
+# --- Framework prompts (v1) — all under data/frameworks/v1/ ---
 mkdir -p "$STAGING/data/frameworks/v1"
-for f in "$SCRIPT_DIR"/data/frameworks/v1/*; do
+for f in "$PROJECT_DIR"/data/frameworks/v1/*; do
     [ -f "$f" ] && cp "$f" "$STAGING/data/frameworks/v1/"
 done
 

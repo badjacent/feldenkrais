@@ -20,6 +20,13 @@ import sys
 import uuid
 from pathlib import Path
 
+# Allow `import web` (used by routes/* and book/state.py) to resolve to this
+# module when this file is loaded as `kb.web` (e.g. via tests). Without this
+# alias, Python would try to load src/kb/web.py a second time under the name
+# `web`, causing a circular import with routes.auth.
+if __name__ != "web" and "web" not in sys.modules:
+    sys.modules["web"] = sys.modules[__name__]
+
 from dotenv import load_dotenv
 
 # Load .env from project root
@@ -994,23 +1001,6 @@ def assemble_chat_context(
     return "\n".join(parts)
 
 
-# ── Conditional book router mount ─────────────────────────────────────
-
-_book_available = False
-_private_data = Path(__file__).parent.parent.parent / "private" / "data"
-_book_data_dir = _private_data if _private_data.exists() else DATA_DIR
-try:
-    from web_book import create_book_router
-    _book_router = create_book_router(db=_db, data_dir=_book_data_dir)
-    app.include_router(_book_router)
-    # Expose the book pipeline section builder for build_pipeline_html()
-    from web_book import _build_book_pipeline_section
-    app.state.build_book_pipeline_section = _build_book_pipeline_section
-    _book_available = True
-except ImportError:
-    pass
-
-
 # ── Include route modules ─────────────────────────────────────────────
 from routes.auth import router as auth_router
 from routes.ingestion import router as ingestion_router
@@ -1029,6 +1019,27 @@ app.include_router(finder_router)
 app.include_router(admin_router)
 app.include_router(pages_router)
 app.include_router(lesson_data_router)
+
+
+# ── Conditional book router mount ─────────────────────────────────────
+# The book pipeline is dormant. Its routes mount only when explicitly
+# enabled via the BOOK_PIPELINE_ENABLED=1 env var AND the private data
+# directory is present. Production Lambda has neither, so the book routes
+# are never exposed there.
+
+_book_available = False
+_private_data = Path(__file__).parent.parent.parent / "private" / "data"
+if os.environ.get("BOOK_PIPELINE_ENABLED") == "1" and _private_data.exists():
+    try:
+        from web_book import create_book_router
+        _book_router = create_book_router(db=_db, data_dir=_private_data)
+        app.include_router(_book_router)
+        # Expose the book pipeline section builder for build_pipeline_html()
+        from web_book import _build_book_pipeline_section
+        app.state.build_book_pipeline_section = _build_book_pipeline_section
+        _book_available = True
+    except ImportError:
+        pass
 
 
 # Lambda handler

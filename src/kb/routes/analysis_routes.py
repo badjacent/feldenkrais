@@ -22,7 +22,9 @@ async def analysis_dashboard(request: Request):
 
 @router.get("/pipeline", response_class=HTMLResponse)
 async def pipeline_dashboard(request: Request):
-    """Pipeline dashboard -- book generation."""
+    """Pipeline dashboard -- book generation. 404s when the book pipeline is dormant."""
+    if not _web._book_available:
+        return HTMLResponse("Not Found", status_code=404)
     if _web.IS_LAMBDA and _web._auth_mod.get_access_tier(request) != "admin":
         return RedirectResponse("/")
     return _web.build_pipeline_html()

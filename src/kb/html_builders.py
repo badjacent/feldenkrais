@@ -298,7 +298,7 @@ def _build_ingestion_page() -> str:
     </style>
 </head>
 <body>
-    <div class="nav"><a href="/">&larr; Home</a> <a href="/analysis">Analysis</a> <a href="/pipeline">Book Pipeline</a></div>
+    <div class="nav"><a href="/">&larr; Home</a> <a href="/analysis">Analysis</a></div>
     <h1>Ingestion Dashboard</h1>
 
     <div id="ingestion-content">
@@ -645,7 +645,6 @@ def _build_analysis_page(group_id: int | None = None) -> str:
         <a href="/">&larr; Home</a>
         <a href="/ingestion">Ingestion</a>
         <a href="/analysis">Analysis</a>
-        <a href="/pipeline">Book Pipeline</a>
     </div>
     <h1>Analysis Pipeline</h1>
     <p style="color:#666;font-size:0.9em;margin-bottom:16px;">
