@@ -62,7 +62,10 @@ def get_genai():
     return genai
 
 
-Provider = Literal["anthropic", "openai", "gemini"]
+Provider = Literal["anthropic", "openai", "gemini", "zai"]
+
+# z.ai (Zhipu GLM) exposes an OpenAI-compatible endpoint.
+ZAI_DEFAULT_BASE_URL = "https://api.z.ai/api/paas/v4"
 
 
 def get_embeddings(texts: list[str], model: str = "gemini-embedding-001",
@@ -108,7 +111,7 @@ class LLM:
     last_usage: dict = field(default_factory=dict, init=False, repr=False)
 
     def __post_init__(self):
-        if self.provider not in ("anthropic", "openai", "gemini"):
+        if self.provider not in ("anthropic", "openai", "gemini", "zai"):
             raise ValueError(f"Unsupported provider: {self.provider}")
 
     @property
@@ -130,6 +133,12 @@ class LLM:
                 self._client = mod.Client(
                     api_key=self.api_key or os.environ.get("GOOGLE_API_KEY"),
                     http_options={"timeout": 600_000},  # 10min request timeout
+                )
+            elif self.provider == "zai":
+                mod = get_openai()
+                self._client = mod.OpenAI(
+                    api_key=self.api_key or os.environ.get("ZAI_API_KEY"),
+                    base_url=os.environ.get("ZAI_BASE_URL", ZAI_DEFAULT_BASE_URL),
                 )
         return self._client
 
@@ -186,7 +195,7 @@ class LLM:
 
         if self.provider == "anthropic":
             return self._chat_anthropic(messages, system, max_tokens, temperature)
-        elif self.provider == "openai":
+        elif self.provider in ("openai", "zai"):
             return self._chat_openai(messages, system, max_tokens, temperature)
         elif self.provider == "gemini":
             return self._chat_gemini(messages, system, max_tokens, temperature)
@@ -360,7 +369,7 @@ class LLM:
 
         if self.provider == "anthropic":
             return self._structured_anthropic(prompt, response_model, system, max_tokens, temperature)
-        elif self.provider == "openai":
+        elif self.provider in ("openai", "zai"):
             return self._structured_openai(prompt, response_model, system, max_tokens, temperature)
         elif self.provider == "gemini":
             return self._structured_gemini(prompt, response_model, system, max_tokens, temperature)
@@ -486,7 +495,7 @@ class LLM:
 
         if self.provider == "anthropic":
             return self._structured_json_anthropic(prompt, schema, system, max_tokens, temperature)
-        elif self.provider == "openai":
+        elif self.provider in ("openai", "zai"):
             return self._structured_json_openai(prompt, schema, system, max_tokens, temperature)
         elif self.provider == "gemini":
             return self._structured_json_gemini(prompt, schema, system, max_tokens, temperature)

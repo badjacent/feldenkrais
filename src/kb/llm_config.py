@@ -61,6 +61,18 @@ LLM_CONFIGS = {
         "api_key_env": "ANTHROPIC_API_KEY",
         "default_max_tokens": 64000,
     },
+    "zai": {
+        "provider": "zai",
+        "model": "glm-4.6",
+        "api_key_env": "ZAI_API_KEY",
+        "default_max_tokens": 32000,
+    },
+    "zai-air": {
+        "provider": "zai",
+        "model": "glm-4.5-air",
+        "api_key_env": "ZAI_API_KEY",
+        "default_max_tokens": 16000,
+    },
 }
 
 DEFAULT_LLM = "gemini"
