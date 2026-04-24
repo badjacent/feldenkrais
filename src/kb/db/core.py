@@ -266,6 +266,22 @@ CREATE TABLE IF NOT EXISTS external_lesson (
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE (lesson_source_id, title)
 );
+
+CREATE TABLE IF NOT EXISTS lesson_view (
+    id SERIAL PRIMARY KEY,
+    document_id TEXT NOT NULL,
+    user_id INTEGER,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS lesson_chat_log (
+    id SERIAL PRIMARY KEY,
+    document_id TEXT NOT NULL,
+    user_id INTEGER,
+    query TEXT NOT NULL,
+    response TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
 """
 
 INDEXES = """
@@ -296,6 +312,10 @@ CREATE INDEX IF NOT EXISTS idx_lgm_document ON lesson_group_member (document_id)
 CREATE INDEX IF NOT EXISTS idx_gag_permitted ON group_analysis_gate (group_id, step_name) WHERE permitted = TRUE;
 CREATE INDEX IF NOT EXISTS idx_das_document ON document_analysis_state (document_id);
 CREATE INDEX IF NOT EXISTS idx_das_step ON document_analysis_state (step_name);
+CREATE INDEX IF NOT EXISTS idx_lesson_view_user ON lesson_view (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_lesson_view_document ON lesson_view (document_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_lesson_chat_document ON lesson_chat_log (document_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_lesson_chat_user ON lesson_chat_log (user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_analysis_transcript ON analysis (document_id) WHERE type_id = 1;
 """
 

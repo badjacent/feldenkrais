@@ -814,13 +814,32 @@ function renderTranscript() {{
     for (const group of groups) {{
         const stepNums = group.steps || [];
         stepNums.forEach(sn => groupedStepNums.add(sn));
+        const stepsInGroup = stepNums.map(sn => stepLookup[sn]).filter(Boolean);
         const heading = group.label ? 'Group ' + group.group_number + ': ' + escHtml(group.label) : 'Group ' + group.group_number;
         const pos = group.starting_position ? '<span style="color:#888;font-weight:400;font-size:0.85em;margin-left:8px;">' + escHtml(group.starting_position) + '</span>' : '';
+        // Compute time range and step range from contained steps
+        let groupMeta = '';
+        if (stepsInGroup.length) {{
+            const firstStep = stepsInGroup[0];
+            const lastStep = stepsInGroup[stepsInGroup.length - 1];
+            const parts = [];
+            if (firstStep.time_start != null && lastStep.time_end != null) {{
+                parts.push(fmtTime(firstStep.time_start) + ' \u2013 ' + fmtTime(lastStep.time_end));
+            }}
+            if (stepNums.length === 1) {{
+                parts.push('step ' + stepNums[0]);
+            }} else if (stepNums.length > 1) {{
+                parts.push('steps ' + stepNums[0] + '\u2013' + stepNums[stepNums.length - 1]);
+            }}
+            if (parts.length) {{
+                groupMeta = '<div style="font-style:italic;font-size:0.78em;color:#bbb;font-weight:400;margin-top:2px;">' + parts.join(' \u00a0\u00b7\u00a0 ') + '</div>';
+            }}
+        }}
         html += '<div style="margin-bottom:28px;">';
         html += '<div style="border-left:4px solid #1a73e8;padding:8px 16px;margin-bottom:12px;">';
         html += '<div style="font-size:1.05em;font-weight:600;color:#222;">' + heading + pos + '</div>';
+        html += groupMeta;
         html += '</div>';
-        const stepsInGroup = stepNums.map(sn => stepLookup[sn]).filter(Boolean);
         for (let si = 0; si < stepsInGroup.length; si++) {{
             const step = stepsInGroup[si];
             const segs = (step.segments || []).filter(s => s.text);
@@ -1218,9 +1237,97 @@ async function loadClassificationTab() {{
 
 // ── Pipeline tab ──
 
+// ── Pipeline controls (shared by pipeline + raw I/O tabs) ──
+
+let _pipelineLocalControls = null;
+
+async function checkPipelineControls() {{
+    if (_pipelineLocalControls !== null) return _pipelineLocalControls;
+    try {{
+        const res = await fetch('/api/analysis/capabilities');
+        const data = await res.json();
+        _pipelineLocalControls = data.local_controls || false;
+    }} catch {{ _pipelineLocalControls = false; }}
+    return _pipelineLocalControls;
+}}
+
+let _pipelinePolling = false;
+
+async function runStepForLesson(stepName) {{
+    const btn = event.target;
+    btn.disabled = true;
+    const origText = btn.textContent;
+    btn.textContent = '...';
+    try {{
+        const res = await fetch('/api/analysis/run-step', {{
+            method: 'POST',
+            headers: {{'Content-Type': 'application/json'}},
+            body: JSON.stringify({{document_id: DOCUMENT_ID, step_name: stepName}})
+        }});
+        const data = await res.json();
+        if (data.status === 'running') {{
+            btn.textContent = 'running';
+            startPipelinePolling();
+        }} else {{
+            alert(data.error || 'Error');
+            btn.textContent = origText;
+            btn.disabled = false;
+        }}
+    }} catch (e) {{
+        alert('Error: ' + e);
+        btn.textContent = origText;
+        btn.disabled = false;
+    }}
+}}
+
+function startPipelinePolling() {{
+    if (_pipelinePolling) return;
+    _pipelinePolling = true;
+    _pollPipeline();
+}}
+
+async function _pollPipeline() {{
+    if (!_pipelinePolling) return;
+    try {{
+        const res = await fetch('/api/lesson/' + DOCUMENT_ID + '/pipeline-status');
+        const data = await res.json();
+        const steps = data.steps || [];
+        const hasWork = steps.some(s => s.stale || s.error);
+
+        // Refresh pipeline tab
+        pipelineTabLoaded = false;
+        await loadPipelineTab();
+
+        if (hasWork) {{
+            // Still working — poll again
+            setTimeout(_pollPipeline, 3000);
+        }} else {{
+            // All done — stop polling, invalidate other tabs so they reload
+            _pipelinePolling = false;
+            condensedLoaded = false;
+            somaticTabLoaded = false;
+            languageTabLoaded = false;
+            classificationTabLoaded = false;
+            rawioTabLoaded = false;
+            // Re-fetch the main analysis data (steps/groups may have changed)
+            try {{
+                const r2 = await fetch('/api/lesson/' + DOCUMENT_ID + '/combined');
+                const newData = await r2.json();
+                if (newData && newData.steps) {{
+                    analysisData = newData;
+                    if (activeTab === 'steps') renderCard();
+                }}
+            }} catch {{}}
+        }}
+    }} catch {{
+        _pipelinePolling = false;
+    }}
+}}
+
 async function loadPipelineTab() {{
     pipelineTabLoaded = true;
     const div = document.getElementById('pipeline-tab-content');
+    const localControls = await checkPipelineControls();
     try {{
         const res = await fetch('/api/lesson/' + DOCUMENT_ID + '/pipeline-status');
         const data = await res.json();
@@ -1251,6 +1358,7 @@ async function loadPipelineTab() {{
         html += '<th style="text-align:center;padding:6px 10px;color:#666;font-weight:600;">Version</th>';
         html += '<th style="text-align:left;padding:6px 10px;color:#666;font-weight:600;">Completed</th>';
         html += '<th style="text-align:left;padding:6px 10px;color:#666;font-weight:600;">Details</th>';
+        if (localControls) html += '<th style="text-align:center;padding:6px 10px;color:#666;font-weight:600;"></th>';
         html += '</tr>';
         steps.forEach(step => {{
             let statusBadge, statusColor;
@@ -1283,10 +1391,20 @@ async function loadPipelineTab() {{
             html += '<td style="padding:8px 10px;text-align:center;font-family:monospace;font-size:0.85em;">' + versionStr + '</td>';
             html += '<td style="padding:8px 10px;">' + completedStr + '</td>';
             html += '<td style="padding:8px 10px;">' + detailStr + '</td>';
+            if (localControls) {{
+                html += '<td style="padding:8px 10px;text-align:center;">';
+                html += '<button onclick="runStepForLesson(\\'' + step.step_name + '\\')" '
+                    + 'style="font-size:0.7em;padding:2px 8px;border:1px solid #007bff;border-radius:4px;background:white;color:#007bff;cursor:pointer;"'
+                    + '>&#9654; run</button>';
+                html += '</td>';
+            }}
             html += '</tr>';
         }});
         html += '</table></div>';
         div.innerHTML = html;
+
+        // If we're polling from a run-step trigger, the poll loop handles refresh.
+        // No need for independent auto-refresh here.
     }} catch (e) {{
         div.innerHTML = '<div style="color:#999;padding:16px;">Failed to load pipeline status.</div>';
     }}
@@ -1321,6 +1439,12 @@ async function loadRawIOTab() {{
                 if (step.raw_json_length) html += ' <span style="color:#888;font-size:0.8em;font-weight:400;">(' + (step.raw_json_length / 1024).toFixed(1) + ' KB)</span>';
             }} else {{
                 html += ' <span style="display:inline-block;padding:1px 8px;border-radius:8px;font-size:0.75em;font-weight:600;color:#fff;background:#757575;margin-left:8px;">not cached</span>';
+            }}
+            if (step.stale) {{
+                html += ' <span style="display:inline-block;padding:1px 8px;border-radius:8px;font-size:0.75em;font-weight:600;color:#856404;background:#fff3cd;margin-left:4px;">stale</span>';
+            }}
+            if (step.error) {{
+                html += ' <span style="display:inline-block;padding:1px 8px;border-radius:8px;font-size:0.75em;font-weight:600;color:#fff;background:#dc3545;margin-left:4px;">error</span>';
             }}
             if (step.has_prompt) {{
                 html += ' <span style="display:inline-block;padding:1px 8px;border-radius:8px;font-size:0.75em;font-weight:600;color:#fff;background:#1565c0;margin-left:4px;">prompt</span>';
@@ -1366,6 +1490,7 @@ async function loadRawIOTab() {{
             html += '</div></details>';
         }});
         div.innerHTML = html;
+
     }} catch (e) {{
         div.innerHTML = '<div style="color:#999;padding:16px;">Failed to load raw I/O data.</div>';
     }}
@@ -1712,9 +1837,16 @@ function renderGroupCards(cards) {{
     let html = '';
     cards.forEach(card => {{
         html += '<div class="condensed-card group-card">';
+        html += '<div class="group-tag">Group ' + card.group_number + ': ' + escHtml(card.group_label || '') + '</div>';
+        // Timestamps + step range
         const tr = getGroupTimeRange(card.group_number);
-        const timeStr = tr ? ' <span style="font-weight:normal;color:#888;">(' + fmtTime(tr.start) + '\\u2013' + fmtTime(tr.end) + ')</span>' : '';
-        html += '<div class="group-tag">Group ' + card.group_number + ': ' + escHtml(card.group_label || '') + timeStr + '</div>';
+        const adGrp = analysisData && analysisData.groups ? analysisData.groups.find(g => g.group_number === card.group_number) : null;
+        const stepNums = adGrp ? (adGrp.steps || []) : [];
+        const metaParts = [];
+        if (tr) metaParts.push(fmtTime(tr.start) + ' \\u2013 ' + fmtTime(tr.end));
+        if (stepNums.length === 1) metaParts.push('step ' + stepNums[0]);
+        else if (stepNums.length > 1) metaParts.push('steps ' + stepNums[0] + '\\u2013' + stepNums[stepNums.length - 1]);
+        if (metaParts.length) html += '<div style="font-style:italic;font-size:0.72em;color:#bbb;font-weight:400;margin-bottom:4px;">' + metaParts.join(' \\u00a0\\u00b7\\u00a0 ') + '</div>';
         html += '<h3>' + escHtml(card.title || '') + '</h3>';
         if (card.the_action) {{
             html += '<p style="margin:8px 0 12px 0;color:#444;">' + escHtml(card.the_action) + '</p>';
@@ -1920,6 +2052,7 @@ async function sendChat() {{
                 provider: PROVIDER,
                 context_config: getChatContextConfig(),
                 lesson_text: lessonText,
+                document_id: DOCUMENT_ID,
             }}),
         }});
         const data = await res.json();

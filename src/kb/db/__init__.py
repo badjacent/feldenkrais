@@ -20,6 +20,7 @@ from .lesson_metadata import LessonMetadataMixin
 from .analysis import AnalysisMixin
 from .locks import LocksMixin
 from .external_lessons import ExternalLessonsMixin
+from .lesson_views import LessonViewsMixin
 
 
 class Database(
@@ -39,6 +40,7 @@ class Database(
     AnalysisMixin,
     LocksMixin,
     ExternalLessonsMixin,
+    LessonViewsMixin,
 ):
     """PostgreSQL database wrapper for the knowledge base.
 

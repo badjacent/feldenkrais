@@ -91,6 +91,11 @@ async def lesson_detail_page(request: Request, document_id: str):
     user = _web._set_source_access(request)
     if _web._db and not _web._db.is_document_accessible(document_id):
         return HTMLResponse("<h1>Not Found</h1>", status_code=404)
+    if _web._db:
+        try:
+            _web._db.log_lesson_view(document_id, user.get("user_id") if user else None)
+        except Exception:
+            pass
     return HTMLResponse(_web.build_lesson_page_html(document_id, user=user, search_mode=_web._is_search_site(request), superuser_active=_web._is_superuser_active(request, user)))
 
 
@@ -356,6 +361,16 @@ async def api_lesson_chat(request: Request):
         response_text = await asyncio.to_thread(
             llm.chat, chat_messages, system=system_prompt,
         )
+
+        if _web._db:
+            try:
+                user = _web._auth_mod.get_current_user(request) if _web._auth_mod else None
+                user_query = messages[-1].get("content", "") if messages else ""
+                doc_id = body.get("document_id", "")
+                _web._db.log_lesson_chat(doc_id, user.get("user_id") if user else None,
+                                         user_query, response_text)
+            except Exception:
+                pass
 
         return JSONResponse({"response": response_text})
     except Exception as e:
