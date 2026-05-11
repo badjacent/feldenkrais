@@ -98,6 +98,61 @@ class PipelineStateMixin:
                 WHERE document_id = %s AND step_name = %s
             """, (document_id, step_name))
 
+    def invalidate_step(self, document_id: str, step_name: str):
+        """Mark a step and all its downstream dependents as stale for re-run.
+
+        Clears errors, sets stale=TRUE, AND deletes the analysis cache entries
+        so the LLM is called fresh (not returned from cache).
+        Recursively invalidates any step that depends on this one.
+        """
+        import hashlib
+
+        with self.get_cursor() as cursor:
+            # Collect all step names to invalidate (target + downstream)
+            cursor.execute("""
+                WITH RECURSIVE downstream AS (
+                    SELECT %s::text AS name
+                    UNION
+                    SELECT s.name
+                    FROM analysis_step s
+                    JOIN downstream d ON d.name = ANY(s.depends_on)
+                )
+                SELECT d.name, s.cache_suffix
+                FROM downstream d
+                JOIN analysis_step s ON s.name = d.name
+            """, (step_name,))
+            steps_to_invalidate = cursor.fetchall()
+
+            # Mark all as stale in pipeline state
+            for row in steps_to_invalidate:
+                cursor.execute("""
+                    INSERT INTO document_analysis_state
+                        (document_id, step_name, stale, error, updated_at)
+                    VALUES (%s, %s, TRUE, NULL, NOW())
+                    ON CONFLICT (document_id, step_name)
+                    DO UPDATE SET stale = TRUE, error = NULL, updated_at = NOW()
+                """, (document_id, row["name"]))
+
+            # Clear analysis cache entries so the LLM runs fresh.
+            # Cache keys are sha256(transcript + cache_suffix)[:16].
+            cursor.execute("""
+                SELECT a.data->>'text' AS text
+                FROM analysis a WHERE a.document_id = %s AND a.type_id = 1
+            """, (document_id,))
+            tx_row = cursor.fetchone()
+            if tx_row and tx_row["text"]:
+                transcript = tx_row["text"].strip()
+                for row in steps_to_invalidate:
+                    suffix = row.get("cache_suffix")
+                    if suffix:
+                        cache_key = hashlib.sha256(
+                            (transcript + suffix).encode()
+                        ).hexdigest()[:16]
+                        cursor.execute(
+                            "DELETE FROM cache WHERE key = %s OR key = %s",
+                            (cache_key, cache_key + ":prompt"),
+                        )
+
     def get_runnable_steps(self, document_id: str | None = None) -> list[dict]:
         """Find all (document, step) pairs that are permitted via group gates, need work, and have deps satisfied.
 
@@ -137,6 +192,8 @@ class PipelineStateMixin:
                         WHERE das2.document_id = c.document_id
                           AND das2.step_name = dep.name
                           AND das2.completed_version IS NOT NULL
+                          AND das2.stale IS NOT TRUE
+                          AND das2.error IS NULL
                     )
                 )
                 ORDER BY c.document_title, c.step_name
@@ -166,6 +223,8 @@ class PipelineStateMixin:
                         WHERE das2.document_id = c.document_id
                           AND das2.step_name = dep.name
                           AND das2.completed_version IS NOT NULL
+                          AND das2.stale IS NOT TRUE
+                          AND das2.error IS NULL
                     )
                 )
             """)

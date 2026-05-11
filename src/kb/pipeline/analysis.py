@@ -123,6 +123,13 @@ def _run_pass_0b_condensed(db: Database, document_id: str, transcript: str) -> b
     if not somatic or not lang:
         logger.error(f"Missing upstream for condensed: somatic={bool(somatic)}, lang={bool(lang)}")
         return False
+    # Ensure somatic has pass_a data (groups/steps) — the condense formatter
+    # needs this to produce per-group input. Load from decompose cache if missing.
+    if not somatic.get("pass_a", {}).get("groups"):
+        decompose_key = get_cache_key(transcript.strip() + ":decompose_v3")
+        decompose = load_cached_analysis(decompose_key)
+        if decompose:
+            somatic["pass_a"] = decompose
     result = run_pass_0b_condensed(somatic, lang, transcript)
     return result is not None
 

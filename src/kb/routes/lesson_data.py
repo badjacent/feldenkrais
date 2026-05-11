@@ -378,8 +378,17 @@ async def api_lesson_pipeline_status(document_id: str):
     if not doc:
         return JSONResponse({"error": "Document not found"}, status_code=404)
 
-    # Get all analysis step definitions
+    # Get all analysis step definitions, ordered by DAG depth
     steps = _web._db.get_analysis_steps()
+    # Topological order (DAG depth), alphabetical tiebreaker
+    _DAG_ORDER = [
+        "decompose", "extract_steps",
+        "language", "map_body_parts", "somatic", "spatial_v3",
+        "concept_tags", "condense", "language_patterns", "spatial",
+        "embed", "embed_positions", "index_concepts", "index_spatial",
+    ]
+    _dag_rank = {name: i for i, name in enumerate(_DAG_ORDER)}
+    steps.sort(key=lambda s: _dag_rank.get(s["name"], 999))
 
     # Get per-step state for this document
     states = []
@@ -421,12 +430,12 @@ async def api_lesson_raw_io(document_id: str):
 
     # Check known cache suffixes for raw I/O data
     io_steps = [
-        {"name": "Pass A (Decompose)", "suffix": ":decompose_v3"},
-        {"name": "Somatic", "suffix": ":somatic_v2"},
-        {"name": "Language", "suffix": ":language_v1"},
-        {"name": "Condensed", "suffix": ":condense_v4"},
-        {"name": "Concepts", "suffix": ":concept_tags_v2"},
-        {"name": "Spatial", "suffix": ":spatial_v2"},
+        {"name": "Pass A (Decompose)", "step_name": "decompose", "suffix": ":decompose_v3"},
+        {"name": "Somatic", "step_name": "somatic", "suffix": ":somatic_v2"},
+        {"name": "Language", "step_name": "language", "suffix": ":language_v1"},
+        {"name": "Condensed", "step_name": "condense", "suffix": ":condense_v4"},
+        {"name": "Concepts", "step_name": "concept_tags", "suffix": ":concept_tags_v2"},
+        {"name": "Spatial", "step_name": "spatial", "suffix": ":spatial_v2"},
     ]
 
     # Reconstruct missing prompts on demand from templates + cached upstream data
@@ -436,10 +445,17 @@ async def api_lesson_raw_io(document_id: str):
     for step in io_steps:
         cache_key = _web.get_cache_key(text + step["suffix"])
         cached = _web.load_cached_analysis(cache_key)
+        # Check pipeline state (stale/error/completed)
+        step_state = _web._db.get_document_state(document_id, step.get("step_name", "")) if _web._db else None
+        is_stale = step_state.get("stale", False) if step_state else False
+        is_error = bool(step_state.get("error")) if step_state else False
         entry = {
             "name": step["name"],
+            "step_name": step.get("step_name", step["name"]),
             "cache_key": cache_key,
             "has_data": cached is not None,
+            "stale": is_stale,
+            "error": step_state.get("error") if is_error else None,
         }
         if cached:
             # Show a preview of the raw data (truncate large values)

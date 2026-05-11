@@ -282,6 +282,12 @@ async def search_site_guard(request: Request, call_next):
 
 # Paths - handle both local development and Lambda environment
 IS_LAMBDA = bool(os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
+
+# Capability flag: pipeline controls (run individual steps, etc.) are available
+# when running locally. This will be replaced by a proper auth/role check when
+# the pipeline moves off localhost.
+PIPELINE_LOCAL_CONTROLS = not IS_LAMBDA
+
 if IS_LAMBDA:
     # In Lambda, data files are packaged alongside the code
     DATA_DIR = Path(__file__).parent / "data"
@@ -358,12 +364,84 @@ def _run_step_subprocess(doc_id: str, step_name: str, title: str, timeout: int =
         return {"ok": False, "doc_id": doc_id, "step": step_name, "title": title,
                 "error": f"Timed out after {timeout}s"}
 
+# ── Priority queue for single-lesson runs ────────────────────────────────
+# Thread-safe list of document_ids that should be processed first.
+# When run-step is triggered for a lesson, it's added here and the worker
+# is started if not already running. Priority lessons are drained before
+# the worker falls back to processing all runnable work.
+
+import threading as _threading
+_priority_lock = _threading.Lock()
+_priority_lessons: list[str] = []  # document_ids, front = highest priority
+_pending_step_keys: set[tuple[str, str]] = set()  # (doc_id, step_name) currently in flight
+
+
+def queue_lesson(document_id: str):
+    """Add a lesson to the priority queue. Starts the worker if needed."""
+    with _priority_lock:
+        if document_id not in _priority_lessons:
+            _priority_lessons.insert(0, document_id)
+    _ensure_worker_running()
+
+
+_worker_thread: _threading.Thread | None = None
+
+
+def _ensure_worker_running():
+    """Start the pipeline worker thread if it's not already running.
+
+    Checks both the DB flag AND whether the actual thread is alive.
+    This handles the case where a hot-reload kills the daemon thread
+    but leaves the DB flag set.
+    """
+    global _worker_thread
+    thread_alive = _worker_thread is not None and _worker_thread.is_alive()
+    if not thread_alive:
+        _pipeline_set_running(True)
+        _worker_thread = _threading.Thread(target=_pipeline_worker, daemon=True)
+        _worker_thread.start()
+
+
+def _get_next_step() -> dict | None:
+    """Get the next step to run, respecting the priority queue.
+
+    Priority lessons are checked first. Within each priority lesson,
+    runnable steps are returned in dependency order. Once a priority
+    lesson has no more runnable steps, it's removed from the queue.
+
+    Falls back to all runnable work when the priority queue is empty.
+    """
+    with _priority_lock:
+        # Phase 1: priority lessons
+        while _priority_lessons:
+            lesson_id = _priority_lessons[0]
+            runnable = _db.get_runnable_steps(document_id=lesson_id)
+            for r in runnable:
+                key = (str(r["document_id"]), r["step_name"])
+                if key not in _pending_step_keys:
+                    return r
+            # No more runnable work for this lesson — done
+            _priority_lessons.pop(0)
+
+    # Phase 2: all runnable work
+    runnable = _db.get_runnable_steps()
+    for r in runnable:
+        key = (str(r["document_id"]), r["step_name"])
+        if key not in _pending_step_keys:
+            return r
+    return None
+
+
 def _pipeline_worker():
     """Background pipeline worker using subprocesses.
 
-    Each step runs in its own process with a hard timeout.
-    Up to 4 steps run concurrently via a thread pool that manages subprocesses.
-    Each pass gets a fresh pool so timed-out threads don't block future work.
+    Supports two modes:
+      - Priority mode: processes steps for specific lessons (from queue_lesson)
+      - Bulk mode: processes all runnable steps across all groups
+
+    Priority lessons are drained first without pre-empting in-flight work.
+    Each step runs in its own subprocess with a 5-minute hard timeout.
+    Up to 4 steps run concurrently via a thread pool.
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
     max_workers = 4
@@ -371,20 +449,30 @@ def _pipeline_worker():
 
     try:
         while _pipeline_is_running():
-            runnable = _db.get_runnable_steps()
-            if not runnable:
+            # Get initial batch
+            initial = []
+            for _ in range(max_workers):
+                r = _get_next_step()
+                if not r:
+                    break
+                key = (str(r["document_id"]), r["step_name"])
+                _pending_step_keys.add(key)
+                initial.append(r)
+
+            if not initial:
+                # Check if priority queue has items (deps might not be ready yet)
+                with _priority_lock:
+                    if _priority_lessons:
+                        # Wait briefly for in-flight deps to complete
+                        import time as _time_mod
+                        _time_mod.sleep(2)
+                        continue
                 break
 
             with ThreadPoolExecutor(max_workers=max_workers) as pool:
                 pending = {}  # future -> info dict
-                idx = 0
 
-                # Seed initial batch
-                while idx < len(runnable) and len(pending) < max_workers:
-                    if not _pipeline_is_running():
-                        break
-                    r = runnable[idx]
-                    idx += 1
+                for r in initial:
                     doc_id = str(r["document_id"])
                     step = r["step_name"]
                     title = r["document_title"][:50]
@@ -393,20 +481,22 @@ def _pipeline_worker():
 
                 _pipeline_update_active(list(pending.values()))
 
-                # Process completions
                 while pending:
                     if not _pipeline_is_running():
                         break
                     try:
                         done = next(as_completed(pending, timeout=step_timeout + 30))
                     except (StopIteration, TimeoutError):
-                        # Pool-level timeout — mark remaining as errors
                         for f, info in list(pending.items()):
                             if not f.done():
                                 _db.mark_step_error(info["doc_id"], info["step"],
                                                     f"Timed out after {step_timeout}s")
+                                _pending_step_keys.discard((info["doc_id"], info["step"]))
                         break
+
                     info = pending.pop(done)
+                    _pending_step_keys.discard((info["doc_id"], info["step"]))
+
                     try:
                         result = done.result()
                         if not result["ok"] and "Timed out" in result.get("error", ""):
@@ -414,19 +504,21 @@ def _pipeline_worker():
                     except Exception:
                         pass
 
-                    # Feed next item
-                    if idx < len(runnable) and _pipeline_is_running():
-                        r = runnable[idx]
-                        idx += 1
-                        doc_id = str(r["document_id"])
-                        step = r["step_name"]
-                        title = r["document_title"][:50]
-                        f = pool.submit(_run_step_subprocess, doc_id, step, title, step_timeout)
-                        pending[f] = {"step": step, "title": title, "doc_id": doc_id}
+                    # Feed next item (re-queries DB, picks up newly-runnable downstream)
+                    if _pipeline_is_running():
+                        r = _get_next_step()
+                        if r:
+                            key = (str(r["document_id"]), r["step_name"])
+                            _pending_step_keys.add(key)
+                            doc_id = str(r["document_id"])
+                            step = r["step_name"]
+                            title = r["document_title"][:50]
+                            f = pool.submit(_run_step_subprocess, doc_id, step, title, step_timeout)
+                            pending[f] = {"step": step, "title": title, "doc_id": doc_id}
 
                     _pipeline_update_active(list(pending.values()))
-            # Pool closes here — any hung threads get abandoned, subprocesses get killed
     finally:
+        _pending_step_keys.clear()
         _pipeline_update_active([])
         _pipeline_set_running(False)
 
@@ -434,8 +526,7 @@ def _pipeline_worker():
 if _db:
     _pipeline_update_active([])
     if _pipeline_is_running():
-        _t = threading.Thread(target=_pipeline_worker, daemon=True)
-        _t.start()
+        _ensure_worker_running()
 
 # ── Initialize extracted modules ──────────────────────────────────────────
 import auth as _auth_mod

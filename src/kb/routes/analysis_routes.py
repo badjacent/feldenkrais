@@ -130,10 +130,7 @@ async def run_analysis_pipeline(request: Request):
         _web._pipeline_set_running(False)
         return JSONResponse({"status": "stopping"})
     else:
-        # Start -- set DB flag and launch worker thread
-        _web._pipeline_set_running(True)
-        t = threading.Thread(target=_web._pipeline_worker, daemon=True)
-        t.start()
+        _web._ensure_worker_running()
         return JSONResponse({"status": "started"})
 
 
@@ -141,6 +138,55 @@ async def run_analysis_pipeline(request: Request):
 async def pipeline_status():
     """Return whether the pipeline is currently running."""
     return JSONResponse({"running": _web._pipeline_is_running()})
+
+
+@router.post("/api/analysis/run-step")
+async def run_single_step(request: Request):
+    """Run a single analysis step for one document plus all downstream dependents.
+
+    Invalidates the step and all downstream dependents first, then queues the
+    lesson for priority processing by the pipeline worker. The worker will run
+    the invalidated step, then pick up any downstream steps that become runnable.
+
+    Only available when PIPELINE_LOCAL_CONTROLS is True.
+    """
+    if not _web.PIPELINE_LOCAL_CONTROLS:
+        return JSONResponse({"error": "Step-level controls not available in this environment"}, status_code=403)
+    if not _web._db:
+        return JSONResponse({"error": "Database not configured"}, status_code=500)
+
+    body = await request.json()
+    document_id = body.get("document_id")
+    step_name = body.get("step_name")
+    if not document_id or not step_name:
+        return JSONResponse({"error": "Missing document_id or step_name"}, status_code=400)
+
+    # Validate step exists
+    step = _web._db.get_analysis_step(step_name)
+    if not step:
+        return JSONResponse({"error": f"Unknown step: {step_name}"}, status_code=400)
+
+    try:
+        # Invalidate this step + all downstream dependents
+        _web._db.invalidate_step(document_id, step_name)
+
+        # Queue this lesson for priority processing. The worker will run the
+        # invalidated step first, then any downstream steps as they become
+        # runnable. If the worker is already processing bulk work, this lesson
+        # jumps to the front without pre-empting in-flight steps.
+        _web.queue_lesson(document_id)
+
+        return JSONResponse({"status": "running", "document_id": document_id, "step_name": step_name})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@router.get("/api/analysis/capabilities")
+async def analysis_capabilities():
+    """Return which pipeline controls are available in this environment."""
+    return JSONResponse({
+        "local_controls": _web.PIPELINE_LOCAL_CONTROLS,
+    })
 
 
 @router.post("/api/analysis/clear-error")

@@ -103,6 +103,9 @@ cython_debug/
 scripts/*.log
 scripts/dedup_log.json
 
+# Local bootstrap artifacts (e.g. pasted library HTML for ff-capture seeding)
+/lesson_index.html
+
 # Media files (do NOT commit large binaries)
 *.mp3
 *.wav

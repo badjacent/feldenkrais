@@ -14,19 +14,28 @@ def _analysis_step_names():
     _db = _web._db
     steps = _db.get_analysis_steps()
     step_lookup = {s["name"]: s for s in steps}
+    # Topological order (DAG depth), alphabetical tiebreaker within each level
     ordered = [
-        "decompose", "somatic", "language", "condense", "embed",
-        "concept_tags", "index_concepts", "spatial", "index_spatial",
-        "language_patterns", "extract_steps", "map_body_parts",
+        # Level 0: no dependencies
+        "decompose", "extract_steps",
+        # Level 1: depend on level 0
+        "language", "map_body_parts", "somatic", "spatial_v3",
+        # Level 2: depend on level 1
+        "concept_tags", "condense", "language_patterns", "spatial",
+        # Level 3: depend on level 2
+        "embed", "embed_positions", "index_concepts", "index_spatial",
     ]
     return [sn for sn in ordered if sn in step_lookup], step_lookup
 
 
 _STEP_DISPLAY_NAMES = {
-    "decompose": "decompose", "somatic": "somatic", "language": "language",
-    "language_patterns": "lang-pat", "concept_tags": "concepts", "spatial": "spatial",
-    "condense": "condense", "embed": "embed", "index_concepts": "idx-conc",
-    "index_spatial": "idx-spat", "extract_steps": "extract", "map_body_parts": "map-body",
+    "decompose": "decompose", "extract_steps": "extract",
+    "language": "language", "map_body_parts": "map-body",
+    "somatic": "somatic", "spatial_v3": "spatial-v3",
+    "concept_tags": "concepts", "condense": "condense",
+    "language_patterns": "lang-pat", "spatial": "spatial",
+    "embed": "embed", "embed_positions": "embed-pos",
+    "index_concepts": "idx-conc", "index_spatial": "idx-spat",
 }
 
 
@@ -491,6 +500,8 @@ def _build_analysis_group_html(group_id: int) -> str:
     import web as _web
     _db = _web._db
 
+    local_controls = _web.PIPELINE_LOCAL_CONTROLS
+
     group = _db.get_lesson_group(group_id)
     if not group:
         return "<p>Group not found.</p>"
@@ -543,21 +554,31 @@ def _build_analysis_group_html(group_id: int) -> str:
                 bg, fg = "#f8f9fa", "#adb5bd"
                 title_attr = "Not started"
 
+            onclick = ""
             if state == "error":
                 onclick = f" onclick=\"clearError('{doc_id}', '{sn}')\" style=\"cursor:pointer;\""
-            else:
-                onclick = ""
+
+            run_btn = ""
+            if local_controls:
+                run_btn = (
+                    f'<button onclick="event.stopPropagation();runStep(\'{doc_id}\',\'{sn}\')" '
+                    f'title="Run {sn}" '
+                    f'style="font-size:0.6em;padding:1px 4px;margin-left:3px;border:1px solid #007bff;'
+                    f'border-radius:3px;background:white;color:#007bff;cursor:pointer;vertical-align:middle;"'
+                    f'>&#9654;</button>'
+                )
 
             gate_cells += (
                 f'<td style="text-align:center;padding:4px 6px;{"cursor:pointer;" if state == "error" else ""}" '
                 f'title="{title_attr}"{onclick}>'
                 f'<span style="padding:2px 6px;border-radius:8px;font-size:0.75em;'
-                f'background:{bg};color:{fg};">{label}</span></td>'
+                f'background:{bg};color:{fg};">{label}</span>{run_btn}</td>'
             )
 
         rows.append(
             f'<tr>'
-            f'<td style="font-size:0.85em;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{html_mod.escape(doc.get("title", ""))}">{html_mod.escape(title)}</td>'
+            f'<td style="font-size:0.85em;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{html_mod.escape(doc.get("title", ""))}">'
+            f'<a href="/lesson/{doc_id}" style="color:#007bff;text-decoration:none;">{html_mod.escape(title)}</a></td>'
             f'{gate_cells}'
             f'</tr>'
         )
@@ -719,6 +740,63 @@ extract_steps ──► map_body_parts (independent)</pre>
             else alert(data.error || 'Error');
         }})
         .catch(err => alert('Error: ' + err));
+    }}
+
+    function runStep(docId, stepName) {{
+        const btn = event.target;
+        btn.disabled = true;
+        btn.textContent = '...';
+        fetch('/api/analysis/run-step', {{
+            method: 'POST',
+            headers: {{'Content-Type': 'application/json'}},
+            body: JSON.stringify({{document_id: docId, step_name: stepName}})
+        }})
+        .then(r => r.json())
+        .then(data => {{
+            if (data.status === 'running') {{
+                // Start polling for completion
+                pollStepStatus(docId, stepName, btn);
+            }} else {{
+                alert(data.error || 'Error');
+                btn.disabled = false;
+                btn.textContent = '\\u25b6';
+            }}
+        }})
+        .catch(err => {{
+            alert('Error: ' + err);
+            btn.disabled = false;
+            btn.textContent = '\\u25b6';
+        }});
+    }}
+
+    function pollStepStatus(docId, stepName, btn) {{
+        // Refresh the dashboard every 2s until the step is no longer stale
+        let polls = 0;
+        const maxPolls = 90; // 3 minutes
+        const timer = setInterval(() => {{
+            polls++;
+            refreshDashboard();
+            if (polls >= maxPolls) {{
+                clearInterval(timer);
+                btn.disabled = false;
+                btn.textContent = '\\u25b6';
+            }}
+        }}, 2000);
+
+        // Also check completion by looking at the step state
+        const checkDone = setInterval(() => {{
+            fetch('/api/analysis/group/' + new URL(window.location).searchParams.get('group'))
+                .then(r => r.text())
+                .then(html => {{
+                    // If step is no longer stale (it completed or errored), stop polling
+                    // We detect this by checking if the button still says '...'
+                    const newBtn = document.querySelector(`button[onclick*="runStep('${{docId}}','${{stepName}}')"]`);
+                    if (!newBtn || newBtn.textContent !== '...') {{
+                        clearInterval(timer);
+                        clearInterval(checkDone);
+                    }}
+                }});
+        }}, 3000);
     }}
 
     function refreshDashboard() {{

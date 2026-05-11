@@ -152,6 +152,28 @@ def _run_condensed_for_groups(
         "Preserve all five points of view. Generate group cards first, then the setting card."
     )
 
+    # Inject a skeleton of expected group cards so the LLM preserves the
+    # exact group count from decompose. Without this, Gemini merges groups
+    # (~58% mismatch rate as of Apr 2026).
+    groups = pass_a_result.get("groups", [])
+    if groups:
+        filtered = [g for g in groups if not group_filter or g["group_number"] in group_filter]
+        if filtered:
+            skel_cards = [
+                {"group_number": g["group_number"], "group_label": g.get("label", ""),
+                 "title": "", "the_action": "", "the_body": "",
+                 "the_attention": "", "the_intention": "", "the_voice": ""}
+                for g in filtered
+            ]
+            skel_json = json.dumps({"group_cards": skel_cards}, indent=2)
+            skeleton_block = (
+                f"\n\n## REQUIRED GROUP STRUCTURE\n\n"
+                f"Fill ALL {len(filtered)} group cards below. "
+                f"Do not merge, skip, or renumber groups.\n\n"
+                f"```json\n{skel_json}\n```\n"
+            )
+            prompt = prompt + skeleton_block
+
     if debug_log is not None:
         label = "Pass 0b Condensed"
         if group_filter:
