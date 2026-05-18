@@ -85,6 +85,77 @@ async def api_search(request: Request, query: str = Form(""), method: str = Form
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+@router.get("/api/lesson-chat-history/{document_id}")
+async def api_lesson_chat_history(request: Request, document_id: str):
+    """Per-lesson chat history for the current user (superuser sees all users)."""
+    if not _web._db:
+        return JSONResponse({"error": "Database not configured"}, status_code=500)
+    user = _web._auth_mod.get_current_user(request) if _web._auth_mod else None
+    is_super = bool(user and _web._is_superuser_active(request, user))
+
+    if is_super:
+        turns = _web._db.get_lesson_chat_history_all(document_id)
+    else:
+        user_id = user.get("user_id") if user else None
+        turns = _web._db.get_lesson_chat_history(document_id, user_id)
+
+    return JSONResponse({
+        "document_id": document_id,
+        "is_superuser_view": is_super,
+        "turns": [
+            {
+                "id": t["id"],
+                "user_id": t.get("user_id"),
+                "query": t["query"],
+                "response": t["response"],
+                "created_at": t["created_at"].isoformat() if t.get("created_at") else None,
+            }
+            for t in turns
+        ],
+    })
+
+
+@router.get("/api/conversations")
+async def api_conversations(request: Request):
+    """Cross-lesson conversation index for the current user (superuser sees everyone)."""
+    if not _web._db:
+        return JSONResponse({"error": "Database not configured"}, status_code=500)
+    user = _web._auth_mod.get_current_user(request) if _web._auth_mod else None
+    is_super = bool(user and _web._is_superuser_active(request, user))
+
+    rows = _web._db.get_chat_lessons_summary(
+        user_id=user.get("user_id") if user else None,
+        all_users=is_super,
+    )
+
+    return JSONResponse({
+        "is_superuser_view": is_super,
+        "lessons": [
+            {
+                "document_id": r["document_id"],
+                "title": r.get("title") or "(untitled)",
+                "user_id": r.get("user_id"),
+                "user_email": r.get("user_email"),
+                "last_chat_at": r["last_chat_at"].isoformat() if r.get("last_chat_at") else None,
+                "turn_count": r["turn_count"],
+            }
+            for r in rows
+        ],
+    })
+
+
+@router.get("/conversations", response_class=HTMLResponse)
+async def conversations_page(request: Request):
+    """Central page listing the current user's chat history across all lessons."""
+    user = _web._set_source_access(request)
+    if not user:
+        return HTMLResponse("<h1>Sign in to view your conversations.</h1>", status_code=401)
+    return HTMLResponse(_web.build_conversations_page_html(
+        user=user,
+        superuser_active=_web._is_superuser_active(request, user),
+    ))
+
+
 @router.get("/lesson/{document_id}", response_class=HTMLResponse)
 async def lesson_detail_page(request: Request, document_id: str):
     """Unified lesson detail page."""
@@ -366,11 +437,23 @@ async def api_lesson_chat(request: Request):
             try:
                 user = _web._auth_mod.get_current_user(request) if _web._auth_mod else None
                 user_query = messages[-1].get("content", "") if messages else ""
-                doc_id = body.get("document_id", "")
+                doc_id = body.get("document_id", "") or ""
+
+                # Fallback: derive doc_id from the Referer URL when the client
+                # didn't send it (old cached JS from before f0476dc, etc.).
+                if not doc_id:
+                    referer = request.headers.get("referer", "")
+                    import re
+                    m = re.search(r"/lesson/([0-9a-fA-F-]{36})", referer)
+                    if m:
+                        doc_id = m.group(1)
+
                 _web._db.log_lesson_chat(doc_id, user.get("user_id") if user else None,
                                          user_query, response_text)
-            except Exception:
-                pass
+            except Exception as log_err:
+                import traceback
+                print(f"[lesson-chat] log_lesson_chat FAILED: {type(log_err).__name__}: {log_err}")
+                traceback.print_exc()
 
         return JSONResponse({"response": response_text})
     except Exception as e:

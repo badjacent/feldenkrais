@@ -52,10 +52,14 @@ logger.setLevel(logging.INFO)
 TRANSCRIPTION_TYPE_ID = 1
 
 # Default configuration
-DEFAULT_MODEL = "whisper-large-v3-turbo"
+DEFAULT_MODEL = "whisper-large-v3"
 DEFAULT_MAX_RETRIES = 5
 DEFAULT_COMPLETION_WINDOW = "24h"
 DEFAULT_PRESIGNED_URL_EXPIRY = 86400  # 24 hours
+# After this many async retries (retries 0..2 are async batch), switch to sync
+# transcription which hits a separate Groq capacity pool.
+SYNC_FALLBACK_THRESHOLD = 3
+DEFAULT_SYNC_DOCS_PER_RUN = 2  # Cap per Lambda invocation; sync is slow (~1 min/chunk)
 
 
 @dataclass
@@ -117,9 +121,13 @@ class TranscriptionService:
         self.config = config or TranscriptionConfig()
 
     def get_documents_to_transcribe(self) -> list[dict]:
-        """Get documents that need transcription."""
+        """Get documents that need transcription via the async batch API.
+
+        Caps retries at SYNC_FALLBACK_THRESHOLD so high-retry docs go through
+        process_sync_fallback() instead of bouncing through the failing batch path.
+        """
         return self.db.get_untranscribed_documents(
-            max_retries=self.config.max_retries
+            max_retries=SYNC_FALLBACK_THRESHOLD
         )
 
     def create_batch(self, document_ids: Optional[list[str]] = None) -> Optional[str]:
@@ -450,25 +458,49 @@ class TranscriptionService:
                         error=error_msg,
                         increment_attempts=True,
                     )
+
+                    job = self.db.get_transcription_job(job_id)
+                    if job:
+                        doc = self.db.get_document(job["document_id"])
+                        doc_title = doc.get("title", job["document_id"]) if doc else job["document_id"]
+                        self.db.log_event("transcription_failed", title=doc_title,
+                                          document_id=job["document_id"], detail={
+                                              "batch_id": batch_id,
+                                              "job_id": job_id,
+                                              "error": error_msg,
+                                          })
+
                     results["jobs_failed"].append({
                         "job_id": job_id,
                         "error": error_msg,
                     })
+                    logger.warning(f"Job {job_id} failed (error file): {error_msg}")
 
         # For cancelled batches, mark any still-pending jobs as failed
         if batch.status == "cancelled":
             jobs = self.db.get_transcription_jobs_by_batch(batch_id)
             for job in jobs:
                 if job["status"] == "pending":
+                    error_msg = f"Batch {batch_id} was cancelled"
                     self.db.update_transcription_job(
                         job_id=job["id"],
                         status="failed",
-                        error=f"Batch {batch_id} was cancelled",
+                        error=error_msg,
                         increment_attempts=True,
                     )
+
+                    doc = self.db.get_document(job["document_id"])
+                    doc_title = doc.get("title", job["document_id"]) if doc else job["document_id"]
+                    self.db.log_event("transcription_failed", title=doc_title,
+                                      document_id=job["document_id"], detail={
+                                          "batch_id": batch_id,
+                                          "job_id": job["id"],
+                                          "error": error_msg,
+                                      })
+
                     results["jobs_failed"].append({
                         "job_id": job["id"],
-                        "error": f"Batch cancelled",
+                        "error": "Batch cancelled",
                     })
                     logger.warning(f"Job {job['id']} failed: batch was cancelled")
 
@@ -764,8 +796,10 @@ class TranscriptionService:
                     f"({doc['retry_count']} retries)"
                 )
 
+        # Async retry only handles docs under the sync-fallback threshold;
+        # higher-retry docs go through process_sync_fallback() instead.
         failed_docs = self.db.get_failed_documents_for_retry(
-            max_retries=self.config.max_retries
+            max_retries=SYNC_FALLBACK_THRESHOLD
         )
 
         if not failed_docs:
@@ -804,15 +838,94 @@ class TranscriptionService:
         logger.info(f"Restaged {len(restaged)} documents for retry")
         return restaged
 
+    def process_sync_fallback(self, max_docs: int = DEFAULT_SYNC_DOCS_PER_RUN) -> list[dict]:
+        """Run synchronous transcription for docs that exhausted async retries.
+
+        Hits Groq's sync `audio.transcriptions.create` endpoint, which has a
+        separate capacity pool from the batch API. Slow (~30-90s per chunk) so
+        caller caps how many docs per Lambda invocation.
+
+        On success: writes transcription analysis, logs transcription_complete.
+        On failure: increments doc retry counter, logs transcription_failed.
+        Once doc retries hit max_retries, the next auto_retry_failed call logs
+        permanent_failure.
+        """
+        candidates = self.db.get_documents_for_sync_fallback(
+            min_retries=SYNC_FALLBACK_THRESHOLD,
+            max_retries=self.config.max_retries,
+        )
+
+        if not candidates:
+            return []
+
+        candidates = candidates[:max_docs]
+        logger.info(f"Sync fallback: attempting {len(candidates)} doc(s)")
+
+        results = []
+        for doc in candidates:
+            doc_id = str(doc["id"])
+            title = doc["title"]
+            retries = doc["transcription_retries"]
+            logger.info(f"Sync transcribe attempt {retries}/{self.config.max_retries}: {title}")
+
+            try:
+                outcome = self.transcribe_single(doc_id)
+                if outcome.get("error"):
+                    raise RuntimeError(outcome["error"])
+
+                self.db.log_event(
+                    "transcription_complete",
+                    title=title,
+                    document_id=doc_id,
+                    detail={
+                        "path": "sync_fallback",
+                        "text_length": outcome.get("text_length"),
+                        "chunk_count": outcome.get("chunk_count"),
+                    },
+                )
+                results.append({**outcome, "status": "completed"})
+                logger.info(f"Sync transcribe SUCCESS: {title}")
+
+            except Exception as e:
+                error_msg = str(e)[:500]
+                new_retries = self.db.increment_document_retries(doc_id)
+                self.db.log_event(
+                    "transcription_failed",
+                    title=title,
+                    document_id=doc_id,
+                    detail={
+                        "path": "sync_fallback",
+                        "attempt": retries + 1,
+                        "max_retries": self.config.max_retries,
+                        "error": error_msg,
+                    },
+                )
+                results.append({
+                    "document_id": doc_id,
+                    "title": title,
+                    "status": "failed",
+                    "retries": new_retries,
+                    "error": error_msg,
+                })
+                logger.warning(f"Sync transcribe FAILED: {title} -> {error_msg}")
+
+        return results
+
     def transcribe_single(self, document_id: str) -> dict:
         """
-        Transcribe a single document synchronously (for testing).
+        Transcribe a single document synchronously.
 
         Uses the sync API with chunking for large files.
         """
         doc = self.db.get_document(document_id)
         if not doc:
             return {"error": "Document not found"}
+
+        # Idempotency guard: another invocation may have just completed this
+        # doc (e.g. scheduled lambda raced a manual invoke). Don't write a duplicate.
+        if self.db.get_analysis(document_id, TRANSCRIPTION_TYPE_ID):
+            logger.info(f"Document {document_id} already has transcription, skipping sync")
+            return {"document_id": document_id, "skipped": "already_transcribed"}
 
         s3_key = doc["s3_key"]
         logger.info(f"Transcribing document {document_id} ({s3_key})")
@@ -925,11 +1038,14 @@ def handler(event, context):
         db.close()
         return {"statusCode": 200, "body": json.dumps({"message": "Skipped - LLM disabled"})}
 
-    # For scheduled events, acquire advisory lock to prevent concurrent runs
+    # Acquire advisory lock for any action that writes state. Manual invokes
+    # (e.g. ad-hoc sync_fallback) need this too — otherwise two invocations
+    # see the same eligible docs and race-write duplicate transcription analyses.
     is_scheduled = "source" in event and event["source"] == "aws.events"
+    writes_state = action in ("create_batch", "sync_fallback", "retry_failed", "transcribe_single") or is_scheduled
     lock_acquired = False
 
-    if is_scheduled:
+    if writes_state:
         lock_acquired = db.try_acquire_lock(Database.LOCK_TRANSCRIPTION)
         if not lock_acquired:
             logger.info("Another transcription Lambda is running, skipping")
@@ -961,12 +1077,18 @@ def handler(event, context):
 
             # Then create a new batch if there are untranscribed documents
             batch_id = service.create_batch()
+
+            # Finally, run sync fallback for docs that exhausted async retries.
+            # Sync is slow, so do it last — earlier steps stay fast even on timeout.
+            sync_results = service.process_sync_fallback()
+
             result = {
                 "action": "create_batch",
                 "batch_id": batch_id,
                 "completed_batches": completed_results,
                 "stale_jobs_expired": stale_expired,
                 "retried_documents": retried,
+                "sync_fallback": sync_results,
             }
 
         elif action == "check_status":
@@ -996,6 +1118,12 @@ def handler(event, context):
             }
             logger.info(f"Restaged {len(retried)} documents for retry")
 
+        elif action == "sync_fallback":
+            sync_results = service.process_sync_fallback(
+                max_docs=event.get("max_docs", DEFAULT_SYNC_DOCS_PER_RUN)
+            )
+            result = {"action": "sync_fallback", "sync_fallback": sync_results}
+
         else:
             # Default action for scheduled events: use batch API
             if is_scheduled:
@@ -1010,12 +1138,18 @@ def handler(event, context):
 
                 # Then create a new batch if there are untranscribed documents
                 batch_id = service.create_batch()
+
+                # Finally, run sync fallback for docs that exhausted async retries.
+                # Sync is slow, so do it last — earlier steps stay fast even on timeout.
+                sync_results = service.process_sync_fallback()
+
                 result = {
                     "action": "scheduled_batch",
                     "batch_id": batch_id,
                     "completed_batches": completed_results,
                     "stale_jobs_expired": stale_expired,
                     "retried_documents": retried,
+                    "sync_fallback": sync_results,
                 }
             else:
                 return {"statusCode": 400, "body": json.dumps({"error": f"Unknown action: {action}"})}

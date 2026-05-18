@@ -830,12 +830,16 @@ extract_steps ──► map_body_parts (independent)</pre>
             }});
     }}
 
-    // Auto-refresh every 10s when pipeline is running
+    // Auto-refresh every 10s while the pipeline is running. Also refresh once
+    // after running -> stopped so the dashboard catches the final step that
+    // completed in the same tick the worker shut down.
+    let _prevPipelineRunning = false;
     setInterval(() => {{
         fetch('/api/analysis/pipeline-status')
             .then(r => r.json())
             .then(data => {{
-                if (data.running) refreshDashboard();
+                if (data.running || _prevPipelineRunning) refreshDashboard();
+                _prevPipelineRunning = data.running;
             }});
     }}, 10000);
 

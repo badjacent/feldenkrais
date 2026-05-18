@@ -15,13 +15,130 @@ class LessonViewsMixin:
 
     def log_lesson_chat(self, document_id: str, user_id: int | None,
                         query: str, response: str):
-        """Append a Q&A exchange to the lesson's chat log."""
-        with self.get_cursor() as cur:
+        """Append a Q&A exchange to the lesson's chat log.
+
+        Resilient to stale pool connections: Neon idle-closes sockets that the
+        psycopg2 pool then hands out as zombies. On the first attempt's
+        OperationalError/InterfaceError, drop the pool and retry once with a
+        fresh connection.
+        """
+        import psycopg2
+        for attempt in (1, 2):
+            try:
+                with self.get_cursor() as cur:
+                    cur.execute(
+                        """INSERT INTO lesson_chat_log (document_id, user_id, query, response)
+                           VALUES (%s, %s, %s, %s)""",
+                        (document_id, user_id, query, response),
+                    )
+                return
+            except (psycopg2.OperationalError, psycopg2.InterfaceError):
+                if attempt == 2:
+                    raise
+                # Force a fresh pool on next get_cursor() — recycles any stale
+                # sockets Neon closed on its end.
+                try:
+                    if self._pool is not None:
+                        self._pool.closeall()
+                except Exception:
+                    pass
+                self._pool = None
+
+    def get_lesson_chat_history(self, document_id: str, user_id: int | None,
+                                limit: int = 200) -> list[dict]:
+        """Return chronological Q&A turns for a (document, user).
+
+        When user_id is None, returns rows for unauthenticated chats only.
+        Use get_lesson_chat_history_all() if you need every user's turns
+        (superuser view).
+        """
+        with self.get_cursor(commit=False) as cur:
+            if user_id is None:
+                cur.execute(
+                    """SELECT id, query, response, created_at
+                       FROM lesson_chat_log
+                       WHERE document_id = %s AND user_id IS NULL
+                       ORDER BY created_at LIMIT %s""",
+                    (document_id, limit),
+                )
+            else:
+                cur.execute(
+                    """SELECT id, query, response, created_at
+                       FROM lesson_chat_log
+                       WHERE document_id = %s AND user_id = %s
+                       ORDER BY created_at LIMIT %s""",
+                    (document_id, user_id, limit),
+                )
+            return [dict(r) for r in cur.fetchall()]
+
+    def get_lesson_chat_history_all(self, document_id: str, limit: int = 500) -> list[dict]:
+        """Return every chat turn on a document, across all users. Superuser only."""
+        with self.get_cursor(commit=False) as cur:
             cur.execute(
-                """INSERT INTO lesson_chat_log (document_id, user_id, query, response)
-                   VALUES (%s, %s, %s, %s)""",
-                (document_id, user_id, query, response),
+                """SELECT id, user_id, query, response, created_at
+                   FROM lesson_chat_log
+                   WHERE document_id = %s
+                   ORDER BY created_at LIMIT %s""",
+                (document_id, limit),
             )
+            return [dict(r) for r in cur.fetchall()]
+
+    def get_chat_lessons_summary(self, user_id: int | None,
+                                 all_users: bool = False,
+                                 limit: int = 200) -> list[dict]:
+        """List documents with chat activity, most-recently-active first.
+
+        Returns: [{document_id, title, last_chat_at, turn_count, user_id?}]
+        If all_users=True (superuser), groups by (document_id, user_id) so a
+        single lesson shows up once per chatting user.
+        """
+        with self.get_cursor(commit=False) as cur:
+            if all_users:
+                cur.execute(
+                    """SELECT l.document_id,
+                              l.user_id,
+                              u.email as user_email,
+                              d.title,
+                              MAX(l.created_at) as last_chat_at,
+                              COUNT(*) as turn_count
+                       FROM lesson_chat_log l
+                       LEFT JOIN document d ON d.id::text = l.document_id
+                       LEFT JOIN users u ON u.id = l.user_id
+                       WHERE l.document_id <> ''
+                       GROUP BY l.document_id, l.user_id, u.email, d.title
+                       ORDER BY MAX(l.created_at) DESC
+                       LIMIT %s""",
+                    (limit,),
+                )
+            elif user_id is None:
+                cur.execute(
+                    """SELECT l.document_id,
+                              d.title,
+                              MAX(l.created_at) as last_chat_at,
+                              COUNT(*) as turn_count
+                       FROM lesson_chat_log l
+                       LEFT JOIN document d ON d.id::text = l.document_id
+                       WHERE l.user_id IS NULL AND l.document_id <> ''
+                       GROUP BY l.document_id, d.title
+                       ORDER BY MAX(l.created_at) DESC
+                       LIMIT %s""",
+                    (limit,),
+                )
+            else:
+                cur.execute(
+                    """SELECT l.document_id,
+                              d.title,
+                              MAX(l.created_at) as last_chat_at,
+                              COUNT(*) as turn_count
+                       FROM lesson_chat_log l
+                       LEFT JOIN document d ON d.id::text = l.document_id
+                       WHERE l.user_id = %s AND l.document_id <> ''
+                       GROUP BY l.document_id, d.title
+                       ORDER BY MAX(l.created_at) DESC
+                       LIMIT %s""",
+                    (user_id, limit),
+                )
+            return [dict(r) for r in cur.fetchall()]
 
     def get_recent_lesson_views(self, user_id: int | None = None, limit: int = 50):
         """Get recent lesson views, optionally filtered by user."""

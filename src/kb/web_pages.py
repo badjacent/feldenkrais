@@ -561,7 +561,7 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
             <div class="note-line" id="annotation-note"></div>
         </div>
     </div>
-    <div id="no-audio-msg" style="display:none; color: #888; font-size: 0.9em; font-style: italic; margin-bottom: 12px;">Audio unavailable for this lesson.</div>
+    <div id="no-audio-msg" style="display:none; color: #888; font-size: 0.9em; font-style: italic; margin-bottom: 12px;">No recording available.</div>
 
     <div class="tab-bar" id="tab-bar">
         <button class="active" onclick="switchTab('steps')">Step by Step</button>
@@ -573,6 +573,7 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
         <button onclick="switchTab('concepts')">Search Specifics</button>
         <button onclick="switchTab('transcript')">Transcript</button>
         <button onclick="switchTab('chat')">Q&amp;A</button>
+        <button onclick="switchTab('history')">History</button>
         <button onclick="switchTab('rawio')">Raw I/O</button>
     </div>
     <div id="status-area"></div>
@@ -723,6 +724,14 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
         <div class="progress-bar" id="annotated-progress"></div>
     </div>
 
+    <!-- History tab: prior Q&A on this lesson -->
+    <div id="tab-history" style="display:none;">
+        <div class="tab-intro">Previous Q&amp;A conversations on this lesson. <a href="/conversations" style="margin-left:8px;">All conversations &rarr;</a></div>
+        <div id="history-tab-content">
+            <div style="color:#999; padding:16px;"><span class="spinner-inline"></span> Loading history...</div>
+        </div>
+    </div>
+
     <!-- Raw I/O tab -->
     <div id="tab-rawio" style="display:none;">
         <div class="tab-intro">Raw LLM prompts and responses for each analysis step. Useful for debugging and understanding what data was produced.</div>
@@ -757,7 +766,7 @@ const audioContainer = document.getElementById('audio-container');
 
 // ── Tab switching ──
 
-const TAB_ORDER = ['steps', 'condensed', 'somatic', 'language', 'classification', 'pipeline', 'concepts', 'transcript', 'chat', 'rawio'];
+const TAB_ORDER = ['steps', 'condensed', 'somatic', 'language', 'classification', 'pipeline', 'concepts', 'transcript', 'chat', 'history', 'rawio'];
 let conceptsLoaded = false;
 let transcriptRendered = false;
 let somaticTabLoaded = false;
@@ -765,6 +774,7 @@ let languageTabLoaded = false;
 let classificationTabLoaded = false;
 let pipelineTabLoaded = false;
 let rawioTabLoaded = false;
+let historyTabLoaded = false;
 
 function switchTab(tab) {{
     activeTab = tab;
@@ -787,6 +797,44 @@ if (tab === 'steps' && analysisData) renderCard();
     if (tab === 'classification' && !classificationTabLoaded) loadClassificationTab();
     if (tab === 'pipeline' && !pipelineTabLoaded) loadPipelineTab();
     if (tab === 'rawio' && !rawioTabLoaded) loadRawIOTab();
+    if (tab === 'history' && !historyTabLoaded) loadHistoryTab();
+}}
+
+// ── History tab (per-lesson chat history) ──
+
+async function loadHistoryTab() {{
+    historyTabLoaded = true;
+    const div = document.getElementById('history-tab-content');
+    try {{
+        const res = await fetch('/api/lesson-chat-history/' + encodeURIComponent(DOCUMENT_ID));
+        const data = await res.json();
+        if (data.error) {{
+            div.innerHTML = '<div style="color:#999;padding:16px;">' + escHtml(data.error) + '</div>';
+            return;
+        }}
+        if (!data.turns || data.turns.length === 0) {{
+            div.innerHTML = '<div style="color:#999;padding:16px;">No previous Q&amp;A on this lesson yet.</div>';
+            return;
+        }}
+        const parts = [];
+        if (data.is_superuser_view) {{
+            parts.push('<div style="font-size:0.85em;color:#888;padding:0 0 12px 0;">Superuser view: showing all users.</div>');
+        }}
+        for (const t of data.turns) {{
+            const ts = t.created_at ? new Date(t.created_at).toLocaleString() : '';
+            const userTag = (data.is_superuser_view && t.user_id) ? ' &middot; user ' + t.user_id : '';
+            parts.push(
+                '<div style="border-left:3px solid #007bff;padding:8px 14px;margin:14px 0;background:#f8f9fa;">' +
+                '<div style="font-size:0.8em;color:#888;margin-bottom:6px;">' + escHtml(ts) + escHtml(userTag) + '</div>' +
+                '<div style="font-weight:600;color:#333;margin-bottom:8px;white-space:pre-wrap;">' + escHtml(t.query) + '</div>' +
+                '<div style="color:#555;white-space:pre-wrap;line-height:1.5;">' + escHtml(t.response) + '</div>' +
+                '</div>'
+            );
+        }}
+        div.innerHTML = parts.join('');
+    }} catch (e) {{
+        div.innerHTML = '<div style="color:#c62828;padding:16px;">Failed to load history: ' + escHtml(e.message) + '</div>';
+    }}
 }}
 
 // ── Transcript rendering ──
@@ -2140,6 +2188,138 @@ async function sendChat() {{
     }}
 }})();
 
+</script>
+</body>
+</html>"""
+
+
+def build_conversations_page_html(user: dict, superuser_active: bool = False) -> str:
+    """Central page listing the user's chat history grouped by lesson.
+
+    Superusers in superuser mode see every user's chats; everyone else sees
+    only their own.
+    """
+    auth_bar = _auth_bar_html(user, superuser_active)
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Conversations</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+               max-width: 900px; margin: 0 auto; padding: 20px; color: #222; }}
+        h1 {{ font-size: 1.6em; margin: 0 0 4px 0; }}
+        .subtitle {{ color: #888; font-size: 0.9em; margin-bottom: 20px; }}
+        .lesson-card {{ border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px;
+                        margin: 14px 0; background: #fff; transition: box-shadow 0.15s; }}
+        .lesson-card:hover {{ box-shadow: 0 2px 8px rgba(0,0,0,0.08); }}
+        .lesson-card-header {{ display: flex; justify-content: space-between; align-items: baseline;
+                                cursor: pointer; }}
+        .lesson-title {{ font-weight: 600; color: #007bff; text-decoration: none; font-size: 1.05em; }}
+        .lesson-title:hover {{ text-decoration: underline; }}
+        .lesson-meta {{ color: #888; font-size: 0.85em; white-space: nowrap; }}
+        .turn {{ border-left: 3px solid #007bff; padding: 8px 14px; margin: 12px 0;
+                 background: #f8f9fa; border-radius: 0 6px 6px 0; }}
+        .turn-ts {{ font-size: 0.78em; color: #888; margin-bottom: 6px; }}
+        .turn-q {{ font-weight: 600; color: #333; margin-bottom: 8px; white-space: pre-wrap; }}
+        .turn-a {{ color: #555; white-space: pre-wrap; line-height: 1.5; font-size: 0.95em; }}
+        .turns-container {{ margin-top: 12px; display: none; }}
+        .turns-container.open {{ display: block; }}
+        .toggle-hint {{ color: #888; font-size: 0.85em; user-select: none; }}
+        #status {{ color: #888; padding: 20px; text-align: center; }}
+    </style>
+</head>
+<body>
+    {auth_bar}
+    <h1>Conversations</h1>
+    <div class="subtitle" id="subtitle">Loading…</div>
+    <div id="lessons"></div>
+    <div id="status"></div>
+
+<script>
+function escHtml(s) {{
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}}
+
+async function toggleLesson(cardId, docId, userId) {{
+    const container = document.getElementById('turns-' + cardId);
+    const hint = document.getElementById('hint-' + cardId);
+    if (container.classList.contains('open')) {{
+        container.classList.remove('open');
+        hint.textContent = 'Show turns ▾';
+        return;
+    }}
+    if (!container.dataset.loaded) {{
+        container.innerHTML = '<div style="color:#888;padding:8px;">Loading turns…</div>';
+        try {{
+            const res = await fetch('/api/lesson-chat-history/' + encodeURIComponent(docId));
+            const data = await res.json();
+            const filtered = (data.turns || []).filter(t => userId === null || t.user_id === userId);
+            if (filtered.length === 0) {{
+                container.innerHTML = '<div style="color:#999;padding:8px;">(no turns)</div>';
+            }} else {{
+                container.innerHTML = filtered.map(t => {{
+                    const ts = t.created_at ? new Date(t.created_at).toLocaleString() : '';
+                    return '<div class="turn">' +
+                        '<div class="turn-ts">' + escHtml(ts) + '</div>' +
+                        '<div class="turn-q">' + escHtml(t.query) + '</div>' +
+                        '<div class="turn-a">' + escHtml(t.response) + '</div>' +
+                        '</div>';
+                }}).join('');
+            }}
+            container.dataset.loaded = '1';
+        }} catch (e) {{
+            container.innerHTML = '<div style="color:#c62828;padding:8px;">Failed: ' + escHtml(e.message) + '</div>';
+        }}
+    }}
+    container.classList.add('open');
+    hint.textContent = 'Hide turns ▴';
+}}
+
+(async function init() {{
+    try {{
+        const res = await fetch('/api/conversations');
+        const data = await res.json();
+        const lessons = data.lessons || [];
+        document.getElementById('subtitle').textContent = data.is_superuser_view
+            ? 'Superuser view — showing every user\\'s chats.'
+            : 'Your chat history, grouped by lesson.';
+        const container = document.getElementById('lessons');
+        if (lessons.length === 0) {{
+            container.innerHTML = '<div style="color:#888;padding:20px;">No conversations yet.</div>';
+            document.getElementById('status').textContent = '';
+            return;
+        }}
+        const parts = [];
+        lessons.forEach((l, i) => {{
+            const cardId = 'c' + i;
+            const ts = l.last_chat_at ? new Date(l.last_chat_at).toLocaleString() : '';
+            const userPart = data.is_superuser_view && l.user_email
+                ? ' · ' + escHtml(l.user_email)
+                : '';
+            const userIdJs = data.is_superuser_view ? (l.user_id == null ? 'null' : l.user_id) : 'null';
+            parts.push(
+                '<div class="lesson-card">' +
+                '<div class="lesson-card-header" onclick="toggleLesson(\\'' + cardId + '\\', \\'' +
+                    escHtml(l.document_id) + '\\', ' + userIdJs + ')">' +
+                '<div><a class="lesson-title" href="/lesson/' + escHtml(l.document_id) + '" onclick="event.stopPropagation()">' +
+                    escHtml(l.title) + '</a>' +
+                '<span class="toggle-hint" id="hint-' + cardId + '" style="margin-left:12px;">Show turns ▾</span></div>' +
+                '<div class="lesson-meta">' + escHtml(ts) + ' · ' + l.turn_count + ' turn' +
+                    (l.turn_count === 1 ? '' : 's') + escHtml(userPart) + '</div>' +
+                '</div>' +
+                '<div class="turns-container" id="turns-' + cardId + '"></div>' +
+                '</div>'
+            );
+        }});
+        container.innerHTML = parts.join('');
+        document.getElementById('status').textContent = '';
+    }} catch (e) {{
+        document.getElementById('status').textContent = 'Failed to load: ' + e.message;
+    }}
+}})();
 </script>
 </body>
 </html>"""

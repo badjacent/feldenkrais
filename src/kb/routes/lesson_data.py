@@ -510,11 +510,19 @@ async def lesson_info(document_id: str):
         except Exception:
             pass
 
+    # Only flag has_audio when the S3 object is actually playable media.
+    # Some text-only lessons have an s3_key pointing at a .txt sidecar; the
+    # browser's <audio> control renders "Error" if asked to decode those.
+    _s3_key = doc.get("s3_key") or ""
+    _ext = _s3_key.rsplit(".", 1)[-1].lower() if "." in _s3_key else ""
+    has_audio = _ext in ("mp3", "wav", "m4a", "aac", "ogg", "flac", "opus",
+                         "mp4", "mov", "webm", "mkv")
+
     return JSONResponse({
         "title": doc.get("title", ""),
         "source_url": source_url,
         "source_name": source_name,
-        "has_audio": bool(doc.get("s3_key")),
+        "has_audio": has_audio,
         "has_whisper_segments": bool(segments),
         "segment_count": len(segments) if segments else 0,
         "text": text or "",

@@ -566,6 +566,7 @@ from web_pages import (  # noqa: E402
     _AUTH_BAR_CSS, _auth_bar_html,
     build_search_home_html,
     build_lesson_page_html,
+    build_conversations_page_html,
 )
 
 

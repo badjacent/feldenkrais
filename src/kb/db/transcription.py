@@ -145,6 +145,49 @@ class TranscriptionMixin:
             row = cursor.fetchone()
             return dict(row) if row else None
 
+    def get_documents_for_sync_fallback(self, min_retries: int, max_retries: int) -> list[dict]:
+        """
+        Get docs eligible for synchronous transcription fallback.
+
+        These are docs whose async retries have crossed the threshold but haven't
+        yet exhausted the overall retry cap, and that don't already have a
+        completed transcription.
+        """
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute(
+                """
+                SELECT d.id, d.title, d.s3_key,
+                       COALESCE(d.transcription_retries, 0) as transcription_retries
+                FROM document d
+                WHERE d.type_id IN (2, 3)
+                AND NOT EXISTS (
+                    SELECT 1 FROM analysis a
+                    WHERE a.document_id = d.id AND a.type_id = 1
+                )
+                AND COALESCE(d.transcription_retries, 0) >= %s
+                AND COALESCE(d.transcription_retries, 0) < %s
+                ORDER BY d.transcription_retries DESC, d.created_at
+                """,
+                (min_retries, max_retries),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def increment_document_retries(self, document_id: str) -> int:
+        """Increment transcription_retries on a document. Returns the new value."""
+        with self.get_cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE document
+                SET transcription_retries = COALESCE(transcription_retries, 0) + 1,
+                    updated_at = NOW()
+                WHERE id = %s
+                RETURNING transcription_retries
+                """,
+                (document_id,),
+            )
+            row = cursor.fetchone()
+            return row["transcription_retries"] if row else 0
+
     def get_failed_documents_for_retry(self, max_retries: int = 5) -> list[dict]:
         """
         Get documents whose transcription failed and are eligible for retry.
