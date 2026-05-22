@@ -93,7 +93,15 @@ class LessonMetadataMixin:
                           COALESCE(
                               d.metadata->>'lesson_type',
                               d.metadata->'lesson_page'->'extracted'->>'lesson_type'
-                          ) as lesson_type
+                          ) as lesson_type,
+                          NULLIF(
+                              COALESCE(
+                                  d.metadata->'lesson_metadata'->>'chapter',
+                                  (regexp_match(coalesce(d.lesson_index, ''), 'Chapter\\s+(\\d+)'))[1],
+                                  (regexp_match(d.title, 'Chapter\\s+(\\d+)'))[1]
+                              ),
+                              ''
+                          )::int as chapter
                    FROM document d
                    WHERE d.source_id = 3
                    ORDER BY d.lesson_date NULLS LAST, d.title""",

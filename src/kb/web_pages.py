@@ -2220,7 +2220,13 @@ def build_fmtt_page_html(
     sections_html = []
     for seg in sorted(by_segment.keys(), key=seg_sort_key):
         items = by_segment[seg]
-        items.sort(key=lambda L: (L.get("lesson_date") or "", L.get("title") or ""))
+        # Chronological within a segment: date first, chapter second,
+        # title as the final tiebreaker.
+        items.sort(key=lambda L: (
+            L.get("lesson_date") or "",
+            L.get("chapter") if L.get("chapter") is not None else 9999,
+            L.get("title") or "",
+        ))
         rows = []
         for L in items:
             doc_id = html_mod.escape(str(L["id"]))
