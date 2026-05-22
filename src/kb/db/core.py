@@ -41,7 +41,9 @@ CREATE TABLE IF NOT EXISTS document (
     metadata JSONB,
     lesson_date DATE,
     lesson_index TEXT,
-    audio_fingerprint TEXT
+    audio_fingerprint TEXT,
+    origin TEXT,
+    presenter TEXT
 );
 
 CREATE TABLE IF NOT EXISTS analysis_type (
@@ -404,6 +406,8 @@ class DatabaseCore:
                 ("document", "category_name", "TEXT"),
                 ("document", "transcription_retries", "INTEGER DEFAULT 0"),
                 ("document", "audio_fingerprint", "TEXT"),
+                ("document", "origin", "TEXT"),
+                ("document", "presenter", "TEXT"),
                 ("users", "superuser_eligible", "BOOLEAN NOT NULL DEFAULT FALSE"),
             ]:
                 cursor.execute(

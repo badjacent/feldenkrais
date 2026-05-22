@@ -2193,6 +2193,115 @@ async function sendChat() {{
 </html>"""
 
 
+def build_fmtt_page_html(
+    user: dict | None,
+    superuser_active: bool,
+    fmtt_lessons: list,
+) -> str:
+    """Dedicated FMTT browse page: lessons grouped by segment, sorted numerically.
+
+    fmtt_lessons: list of dicts each containing
+        id, title, lesson_date (iso str or None), segment_label,
+        presenter (str or None), origin (str or None), lesson_type (str or None)
+    """
+    auth_bar = _auth_bar_html(user, superuser_active=superuser_active)
+
+    import re as _re
+    # Group by segment
+    by_segment: dict = {}
+    for L in fmtt_lessons:
+        seg = L.get("segment_label") or "(no segment)"
+        by_segment.setdefault(seg, []).append(L)
+
+    def seg_sort_key(label):
+        m = _re.match(r"\s*Segment\s+(\d+)", label)
+        return (int(m.group(1)) if m else 9999, label)
+
+    sections_html = []
+    for seg in sorted(by_segment.keys(), key=seg_sort_key):
+        items = by_segment[seg]
+        items.sort(key=lambda L: (L.get("lesson_date") or "", L.get("title") or ""))
+        rows = []
+        for L in items:
+            doc_id = html_mod.escape(str(L["id"]))
+            title = html_mod.escape(L.get("title") or "(untitled)")
+            ltype = (L.get("lesson_type") or "").strip()
+            type_class = ltype.lower().replace(" ", "-") if ltype else ""
+            type_pill = (
+                f'<span class="type-pill type-{html_mod.escape(type_class)}">'
+                f'{html_mod.escape(ltype)}</span>'
+                if ltype else ""
+            )
+            extras = []
+            if L.get("presenter"): extras.append(html_mod.escape(L["presenter"]))
+            if L.get("origin"):    extras.append(html_mod.escape(L["origin"]))
+            extra_line = (
+                f'<div class="lesson-extra">{" · ".join(extras)}</div>'
+                if extras else ""
+            )
+            rows.append(
+                f'<li class="lesson-row">{type_pill}'
+                f'<a href="/lesson/{doc_id}" class="lesson-title-link">{title}</a>'
+                f'{extra_line}</li>'
+            )
+        sections_html.append(
+            f'<section class="segment-block">'
+            f'<h2 class="segment-heading">{html_mod.escape(seg)} '
+            f'<span class="count">({len(items)})</span></h2>'
+            f'<ul class="lesson-ul">{"".join(rows)}</ul>'
+            f'</section>'
+        )
+
+    total = len(fmtt_lessons)
+    n_segments = len(by_segment)
+
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Feldenkrais Manhattan Training</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+               max-width: 1000px; margin: 0 auto; padding: 24px; color: #222; }}
+        h1 {{ margin: 0 0 4px; font-size: 1.7em; }}
+        .subtitle {{ color: #888; font-size: 0.95em; margin-bottom: 28px; }}
+        .segment-block {{ margin-bottom: 28px; border: 1px solid #e7e7e7; border-radius: 10px;
+                          padding: 18px 22px; background: #fff; }}
+        .segment-heading {{ font-size: 1.1em; color: #1a1a1a; margin: 0 0 14px;
+                            padding-bottom: 8px; border-bottom: 1px solid #f0f0f0; }}
+        .segment-heading .count {{ color: #999; font-weight: 400; font-size: 0.85em;
+                                    margin-left: 6px; }}
+        .lesson-ul {{ list-style: none; padding: 0; margin: 0; }}
+        .lesson-row {{ padding: 9px 0; border-top: 1px solid #f4f4f4;
+                       display: grid; grid-template-columns: 90px 1fr;
+                       gap: 10px; align-items: baseline; }}
+        .lesson-row:first-child {{ border-top: 0; }}
+        .type-pill {{ display: inline-block; padding: 2px 8px; font-size: 0.72em;
+                      border-radius: 10px; color: #fff; background: #888;
+                      text-transform: uppercase; letter-spacing: 0.04em; text-align: center;
+                      align-self: start; justify-self: start; }}
+        .type-pill:empty {{ display: none; }}
+        .type-pill.type-atm {{ background: #007bff; }}
+        .type-pill.type-discussion {{ background: #6c757d; }}
+        .type-pill.type-fi-demo {{ background: #20c997; }}
+        .type-pill.type-lecture {{ background: #fd7e14; }}
+        .type-pill.type-practice {{ background: #9b59b6; }}
+        .lesson-title-link {{ color: #1565c0; text-decoration: none;
+                              font-size: 0.97em; line-height: 1.4; }}
+        .lesson-title-link:hover {{ text-decoration: underline; }}
+        .lesson-extra {{ color: #777; font-size: 0.82em; margin-top: 2px; grid-column: 2; }}
+{_AUTH_BAR_CSS}
+    </style>
+</head>
+<body>
+    {auth_bar}
+    <h1>Feldenkrais Manhattan Training</h1>
+    <p class="subtitle">{total} lessons across {n_segments} segments. Click any lesson for full analysis, transcript, and Q&amp;A.</p>
+    {"".join(sections_html) if sections_html else '<p style="color:#888;padding:20px;">No FMTT lessons available to you.</p>'}
+</body>
+</html>"""
+
+
 def build_conversations_page_html(user: dict, superuser_active: bool = False) -> str:
     """Central page listing the user's chat history grouped by lesson.
 

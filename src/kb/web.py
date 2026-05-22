@@ -567,6 +567,7 @@ from web_pages import (  # noqa: E402
     build_search_home_html,
     build_lesson_page_html,
     build_conversations_page_html,
+    build_fmtt_page_html,
 )
 
 
@@ -700,11 +701,12 @@ def get_available_lessons() -> tuple[dict[str, list[tuple[str, str]]], dict[str,
                 override_buckets = {}  # category_name -> list of (id, title)
                 source_bucket = []     # docs without override
 
+                # FMTT (source_id=3) is shown exclusively on its dedicated
+                # /fmtt page — drop it from the home-page browse.
+                if src["source_id"] == 3:
+                    continue
                 for doc in _db.get_source_lessons(src["source_id"]):
-                    # Only show ATM lessons for FELDENKRAIS_MANHATTAN
                     lesson_type = doc.get("lesson_type")
-                    if src["source_id"] == 3 and lesson_type and lesson_type != "ATM":
-                        continue
                     title = doc["title"]
                     instructor = doc.get("instructor")
                     display = f"{title} ({instructor})" if instructor else title

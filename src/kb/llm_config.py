@@ -37,6 +37,12 @@ LLM_CONFIGS = {
         "api_key_env": "GOOGLE_API_KEY",
         "default_max_tokens": 8192,
     },
+    "gemini-3.5-flash": {
+        "provider": "gemini",
+        "model": "gemini-3.5-flash",
+        "api_key_env": "GOOGLE_API_KEY",
+        "default_max_tokens": 65536,
+    },
     "openai": {
         "provider": "openai",
         "model": "gpt-5",

@@ -74,6 +74,27 @@ class LessonMetadataMixin:
             """, (source_id,))
             return [dict(row) for row in cursor.fetchall()]
 
+    def get_fmtt_lessons(self) -> list[dict]:
+        """All FMTT (source_id=3) lessons, with the metadata the /fmtt page needs.
+
+        Pulls the segment_label out of metadata->lesson_page so the page can
+        group lessons under their canonical segment heading.
+        """
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute(
+                """SELECT d.id::text as id,
+                          d.title,
+                          d.lesson_date::text as lesson_date,
+                          d.origin,
+                          d.presenter,
+                          d.metadata->'lesson_page'->>'segment_label' as segment_label,
+                          d.metadata->>'lesson_type' as lesson_type
+                   FROM document d
+                   WHERE d.source_id = 3
+                   ORDER BY d.lesson_date NULLS LAST, d.title""",
+            )
+            return [dict(r) for r in cursor.fetchall()]
+
     def get_document_transcription(self, document_id: str) -> Optional[str]:
         """Get the text content for a document.
 

@@ -10,6 +10,27 @@ import web as _web
 router = APIRouter()
 
 
+@router.get("/fmtt", response_class=HTMLResponse)
+async def fmtt_page(request: Request):
+    """Dedicated Feldenkrais Manhattan Training browse page.
+
+    Restricted to users who have access to source_id=3 (FMTT). Superusers/admins
+    see everything; everyone else gets a 404 unless their group grants access.
+    """
+    user = _web._set_source_access(request)
+    su_active = _web._is_superuser_active(request, user)
+    allowed = _web._db.allowed_source_ids if _web._db else set()
+    if allowed is not None and 3 not in allowed:
+        return HTMLResponse("<h1>Not Found</h1>", status_code=404)
+
+    lessons = _web._db.get_fmtt_lessons() if _web._db else []
+    return HTMLResponse(_web.build_fmtt_page_html(
+        user=user,
+        superuser_active=su_active,
+        fmtt_lessons=lessons,
+    ))
+
+
 @router.get("/", response_class=HTMLResponse)
 async def landing_page(request: Request):
     """Landing page: search home, plus dev tools for admin or local dev."""
