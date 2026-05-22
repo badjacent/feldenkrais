@@ -78,7 +78,9 @@ class LessonMetadataMixin:
         """All FMTT (source_id=3) lessons, with the metadata the /fmtt page needs.
 
         Pulls the segment_label out of metadata->lesson_page so the page can
-        group lessons under their canonical segment heading.
+        group lessons under their canonical segment heading. The lesson_type
+        falls back to the LLM-extracted value (Segments 11-12 weren't loaded
+        through the scraper path that populates metadata.lesson_type).
         """
         with self.get_cursor(commit=False) as cursor:
             cursor.execute(
@@ -88,7 +90,10 @@ class LessonMetadataMixin:
                           d.origin,
                           d.presenter,
                           d.metadata->'lesson_page'->>'segment_label' as segment_label,
-                          d.metadata->>'lesson_type' as lesson_type
+                          COALESCE(
+                              d.metadata->>'lesson_type',
+                              d.metadata->'lesson_page'->'extracted'->>'lesson_type'
+                          ) as lesson_type
                    FROM document d
                    WHERE d.source_id = 3
                    ORDER BY d.lesson_date NULLS LAST, d.title""",
