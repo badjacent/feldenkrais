@@ -580,7 +580,7 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
 
     <!-- Steps/Cards tab (default) -->
     <div id="tab-steps">
-        <div class="tab-intro">Follow along with the lesson one movement at a time. Each card shows what's happening biomechanically and linguistically, synced with the transcript and audio.</div>
+        <div class="tab-intro">Follow along with the lesson one movement at a time. Each card shows what's happening biomechanically and linguistically, synced with the transcript and audio. <a href="/lesson/{esc_id}/print" target="_blank" style="margin-left:8px;">Print sequence &rarr;</a></div>
         <div class="card" id="card">
             <div class="card-placeholder" id="card-placeholder">
                 <span class="spinner-inline"></span> Loading analysis...
@@ -2188,6 +2188,144 @@ async function sendChat() {{
     }}
 }})();
 
+</script>
+</body>
+</html>"""
+
+
+def build_lesson_print_html(document_id: str, title: str | None = None) -> str:
+    """Print-friendly view: numbered list of step instructions, grouped.
+
+    Client-side fetches /api/lesson/{id}/combined and renders one bullet per
+    step. No header/nav/auth bar — just the steps. Designed for browser print.
+    """
+    esc_id = html_mod.escape(document_id)
+    esc_title = html_mod.escape(title or "Lesson")
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>{esc_title} — Print</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+               max-width: 760px; margin: 0 auto; padding: 32px 28px;
+               color: #222; line-height: 1.55; font-size: 13.5pt; }}
+        h1 {{ font-size: 1.5em; margin: 0 0 4px; }}
+        .subtitle {{ color: #888; font-size: 0.85em; margin-bottom: 24px; }}
+        h2 {{ font-size: 1.1em; margin: 22px 0 8px; color: #555;
+              border-bottom: 1px solid #e0e0e0; padding-bottom: 4px; }}
+        h2 .pos {{ color: #999; font-weight: 400; font-size: 0.85em; margin-left: 8px; }}
+        ol.steps {{ list-style: none; padding-left: 0; counter-reset: step; margin: 0; }}
+        ol.steps li {{ position: relative; padding: 4px 0 4px 38px; margin-bottom: 4px;
+                       break-inside: avoid; page-break-inside: avoid; }}
+        ol.steps li::before {{ counter-increment: step; content: counter(step) ".";
+                                position: absolute; left: 0; top: 4px;
+                                color: #999; font-variant-numeric: tabular-nums;
+                                width: 30px; text-align: right; }}
+        ol.steps .pos {{ display: inline; color: #aaa; font-style: italic;
+                          font-size: 0.85em; margin-right: 6px; }}
+        .toolbar {{ position: fixed; top: 12px; right: 12px;
+                    background: #fff; padding: 6px 10px; border: 1px solid #ddd;
+                    border-radius: 6px; font-size: 0.85em; }}
+        .toolbar a, .toolbar button {{ color: #007bff; text-decoration: none;
+                                       background: none; border: none; cursor: pointer;
+                                       padding: 0 4px; font-size: 1em; }}
+        .toolbar a:hover, .toolbar button:hover {{ text-decoration: underline; }}
+        @media print {{
+            .toolbar {{ display: none; }}
+            body {{ padding: 16px; font-size: 11pt; }}
+            h1 {{ font-size: 1.3em; }}
+            h2 {{ font-size: 1.0em; margin-top: 14px; }}
+        }}
+        #status {{ color: #888; padding: 20px 0; }}
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <button onclick="window.print()">Print</button>
+        &middot; <a href="/lesson/{esc_id}">Back to lesson</a>
+    </div>
+    <h1 id="lesson-title">{esc_title}</h1>
+    <div class="subtitle" id="subtitle"></div>
+    <div id="content"><div id="status">Loading…</div></div>
+
+<script>
+function escHtml(s) {{
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}}
+
+(async function init() {{
+    const docId = {json.dumps(document_id)};
+    try {{
+        const info = await fetch('/api/lesson-info/' + encodeURIComponent(docId)).then(r => r.json());
+        if (info.title) {{
+            document.title = info.title + ' — Print';
+            document.getElementById('lesson-title').textContent = info.title;
+        }}
+
+        const data = await fetch('/api/lesson/' + encodeURIComponent(docId) + '/combined').then(r => r.json());
+        if (data.error) {{
+            document.getElementById('content').innerHTML =
+                '<div style="color:#c62828;padding:20px;">' + escHtml(data.error) + '</div>';
+            return;
+        }}
+        const steps = data.steps || [];
+        const groups = data.groups || [];
+
+        document.getElementById('subtitle').textContent =
+            steps.length + ' steps across ' + groups.length + ' group' +
+            (groups.length === 1 ? '' : 's');
+
+        // Map step_number -> step, group_number -> group
+        const stepByNum = {{}};
+        for (const s of steps) stepByNum[s.step_number] = s;
+
+        const parts = [];
+        // If we have group structure, render group-by-group with continuous numbering.
+        // Otherwise just one big <ol>.
+        if (groups.length > 0) {{
+            let openOl = false;
+            for (const g of groups) {{
+                const stepNums = g.steps || [];
+                if (!stepNums.length) continue;
+                if (openOl) parts.push('</ol>');
+                const pos = g.starting_position
+                    ? '<span class="pos">(' + escHtml(g.starting_position) + ')</span>'
+                    : '';
+                parts.push('<h2>Group ' + escHtml(String(g.group_number)) + ': ' +
+                           escHtml(g.label || '') + pos + '</h2>');
+                // Continue ol numbering from first step number in this group
+                const first = stepNums[0];
+                parts.push('<ol class="steps" start="' + first + '" style="counter-reset: step ' + (first - 1) + ';">');
+                openOl = true;
+                for (const n of stepNums) {{
+                    const s = stepByNum[n];
+                    if (!s) continue;
+                    const sp = s.starting_position && s.starting_position !== (g.starting_position || '')
+                        ? '<span class="pos">[' + escHtml(s.starting_position) + ']</span> '
+                        : '';
+                    parts.push('<li>' + sp + escHtml(s.instruction || '') + '</li>');
+                }}
+            }}
+            if (openOl) parts.push('</ol>');
+        }} else {{
+            parts.push('<ol class="steps">');
+            for (const s of steps) {{
+                const sp = s.starting_position
+                    ? '<span class="pos">[' + escHtml(s.starting_position) + ']</span> '
+                    : '';
+                parts.push('<li>' + sp + escHtml(s.instruction || '') + '</li>');
+            }}
+            parts.push('</ol>');
+        }}
+        document.getElementById('content').innerHTML = parts.join('');
+    }} catch (e) {{
+        document.getElementById('content').innerHTML =
+            '<div style="color:#c62828;padding:20px;">Failed: ' + escHtml(e.message) + '</div>';
+    }}
+}})();
 </script>
 </body>
 </html>"""

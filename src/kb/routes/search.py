@@ -156,6 +156,20 @@ async def conversations_page(request: Request):
     ))
 
 
+@router.get("/lesson/{document_id}/print", response_class=HTMLResponse)
+async def lesson_print_page(request: Request, document_id: str):
+    """Print-friendly numbered step list for a lesson."""
+    _web._set_source_access(request)
+    if _web._db and not _web._db.is_document_accessible(document_id):
+        return HTMLResponse("<h1>Not Found</h1>", status_code=404)
+    title = None
+    if _web._db:
+        doc = _web._db.get_document(document_id)
+        if doc:
+            title = doc.get("title")
+    return HTMLResponse(_web.build_lesson_print_html(document_id, title=title))
+
+
 @router.get("/lesson/{document_id}", response_class=HTMLResponse)
 async def lesson_detail_page(request: Request, document_id: str):
     """Unified lesson detail page."""

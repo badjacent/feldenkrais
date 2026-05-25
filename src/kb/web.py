@@ -568,6 +568,7 @@ from web_pages import (  # noqa: E402
     build_lesson_page_html,
     build_conversations_page_html,
     build_fmtt_page_html,
+    build_lesson_print_html,
 )
 
 
