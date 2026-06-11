@@ -103,7 +103,19 @@ def process_file(
         metadata["scraper"] = sidecar["scraper_metadata"]
     if sidecar.get("youtube_metadata"):
         metadata["youtube"] = sidecar["youtube_metadata"]
+    # FMTT (and any future scraper) enrichment blocks. These feed the /fmtt page
+    # query (segment_label, lesson_type, chapter); without mapping them here the
+    # data would be dropped and require a separate backfill pass.
+    if sidecar.get("lesson_page"):
+        metadata["lesson_page"] = sidecar["lesson_page"]
+    if sidecar.get("lesson_metadata"):
+        metadata["lesson_metadata"] = sidecar["lesson_metadata"]
     metadata_json = json.dumps(metadata) if metadata else None
+
+    # Structured columns the sidecar may carry straight onto the document row.
+    origin = sidecar.get("origin")
+    presenter = sidecar.get("presenter")
+    category_name = sidecar.get("category_name")
 
     # Check for duplicate document
     if db.document_exists(title, source_url):
@@ -136,6 +148,9 @@ def process_file(
             metadata=metadata_json,
             lesson_date=lesson_date,
             lesson_index=lesson_index,
+            origin=origin,
+            presenter=presenter,
+            category_name=category_name,
         )
 
         # For text documents, store content as analysis (same as transcription)

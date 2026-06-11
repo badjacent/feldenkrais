@@ -18,16 +18,19 @@ class DocumentsMixin:
         metadata: Optional[str] = None,
         lesson_date: Optional[str] = None,
         lesson_index: Optional[str] = None,
+        origin: Optional[str] = None,
+        presenter: Optional[str] = None,
+        category_name: Optional[str] = None,
     ) -> str:
         """Create a new document record. Returns the document ID."""
         doc_id = str(uuid4())
         with self.get_cursor() as cursor:
             cursor.execute(
                 """
-                INSERT INTO document (id, title, source_url, s3_key, source_id, type_id, tags, metadata, lesson_date, lesson_index)
-                VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s)
+                INSERT INTO document (id, title, source_url, s3_key, source_id, type_id, tags, metadata, lesson_date, lesson_index, origin, presenter, category_name)
+                VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s, %s, %s, %s)
                 """,
-                (doc_id, title, source_url, s3_key, source_id, type_id, tags, metadata, lesson_date, lesson_index),
+                (doc_id, title, source_url, s3_key, source_id, type_id, tags, metadata, lesson_date, lesson_index, origin, presenter, category_name),
             )
         return doc_id
 

@@ -87,6 +87,33 @@ class TestCreateDocument:
         sql = mock_db._mock_cursor.execute.call_args[0][0]
         assert "status" not in sql.lower().split("values")[0].split("(")[1]
 
+    def test_create_document_with_structured_columns(self, mock_db):
+        """origin/presenter/category_name should be inserted into their columns."""
+        with patch("kb.db.documents.uuid4") as mock_uuid:
+            mock_uuid.return_value = "test-uuid"
+            mock_db.create_document(
+                title="Test", s3_key="test.mp3", source_id=3, type_id=2,
+                origin="Amherst 1981",
+                presenter="Sheryl Field",
+                category_name="Segment 13: June 5-June 8",
+            )
+        call_args = mock_db._mock_cursor.execute.call_args
+        sql, params = call_args[0][0], call_args[0][1]
+        for col in ("origin", "presenter", "category_name"):
+            assert col in sql
+        # appended after lesson_index → last three params, in declared order
+        assert params[-3:] == ("Amherst 1981", "Sheryl Field", "Segment 13: June 5-June 8")
+
+    def test_create_document_structured_columns_default_none(self, mock_db):
+        """Omitting the new columns passes NULL (no regression for other sources)."""
+        with patch("kb.db.documents.uuid4") as mock_uuid:
+            mock_uuid.return_value = "test-uuid"
+            mock_db.create_document(
+                title="Test", s3_key="test.mp3", source_id=1, type_id=2,
+            )
+        params = mock_db._mock_cursor.execute.call_args[0][1]
+        assert params[-3:] == (None, None, None)
+
 
 class TestGetDocument:
     def test_get_existing_document(self, mock_db):
