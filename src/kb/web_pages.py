@@ -2265,7 +2265,11 @@ function escHtml(s) {{
             document.getElementById('lesson-title').textContent = info.title;
         }}
 
-        const data = await fetch('/api/lesson/' + encodeURIComponent(docId) + '/combined').then(r => r.json());
+        const resp = await fetch('/api/lesson/' + encodeURIComponent(docId) + '/combined');
+        const data = await resp.json();
+        console.log('print: data', {{ok: resp.ok, status: resp.status, err: data.error,
+                                     steps: (data.steps || []).length,
+                                     groups: (data.groups || []).length}});
         if (data.error) {{
             document.getElementById('content').innerHTML =
                 '<div style="color:#c62828;padding:20px;">' + escHtml(data.error) + '</div>';
@@ -2278,13 +2282,21 @@ function escHtml(s) {{
             steps.length + ' steps across ' + groups.length + ' group' +
             (groups.length === 1 ? '' : 's');
 
-        // Map step_number -> step, group_number -> group
+        if (!steps.length) {{
+            document.getElementById('content').innerHTML =
+                '<div style="color:#888;padding:20px;">No steps found in the decomposition for this lesson.</div>';
+            return;
+        }}
+
+        // Map step_number -> step
         const stepByNum = {{}};
         for (const s of steps) stepByNum[s.step_number] = s;
 
+        // Track which steps have been rendered so we can fall back to ungrouped
+        // listing if group.steps[] doesn't cover everything.
+        const rendered = new Set();
+
         const parts = [];
-        // If we have group structure, render group-by-group with continuous numbering.
-        // Otherwise just one big <ol>.
         if (groups.length > 0) {{
             let openOl = false;
             for (const g of groups) {{
@@ -2296,13 +2308,13 @@ function escHtml(s) {{
                     : '';
                 parts.push('<h2>Group ' + escHtml(String(g.group_number)) + ': ' +
                            escHtml(g.label || '') + pos + '</h2>');
-                // Continue ol numbering from first step number in this group
                 const first = stepNums[0];
                 parts.push('<ol class="steps" start="' + first + '" style="counter-reset: step ' + (first - 1) + ';">');
                 openOl = true;
                 for (const n of stepNums) {{
                     const s = stepByNum[n];
                     if (!s) continue;
+                    rendered.add(n);
                     const sp = s.starting_position && s.starting_position !== (g.starting_position || '')
                         ? '<span class="pos">[' + escHtml(s.starting_position) + ']</span> '
                         : '';
@@ -2310,9 +2322,16 @@ function escHtml(s) {{
                 }}
             }}
             if (openOl) parts.push('</ol>');
-        }} else {{
-            parts.push('<ol class="steps">');
-            for (const s of steps) {{
+        }}
+
+        // Catch any steps that weren't covered by the group structure (or render
+        // all steps if there were no groups at all).
+        const orphans = steps.filter(s => !rendered.has(s.step_number));
+        if (orphans.length) {{
+            if (groups.length > 0) parts.push('<h2>Other steps</h2>');
+            const first = orphans[0].step_number || 1;
+            parts.push('<ol class="steps" start="' + first + '" style="counter-reset: step ' + (first - 1) + ';">');
+            for (const s of orphans) {{
                 const sp = s.starting_position
                     ? '<span class="pos">[' + escHtml(s.starting_position) + ']</span> '
                     : '';
@@ -2320,10 +2339,18 @@ function escHtml(s) {{
             }}
             parts.push('</ol>');
         }}
+
+        if (!parts.length) {{
+            document.getElementById('content').innerHTML =
+                '<div style="color:#888;padding:20px;">Rendered 0 steps. data.steps=' +
+                steps.length + ' data.groups=' + groups.length + '. Check console.</div>';
+            return;
+        }}
         document.getElementById('content').innerHTML = parts.join('');
     }} catch (e) {{
+        console.error('print: failed', e);
         document.getElementById('content').innerHTML =
-            '<div style="color:#c62828;padding:20px;">Failed: ' + escHtml(e.message) + '</div>';
+            '<div style="color:#c62828;padding:20px;">Failed: ' + escHtml(e.message || String(e)) + '<br><small>(see browser console for details)</small></div>';
     }}
 }})();
 </script>

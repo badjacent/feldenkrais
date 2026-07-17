@@ -1,0 +1,205 @@
+# Draft anti-patterns catalog
+# Generated 2026-05-26 15:13 UTC from 373 records across 55 FP-Free lessons.
+# Review, edit, and rename before promoting to the canonical catalog.
+
+# Total entries: 25
+
+- id: rectus-abdominis-grip
+  name: "The Rigid Abdominal Shield"
+  aliases: ["Six-pack bracing", "The vertical strap", "Abdominal splinting"]
+  body_signature: "rectus abdominis"
+  description: "The habit of reflexively tightening the superficial abdominal wall as a 'brace' or stabilizer. This creates a rigid front that flattens the back, restricts the diaphragm, and prevents fluid spinal undulation."
+  common_indicators: "Lifting a leg from supine, sitting 'upright', or navigating novel/complex movements."
+  frequency: 16
+
+- id: thoracic-rigidity
+  name: "The Monolithic Rib Cage"
+  aliases: ["The rigid box torso", "The concrete thorax", "Fixed sternum"]
+  body_signature: "thoracic spine and intercostal muscles"
+  description: "Treating the rib cage as a single, solid unit or 'cage' rather than an articulated structure. This prevents the ribs from warping, compressing, or sliding during rotation and side-bending."
+  common_indicators: "Turning to check a blind spot, reaching across the body, or deep breathing exercises."
+  frequency: 14
+
+- id: scapular-thoracic-glue
+  name: "The Frozen Shoulder Blade"
+  aliases: ["Scapular pinning", "Shoulder-ribcage fixation", "Stuck scapula"]
+  body_signature: "serratus anterior, rhomboids, and trapezius"
+  description: "Treating the shoulder blade as if it is fused to the ribs. Instead of the scapula gliding freely to support arm movement, the person moves the entire torso to move the arm."
+  common_indicators: "Reaching for an object, driving (hands on wheel), or side-bending."
+  frequency: 12
+
+- id: cervical-thoracic-coupling
+  name: "Head-Shoulder-Chest Lockstep"
+  aliases: ["Cervical-thoracic glue", "Head-torso coupling", "Uncoupled head and heart"]
+  body_signature: "sternocleidomastoid and upper thoracic vertebrae"
+  description: "Moving the head, neck, and upper torso as a single rigid block. This lack of differentiation forces the eyes and nose to remain fixed to the center of the sternum during turns."
+  common_indicators: "Looking behind, lateral weight shifts, and rolling from side to back."
+  frequency: 11
+
+- id: breath-holding-under-effort
+  name: "Respiratory Bracing for Stability"
+  aliases: ["The bracing breath", "Apnea under concentration", "Valsalva-like maneuver"]
+  body_signature: "diaphragm and intercostals"
+  description: "Freezing the breath or fixing the ribs as soon as a movement becomes mentally or physically complex. This uses internal pressure as a substitute for skeletal support."
+  common_indicators: "Novel coordination 'riddles', balancing on one leg, or lifting heavy limbs."
+  frequency: 11
+
+- id: oculomotor-cervical-rigidity
+  name: "The Visual-Cervical Anchor"
+  aliases: ["Eye-head coupling", "Gaze-locked rotation", "Visual-vestibular fixation"]
+  body_signature: "extraocular muscles and suboccipitals"
+  description: "The habitual coupling of eye direction with head movement, where the eyes and head move only as a single unit. This locks the neck and prevents the head from rolling freely through the visual field."
+  common_indicators: "Turning the head, rolling on the floor, or tracking a moving object."
+  frequency: 10
+
+- id: gluteal-over-activity
+  name: "The Gluteal Power Clench"
+  aliases: ["Buttock bracing", "Gluteal sensory shielding", "The performative pelvic lift"]
+  body_signature: "gluteus maximus"
+  description: "Using maximal muscular 'clenching' of the buttocks as the primary engine for pelvic movement. This masks skeletal sensitivity and 'shoves' the pelvis rather than allowing it to roll."
+  common_indicators: "Pelvic tilts, bridging, or rolling the lower body."
+  frequency: 9
+
+- id: neck-extensor-guarding
+  name: "The Vigilant Turtle Neck"
+  aliases: ["Suboccipital shortening", "The rooted skull", "Cervical bracing"]
+  body_signature: "suboccipitals and cervical extensors"
+  description: "Holding the neck rigid against gravitational or internal forces, preventing the head from responding to the movement of the pelvis or spine."
+  common_indicators: "Weight shifts in the pelvis, rolling the torso, or lying prone."
+  frequency: 9
+
+- id: jaw-mandibular-bracing
+  name: "The Vigilant Jaw Clench"
+  aliases: ["Masseter guarding", "Mandibular bracing", "Jaw-spine coupling"]
+  body_signature: "masseter, temporalis, and hyoid muscles"
+  description: "Holding the teeth together or maintaining high jaw tension as a parasitic 'helper' for movement. This creates a false sense of internal stability during limb coordination."
+  common_indicators: "Concentrating on footwork, reaching, or lifting the pelvis."
+  frequency: 8
+
+- id: pelvic-lumbar-fixation
+  name: "The Rigid Lumbar-Pelvic Unit"
+  aliases: ["Frozen pelvic base", "Pelvic-rib glue", "Waist shortening brace"]
+  body_signature: "lumbar spine and pelvis"
+  description: "The tendency for the lower back and pelvis to move as a single, frozen block. This eliminates the independent rolling of the pelvis relative to the lower ribs."
+  common_indicators: "Pelvic clock exercises, rolling from side to back, or sitting transitions."
+  frequency: 8
+
+- id: hip-flexor-dominance
+  name: "The Hip-Flexor Anchor"
+  aliases: ["Iliopsoas over-recruitment", "Trailing leg drag", "Pelvic rolling by pulling"]
+  body_signature: "iliopsoas and psoas major"
+  description: "Using excessive hip flexor effort to 'pull' the legs or pelvis rather than utilizing ground force or skeletal counterweights. This often pins the pelvis to the floor."
+  common_indicators: "Lifting the knees, rolling the lower body, or side-sitting."
+  frequency: 7
+
+- id: lumbar-extension-habit
+  name: "The Braced Lumbar Arch"
+  aliases: ["Lumbar arch locking", "Static back pillar", "Belly-breathing as extension"]
+  body_signature: "lumbar erector spinae"
+  description: "Maintaining a permanent, rigid arch in the lower back even when a fold or posterior tilt is required. It often involves arching the back to 'fake' a large inhale."
+  common_indicators: "Pelvic tilting to 12 o'clock, bridge prep, or deep inhalation."
+  frequency: 7
+
+- id: sternocleidomastoid-dominance
+  name: "Neck-Led Cranial Lifting"
+  aliases: ["Neck-led lifting", "Leading with the chin", "Neck whiplash"]
+  body_signature: "sternocleidomastoid (SCM)"
+  description: "Engaging the superficial neck flexors to 'heave' the head off the floor or initiate a turn, rather than letting the power come from the torso and spine."
+  common_indicators: "Lifting the head from supine, rolling to the side, or sitting up."
+  frequency: 6
+
+- id: adductor-guarding
+  name: "The Parasitic Adductor Grip"
+  aliases: ["Internal hip narrowing", "Socially constrained femurs", "Adductor press"]
+  body_signature: "hip adductor group"
+  description: "Holding chronic tension in the inner thighs, which prevents the femurs from tilting outward smoothly or the pelvis from rotating freely."
+  common_indicators: "Lying with legs long, pelvic lifting, or widening the knees in sitting."
+  frequency: 6
+
+- id: axial-undifferentiation
+  name: "The Steamroller Log-Roll"
+  aliases: ["Shoulder-pelvis coupling", "En bloc rotation", "The steel rod spine"]
+  body_signature: "entire axial skeleton"
+  description: "Moving the shoulders and pelvis as a single rigid unit, eliminating the sequential spiral of the vertebrae. The torso moves like a heavy, solid log."
+  common_indicators: "Rolling from back to side, checking the blind spot while walking."
+  frequency: 6
+
+- id: distal-initiation-bias
+  name: "The Distal-Drive Straining"
+  aliases: ["Peripheral over-effort", "Linear reach habit", "Muscular heaving"]
+  body_signature: "extremities (hands/feet/knees)"
+  description: "Attempting to move the center of the body by 'pulling' or 'striving' with the hands or feet, rather than initiating movement from the proximal core and spine."
+  common_indicators: "Reaching for a far object, rolling the pelvis by pulling the knee."
+  frequency: 5
+
+- id: pelvic-floor-guarding
+  name: "Chronic Pelvic Floor Tension"
+  aliases: ["High-tone baseline", "Pelvic floor sphincters guarding"]
+  body_signature: "pelvic floor / levator ani"
+  description: "Maintaining a constant, low-level contraction of the pelvic floor. This prevents the pelvic basin from responding to internal pressure changes or skeletal shifts."
+  common_indicators: "Stressful situations, concentrated core work, or 'good' postural holding."
+  frequency: 4
+
+- id: ankle-joint-neutralization
+  name: "The Dead-End Ankle"
+  aliases: ["Frozen ankles", "Linear foot thinking", "Ankle-knee dependency"]
+  body_signature: "talocrural and subtalar joints"
+  description: "Treating the ankle and foot as a static block or 'stilt' rather than a dynamic transmitter of force. This breaks the kinetic chain from the floor to the pelvis."
+  common_indicators: "Standing on one leg, walking, or pushing from the feet to lift the pelvis."
+  frequency: 4
+
+- id: tongue-root-retraction
+  name: "The Anchored Tongue"
+  aliases: ["Tongue root tension", "Retracted tongue root"]
+  body_signature: "hyoid muscles and tongue base"
+  description: "Pressing the tongue against the palate or floor of the mouth, narrowing the airway and tensing the throat during unrelated physical effort."
+  common_indicators: "Difficult coordinations, balancing, or upper-body effort."
+  frequency: 3
+
+- id: pelvic-blindness
+  name: "Skeletal Amnesia of the Sit Bones"
+  aliases: ["Blind sit bones", "Anatomical amnesia of the pelvis"]
+  body_signature: "ischial tuberosities"
+  description: "A lack of awareness of the sit bones as the primary 'feet' of the seated body, leading to heavy, slumped, or muscularly-held sitting."
+  common_indicators: "Seated transitions, shifting weight in a chair, or the 'bucket seat slump'."
+  frequency: 3
+
+- id: paradoxical-breathing-habit
+  name: "Anxious Paradoxical Breathing"
+  aliases: ["Seesaw breathing", "Chest-only breathing"]
+  body_signature: "diaphragm and abdominal wall"
+  description: "Sucking the belly in during inhalation and pushing it out during exhalation. This reversal typically occurs during high-stress states or over-concentration."
+  common_indicators: "Anxiety, complex physical tasks, or postural 'holding'."
+  frequency: 3
+
+- id: symmetry-obsession
+  name: "The Symmetry-at-all-Costs Trap"
+  aliases: ["Bilateral interference", "The 'Bug' trap"]
+  body_signature: "central nervous system"
+  description: "The compulsive urge to make the left and right sides move identically, which masks functional asymmetries and inhibits the differentiation needed for spirals."
+  common_indicators: "Asymmetric tasks, one-sided reaches, or weight-shifting."
+  frequency: 3
+
+- id: glottis-grip-reflex
+  name: "The Glottis-Grip Defense"
+  aliases: ["Throat bracing", "Vocal fold straining"]
+  body_signature: "laryngeal muscles"
+  description: "Closing the airway at the throat to create internal thoracic pressure. This is a primitive response to heavy effort that stiffens the entire upper torso."
+  common_indicators: "Lifting the pelvis, holding a difficult position, or 'trying hard'."
+  frequency: 2
+
+- id: toe-gripping-for-stability
+  name: "The Toe-Claw Support"
+  aliases: ["Gripping the floor", "Toe-scrunching"]
+  body_signature: "intrinsic foot flexors"
+  description: "Curling or 'clawing' the toes into the floor to find balance or generate power, which prevents the weight from shifting through the skeleton of the foot."
+  common_indicators: "Standing balance, walking, or pushing to roll."
+  frequency: 2
+
+- id: passive-floor-occupancy
+  name: "The Passive Floor-Side Blindness"
+  aliases: ["Ignoring ground reaction force", "Resisting support"]
+  body_signature: "floor-side limbs and ribs"
+  description: "Treating the floor as a passive resting place rather than an active partner. The person fails to push into the floor to generate movement, relying instead on 'lifting' away from it."
+  common_indicators: "Rolling from back to side, or trying to lift the head/pelvis from the floor."
+  frequency: 2
