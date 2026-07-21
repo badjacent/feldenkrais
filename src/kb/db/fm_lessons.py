@@ -71,6 +71,19 @@ class FMLessonsMixin:
             )
             return {row['lesson_url']: row['youtube_id'] for row in cursor.fetchall()}
 
+    def get_fm_no_video_urls(self) -> set[str]:
+        """Get lesson URLs previously scraped and found to have no video.
+
+        These pages (photo rosters, whiteboards, never-posted chapters) are
+        permanently skipped by the loader; clear their status='no_video' row
+        to re-check one.
+        """
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute(
+                "SELECT lesson_url FROM fm_lesson_status WHERE status = 'no_video'"
+            )
+            return {row['lesson_url'] for row in cursor.fetchall()}
+
     def get_all_fm_lessons(self) -> list[dict]:
         """Get all FM lessons with their cached data."""
         with self.get_cursor(commit=False) as cursor:
