@@ -290,14 +290,19 @@ def safe_call(fn, *a, **k):
     return None
 
 
-def run(doc_id: str, candidates: list[Model], judges: list[Model], n_questions: int):
+def run(doc_id: str, candidates: list[Model], judges: list[Model], n_questions: int,
+        pregen: dict | None = None):
+    """pregen: {label, family, answers: {question_index: text}} — answers supplied
+    out-of-band (e.g. generated in a Claude Code session on the user's subscription)
+    instead of via a metered API call. When set, `candidates` is that one pregen
+    model and judges are auto-filtered to exclude its family (no self-preference)."""
     db = Database(os.environ["DATABASE_URL"])
     context = build_lesson_context(db, doc_id)
     seed = load_seed(db, doc_id, n_questions)
     logger.info("Loaded %d questions; context = %d chars; %d candidates, %d judges",
                 len(seed), len(context), len(candidates), len(judges))
 
-    cand_llms = {m.label: make_llm(m) for m in candidates}
+    cand_llms = {m.label: make_llm(m) for m in candidates if m.provider != "pregen"}
     judge_llms = {j.label: make_llm(j) for j in judges}
     cand_family = {m.label: m.family for m in candidates}
     judge_family = {j.label: j.family for j in judges}
@@ -310,7 +315,11 @@ def run(doc_id: str, candidates: list[Model], judges: list[Model], n_questions: 
 
         answers = {}
         for m in candidates:
-            ans = safe_call(cand_llms[m.label].complete, q, system=sysprompt, max_tokens=m.max_tokens)
+            if m.provider == "pregen":
+                ans = (pregen or {}).get("answers", {}).get(str(qi)) or \
+                      (pregen or {}).get("answers", {}).get(qi)
+            else:
+                ans = safe_call(cand_llms[m.label].complete, q, system=sysprompt, max_tokens=m.max_tokens)
             answers[m.label] = ans
             logger.info("  %-18s -> %s", m.label, f"{len(ans)} chars" if ans else "FAILED")
 
@@ -453,11 +462,26 @@ def main():
                     help="List model IDs the key can serve (openai|anthropic|gemini|zai), then exit")
     ap.add_argument("--models", metavar="SPEC",
                     help="Override candidates: 'label:provider:model[:thinking],...'")
+    ap.add_argument("--pregen", metavar="PATH",
+                    help="Score answers supplied in a JSON file {label,family,answers} instead "
+                         "of calling an API. Judges auto-filtered to exclude the answer's family.")
     args = ap.parse_args()
 
     if args.list_models:
         for i in list_provider_models(args.list_models):
             print(i)
+        return
+
+    if args.pregen:
+        pg = json.loads(Path(args.pregen).read_text())
+        fam = pg.get("family", "unknown")
+        cand = [Model(pg.get("label", "pregen"), "pregen", "-", fam, 4096)]
+        judges = [j for j in JUDGES if j.family != fam]
+        if not judges:
+            raise SystemExit(f"No judge of a different family than '{fam}' in JUDGES")
+        logger.info("Pregen candidate '%s' (family=%s); judges: %s",
+                    cand[0].label, fam, ", ".join(j.label for j in judges))
+        run(args.doc, cand, judges, args.questions, pregen=pg)
         return
 
     if args.smoke:
