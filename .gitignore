@@ -126,3 +126,4 @@ terraform/*.tfvars
 # Commit lock file for CI reproducibility
 # terraform/.terraform.lock.hcl
 terraform/*.zip
+data/model_eval/

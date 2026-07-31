@@ -230,7 +230,12 @@ class LLM:
 
         with self.client.messages.stream(**kwargs) as stream:
             response = stream.get_final_message()
-        return response.content[0].text
+        # Models with thinking on (Fable 5, adaptive-thinking Opus/Sonnet) return
+        # a ThinkingBlock before the text — pick the first text block, not [0].
+        text = next((b.text for b in response.content if getattr(b, "type", None) == "text"), None)
+        if text is None:
+            text = next((b.text for b in response.content if hasattr(b, "text")), "")
+        return text
 
     def _chat_openai(
         self,
