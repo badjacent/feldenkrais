@@ -19,9 +19,12 @@ Usage:
 """
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
 import json
 import logging
+import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -47,6 +50,7 @@ logger = logging.getLogger(__name__)
 
 # Default LLM provider for analysis steps
 DEFAULT_PROVIDER = "gemini"
+ANALYZER_LOCK = "feldenkrais:analysis-worker"
 
 
 def _get_transcript(db: Database, document_id: str) -> str | None:
@@ -403,6 +407,98 @@ def run_one(document_id: str, step_name: str) -> bool:
     return ok
 
 
+def _run_step_process(document_id: str, step_name: str, timeout: int) -> dict:
+    root = Path(__file__).resolve().parents[3]
+    env = os.environ.copy()
+    python_path = str(root / "src")
+    env["PYTHONPATH"] = (
+        python_path
+        if not env.get("PYTHONPATH")
+        else python_path + os.pathsep + env["PYTHONPATH"]
+    )
+    started = time.monotonic()
+    try:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "kb.pipeline.analysis",
+                "run-one",
+                str(document_id),
+                step_name,
+            ],
+            cwd=root,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return {
+            "ok": False,
+            "document_id": str(document_id),
+            "step_name": step_name,
+            "error": f"timed out after {timeout}s",
+        }
+    return {
+        "ok": result.returncode == 0,
+        "document_id": str(document_id),
+        "step_name": step_name,
+        "elapsed_seconds": round(time.monotonic() - started, 1),
+        "error": result.stderr[-500:] if result.returncode else None,
+    }
+
+
+def run_bounded_worker(
+    db: Database,
+    *,
+    max_steps: int,
+    max_seconds: int,
+    workers: int,
+    step_timeout: int,
+) -> dict:
+    """Drain runnable analysis work while holding the cross-host lease."""
+    started = time.monotonic()
+    completed = 0
+    failed = 0
+    with db.advisory_lock(ANALYZER_LOCK) as acquired:
+        if not acquired:
+            return {"status": "busy", "completed": 0, "failed": 0}
+
+        while completed + failed < max_steps and time.monotonic() - started < max_seconds:
+            remaining = max_steps - completed - failed
+            runnable = db.get_runnable_steps()
+            if not runnable:
+                break
+            batch = runnable[: min(workers, remaining)]
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                futures = {
+                    executor.submit(
+                        _run_step_process,
+                        row["document_id"],
+                        row["step_name"],
+                        step_timeout,
+                    ): row
+                    for row in batch
+                }
+                for future in as_completed(futures):
+                    result = future.result()
+                    if result["ok"]:
+                        completed += 1
+                    else:
+                        failed += 1
+                    print(json.dumps(result, sort_keys=True), flush=True)
+
+    return {
+        "status": "completed",
+        "completed": completed,
+        "failed": failed,
+        "elapsed_seconds": round(time.monotonic() - started, 1),
+        "remaining_runnable": db.count_runnable_steps(),
+    }
+
+
 def show_status(db: Database):
     """Print analysis pipeline status summary."""
     steps = db.get_analysis_steps()
@@ -423,7 +519,6 @@ def show_status(db: Database):
 
 
 def main():
-    import os
     from dotenv import load_dotenv
     load_dotenv(Path(__file__).parent.parent.parent.parent / ".env")
 
@@ -435,6 +530,13 @@ def main():
     one_parser.add_argument("step_name", help="Analysis step name")
 
     sub.add_parser("status", help="Show pipeline status")
+
+    run_parser = sub.add_parser("run", help="Run a bounded leased analysis worker")
+    run_parser.add_argument("--max-steps", type=int, default=100)
+    run_parser.add_argument("--max-seconds", type=int, default=3600)
+    run_parser.add_argument("--workers", type=int, default=2)
+    run_parser.add_argument("--step-timeout", type=int, default=600)
+    run_parser.add_argument("--dry-run", action="store_true")
 
     args = parser.parse_args()
 
@@ -448,6 +550,39 @@ def main():
             sys.exit(1)
         db = Database(db_url)
         show_status(db)
+        db.close()
+    elif args.command == "run":
+        db_url = os.environ.get("DATABASE_URL")
+        if not db_url:
+            print("ERROR: DATABASE_URL not set")
+            sys.exit(1)
+        if min(args.max_steps, args.max_seconds, args.workers, args.step_timeout) < 1:
+            parser.error("run limits must be positive")
+        db = Database(db_url)
+        if args.dry_run:
+            runnable = db.get_runnable_steps()
+            print(
+                json.dumps(
+                    {
+                        "status": "dry-run",
+                        "runnable": len(runnable),
+                        "sample": runnable[: min(20, args.max_steps)],
+                    },
+                    default=str,
+                    sort_keys=True,
+                )
+            )
+        else:
+            result = run_bounded_worker(
+                db,
+                max_steps=args.max_steps,
+                max_seconds=args.max_seconds,
+                workers=args.workers,
+                step_timeout=args.step_timeout,
+            )
+            print(json.dumps(result, sort_keys=True))
+            if result["status"] == "busy":
+                sys.exit(75)
         db.close()
     else:
         parser.print_help()

@@ -364,6 +364,39 @@ class DatabaseCore:
         return self._pool
 
     @contextmanager
+    def advisory_lock(self, name: str):
+        """Hold a PostgreSQL session advisory lock for the context lifetime.
+
+        Yields False without blocking when another process already owns the
+        named lock. The dedicated connection is never returned to the pool
+        until the lock has been released.
+        """
+        conn = self._get_pool().getconn()
+        acquired = False
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                cursor.execute(
+                    "SELECT pg_try_advisory_lock(hashtext(%s)) AS acquired",
+                    (name,),
+                )
+                row = cursor.fetchone()
+                acquired = bool(row and row["acquired"])
+            yield acquired
+        finally:
+            if acquired:
+                try:
+                    with conn.cursor() as cursor:
+                        cursor.execute(
+                            "SELECT pg_advisory_unlock(hashtext(%s))",
+                            (name,),
+                        )
+                finally:
+                    conn.rollback()
+            else:
+                conn.rollback()
+            self._get_pool().putconn(conn)
+
+    @contextmanager
     def get_cursor(self, commit: bool = True):
         """
         Context manager for database operations.

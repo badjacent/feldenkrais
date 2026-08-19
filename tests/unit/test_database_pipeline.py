@@ -53,6 +53,16 @@ class TestAnalysisSteps:
         assert "UPDATE analysis_step SET current_version" in sql
         assert params == (4, "decompose")
 
+    def test_advisory_lock_holds_dedicated_connection(self, mock_db):
+        mock_db._mock_cursor.fetchone.return_value = {"acquired": True}
+
+        with mock_db.advisory_lock("analysis") as acquired:
+            assert acquired is True
+
+        calls = mock_db._mock_cursor.execute.call_args_list
+        assert "pg_try_advisory_lock" in calls[0][0][0]
+        mock_db._pool.putconn.assert_called_once()
+
 
 class TestDocumentAnalysisState:
     def test_mark_step_completed(self, mock_db):
