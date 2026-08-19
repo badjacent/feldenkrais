@@ -35,6 +35,17 @@ media and creates transcription work; the transcription and analysis workers
 then consume their own durable queues. Re-running intake is safe. No transcript,
 media, or private analysis is copied into the public Atlas repository.
 
+After that manual smoke test, `run-atlas-intake-worker.sh` performs the same
+idempotent operation in bounded batches. It reads the sibling Atlas catalog via
+`ATLAS_CATALOG_PATH` and adds URLs only; PostgreSQL remains the durable queue.
+Install but do not enable its launchd definition until all downstream smoke
+tests have passed:
+
+```sh
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.feldenkrais.atlas-intake.plist
+launchctl kickstart gui/$(id -u)/com.feldenkrais.atlas-intake
+```
+
 ## Install without enabling
 
 From `/Users/hermes/src/feldenkrais`:
@@ -45,6 +56,7 @@ UV_PROJECT_ENVIRONMENT=.venv-mini uv sync --python /opt/homebrew/bin/python3.12 
   --extra mini --group dev
 mkdir -p var/log var/run ~/Library/LaunchAgents
 cp ops/mini/launchd/*.plist ~/Library/LaunchAgents/
+plutil -lint ~/Library/LaunchAgents/com.feldenkrais.atlas-intake.plist
 plutil -lint ~/Library/LaunchAgents/com.feldenkrais.youtube-ingest.plist
 plutil -lint ~/Library/LaunchAgents/com.feldenkrais.analysis.plist
 plutil -lint ~/Library/LaunchAgents/com.feldenkrais.transcription.plist
@@ -139,6 +151,7 @@ launchctl kickstart gui/$(id -u)/com.feldenkrais.youtube-ingest
 launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.feldenkrais.analysis.plist
 launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.feldenkrais.transcription.plist
 launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.feldenkrais.youtube-ingest.plist
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.feldenkrais.atlas-intake.plist
 ```
 
 Disabling launchd does not delete or rewrite queued work.
