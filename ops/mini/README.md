@@ -97,8 +97,12 @@ by the existing application, including:
 
 Start from `ops/mini/worker.env.example`, copy it to `.env`, fill values over a
 trusted SSH session, and run `chmod 600 .env`. The example contains no secrets.
+Then run `ops/mini/check-readiness.sh`; it checks permissions, required values,
+database connectivity, S3 access, FFmpeg, Python, and every plist without
+printing credentials or changing durable state.
 
-Use a dedicated S3 principal restricted to reading the archive prefix. Prefer a
+Use a dedicated S3 principal restricted to listing the bucket and reading and
+writing the archive prefix (ingest writes; transcription reads). Prefer a
 dedicated database role restricted to the tables/functions required by the
 workers after the initial smoke test establishes the exact grants.
 
