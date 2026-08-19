@@ -588,6 +588,7 @@ if __name__ == "__main__":
     db = Database(config.database_url)
     db.initialize()
 
+    lock_acquired = False
     try:
         if args.command == "add":
             urls = list(args.urls) if args.urls else []
@@ -604,6 +605,10 @@ if __name__ == "__main__":
             print(json.dumps(result, indent=2))
 
         elif args.command == "process":
+            lock_acquired = db.try_acquire_lock(Database.LOCK_YOUTUBE)
+            if not lock_acquired:
+                print("Another YouTube worker holds the database lease; skipping")
+                sys.exit(0)
             bucket = args.bucket or config.bucket
             if not bucket:
                 print("Error: bucket required (--bucket or KB_BUCKET env var)")
@@ -629,4 +634,6 @@ if __name__ == "__main__":
                     print(f"             Error: {item['error'][:80]}")
 
     finally:
+        if lock_acquired:
+            db.release_lock(Database.LOCK_YOUTUBE)
         db.close()
