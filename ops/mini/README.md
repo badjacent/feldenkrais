@@ -23,7 +23,8 @@ From `/Users/hermes/src/feldenkrais`:
 
 ```sh
 export PATH=/opt/homebrew/bin:$PATH
-UV_PROJECT_ENVIRONMENT=.venv-mini uv sync --extra mini
+UV_PROJECT_ENVIRONMENT=.venv-mini uv sync --python /opt/homebrew/bin/python3.12 \
+  --extra mini --group dev
 mkdir -p var/log var/run ~/Library/LaunchAgents
 cp ops/mini/launchd/*.plist ~/Library/LaunchAgents/
 plutil -lint ~/Library/LaunchAgents/com.feldenkrais.analysis.plist
@@ -42,6 +43,9 @@ by the existing application, including:
 - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_DEFAULT_REGION`
 - `KB_BUCKET=feldenkrais-prod`
 - `LOCAL_WHISPER_MODEL=mlx-community/whisper-large-v3-turbo`
+
+Start from `ops/mini/worker.env.example`, copy it to `.env`, fill values over a
+trusted SSH session, and run `chmod 600 .env`. The example contains no secrets.
 
 Use a dedicated S3 principal restricted to reading the archive prefix. Prefer a
 dedicated database role restricted to the tables/functions required by the
