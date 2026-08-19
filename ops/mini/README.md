@@ -46,6 +46,25 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.feldenkrais.atlas-in
 launchctl kickstart gui/$(id -u)/com.feldenkrais.atlas-intake
 ```
 
+## Public Atlas projection
+
+`run-atlas-projection-worker.sh` exports only the reviewed, versioned public
+projection after analysis has produced structured concepts. It acquires the
+Atlas crawler lock, requires a clean `main` checkout, pulls fast-forward-only,
+validates every projected URL against the current free lesson catalog, and runs
+an approved site build before committing and pushing only
+`catalog/chooser-analysis.json`. If a crawl is active, it changes nothing and a
+later scheduled run can retry.
+
+Install its plist with the others, but do not bootstrap it until the complete
+one-document intake, transcription, and analysis smoke test has passed. Run the
+first projection manually and inspect its commit before enabling it:
+
+```sh
+ops/mini/run-atlas-projection-worker.sh
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.feldenkrais.atlas-projection.plist
+```
+
 ## Install without enabling
 
 From `/Users/hermes/src/feldenkrais`:
@@ -56,6 +75,7 @@ UV_PROJECT_ENVIRONMENT=.venv-mini uv sync --python /opt/homebrew/bin/python3.12 
   --extra mini --group dev
 mkdir -p var/log var/run ~/Library/LaunchAgents
 cp ops/mini/launchd/*.plist ~/Library/LaunchAgents/
+plutil -lint ~/Library/LaunchAgents/com.feldenkrais.atlas-projection.plist
 plutil -lint ~/Library/LaunchAgents/com.feldenkrais.atlas-intake.plist
 plutil -lint ~/Library/LaunchAgents/com.feldenkrais.youtube-ingest.plist
 plutil -lint ~/Library/LaunchAgents/com.feldenkrais.analysis.plist
@@ -152,6 +172,7 @@ launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.feldenkrais.analysis.p
 launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.feldenkrais.transcription.plist
 launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.feldenkrais.youtube-ingest.plist
 launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.feldenkrais.atlas-intake.plist
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.feldenkrais.atlas-projection.plist
 ```
 
 Disabling launchd does not delete or rewrite queued work.
