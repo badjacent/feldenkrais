@@ -4,7 +4,7 @@ from ops.export_atlas_projection import (
     normalize_values,
     public_lesson_key,
 )
-from ops.sync_atlas_projection import projection_equivalent
+from ops.sync_atlas_projection import crawl_lock_path, projection_equivalent
 
 
 def test_normalize_resource_url_handles_aliases():
@@ -44,3 +44,7 @@ def test_projection_equivalence_ignores_only_generation_time():
     changed = b'{"generated_at":"two","entries":[{"lesson_key":"b"}]}'
     assert projection_equivalent(first, later)
     assert not projection_equivalent(first, changed)
+
+
+def test_projection_uses_the_atlas_crawl_publish_lock(tmp_path):
+    assert crawl_lock_path(tmp_path) == tmp_path / "var/crawl-cycle.lock"

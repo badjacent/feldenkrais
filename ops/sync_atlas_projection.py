@@ -83,10 +83,15 @@ def projection_equivalent(left: bytes, right: bytes) -> bool:
     return first == second
 
 
+def crawl_lock_path(atlas: Path) -> Path:
+    """Return the exact lock file held by the Atlas crawl/publish cycle."""
+    return atlas / "var/crawl-cycle.lock"
+
+
 def sync(atlas: Path, *, push: bool) -> dict:
     atlas = atlas.resolve()
     target = atlas / "catalog/chooser-analysis.json"
-    with atlas_lock(atlas / "var/run/crawl-cycle.lock"):
+    with atlas_lock(crawl_lock_path(atlas)):
         if run("git", "status", "--porcelain", cwd=atlas).stdout.strip():
             raise SystemExit("Atlas worktree is not clean; projection sync deferred")
         branch = run("git", "branch", "--show-current", cwd=atlas).stdout.strip()
