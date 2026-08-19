@@ -45,6 +45,7 @@ UV_PROJECT_ENVIRONMENT=.venv-mini uv sync --python /opt/homebrew/bin/python3.12 
   --extra mini --group dev
 mkdir -p var/log var/run ~/Library/LaunchAgents
 cp ops/mini/launchd/*.plist ~/Library/LaunchAgents/
+plutil -lint ~/Library/LaunchAgents/com.feldenkrais.youtube-ingest.plist
 plutil -lint ~/Library/LaunchAgents/com.feldenkrais.analysis.plist
 plutil -lint ~/Library/LaunchAgents/com.feldenkrais.transcription.plist
 ```
@@ -108,11 +109,36 @@ cd src/kb
 ../../.venv-mini/bin/python -m ingest.local_transcribe status
 ```
 
+## Manual YouTube ingest cutover
+
+This worker consumes the URLs added by `import_atlas_lessons.py`, downloads
+audio with yt-dlp, archives it in S3, and creates the durable transcription
+work consumed by the local MLX worker. It is bounded by
+`YOUTUBE_INGEST_BATCH_LIMIT` (default 5) and has a host-local lock. The database
+worker lease also prevents overlap with the existing Lambda consumer.
+
+After the Atlas intake dry run, queue exactly one URL, then run:
+
+```sh
+set -a; source .env; set +a
+PYTHONPATH=src/kb .venv-mini/bin/python -m ingest.youtube status
+YOUTUBE_INGEST_BATCH_LIMIT=1 ops/mini/run-youtube-ingest-worker.sh
+PYTHONPATH=src/kb .venv-mini/bin/python -m ingest.youtube status
+```
+
+Inspect the S3 object, document row, and queued transcription before enabling:
+
+```sh
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.feldenkrais.youtube-ingest.plist
+launchctl kickstart gui/$(id -u)/com.feldenkrais.youtube-ingest
+```
+
 ## Disable
 
 ```sh
 launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.feldenkrais.analysis.plist
 launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.feldenkrais.transcription.plist
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.feldenkrais.youtube-ingest.plist
 ```
 
 Disabling launchd does not delete or rewrite queued work.
