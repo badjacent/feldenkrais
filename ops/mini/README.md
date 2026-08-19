@@ -17,6 +17,24 @@ The queues remain domain-specific. A future operational status projection may
 join their run IDs and heartbeats, but it must not replace their authoritative
 tables.
 
+## Atlas lesson intake
+
+The Atlas catalog can feed newly discovered free YouTube lessons into the
+existing private ingest queue. The command is deliberately dry-run by default
+and deduplicates by YouTube video ID against both documents and queued work:
+
+```sh
+set -a; source .env; set +a
+PYTHONPATH=src .venv-mini/bin/python ops/import_atlas_lessons.py \
+  --catalog /Users/hermes/src/feldenkrais-index/catalog/resources.json
+```
+
+After database, S3, FFmpeg, and one-document transcription smoke tests pass,
+add a bounded batch with `--apply --limit 20`. The YouTube ingest worker archives
+media and creates transcription work; the transcription and analysis workers
+then consume their own durable queues. Re-running intake is safe. No transcript,
+media, or private analysis is copied into the public Atlas repository.
+
 ## Install without enabling
 
 From `/Users/hermes/src/feldenkrais`:
