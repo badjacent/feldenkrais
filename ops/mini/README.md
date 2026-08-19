@@ -22,6 +22,8 @@ tables.
 From `/Users/hermes/src/feldenkrais`:
 
 ```sh
+export PATH=/opt/homebrew/bin:$PATH
+UV_PROJECT_ENVIRONMENT=.venv-mini uv sync --extra mini
 mkdir -p var/log var/run ~/Library/LaunchAgents
 cp ops/mini/launchd/*.plist ~/Library/LaunchAgents/
 plutil -lint ~/Library/LaunchAgents/com.feldenkrais.analysis.plist
