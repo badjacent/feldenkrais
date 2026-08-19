@@ -53,9 +53,9 @@ workers after the initial smoke test establishes the exact grants.
 
 ## Manual analysis cutover
 
-First stop the laptop's bulk analysis loop. The Mini CLI worker has a PostgreSQL
-advisory lease that prevents two CLI workers from overlapping, but the legacy
-web-process loop does not yet participate in that lease.
+The Mini CLI worker and the web-triggered worker share a PostgreSQL advisory
+lease, preventing analysis execution from overlapping across hosts. Stop any
+older deployed worker that predates this lease before the first cutover test.
 
 ```sh
 set -a; source .env; set +a
@@ -79,6 +79,16 @@ Install FFmpeg and the MLX dependencies, prefetch the configured model, then
 follow `private/ops/mini_transcribe/SETUP.md` for the dry run and one-document
 live test. After those checks, run `ops/mini/run-transcription-worker.sh`
 manually before bootstrapping its plist.
+
+The local worker retries its own failed claims up to
+`TRANSCRIPTION_MAX_RETRIES` and may reclaim a `pending` or `processing` claim
+only after `TRANSCRIPTION_STALE_MINUTES`. Each launch is bounded by
+`TRANSCRIPTION_MAX_SECONDS`. Inspect shared queue health without doing work:
+
+```sh
+cd src/kb
+../../.venv-mini/bin/python -m ingest.local_transcribe status
+```
 
 ## Disable
 

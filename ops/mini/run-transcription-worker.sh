@@ -18,4 +18,7 @@ trap 'rmdir "$lock_dir"' EXIT INT TERM
 cd src/kb
 /usr/bin/caffeinate -i /usr/bin/nice -n 19 \
   ../../.venv-mini/bin/python -m ingest.local_transcribe run \
-  --limit "${TRANSCRIPTION_BATCH_LIMIT:-20}"
+  --limit "${TRANSCRIPTION_BATCH_LIMIT:-20}" \
+  --max-seconds "${TRANSCRIPTION_MAX_SECONDS:-3300}" \
+  --max-retries "${TRANSCRIPTION_MAX_RETRIES:-3}" \
+  --stale-minutes "${TRANSCRIPTION_STALE_MINUTES:-360}"

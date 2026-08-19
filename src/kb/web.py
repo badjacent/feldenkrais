@@ -433,6 +433,16 @@ def _get_next_step() -> dict | None:
 
 
 def _pipeline_worker():
+    """Run the web-triggered worker only while holding the cross-host lease."""
+    with _db.advisory_lock("feldenkrais:analysis-worker") as acquired:
+        if not acquired:
+            print("[pipeline] analysis worker lease is held elsewhere", flush=True)
+            _pipeline_set_running(False)
+            return
+        _pipeline_worker_locked()
+
+
+def _pipeline_worker_locked():
     """Background pipeline worker using subprocesses.
 
     Supports two modes:
