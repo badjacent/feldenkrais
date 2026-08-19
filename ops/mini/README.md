@@ -97,9 +97,13 @@ by the existing application, including:
 
 Start from `ops/mini/worker.env.example`, copy it to `.env`, fill values over a
 trusted SSH session, and run `chmod 600 .env`. The example contains no secrets.
-Then run `ops/mini/check-readiness.sh`; it checks permissions, required values,
-database connectivity, S3 access, FFmpeg, Python, and every plist without
-printing credentials or changing durable state.
+Then run `ops/mini/check-readiness.sh transcription`; it checks permissions,
+the transcription-specific values, database connectivity, S3 access, FFmpeg,
+Python/MLX, Apple Silicon, and every plist without printing credentials or
+changing durable state. This mode does not require an analysis-provider key,
+so local speech-to-text can be certified independently. Run
+`ops/mini/check-readiness.sh full` before enabling the analysis and projection
+workers; full mode additionally requires an analysis-provider credential.
 
 Use a dedicated S3 principal restricted to listing the bucket and reading and
 writing the archive prefix (ingest writes; transcription reads). Prefer a
@@ -134,6 +138,12 @@ Install FFmpeg and the MLX dependencies, prefetch the configured model, then
 follow `private/ops/mini_transcribe/SETUP.md` for the dry run and one-document
 live test. After those checks, run `ops/mini/run-transcription-worker.sh`
 manually before bootstrapping its plist.
+
+The readiness command for this cutover is:
+
+```sh
+ops/mini/check-readiness.sh transcription
+```
 
 The local worker retries its own failed claims up to
 `TRANSCRIPTION_MAX_RETRIES` and may reclaim a `pending` or `processing` claim
