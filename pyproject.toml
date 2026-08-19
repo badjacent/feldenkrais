@@ -11,6 +11,16 @@ dependencies = [
     "requests>=2.32.5",
 ]
 
+[project.optional-dependencies]
+mini = [
+    "anthropic>=0.76,<1",
+    "google-genai>=1.60,<2",
+    "mlx-whisper>=0.4,<1",
+    "openai>=2.15,<3",
+    "psycopg2-binary>=2.9,<3",
+    "python-dotenv>=1.2,<2",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",

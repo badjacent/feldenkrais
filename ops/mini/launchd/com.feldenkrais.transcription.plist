@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.feldenkrais.transcription</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/hermes/src/feldenkrais/ops/mini/run-transcription-worker.sh</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/hermes/src/feldenkrais</string>
+  <key>RunAtLoad</key>
+  <false/>
+  <key>StartInterval</key>
+  <integer>1800</integer>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>LowPriorityIO</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/Users/hermes/src/feldenkrais/var/log/transcription-worker.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/hermes/src/feldenkrais/var/log/transcription-worker.log</string>
+</dict>
+</plist>
