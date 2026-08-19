@@ -1,6 +1,12 @@
 #!/bin/zsh
 set -euo pipefail
 
+mode=${1:-full}
+if [[ "$mode" != "transcription" && "$mode" != "full" ]]; then
+  print -u2 "usage: $0 [transcription|full]"
+  exit 2
+fi
+
 repo_root=${0:A:h:h:h}
 cd "$repo_root"
 
@@ -28,8 +34,13 @@ if (( ${#missing} )); then
   print -u2 "not ready: missing ${missing[*]}"
   exit 1
 fi
-if [[ -z "${GEMINI_API_KEY:-}" && -z "${OPENAI_API_KEY:-}" && -z "${ANTHROPIC_API_KEY:-}" ]]; then
+if [[ "$mode" == "full" && -z "${GEMINI_API_KEY:-}" && -z "${OPENAI_API_KEY:-}" && -z "${ANTHROPIC_API_KEY:-}" ]]; then
   print -u2 "not ready: no configured analysis provider credential"
+  exit 1
+fi
+
+if [[ "$(uname -m)" != "arm64" ]]; then
+  print -u2 "not ready: local MLX transcription requires Apple Silicon"
   exit 1
 fi
 
@@ -44,6 +55,7 @@ export PYTHONPATH="$repo_root/src${PYTHONPATH:+:$PYTHONPATH}"
 .venv-mini/bin/python - <<'PY'
 import os
 import boto3
+import mlx_whisper  # noqa: F401 - readiness import
 import psycopg2
 
 with psycopg2.connect(os.environ["DATABASE_URL"], connect_timeout=10) as connection:
@@ -60,5 +72,9 @@ for plist in ops/mini/launchd/*.plist; do
   plutil -lint "$plist" >/dev/null
 done
 
-print "ready: database, S3, FFmpeg, Python, and launchd definitions passed"
-print "next: run the documented one-lesson smoke test; workers remain disabled"
+print "ready ($mode): database, S3, FFmpeg, Python, MLX, and launchd definitions passed"
+if [[ "$mode" == "transcription" ]]; then
+  print "next: run the documented one-lesson transcription smoke test; workers remain disabled"
+else
+  print "next: run the documented one-lesson end-to-end smoke test; workers remain disabled"
+fi
