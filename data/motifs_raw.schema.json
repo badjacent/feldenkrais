@@ -1,0 +1,32 @@
+{
+  "type": "object",
+  "properties": {
+    "raw_motifs": {
+      "type": "array",
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "properties": {
+          "label": { "type": "string" },
+          "description": { "type": "string" },
+          "mode": { "type": "string", "enum": ["taught", "referenced"] },
+          "role": { "type": "string", "enum": ["central", "supporting", "incidental"] },
+          "evidence": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "properties": {
+                "step_ids": { "type": "array", "items": { "type": "integer" } },
+                "reason": { "type": "string" }
+              },
+              "required": ["step_ids", "reason"]
+            }
+          }
+        },
+        "required": ["label", "description", "mode", "role", "evidence"]
+      }
+    }
+  },
+  "required": ["raw_motifs"]
+}

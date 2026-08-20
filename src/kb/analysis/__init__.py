@@ -85,3 +85,8 @@ def __getattr__(name):
     if name in _STATE_KEYS:
         return _state[name]
     raise AttributeError(f"module 'analysis' has no attribute {name!r}")
+
+
+# ── Distinctive motifs ────────────────────────────────────────────────────
+from .motifs import load_motifs, load_motif_registry, run_motifs, run_raw_motifs  # noqa: E402
+from .axes import load_axes, run_axes  # noqa: E402

@@ -42,6 +42,9 @@ from analysis import (
     run_pass_0b_spatial,
     run_pass_0b_spatial_v3,
     run_pass_0b_condensed,
+    run_motifs,
+    run_raw_motifs,
+    run_axes,
     get_cache_key,
     load_cached_analysis,
 )
@@ -135,6 +138,21 @@ def _run_pass_0b_condensed(db: Database, document_id: str, transcript: str) -> b
         if decompose:
             somatic["pass_a"] = decompose
     result = run_pass_0b_condensed(somatic, lang, transcript)
+    return result is not None
+
+
+def _run_motifs(db: Database, document_id: str, transcript: str) -> bool:
+    result = run_motifs(transcript, DEFAULT_PROVIDER)
+    return result is not None
+
+
+def _run_raw_motifs(db: Database, document_id: str, transcript: str) -> bool:
+    result = run_raw_motifs(transcript, DEFAULT_PROVIDER)
+    return result is not None
+
+
+def _run_axes(db: Database, document_id: str, transcript: str) -> bool:
+    result = run_axes(transcript, DEFAULT_PROVIDER)
     return result is not None
 
 
@@ -329,6 +347,9 @@ STEP_EXECUTORS = {
     "index_spatial": _run_spatial_index,
     "extract_steps": _run_extraction,
     "map_body_parts": _run_mapping,
+    "motifs": _run_motifs,
+    "raw_motifs": _run_raw_motifs,
+    "axes": _run_axes,
 }
 
 
