@@ -19,4 +19,5 @@ trap 'rmdir "$lock_dir"' EXIT INT TERM
 export PYTHONPATH="$repo_root/src/kb${PYTHONPATH:+:$PYTHONPATH}"
 /usr/bin/caffeinate -i /usr/bin/nice -n 19 \
   .venv-mini/bin/python -m ingest.youtube process \
-  --limit "${YOUTUBE_INGEST_BATCH_LIMIT:-5}"
+  --limit "${YOUTUBE_INGEST_BATCH_LIMIT:-5}" \
+  --origin feldenkrais_atlas

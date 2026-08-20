@@ -26,15 +26,33 @@ class YouTubeMixin:
             # URL already exists
             return None
 
-    def get_pending_youtube_urls(self, limit: int = 10) -> list[dict]:
+    def get_pending_youtube_urls(
+        self,
+        limit: int = 10,
+        *,
+        origin: Optional[str] = None,
+        exclude_origin: Optional[str] = None,
+    ) -> list[dict]:
         """Get pending YouTube URLs to process."""
+        if origin and exclude_origin:
+            raise ValueError("origin and exclude_origin are mutually exclusive")
+        predicate = ""
+        params = []
+        if origin:
+            predicate = " AND origin = %s"
+            params.append(origin)
+        elif exclude_origin:
+            predicate = " AND COALESCE(origin, '') <> %s"
+            params.append(exclude_origin)
+        params.append(limit)
         with self.get_cursor(commit=False) as cursor:
             cursor.execute(
-                """SELECT * FROM youtube_queue
+                f"""SELECT * FROM youtube_queue
                    WHERE status = 'pending'
                      AND (next_attempt_at IS NULL OR next_attempt_at <= NOW())
+                   {predicate}
                    ORDER BY created_at LIMIT %s""",
-                (limit,),
+                params,
             )
             return [dict(row) for row in cursor.fetchall()]
 

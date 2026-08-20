@@ -411,6 +411,8 @@ def process_queue(
     storage,  # Storage instance
     limit: int = 10,
     tags: Optional[list[str]] = None,
+    origin: Optional[str] = None,
+    exclude_origin: Optional[str] = None,
 ) -> dict:
     """
     Process pending URLs from the queue.
@@ -425,7 +427,11 @@ def process_queue(
     )
     if requeued:
         logger.info("Released %s YouTube URL(s) for bounded retry", requeued)
-    pending = db.get_pending_youtube_urls(limit=limit)
+    pending = db.get_pending_youtube_urls(
+        limit=limit,
+        origin=origin,
+        exclude_origin=exclude_origin,
+    )
 
     if not pending:
         logger.info("No pending YouTube URLs")
@@ -525,7 +531,13 @@ def handler(event, context):
             limit = event.get("limit", 1)
             tags = event.get("tags")
 
-            result = process_queue(db, storage, limit=limit, tags=tags)
+            result = process_queue(
+                db,
+                storage,
+                limit=limit,
+                tags=tags,
+                exclude_origin="feldenkrais_atlas",
+            )
 
             return {
                 "statusCode": 200,
@@ -598,6 +610,10 @@ if __name__ == "__main__":
     process_parser.add_argument("--limit", "-l", type=int, default=10, help="Max URLs to process")
     process_parser.add_argument("--tags", help="Comma-separated tags")
     process_parser.add_argument("--bucket", help="S3 bucket (overrides KB_BUCKET)")
+    process_parser.add_argument("--origin", help="Only process this queue origin")
+    process_parser.add_argument(
+        "--exclude-origin", help="Exclude this queue origin"
+    )
 
     # Status command
     status_parser = subparsers.add_parser("status", help="Show queue status")
@@ -641,7 +657,14 @@ if __name__ == "__main__":
             storage = get_storage(bucket)
             tags = args.tags.split(",") if args.tags else None
 
-            result = process_queue(db, storage, limit=args.limit, tags=tags)
+            result = process_queue(
+                db,
+                storage,
+                limit=args.limit,
+                tags=tags,
+                origin=args.origin,
+                exclude_origin=args.exclude_origin,
+            )
             print(json.dumps(result, indent=2))
 
         elif args.command == "status":

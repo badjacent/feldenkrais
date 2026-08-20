@@ -32,7 +32,29 @@ def test_pending_query_respects_retry_time():
 
     sql, params = db.cursor.execute.call_args.args
     assert "next_attempt_at <= NOW()" in sql
-    assert params == (4,)
+    assert params == [4]
+
+
+def test_pending_query_can_reserve_an_origin_for_one_worker():
+    db = FakeDb()
+    db.cursor.fetchall.return_value = []
+
+    db.get_pending_youtube_urls(limit=4, origin="feldenkrais_atlas")
+
+    sql, params = db.cursor.execute.call_args.args
+    assert "origin = %s" in sql
+    assert params == ["feldenkrais_atlas", 4]
+
+
+def test_pending_query_can_exclude_a_reserved_origin():
+    db = FakeDb()
+    db.cursor.fetchall.return_value = []
+
+    db.get_pending_youtube_urls(limit=4, exclude_origin="feldenkrais_atlas")
+
+    sql, params = db.cursor.execute.call_args.args
+    assert "COALESCE(origin, '') <> %s" in sql
+    assert params == ["feldenkrais_atlas", 4]
 
 
 def test_requeue_is_bounded_by_attempt_count_delay_and_processing_lease():
