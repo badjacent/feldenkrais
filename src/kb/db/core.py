@@ -462,6 +462,14 @@ class DatabaseCore:
                         EXCEPTION WHEN duplicate_column THEN NULL;
                         END $$;
                     """)
+            # Atlas media requires browser credentials available only on the
+            # Mini. A distinct pending state also protects against older cloud
+            # workers that have not yet learned the origin filter.
+            cursor.execute(
+                """UPDATE youtube_queue
+                   SET status = 'local_pending', updated_at = NOW()
+                   WHERE origin = 'feldenkrais_atlas' AND status = 'pending'"""
+            )
             # Seed enum values
             for statement in SEED_DATA.strip().split(';'):
                 statement = statement.strip()

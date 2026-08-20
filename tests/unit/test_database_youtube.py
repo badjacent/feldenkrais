@@ -13,6 +13,18 @@ class FakeDb(YouTubeMixin):
         yield self.cursor
 
 
+def test_atlas_urls_enter_cloud_invisible_local_pending_state():
+    db = FakeDb()
+
+    assert db.add_youtube_url(
+        "https://youtube.com/watch?v=atlas", origin="feldenkrais_atlas"
+    )
+
+    sql, params = db.cursor.execute.call_args.args
+    assert "status" in sql
+    assert params[-2:] == ("feldenkrais_atlas", "local_pending")
+
+
 def test_claim_increments_persisted_attempt_count():
     db = FakeDb()
     db.cursor.rowcount = 1
@@ -21,6 +33,7 @@ def test_claim_increments_persisted_attempt_count():
 
     sql, params = db.cursor.execute.call_args.args
     assert "attempts = attempts + 1" in sql
+    assert "local_pending" in sql
     assert params == ("queue-1",)
 
 
@@ -43,7 +56,7 @@ def test_pending_query_can_reserve_an_origin_for_one_worker():
 
     sql, params = db.cursor.execute.call_args.args
     assert "origin = %s" in sql
-    assert params == ["feldenkrais_atlas", 4]
+    assert params == ["local_pending", "feldenkrais_atlas", 4]
 
 
 def test_pending_query_can_exclude_a_reserved_origin():
@@ -69,6 +82,7 @@ def test_requeue_is_bounded_by_attempt_count_delay_and_processing_lease():
     assert "attempts < %s" in sql
     assert "COALESCE(next_attempt_at, updated_at) <= NOW()" in sql
     assert "status = 'processing'" in sql
+    assert "local_pending" in sql
     assert "updated_at <= NOW()" in sql
     assert params == (3, 240)
 
