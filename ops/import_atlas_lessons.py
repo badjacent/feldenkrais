@@ -71,6 +71,25 @@ def plan_intake(db: Database, catalog: list[dict]) -> dict:
     }
 
 
+def reconcile_atlas_origins(db: Database, catalog: list[dict]) -> int:
+    """Mark previously queued Atlas lessons for local-only transcription."""
+    eligible_ids = set(eligible_urls(catalog))
+    updated = 0
+    with db.get_cursor() as cursor:
+        cursor.execute("SELECT id, url, origin FROM youtube_queue")
+        for row in cursor.fetchall():
+            if (
+                row.get("origin") != "feldenkrais_atlas"
+                and youtube_id(row["url"]) in eligible_ids
+            ):
+                cursor.execute(
+                    "UPDATE youtube_queue SET origin = %s, updated_at = NOW() WHERE id = %s",
+                    ("feldenkrais_atlas", row["id"]),
+                )
+                updated += cursor.rowcount
+    return updated
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Queue free Atlas YouTube lessons for private analysis"
@@ -91,6 +110,7 @@ def main() -> None:
     db = Database(database_url)
     try:
         report = plan_intake(db, catalog)
+        origins_reconciled = reconcile_atlas_origins(db, catalog) if args.apply else 0
         selected = report.pop("pending")[: args.limit]
         added = 0
         if args.apply:
@@ -102,6 +122,7 @@ def main() -> None:
             {
                 "pending": len(selected),
                 "added": added,
+                "origins_reconciled": origins_reconciled,
                 "dry_run": not args.apply,
                 "sample": selected[:10],
             }
