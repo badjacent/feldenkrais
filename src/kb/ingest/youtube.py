@@ -7,6 +7,7 @@ Manages a queue of URLs in the database.
 
 import json
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -49,8 +50,25 @@ _channel_source_cache: dict[str, int] = {}
 
 def _youtube_dl_runtime_options() -> dict:
     """Enable yt-dlp's YouTube challenge solver with an installed JS runtime."""
+    deno = shutil.which("deno")
+    if deno:
+        return {"js_runtimes": {"deno": {"path": deno}}}
     node = shutil.which("node")
     return {"js_runtimes": {"node": {"path": node}}} if node else {}
+
+
+def _youtube_dl_session_options() -> dict:
+    """Load an optional private cookie jar and YouTube client selection."""
+    options = {}
+    cookie_path = os.getenv("YOUTUBE_COOKIES_PATH")
+    if cookie_path:
+        options["cookiefile"] = cookie_path
+    player_client = os.getenv("YOUTUBE_PLAYER_CLIENT")
+    if player_client:
+        options["extractor_args"] = {
+            "youtube": {"player_client": [player_client]}
+        }
+    return options
 
 
 def resolve_channel_source(db: Database, channel_name: str) -> int:
@@ -126,6 +144,7 @@ def get_video_info(url: str) -> VideoInfo:
             'no_warnings': True,
             'skip_download': True,
             **_youtube_dl_runtime_options(),
+            **_youtube_dl_session_options(),
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -165,7 +184,7 @@ def download_audio(url: str, output_dir: str) -> tuple[str, str]:
         import yt_dlp
 
         ydl_opts = {
-            'format': 'bestaudio/best',
+            'format': os.getenv("YOUTUBE_AUDIO_FORMAT", "bestaudio/best"),
             'outtmpl': output_template,
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
@@ -175,6 +194,7 @@ def download_audio(url: str, output_dir: str) -> tuple[str, str]:
             'quiet': True,
             'no_warnings': True,
             **_youtube_dl_runtime_options(),
+            **_youtube_dl_session_options(),
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
