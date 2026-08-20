@@ -13,3 +13,22 @@ def test_youtube_dl_runtime_options_is_empty_without_node(monkeypatch):
     monkeypatch.setattr(youtube.shutil, "which", lambda _name: None)
 
     assert youtube._youtube_dl_runtime_options() == {}
+
+
+def test_youtube_dl_runtime_options_prefers_deno(monkeypatch):
+    paths = {"deno": "/opt/deno", "node": "/opt/node"}
+    monkeypatch.setattr(youtube.shutil, "which", paths.get)
+
+    assert youtube._youtube_dl_runtime_options() == {
+        "js_runtimes": {"deno": {"path": "/opt/deno"}}
+    }
+
+
+def test_youtube_dl_session_options(monkeypatch):
+    monkeypatch.setenv("YOUTUBE_COOKIES_PATH", "/private/cookies.txt")
+    monkeypatch.setenv("YOUTUBE_PLAYER_CLIENT", "web_safari")
+
+    assert youtube._youtube_dl_session_options() == {
+        "cookiefile": "/private/cookies.txt",
+        "extractor_args": {"youtube": {"player_client": ["web_safari"]}},
+    }
