@@ -21,6 +21,7 @@ from .analysis import AnalysisMixin
 from .locks import LocksMixin
 from .external_lessons import ExternalLessonsMixin
 from .lesson_views import LessonViewsMixin
+from .renditions import RenditionsMixin
 
 
 class Database(
@@ -41,6 +42,7 @@ class Database(
     LocksMixin,
     ExternalLessonsMixin,
     LessonViewsMixin,
+    RenditionsMixin,
 ):
     """PostgreSQL database wrapper for the knowledge base.
 

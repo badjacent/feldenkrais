@@ -142,6 +142,26 @@ CREATE TABLE IF NOT EXISTS lesson_embedding (
     PRIMARY KEY (document_id, method)
 );
 
+CREATE TABLE IF NOT EXISTS lesson_rendition (
+    document_id UUID PRIMARY KEY REFERENCES document(id) ON DELETE CASCADE,
+    lesson_key TEXT NOT NULL,
+    detection_version TEXT NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS lesson_rendition_evidence (
+    left_document_id UUID NOT NULL REFERENCES document(id) ON DELETE CASCADE,
+    right_document_id UUID NOT NULL REFERENCES document(id) ON DELETE CASCADE,
+    detection_version TEXT NOT NULL,
+    reasons TEXT[] NOT NULL,
+    shingle_overlap REAL,
+    raw_cosine REAL,
+    canonical_identity TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (left_document_id, right_document_id, detection_version),
+    CHECK (left_document_id <> right_document_id)
+);
+
 CREATE TABLE IF NOT EXISTS lesson_concept (
     document_id UUID NOT NULL REFERENCES document(id) ON DELETE CASCADE,
     category TEXT NOT NULL,
@@ -309,6 +329,8 @@ CREATE INDEX IF NOT EXISTS idx_pipeline_log_created ON pipeline_log(created_at D
 CREATE INDEX IF NOT EXISTS idx_pipeline_log_document ON pipeline_log(document_id);
 CREATE INDEX IF NOT EXISTS idx_lesson_embedding_hnsw ON lesson_embedding USING hnsw (embedding vector_cosine_ops);
 CREATE INDEX IF NOT EXISTS idx_lesson_embedding_method ON lesson_embedding (method);
+CREATE INDEX IF NOT EXISTS idx_lesson_rendition_key ON lesson_rendition (lesson_key);
+CREATE INDEX IF NOT EXISTS idx_lesson_rendition_evidence_right ON lesson_rendition_evidence (right_document_id);
 CREATE INDEX IF NOT EXISTS idx_lesson_concept_value ON lesson_concept (value);
 CREATE INDEX IF NOT EXISTS idx_lesson_concept_category ON lesson_concept (category, value);
 CREATE INDEX IF NOT EXISTS idx_external_lesson_source ON external_lesson (lesson_source_id);
