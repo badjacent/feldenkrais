@@ -418,7 +418,10 @@ def process_queue(
     Returns summary of processing results.
     """
     requeued = db.requeue_retryable_youtube_urls(
-        max_attempts=int(os.getenv("YOUTUBE_MAX_ATTEMPTS", "3"))
+        max_attempts=int(os.getenv("YOUTUBE_MAX_ATTEMPTS", "3")),
+        stale_processing_minutes=int(
+            os.getenv("YOUTUBE_STALE_PROCESSING_MINUTES", "360")
+        ),
     )
     if requeued:
         logger.info("Released %s YouTube URL(s) for bounded retry", requeued)

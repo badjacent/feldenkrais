@@ -52,16 +52,24 @@ class YouTubeMixin:
             )
             return cursor.rowcount > 0
 
-    def requeue_retryable_youtube_urls(self, max_attempts: int = 3) -> int:
-        """Release failed URLs whose bounded retry delay has elapsed."""
+    def requeue_retryable_youtube_urls(
+        self,
+        max_attempts: int = 3,
+        stale_processing_minutes: int = 360,
+    ) -> int:
+        """Release delayed failures and abandoned processing claims."""
         with self.get_cursor() as cursor:
             cursor.execute(
                 """UPDATE youtube_queue
                    SET status = 'pending', updated_at = NOW()
-                   WHERE status = 'failed'
-                     AND attempts < %s
-                     AND COALESCE(next_attempt_at, updated_at) <= NOW()""",
-                (max_attempts,),
+                   WHERE attempts < %s AND (
+                       (status = 'failed'
+                        AND COALESCE(next_attempt_at, updated_at) <= NOW())
+                       OR
+                       (status = 'processing'
+                        AND updated_at <= NOW() - (%s * INTERVAL '1 minute'))
+                   )""",
+                (max_attempts, stale_processing_minutes),
             )
             return cursor.rowcount
 
