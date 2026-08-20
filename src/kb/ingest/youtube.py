@@ -360,19 +360,19 @@ def process_url(
             result["staging_key"] = staging_key
 
         # Mark as completed
-        db.update_youtube_queue(queue_id=queue_id, status="completed")
+        db.complete_youtube_url(queue_id)
         result["status"] = "completed"
         logger.info(f"Successfully processed: {video_info.title}")
 
     except subprocess.CalledProcessError as e:
         error_msg = e.stderr if e.stderr else str(e)
         logger.error(f"yt-dlp error for {url}: {error_msg}")
-        db.update_youtube_queue(queue_id=queue_id, status="failed", error=error_msg[:500])
+        db.fail_youtube_url(queue_id, error_msg)
         result["error"] = error_msg
 
     except Exception as e:
         logger.error(f"Error processing {url}: {e}")
-        db.update_youtube_queue(queue_id=queue_id, status="failed", error=str(e)[:500])
+        db.fail_youtube_url(queue_id, str(e))
         result["error"] = str(e)
 
     return result
@@ -417,6 +417,11 @@ def process_queue(
 
     Returns summary of processing results.
     """
+    requeued = db.requeue_retryable_youtube_urls(
+        max_attempts=int(os.getenv("YOUTUBE_MAX_ATTEMPTS", "3"))
+    )
+    if requeued:
+        logger.info("Released %s YouTube URL(s) for bounded retry", requeued)
     pending = db.get_pending_youtube_urls(limit=limit)
 
     if not pending:
@@ -498,16 +503,6 @@ def handler(event, context):
             db.close()
             return {"statusCode": 200, "body": json.dumps({"message": "Skipped - LLM disabled"})}
 
-    # For process action, acquire advisory lock to prevent concurrent runs
-    lock_acquired = False
-    if action == "process":
-        lock_acquired = db.try_acquire_lock(Database.LOCK_YOUTUBE)
-        if not lock_acquired:
-            logger.info("Another YouTube Lambda is processing, skipping")
-            db.close()
-            return {"statusCode": 200, "body": json.dumps({"message": "Skipped - another instance running"})}
-        logger.info("Acquired YouTube lock")
-
     try:
         if action == "add":
             urls = event.get("urls", [])
@@ -575,9 +570,6 @@ def handler(event, context):
         }
 
     finally:
-        if lock_acquired:
-            db.release_lock(Database.LOCK_YOUTUBE)
-            logger.info("Released YouTube lock")
         db.close()
 
 
@@ -622,7 +614,6 @@ if __name__ == "__main__":
     db = Database(config.database_url)
     db.initialize()
 
-    lock_acquired = False
     try:
         if args.command == "add":
             urls = list(args.urls) if args.urls else []
@@ -639,10 +630,6 @@ if __name__ == "__main__":
             print(json.dumps(result, indent=2))
 
         elif args.command == "process":
-            lock_acquired = db.try_acquire_lock(Database.LOCK_YOUTUBE)
-            if not lock_acquired:
-                print("Another YouTube worker holds the database lease; skipping")
-                sys.exit(0)
             bucket = args.bucket or config.bucket
             if not bucket:
                 print("Error: bucket required (--bucket or KB_BUCKET env var)")
@@ -668,6 +655,4 @@ if __name__ == "__main__":
                     print(f"             Error: {item['error'][:80]}")
 
     finally:
-        if lock_acquired:
-            db.release_lock(Database.LOCK_YOUTUBE)
         db.close()

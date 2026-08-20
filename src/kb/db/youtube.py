@@ -30,7 +30,10 @@ class YouTubeMixin:
         """Get pending YouTube URLs to process."""
         with self.get_cursor(commit=False) as cursor:
             cursor.execute(
-                "SELECT * FROM youtube_queue WHERE status = 'pending' ORDER BY created_at LIMIT %s",
+                """SELECT * FROM youtube_queue
+                   WHERE status = 'pending'
+                     AND (next_attempt_at IS NULL OR next_attempt_at <= NOW())
+                   ORDER BY created_at LIMIT %s""",
                 (limit,),
             )
             return [dict(row) for row in cursor.fetchall()]
@@ -41,12 +44,55 @@ class YouTubeMixin:
             cursor.execute(
                 """
                 UPDATE youtube_queue
-                SET status = 'processing', updated_at = NOW()
+                SET status = 'processing', attempts = attempts + 1,
+                    next_attempt_at = NULL, updated_at = NOW()
                 WHERE id = %s AND status = 'pending'
                 """,
                 (queue_id,),
             )
             return cursor.rowcount > 0
+
+    def requeue_retryable_youtube_urls(self, max_attempts: int = 3) -> int:
+        """Release failed URLs whose bounded retry delay has elapsed."""
+        with self.get_cursor() as cursor:
+            cursor.execute(
+                """UPDATE youtube_queue
+                   SET status = 'pending', updated_at = NOW()
+                   WHERE status = 'failed'
+                     AND attempts < %s
+                     AND COALESCE(next_attempt_at, updated_at) <= NOW()""",
+                (max_attempts,),
+            )
+            return cursor.rowcount
+
+    def fail_youtube_url(
+        self,
+        queue_id: str,
+        error: str,
+        *,
+        retry_delay_minutes: int = 60,
+    ) -> None:
+        """Persist failure details and the earliest bounded retry time."""
+        with self.get_cursor() as cursor:
+            cursor.execute(
+                """UPDATE youtube_queue
+                   SET status = 'failed', error = %s,
+                       next_attempt_at = NOW() + (%s * INTERVAL '1 minute'),
+                       updated_at = NOW()
+                   WHERE id = %s""",
+                (error[:500], retry_delay_minutes, queue_id),
+            )
+
+    def complete_youtube_url(self, queue_id: str) -> None:
+        """Mark an item complete and clear diagnostics from earlier attempts."""
+        with self.get_cursor() as cursor:
+            cursor.execute(
+                """UPDATE youtube_queue
+                   SET status = 'completed', error = NULL,
+                       next_attempt_at = NULL, updated_at = NOW()
+                   WHERE id = %s""",
+                (queue_id,),
+            )
 
     def update_youtube_queue(
         self,
