@@ -162,6 +162,18 @@ CREATE TABLE IF NOT EXISTS lesson_rendition_evidence (
     CHECK (left_document_id <> right_document_id)
 );
 
+CREATE TABLE IF NOT EXISTS lesson_profile (
+    document_id UUID PRIMARY KEY REFERENCES document(id) ON DELETE CASCADE,
+    lesson_key TEXT NOT NULL,
+    schema_version TEXT NOT NULL,
+    extraction_model TEXT NOT NULL,
+    weight_set TEXT NOT NULL,
+    content_hash TEXT NOT NULL,
+    profile JSONB NOT NULL,
+    duration_seconds INTEGER,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS lesson_concept (
     document_id UUID NOT NULL REFERENCES document(id) ON DELETE CASCADE,
     category TEXT NOT NULL,
@@ -331,6 +343,8 @@ CREATE INDEX IF NOT EXISTS idx_lesson_embedding_hnsw ON lesson_embedding USING h
 CREATE INDEX IF NOT EXISTS idx_lesson_embedding_method ON lesson_embedding (method);
 CREATE INDEX IF NOT EXISTS idx_lesson_rendition_key ON lesson_rendition (lesson_key);
 CREATE INDEX IF NOT EXISTS idx_lesson_rendition_evidence_right ON lesson_rendition_evidence (right_document_id);
+CREATE INDEX IF NOT EXISTS idx_lesson_profile_lesson_key ON lesson_profile (lesson_key);
+CREATE INDEX IF NOT EXISTS idx_lesson_profile_version ON lesson_profile (schema_version, extraction_model, weight_set);
 CREATE INDEX IF NOT EXISTS idx_lesson_concept_value ON lesson_concept (value);
 CREATE INDEX IF NOT EXISTS idx_lesson_concept_category ON lesson_concept (category, value);
 CREATE INDEX IF NOT EXISTS idx_external_lesson_source ON external_lesson (lesson_source_id);
