@@ -1,6 +1,5 @@
 from ops.export_atlas_projection import (
     build_summary,
-    derive_transcript_facets,
     normalize_resource_url,
     normalize_values,
     public_lesson_key,
@@ -37,25 +36,6 @@ def test_public_projection_helpers_are_safe_and_deterministic():
     assert normalize_values(
         "positions", {"supine with knees standing", "side_lying_right"}
     ) == ["side-lying", "lying"]
-
-
-def test_transcript_facets_are_coarse_and_do_not_copy_source_text():
-    transcript = (
-        "Lie on your back and notice your breathing. Roll the pelvis and turn "
-        "your head. After a pause, compare how the shoulders feel."
-    )
-
-    facets = derive_transcript_facets(transcript)
-
-    assert facets["positions"] == ["lying"]
-    assert facets["body_regions"] == ["shoulders", "pelvis", "head"]
-    assert facets["movement_themes"] == ["breathing", "rolling", "rotation"]
-    assert facets["teaching_strategies"] == [
-        "comparison",
-        "sensing",
-        "rest and integration",
-    ]
-    assert "Lie on your back" not in str(facets)
 
 
 def test_projection_equivalence_ignores_only_generation_time():

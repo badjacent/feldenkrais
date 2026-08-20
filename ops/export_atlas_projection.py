@@ -7,7 +7,6 @@ import argparse
 import hashlib
 import json
 import os
-import re
 from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -46,52 +45,6 @@ CANONICAL_TERMS = {
         "sitting": ("sitting", "seated"),
         "standing": ("standing",),
         "kneeling": ("kneeling", "all fours"),
-    },
-}
-
-TRANSCRIPT_PATTERNS = {
-    "body_regions": {
-        "spine": (r"\bspine\b", r"\bvertebra(?:e|l)?\b"),
-        "ribs": (r"\bribs?\b", r"\bsternum\b", r"\bchest\b"),
-        "shoulders": (r"\bshoulders?\b", r"\bscapula(?:e|r)?\b"),
-        "pelvis": (r"\bpelvis\b", r"\bpelvic\b", r"\bsit(?:ting)? bones?\b"),
-        "hips": (r"\bhips?\b",),
-        "legs": (r"\blegs?\b", r"\bknees?\b", r"\bshins?\b"),
-        "feet": (r"\bfeet\b", r"\bfoot\b", r"\bankles?\b", r"\btoes?\b"),
-        "arms": (r"\barms?\b", r"\belbows?\b", r"\bhands?\b", r"\bwrists?\b"),
-        "head": (r"\bhead\b", r"\bskull\b"),
-        "neck": (r"\bneck\b", r"\bcervical\b"),
-        "eyes": (r"\beyes?\b", r"\bgaze\b"),
-        "jaw": (r"\bjaw\b", r"\bmouth\b", r"\btongue\b"),
-    },
-    "positions": {
-        "side-lying": (r"\bside[ -]lying\b", r"\blie on your (?:left|right) side\b"),
-        "lying": (r"\bsupine\b", r"\blie on your back\b", r"\blying on your back\b"),
-        "prone": (r"\bprone\b", r"\b(?:lie|lying) on your (?:belly|stomach)\b"),
-        "sitting": (r"\bsitting\b", r"\bseated\b", r"\bsit on\b"),
-        "standing": (r"\bstanding\b", r"\bstand (?:up|on)\b"),
-        "kneeling": (r"\bkneeling\b", r"\ball fours\b", r"\bhands and knees\b"),
-    },
-    "movement_themes": {
-        "breathing": (r"\bbreath(?:e|ing|s)?\b", r"\binhal(?:e|ing)\b", r"\bexhal(?:e|ing)\b"),
-        "rolling": (r"\broll(?:ing|ed|s)?\b",),
-        "rotation": (r"\brotat(?:e|ing|ion)\b", r"\bturn(?:ing|ed|s)?\b", r"\btwist(?:ing|ed|s)?\b"),
-        "reaching": (r"\breach(?:ing|ed|es)?\b", r"\blengthen(?:ing|ed|s)?\b"),
-        "weight shifting": (r"\bshift(?:ing)? (?:your )?weight\b", r"\bweight transfer\b"),
-        "flexion and extension": (r"\bflex(?:ion|ing)?\b", r"\bextend(?:ing|ed)?\b", r"\barch(?:ing|ed)?\b"),
-        "walking": (r"\bwalk(?:ing|ed|s)?\b", r"\bstepp(?:ing|ed)\b"),
-        "balance": (r"\bbalanc(?:e|ing)\b",),
-        "circling": (r"\bcircl(?:e|ing|ed)\b",),
-        "lifting and lowering": (r"\blift(?:ing|ed)?\b", r"\blower(?:ing|ed)?\b"),
-        "pressing and pushing": (r"\bpress(?:ing|ed)?\b", r"\bpush(?:ing|ed)?\b"),
-    },
-    "teaching_strategies": {
-        "variation": (r"\bvariation\b", r"\banother way\b", r"\bdifferent way\b"),
-        "comparison": (r"\bcompar(?:e|ing|ison)\b", r"\bnotice the difference\b"),
-        "reference movement": (r"\btry that again\b", r"\breturn to\b", r"\bonce again\b"),
-        "sensing": (r"\bsens(?:e|ing)\b", r"\bnotice\b", r"\bfeel(?:ing)?\b"),
-        "imagination": (r"\bimagin(?:e|ing|ation)\b",),
-        "rest and integration": (r"\btake a rest\b", r"\brest for a moment\b", r"\bpause\b"),
     },
 }
 
@@ -153,21 +106,6 @@ def export_projection(db: Database, catalog: list[dict]) -> dict:
                 (list(matches),),
             )
             concept_rows = cursor.fetchall()
-            cursor.execute(
-                """SELECT DISTINCT ON (document_id) document_id::text,
-                          data->>'text' AS text
-                   FROM analysis
-                   WHERE type_id = 1 AND document_id = ANY(%s::uuid[])
-                   ORDER BY document_id, updated_at DESC""",
-                (list(matches),),
-            )
-            transcripts = {
-                row["document_id"]: row["text"]
-                for row in cursor.fetchall()
-                if row.get("text")
-            }
-        if not matches:
-            transcripts = {}
     by_document: dict[str, dict[str, set[str]]] = defaultdict(
         lambda: defaultdict(set)
     )
@@ -182,10 +120,6 @@ def export_projection(db: Database, catalog: list[dict]) -> dict:
             for field, values in by_document.get(document_id, {}).items()
             if values
         }
-        for field, values in derive_transcript_facets(
-            transcripts.get(document_id, "")
-        ).items():
-            facets.setdefault(field, values)
         if not facets:
             continue
         entries.append(
@@ -199,7 +133,7 @@ def export_projection(db: Database, catalog: list[dict]) -> dict:
     entries.sort(key=lambda item: item["resource_url"])
     return {
         "schema_version": 1,
-        "analysis_version": "public-transcript-facets-v1",
+        "analysis_version": "structured-concepts-v1",
         "generated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "entries": entries,
     }
@@ -225,23 +159,6 @@ def normalize_values(field: str, values: set[str]) -> list[str]:
             for alias in aliases
         )
     ]
-
-
-def derive_transcript_facets(text: str) -> dict[str, list[str]]:
-    """Derive a deliberately coarse, non-quoting public projection."""
-    normalized = " ".join((text or "").casefold().split())
-    if not normalized:
-        return {}
-    result = {}
-    for field, labels in TRANSCRIPT_PATTERNS.items():
-        matches = [
-            label
-            for label, patterns in labels.items()
-            if any(re.search(pattern, normalized) for pattern in patterns)
-        ]
-        if matches:
-            result[field] = matches[:8]
-    return result
 
 
 def main() -> None:
