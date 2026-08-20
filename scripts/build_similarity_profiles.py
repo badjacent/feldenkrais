@@ -16,6 +16,11 @@ from kb.similarity.profiles import profile_content_hash, project_existing_analys
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--apply", action="store_true", help="replace the persisted profile version")
+    parser.add_argument(
+        "--skip-initialize",
+        action="store_true",
+        help="do not run broad database initialization (use when workers are active)",
+    )
     parser.add_argument("--weight-set", default="weights-v1")
     args = parser.parse_args()
     load_dotenv()
@@ -24,7 +29,8 @@ def main() -> None:
         parser.error("DATABASE_URL is required")
 
     db = Database(database_url)
-    db.initialize()
+    if not args.skip_initialize:
+        db.initialize()
     try:
         rows = db.get_similarity_projection_inputs()
         projected = [

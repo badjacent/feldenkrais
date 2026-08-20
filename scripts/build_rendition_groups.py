@@ -20,6 +20,11 @@ def main() -> None:
         action="store_true",
         help="replace persisted rendition assignments after building",
     )
+    parser.add_argument(
+        "--skip-initialize",
+        action="store_true",
+        help="do not run broad database initialization (use when workers are active)",
+    )
     args = parser.parse_args()
 
     load_dotenv()
@@ -28,7 +33,8 @@ def main() -> None:
         parser.error("DATABASE_URL is required")
 
     db = Database(database_url)
-    db.initialize()
+    if not args.skip_initialize:
+        db.initialize()
     try:
         inputs = [RenditionDocument(**row) for row in db.get_rendition_inputs()]
         build = build_rendition_groups(

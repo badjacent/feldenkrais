@@ -74,6 +74,9 @@ class ProjectedProfile:
 def profile_to_payload(projected: ProjectedProfile) -> dict[str, Any]:
     """Return a stable JSON representation (tuple-key maps need encoding)."""
     profile = asdict(projected.profile)
+    # Canonical-summary embeddings remain in pgvector; do not duplicate them
+    # in the JSONB profile or derived artifact metadata.
+    profile.pop("embedding")
     profile["diffs"] = [
         {"parts": list(parts), "weight": weight}
         for parts, weight in sorted(projected.profile.diffs.items())
@@ -84,6 +87,23 @@ def profile_to_payload(projected: ProjectedProfile) -> dict[str, Any]:
         "provenance": dict(projected.provenance),
         "profile": profile,
     }
+
+
+def profile_from_payload(payload: Mapping[str, Any], *, embedding=None) -> ProjectedProfile:
+    """Rehydrate a stored profile after joining its pgvector embedding."""
+    values = dict(payload["profile"])
+    values["diffs"] = {
+        tuple(item["parts"]): float(item["weight"])
+        for item in values.get("diffs", [])
+    }
+    values["marks"] = tuple(TrademarkMechanism(**item) for item in values.get("marks", []))
+    values["embedding"] = embedding
+    return ProjectedProfile(
+        profile=LessonProfile(**values),
+        schema_version=str(payload["schema_version"]),
+        extraction_model=str(payload["extraction_model"]),
+        provenance=dict(payload.get("provenance", {})),
+    )
 
 
 def profile_content_hash(projected: ProjectedProfile) -> str:

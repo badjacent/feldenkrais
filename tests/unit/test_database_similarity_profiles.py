@@ -24,3 +24,25 @@ def test_replace_profiles_is_version_scoped_and_json_safe(mock_db):
 def test_empty_profile_batch_does_not_delete_existing_profiles(mock_db):
     mock_db.replace_similarity_profiles([], weight_set="weights-v1", content_hashes={})
     mock_db._mock_cursor.execute.assert_not_called()
+
+
+def test_read_profiles_joins_embedding_without_storing_it_in_json(mock_db):
+    projected = project_existing_analysis(document_id="doc", lesson_key="lesson:key")
+    from kb.similarity.profiles import profile_to_payload
+
+    mock_db._mock_cursor.fetchall.return_value = [
+        {
+            "profile": profile_to_payload(projected),
+            "content_hash": "abc",
+            "embedding": "[0.1,0.2]",
+        }
+    ]
+
+    rows = mock_db.get_similarity_profiles(
+        schema_version="profile-v1",
+        extraction_model="pass0b-existing",
+        weight_set="weights-v1",
+    )
+
+    assert rows[0]["embedding"] == [0.1, 0.2]
+    assert "embedding" not in rows[0]["payload"]["profile"]

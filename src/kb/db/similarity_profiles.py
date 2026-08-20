@@ -40,7 +40,11 @@ class SimilarityProfilesMixin:
                 SELECT d.id::text AS document_id,
                        lr.lesson_key,
                        tx.data->>'text' AS transcript,
-                       COALESCE((d.metadata->>'duration_seconds')::integer, 0) AS duration_seconds,
+                       CASE
+                         WHEN d.metadata->>'duration_seconds' ~ '^\\d+$'
+                         THEN (d.metadata->>'duration_seconds')::integer
+                         ELSE NULL
+                       END AS duration_seconds,
                        le.embedding::text AS embedding
                 FROM lesson_rendition lr
                 JOIN document d ON d.id = lr.document_id
@@ -123,3 +127,39 @@ class SimilarityProfilesMixin:
                 """,
                 rows,
             )
+
+    def get_similarity_profiles(
+        self,
+        *,
+        schema_version: str,
+        extraction_model: str,
+        weight_set: str,
+    ) -> list[dict]:
+        """Read persisted profiles, joining embeddings from pgvector."""
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute(
+                """
+                SELECT lp.profile,
+                       lp.content_hash,
+                       le.embedding::text AS embedding
+                FROM lesson_profile lp
+                LEFT JOIN lesson_embedding le
+                  ON le.document_id = lp.document_id AND le.method = 'default'
+                WHERE lp.schema_version = %s
+                  AND lp.extraction_model = %s
+                  AND lp.weight_set = %s
+                ORDER BY lp.document_id
+                """,
+                (schema_version, extraction_model, weight_set),
+            )
+            return [
+                {
+                    "payload": dict(row["profile"]),
+                    "content_hash": row["content_hash"],
+                    "embedding": (
+                        [float(value) for value in json.loads(row["embedding"])]
+                        if row["embedding"] else None
+                    ),
+                }
+                for row in cursor.fetchall()
+            ]
