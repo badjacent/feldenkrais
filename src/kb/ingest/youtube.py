@@ -8,6 +8,7 @@ Manages a queue of URLs in the database.
 import json
 import logging
 import re
+import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -44,6 +45,12 @@ AUDIO_TYPE_ID = 2
 
 # Cache of channel_name -> source_id (populated at runtime)
 _channel_source_cache: dict[str, int] = {}
+
+
+def _youtube_dl_runtime_options() -> dict:
+    """Enable yt-dlp's YouTube challenge solver with an installed JS runtime."""
+    node = shutil.which("node")
+    return {"js_runtimes": {"node": {"path": node}}} if node else {}
 
 
 def resolve_channel_source(db: Database, channel_name: str) -> int:
@@ -118,6 +125,7 @@ def get_video_info(url: str) -> VideoInfo:
             'quiet': True,
             'no_warnings': True,
             'skip_download': True,
+            **_youtube_dl_runtime_options(),
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -166,6 +174,7 @@ def download_audio(url: str, output_dir: str) -> tuple[str, str]:
             }],
             'quiet': True,
             'no_warnings': True,
+            **_youtube_dl_runtime_options(),
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
