@@ -85,6 +85,8 @@ CREATE TABLE IF NOT EXISTS youtube_queue (
     channel_id TEXT,
     duration_seconds INTEGER,
     origin TEXT,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at TIMESTAMPTZ,
     error TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -444,6 +446,8 @@ class DatabaseCore:
                 ("document", "origin", "TEXT"),
                 ("document", "presenter", "TEXT"),
                 ("youtube_queue", "origin", "TEXT"),
+                ("youtube_queue", "attempts", "INTEGER NOT NULL DEFAULT 0"),
+                ("youtube_queue", "next_attempt_at", "TIMESTAMPTZ"),
                 ("users", "superuser_eligible", "BOOLEAN NOT NULL DEFAULT FALSE"),
             ]:
                 cursor.execute(
