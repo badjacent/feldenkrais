@@ -11,6 +11,7 @@ def test_get_rendition_inputs_only_uses_explicit_raw_vectors(mock_db):
             "metadata": {"lesson_type": "ATM"},
             "transcript": "move slowly",
             "raw_embedding": "[0.1,0.2]",
+            "source_name": "FELDENKRAIS_PROJECT",
         }
     ]
 
@@ -18,6 +19,7 @@ def test_get_rendition_inputs_only_uses_explicit_raw_vectors(mock_db):
 
     sql = mock_db._mock_cursor.execute.call_args[0][0]
     assert "raw.method = 'raw'" in sql
+    assert "document_source" in sql
     assert result[0]["raw_embedding"] == [0.1, 0.2]
 
 

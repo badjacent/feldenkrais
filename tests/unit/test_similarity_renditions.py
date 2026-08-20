@@ -4,6 +4,7 @@ from kb.similarity.renditions import (
     RenditionDocument,
     build_rendition_groups,
     canonical_lesson_identity,
+    is_similarity_eligible,
     transcript_shingles,
 )
 
@@ -34,6 +35,18 @@ def test_type_and_split_gates_fail_closed_before_rendition_scoring():
         "talk": "not_atm",
         "unknown": "not_atm",
     }
+
+
+def test_curated_atm_only_source_satisfies_legacy_type_gate():
+    document = RenditionDocument(
+        "legacy",
+        "A lesson",
+        {},
+        "move slowly and attend to yourself " * 20,
+        source_name="FELDENKRAIS_PROJECT",
+    )
+
+    assert is_similarity_eligible(document)
 
 
 def test_shared_ay_identity_groups_different_teacher_renditions():

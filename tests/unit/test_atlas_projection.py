@@ -2,6 +2,7 @@ from ops.export_atlas_projection import (
     build_summary,
     normalize_resource_url,
     normalize_values,
+    _public_labels,
     public_lesson_key,
 )
 from ops.sync_atlas_projection import crawl_lock_path, projection_equivalent
@@ -36,6 +37,10 @@ def test_public_projection_helpers_are_safe_and_deterministic():
     assert normalize_values(
         "positions", {"supine with knees standing", "side_lying_right"}
     ) == ["side-lying", "lying"]
+    assert _public_labels({"head_neck": 0.3, "ribs_chest": 1.0}) == [
+        "ribs-chest",
+        "head-neck",
+    ]
 
 
 def test_projection_equivalence_ignores_only_generation_time():

@@ -36,8 +36,10 @@ class RenditionsMixin:
                        d.title,
                        COALESCE(d.metadata, '{}'::jsonb) AS metadata,
                        tx.data->>'text' AS transcript,
-                       raw.embedding::text AS raw_embedding
+                       raw.embedding::text AS raw_embedding,
+                       ds.name AS source_name
                 FROM document d
+                JOIN document_source ds ON ds.id = d.source_id
                 JOIN LATERAL (
                     SELECT a.data
                     FROM analysis a

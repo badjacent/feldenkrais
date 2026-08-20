@@ -14,10 +14,11 @@ from dataclasses import dataclass, field
 from itertools import combinations
 from typing import Any, Iterable, Mapping, Sequence
 
-RENDITION_DETECTION_VERSION = "rendition-v1"
+RENDITION_DETECTION_VERSION = "rendition-v2"
 SHINGLE_THRESHOLD = 0.65
 RAW_COSINE_THRESHOLD = 0.985
 DEFAULT_SHINGLE_SIZE = 7
+ATM_ONLY_SOURCES = {"FELDENKRAIS_PROJECT", "FLOWING_BODY", "OPENATM"}
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+(?:'[a-z0-9]+)?")
 _AY_RE = re.compile(
@@ -39,6 +40,7 @@ class RenditionDocument:
     metadata: Mapping[str, Any] = field(default_factory=dict)
     transcript: str = ""
     raw_embedding: Sequence[float] | None = None
+    source_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -98,7 +100,9 @@ def is_multi_lesson(metadata: Mapping[str, Any]) -> bool:
 
 
 def eligibility_reason(document: RenditionDocument) -> str | None:
-    if _metadata_lesson_type(document.metadata) != "ATM":
+    explicitly_atm = _metadata_lesson_type(document.metadata) == "ATM"
+    source_is_atm_only = document.source_name in ATM_ONLY_SOURCES
+    if not explicitly_atm and not source_is_atm_only:
         return "not_atm"
     if is_multi_lesson(document.metadata):
         return "multi_lesson_requires_split"

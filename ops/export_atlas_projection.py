@@ -7,12 +7,14 @@ import argparse
 import hashlib
 import json
 import os
-from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import parse_qsl, urlsplit
 
 from kb.database import Database
+from kb.similarity.calibration import build_embedding_calibration
+from kb.similarity.measures import similar_lessons
+from kb.similarity.profiles import PROFILE_SCHEMA_VERSION, profile_from_payload
 
 PRACTICE_KINDS = {"audio_lesson", "video_lesson"}
 CATEGORY_FIELDS = {
@@ -61,8 +63,11 @@ def normalize_resource_url(url: str) -> str:
     return f"{host}{path}"
 
 
-def public_lesson_key(document_id: str) -> str:
-    return hashlib.sha256(f"atlas-analysis:{document_id}".encode()).hexdigest()[:16]
+def public_lesson_key(private_lesson_key: str) -> str:
+    """Hide private identifiers while preserving rendition identity."""
+    return hashlib.sha256(
+        f"atlas-analysis:{private_lesson_key}".encode()
+    ).hexdigest()[:16]
 
 
 def build_summary(facets: dict[str, list[str]]) -> str:
@@ -97,46 +102,75 @@ def export_projection(db: Database, catalog: list[dict]) -> dict:
             for row in documents
             if normalize_resource_url(row["source_url"]) in eligible
         }
-        if not matches:
-            concept_rows = []
-        else:
-            cursor.execute(
-                """SELECT document_id::text, category, value
-                   FROM lesson_concept WHERE document_id = ANY(%s::uuid[])""",
-                (list(matches),),
-            )
-            concept_rows = cursor.fetchall()
-    by_document: dict[str, dict[str, set[str]]] = defaultdict(
-        lambda: defaultdict(set)
+    profile_rows = db.get_similarity_profiles(
+        schema_version=PROFILE_SCHEMA_VERSION,
+        extraction_model="pass0b-existing",
+        weight_set="weights-v1",
     )
-    for row in concept_rows:
-        field = CATEGORY_FIELDS.get(row["category"])
-        if field and row["value"]:
-            by_document[row["document_id"]][field].add(str(row["value"]).strip())
+    profiles = [
+        profile_from_payload(row["payload"], embedding=row["embedding"]).profile
+        for row in profile_rows
+    ]
+    profiles_by_id = {profile.document_id: profile for profile in profiles}
+    matched_profiles = [profiles_by_id[document_id] for document_id in matches if document_id in profiles_by_id]
+    if len(matched_profiles) >= 2:
+        calibration = build_embedding_calibration(
+            profiles,
+            schema_version=PROFILE_SCHEMA_VERSION,
+            extraction_model="pass0b-existing",
+        )
+        ecdf = calibration.ecdf()
+    else:
+        ecdf = None
     entries = []
     for document_id, item in matches.items():
-        facets = {
-            field: normalize_values(field, values)
-            for field, values in by_document.get(document_id, {}).items()
-            if values
-        }
-        if not facets:
+        profile = profiles_by_id.get(document_id)
+        if profile is None:
             continue
+        facets = {
+            "body_regions": _public_labels(profile.regions),
+            "movement_themes": _public_labels(profile.themes),
+            "positions": _public_labels(profile.positions),
+        }
+        facets = {key: value for key, value in facets.items() if value}
+        neighbors = []
+        if ecdf is not None:
+            neighbors = [
+                {
+                    "lesson_key": public_lesson_key(result_profile.lesson_key),
+                    "score": round(result.similarity, 5),
+                }
+                for result in similar_lessons(
+                    profile,
+                    matched_profiles,
+                    embedding_ecdf=ecdf,
+                    limit=8,
+                )
+                if (result_profile := profiles_by_id[result.right_id])
+            ]
         entries.append(
             {
                 "resource_url": item["url"],
-                "lesson_key": public_lesson_key(document_id),
+                "lesson_key": public_lesson_key(profile.lesson_key),
                 "analysis_summary": build_summary(facets),
+                "similarities": neighbors,
                 **facets,
             }
         )
     entries.sort(key=lambda item: item["resource_url"])
     return {
         "schema_version": 1,
-        "analysis_version": "structured-concepts-v1",
+        "analysis_version": "similarity-profile-v1:weights-v1",
         "generated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "entries": entries,
     }
+
+
+def _public_labels(values: dict[str, float]) -> list[str]:
+    return [
+        key.replace("_", "-")
+        for key, _ in sorted(values.items(), key=lambda item: (-item[1], item[0]))
+    ][:8]
 
 
 def _join(values: list[str]) -> str:
