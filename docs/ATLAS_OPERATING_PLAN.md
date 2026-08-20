@@ -106,7 +106,11 @@ crossing the analysis approval boundary.
 
 Outcome: crawler state survives Mini loss and has a practiced recovery path.
 
-- Verify an exact S3 backup can be downloaded and restored into an isolated DB.
+- **Completed 2026-08-20:** downloaded the exact
+  `feldenkrais-index-20260820T121330Z.db.gz` S3 object, restored it into an
+  isolated temporary database, and verified SQLite integrity, foreign keys, and
+  durable table counts. Atlas PR #130 makes this drill repeatable without the
+  AWS CLI and without replacing the live database.
 - Decide the Neon cutover window separately from crawler expansion.
 - Re-run empty-target migration plus row-count verification, test Neon PITR, then
   retain SQLite backups through a successful rollback drill.
