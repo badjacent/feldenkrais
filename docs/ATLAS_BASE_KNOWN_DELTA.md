@@ -30,8 +30,8 @@ Non-negotiable boundaries:
 | Area | Current evidence | Base delta |
 |---|---|---|
 | Public catalog | 1,767 public records; 853 live free audio/video lessons; 57 lesson sources in the live interactive index | Coverage is substantial but not demonstrably close to the discoverable universe |
-| Discovery state | Mini health: 93 sources; 480 queued, 65 partial, 5 failed tasks; last 45-minute cycle accepted 86 and deferred 52 seeds by time budget | Known queues and partial frontiers remain; failed tasks require bounded reconciliation |
-| Continuous crawl | `com.feldenkrais.atlas-crawler` is loaded every 6 hours; last run succeeded and auto-published | Long-run yield, failure drift, and queue retirement are not yet summarized as a stable operating SLO |
+| Discovery state | Mini report: 93 enabled sources, all crawled within 16.5 hours; 146 worker-actionable tasks (65 seed, 60 retry, 21 continuation) and 404 owner-review proposals; no source has a pending pagination frontier | Worker backlog needs bounded retirement; owner-review proposals must not be counted as crawler work or activated automatically |
+| Continuous crawl | `com.feldenkrais.atlas-crawler` is loaded every 6 hours; last run succeeded and auto-published; rolling reports cover yield, queue age, and source frontiers | Four runs remain historically marked `running` (oldest 33.4 hours); run-finalization failure and stable operating thresholds remain unresolved |
 | Freshness | Complete-sweep auditing is active; latest run marked 7 stale and 0 dead | Full source-family coverage and repeated-sweep behavior remain to be measured |
 | Backups | Latest crawl produced, locally verified, uploaded, and remotely verified an encrypted S3 backup | Restore testing and a documented recovery drill remain unverified |
 | Canonical crawler DB | Mini health reports SQLite | Planned Neon cutover, PITR verification, and post-cutover restore evidence remain incomplete |
@@ -43,7 +43,7 @@ Non-negotiable boundaries:
 | Analysis boundary | `com.feldenkrais.analysis` is persistently disabled; the wrapper also exits before queue access unless `ANALYSIS_ENABLED=1` | No owner-approved analysis cohort or budget currently exists |
 | Local transcription | Mini transcription worker is active and completing local Whisper jobs | Authorized transcription capacity exists, but it must remain distinct from analysis and public projection |
 | Analytics/cost | Privacy-preserving CloudFront logging, request alarm, and $10 budget policy are documented | Current traffic/cost reports and periodic review evidence have not been refreshed in this audit |
-| Governance | Owner-only seed review CLI and audited candidate states exist | Five newly proposed sources and the wider candidate backlog still require owner decisions before activation |
+| Governance | Owner-only seed review CLI and audited candidate states exist; 404 queued proposals are explicitly reported as owner attention | Proposal sampling/prioritization and eventual owner decisions remain; none may be activated as crawler backlog retirement |
 
 ## Evidence sources
 
