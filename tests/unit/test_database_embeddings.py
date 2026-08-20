@@ -85,6 +85,17 @@ class TestSearchLessons:
         sql = mock_db._mock_cursor.execute.call_args[0][0]
         assert "LIMIT %s" in sql
 
+    def test_query_document_enforces_rendition_gate(self, mock_db):
+        mock_db._mock_cursor.fetchall.return_value = []
+
+        mock_db.search_lessons([0.1], query_document_id="query-doc")
+
+        sql, params = mock_db._mock_cursor.execute.call_args[0]
+        assert "candidate_rendition" in sql
+        assert "query_rendition" in sql
+        assert "candidate_rendition.lesson_key IS DISTINCT FROM query_rendition.lesson_key" in sql
+        assert params.count("query-doc") == 2
+
 
 class TestUpsertConcepts:
     def test_inserts_concept_tags(self, mock_db):

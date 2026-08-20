@@ -23,8 +23,18 @@ class EmbeddingsMixin:
                 (document_id, method, str(embedding), summary_text, summary_hash),
             )
 
-    def search_lessons(self, query_embedding: list[float], limit: int = 10, method: str = "default") -> list[dict]:
-        """Search lessons by cosine similarity. Returns list of {document_id, title, similarity, summary_text, source_id, category_name}."""
+    def search_lessons(
+        self,
+        query_embedding: list[float],
+        limit: int = 10,
+        method: str = "default",
+        query_document_id: str | None = None,
+    ) -> list[dict]:
+        """Search embeddings, optionally enforcing the rendition gate.
+
+        Supplying `query_document_id` excludes both the query document and all
+        documents sharing its persisted `lesson_key`.
+        """
         if self.allowed_source_ids is not None:
             source_join = "\nJOIN document_source ds ON ds.id = d.source_id"
             source_filter = " AND ds.id = ANY(%s)"
@@ -33,6 +43,27 @@ class EmbeddingsMixin:
             source_join = ""
             source_filter = ""
             extra_params = []
+        if query_document_id is not None:
+            rendition_join = """
+                LEFT JOIN lesson_rendition candidate_rendition
+                  ON candidate_rendition.document_id = le.document_id
+                LEFT JOIN lesson_rendition query_rendition
+                  ON query_rendition.document_id = %s
+            """
+            rendition_filter = """
+                AND le.document_id <> %s
+                AND (
+                    query_rendition.lesson_key IS NULL
+                    OR candidate_rendition.lesson_key IS DISTINCT FROM query_rendition.lesson_key
+                )
+            """
+            rendition_params: list = [query_document_id]
+            rendition_filter_params: list = [query_document_id]
+        else:
+            rendition_join = ""
+            rendition_filter = ""
+            rendition_params = []
+            rendition_filter_params = []
         with self.get_cursor(commit=False) as cursor:
             cursor.execute(
                 f"""
@@ -42,12 +73,17 @@ class EmbeddingsMixin:
                        d.source_id,
                        d.category_name
                 FROM lesson_embedding le
-                JOIN document d ON d.id = le.document_id{source_join}
-                WHERE le.method = %s{source_filter}
+                JOIN document d ON d.id = le.document_id{source_join}{rendition_join}
+                WHERE le.method = %s{source_filter}{rendition_filter}
                 ORDER BY le.embedding <=> %s::vector
                 LIMIT %s
                 """,
-                [str(query_embedding), method] + extra_params + [str(query_embedding), limit],
+                [str(query_embedding)]
+                + rendition_params
+                + [method]
+                + extra_params
+                + rendition_filter_params
+                + [str(query_embedding), limit],
             )
             return [dict(row) for row in cursor.fetchall()]
 
