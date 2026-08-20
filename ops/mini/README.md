@@ -112,6 +112,12 @@ workers after the initial smoke test establishes the exact grants.
 
 ## Manual analysis cutover
 
+Analysis is owner-approval gated. Merely installing or bootstrapping the plist
+does not authorize work: `run-analysis-worker.sh` exits successfully without
+claiming queue items unless `ANALYSIS_ENABLED=1`. Keep it unset or `0` until the
+owner explicitly approves an analysis run. Approval should name the intended
+cohort or budget; transcription approval does not imply analysis approval.
+
 The Mini CLI worker and the web-triggered worker share a PostgreSQL advisory
 lease, preventing analysis execution from overlapping across hosts. Stop any
 older deployed worker that predates this lease before the first cutover test.
@@ -128,6 +134,7 @@ After inspecting that result, run `ops/mini/run-analysis-worker.sh` manually.
 Only then enable scheduling:
 
 ```sh
+export ANALYSIS_ENABLED=1
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.feldenkrais.analysis.plist
 launchctl kickstart gui/$(id -u)/com.feldenkrais.analysis
 ```

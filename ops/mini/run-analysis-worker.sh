@@ -8,6 +8,10 @@ source .env
 set +a
 
 mkdir -p var/log
+if [[ "${ANALYSIS_ENABLED:-0}" != "1" ]]; then
+  print -r -- '{"status":"disabled","reason":"ANALYSIS_ENABLED is not 1"}'
+  exit 0
+fi
 export PYTHONPATH="$repo_root/src${PYTHONPATH:+:$PYTHONPATH}"
 exec /usr/bin/caffeinate -i /usr/bin/nice -n 10 \
   .venv-mini/bin/python -m kb.pipeline.analysis run \
