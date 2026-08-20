@@ -21,7 +21,7 @@ def main() -> None:
         action="store_true",
         help="do not run broad database initialization (use when workers are active)",
     )
-    parser.add_argument("--weight-set", default="weights-v1")
+    parser.add_argument("--weight-set", default="weights-v2-language")
     args = parser.parse_args()
     load_dotenv()
     database_url = os.environ.get("DATABASE_URL")
@@ -44,6 +44,7 @@ def main() -> None:
                 spatial=row["spatial"],
                 embedding=row["embedding"],
                 duration_seconds=row["duration_seconds"],
+                content_language=row["content_language"],
             )
             for row in rows
         ]

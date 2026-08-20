@@ -379,11 +379,16 @@ For example:
   "teacher": "...",
   "source": "...",
   "date": "...",
-  "title": "..."
+  "title": "...",
+  "language": "en"
 }
 ```
 
 Duration should probably have relatively little weight in similarity.
+
+Normalized content language should also have a small weight. Same-language
+lessons are slightly more useful alternatives for a chooser; this must remain a
+minor objective metadata term rather than a proxy for movement similarity.
 
 Teacher should generally **not** directly affect movement similarity unless explicitly requested.
 

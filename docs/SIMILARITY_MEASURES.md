@@ -30,7 +30,7 @@ than being generated after the fact.
 | `arch` | soft one-hot over 7 architecture types + flags {side_compare, act_vs_relationship} | new extraction, cross-checked vs condensed group structure |
 | `marks` | set of {mechanism_id, strength ∈ [0,1], mode ∈ taught/referenced} | new extraction, normalized vocabulary + synonyms (bell_hand=jellyfish_hand, …) |
 | `E` | embedding of canonical movement summary | condensed-summary embedding (pgvector) |
-| `meta` | duration etc. | metadata |
+| `meta` | duration and normalized content language | metadata |
 
 **Ordinal, not free continuous**: the LLM never emits "0.8"; it emits levels
 that map to fixed numbers. Weights that can be computed from step data are
@@ -68,8 +68,11 @@ Without this, same-domain cosines (all ≈0.6–0.95) flatten or dominate the
 blend. The ECDF is a stored, versioned artifact.
 
 ### 2.6 Metadata
-`sim_dur = exp(−|Δduration| / 30 min)`. Teacher/source **never** enter
-similarity (available only as explicit filters).
+`sim_dur = exp(−|Δduration| / 30 min)`. For known normalized content-language
+codes, `sim_lang = 1` when the primary language codes match and `0` otherwise;
+missing/`unknown` language is dropped and the blend is renormalized. Language is
+a small usability term, not evidence of movement similarity. Teacher/source
+**never** enter similarity (available only as explicit filters).
 
 ## 3. Aggregation
 
@@ -82,7 +85,10 @@ explanation. Default w_F: regions .18, themes .16, positions .12,
 diffs .14, prox_dist .10, sensory .08, scalars .10, arch .12.
 
 ### 3.2 Base blend
-    Base(A,B) = 0.55·S + 0.40·sim_E + 0.05·sim_dur
+    Base(A,B) = 0.52·S + 0.38·sim_E + 0.05·sim_dur + 0.05·sim_lang
+
+Present terms are renormalized when structured data, embedding, duration, or
+language is unavailable.
 
 ### 3.3 Trademark lift (not a weighted field)
     t(A,B) = max over shared mechanisms of  m(mode_A, mode_B) · min(strength_A, strength_B)

@@ -107,6 +107,7 @@ def test_profile_payload_is_stable_and_json_safe():
     result = project_existing_analysis(
         document_id="lesson",
         lesson_key="lesson:key",
+        content_language="es-MX",
         somatic={"steps": [{"differentiation": "shoulder from ribs"}]},
     )
 
@@ -115,7 +116,9 @@ def test_profile_payload_is_stable_and_json_safe():
         {"parts": ["ribs_chest", "shoulders_scapulae"], "weight": 1.0}
     ]
     assert "embedding" not in payload["profile"]
+    assert payload["profile"]["language"] == "es-MX"
     restored = profile_from_payload(payload, embedding=[1.0, 0.0])
     assert restored.profile.diffs == result.profile.diffs
     assert restored.profile.embedding == [1.0, 0.0]
+    assert restored.profile.language == "es-MX"
     assert profile_content_hash(result) == profile_content_hash(result)

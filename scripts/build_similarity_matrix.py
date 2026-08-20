@@ -21,7 +21,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--extraction-model", default="pass0b-existing")
-    parser.add_argument("--weight-set", default="weights-v1")
+    parser.add_argument("--weight-set", default="weights-v2-language")
     parser.add_argument("--incremental", action="store_true")
     args = parser.parse_args()
     load_dotenv()

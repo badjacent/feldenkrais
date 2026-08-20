@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import bisect
 import math
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Iterable, Mapping, Sequence
 
 DEFAULT_STRUCTURED_WEIGHTS = {
     "regions": 0.18,
@@ -60,6 +60,7 @@ class LessonProfile:
     marks: tuple[TrademarkMechanism, ...] = ()
     embedding: Sequence[float] | None = None
     duration_seconds: int | None = None
+    language: str | None = None
 
 
 @dataclass(frozen=True)
@@ -80,6 +81,7 @@ class SimilarityResult:
     structured: float | None
     embedding: float | None
     duration: float | None
+    language: float | None
     fields: Mapping[str, FieldScore]
     missing_fields: tuple[str, ...]
     trademark_mechanism: str | None = None
@@ -185,6 +187,35 @@ def duration_similarity(left_seconds: int | None, right_seconds: int | None) -> 
     return math.exp(-abs(left_seconds - right_seconds) / 1800)
 
 
+def normalize_language(value: str | None) -> str | None:
+    if not value:
+        return None
+    normalized = value.strip().casefold().replace("_", "-")
+    aliases = {
+        "english": "en",
+        "spanish": "es",
+        "español": "es",
+        "french": "fr",
+        "français": "fr",
+        "german": "de",
+        "deutsch": "de",
+        "hebrew": "he",
+        "japanese": "ja",
+        "italian": "it",
+        "portuguese": "pt",
+    }
+    normalized = aliases.get(normalized, normalized).split("-", 1)[0]
+    return None if normalized in {"", "none", "null", "und", "unknown"} else normalized
+
+
+def language_similarity(left: str | None, right: str | None) -> float | None:
+    left_code = normalize_language(left)
+    right_code = normalize_language(right)
+    if left_code is None or right_code is None:
+        return None
+    return float(left_code == right_code)
+
+
 def trademark_match(left: LessonProfile, right: LessonProfile) -> tuple[float, str | None]:
     mode_multiplier = {
         ("taught", "taught"): 1.0,
@@ -255,7 +286,13 @@ def score_pair(
     raw_cosine = cosine_similarity(left.embedding, right.embedding)
     embedding = embedding_ecdf.normalize(raw_cosine) if raw_cosine is not None else None
     duration = duration_similarity(left.duration_seconds, right.duration_seconds)
-    blend_terms = [(0.55, structured), (0.40, embedding), (0.05, duration)]
+    language = language_similarity(left.language, right.language)
+    blend_terms = [
+        (0.52, structured),
+        (0.38, embedding),
+        (0.05, duration),
+        (0.05, language),
+    ]
     present_terms = [(weight, value) for weight, value in blend_terms if value is not None]
     if not present_terms:
         raise ValueError("pair has no comparable similarity fields")
@@ -272,6 +309,7 @@ def score_pair(
         structured=structured,
         embedding=embedding,
         duration=duration,
+        language=language,
         fields=fields,
         missing_fields=tuple(missing),
         trademark_mechanism=mechanism if match_strength else None,
@@ -407,6 +445,7 @@ def explain(result: SimilarityResult) -> dict:
         },
         "embedding": result.embedding,
         "duration": result.duration,
+        "language": result.language,
         "trademark": (
             {
                 "mechanism_id": result.trademark_mechanism,

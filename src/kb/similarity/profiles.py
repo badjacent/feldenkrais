@@ -1,18 +1,18 @@
-"""Projection of existing pass0b artifacts into similarity profile v1."""
+"""Projection of existing pass0b artifacts into similarity profile v2."""
 
 from __future__ import annotations
 
 import hashlib
 import json
 import re
-from dataclasses import asdict
 from collections import Counter
-from dataclasses import dataclass
-from typing import Any, Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import asdict, dataclass
+from typing import Any
 
 from .measures import LessonProfile, TrademarkMechanism
 
-PROFILE_SCHEMA_VERSION = "profile-v1"
+PROFILE_SCHEMA_VERSION = "profile-v2"
 ORDINAL_WEIGHTS = {"primary": 1.0, "secondary": 0.6, "present": 0.3}
 
 REGION_TERMS = {
@@ -289,6 +289,7 @@ def project_existing_analysis(
     spatial: Mapping[str, Any] | None = None,
     embedding: Sequence[float] | None = None,
     duration_seconds: int | None = None,
+    content_language: str | None = None,
     marks: Sequence[TrademarkMechanism] = (),
     architecture: Mapping[str, Any] | None = None,
     extraction_model: str = "pass0b-existing",
@@ -341,6 +342,7 @@ def project_existing_analysis(
         marks=tuple(marks),
         embedding=embedding,
         duration_seconds=duration_seconds,
+        language=content_language,
     )
     return ProjectedProfile(
         profile=profile,
@@ -355,5 +357,6 @@ def project_existing_analysis(
             "diffs": "somatic.differentiation" if profile.diffs else "missing",
             "architecture": "dedicated_extraction" if architecture else "missing",
             "marks": "dedicated_extraction" if marks else "missing",
+            "language": "document_metadata" if content_language else "missing",
         },
     )

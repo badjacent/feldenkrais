@@ -10,6 +10,7 @@ from kb.similarity.measures import (
     diverse_lessons,
     duration_similarity,
     explain,
+    language_similarity,
     ruzicka,
     score_pair,
     similar_lessons,
@@ -87,6 +88,31 @@ def test_trademark_lift_respects_taught_vs_referenced_mode(left_mode, right_mode
 
 def test_duration_uses_thirty_minute_exponential_scale():
     assert duration_similarity(1800, 3600) == pytest.approx(math.exp(-1))
+
+
+def test_language_is_small_normalized_metadata_term_and_unknown_is_missing():
+    assert language_similarity("en-US", "English") == 1.0
+    assert language_similarity("en", "Spanish") == 0.0
+    assert language_similarity("unknown", "en") is None
+
+    same = score_pair(
+        profile("a", regions={"ribs": 0.5}, language="en-US"),
+        profile("b", regions={"ribs": 1.0}, language="English"),
+        embedding_ecdf=ECDF,
+    )
+    different = score_pair(
+        profile("a", regions={"ribs": 0.5}, language="en"),
+        profile("c", regions={"ribs": 1.0}, language="es"),
+        embedding_ecdf=ECDF,
+    )
+    missing = score_pair(
+        profile("a", regions={"ribs": 0.5}, language="unknown"),
+        profile("d", regions={"ribs": 1.0}, language="en"),
+        embedding_ecdf=ECDF,
+    )
+
+    assert same.similarity > missing.similarity > different.similarity
+    assert explain(same)["language"] == 1.0
 
 
 def test_teacher_and_source_cannot_enter_the_profile_or_score():
