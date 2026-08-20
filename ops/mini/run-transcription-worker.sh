@@ -11,10 +11,22 @@ set +a
 mkdir -p var/run var/log
 lock_dir=var/run/transcription-worker.lock
 if ! mkdir "$lock_dir" 2>/dev/null; then
-  print "transcription worker already active"
-  exit 0
+  lock_pid=""
+  [[ -r "$lock_dir/pid" ]] && lock_pid=$(<"$lock_dir/pid")
+  if [[ "$lock_pid" == <-> ]] && kill -0 "$lock_pid" 2>/dev/null; then
+    print "transcription worker already active (pid $lock_pid)"
+    exit 0
+  fi
+  print "removing stale transcription worker lock"
+  rm -f "$lock_dir/pid"
+  rmdir "$lock_dir" 2>/dev/null || {
+    print -u2 "cannot safely remove transcription worker lock: $lock_dir"
+    exit 1
+  }
+  mkdir "$lock_dir"
 fi
-trap 'rmdir "$lock_dir"' EXIT INT TERM
+print $$ > "$lock_dir/pid"
+trap 'rm -f "$lock_dir/pid"; rmdir "$lock_dir" 2>/dev/null || true' EXIT INT TERM
 
 cd src/kb
 /usr/bin/caffeinate -i /usr/bin/nice -n 19 \
