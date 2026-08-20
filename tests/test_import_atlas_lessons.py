@@ -1,4 +1,9 @@
-from ops.import_atlas_lessons import eligible_urls, plan_intake, youtube_id
+from ops.import_atlas_lessons import (
+    eligible_urls,
+    plan_intake,
+    reconcile_atlas_origins,
+    youtube_id,
+)
 
 
 class FakeCursor:
@@ -6,7 +11,16 @@ class FakeCursor:
         self.db = db
         self.rows = []
 
-    def execute(self, query):
+    def execute(self, query, params=None):
+        if query.startswith("UPDATE youtube_queue"):
+            queue_id = params[1]
+            for row in self.db.queue:
+                if row["id"] == queue_id:
+                    row["origin"] = params[0]
+                    self.rowcount = 1
+                    return
+            self.rowcount = 0
+            return
         self.rows = self.db.documents if "document" in query else self.db.queue
 
     def fetchall(self):
@@ -22,7 +36,13 @@ class FakeCursor:
 class FakeDatabase:
     def __init__(self):
         self.documents = [{"source_url": "https://youtu.be/existingdoc"}]
-        self.queue = [{"url": "https://youtube.com/watch?v=queuedvideo"}]
+        self.queue = [
+            {
+                "id": "queue-1",
+                "url": "https://youtube.com/watch?v=queuedvideo",
+                "origin": None,
+            }
+        ]
 
     def get_cursor(self, commit=False):
         return FakeCursor(self)
@@ -71,3 +91,12 @@ def test_plan_intake_excludes_documents_and_existing_queue_entries():
         "already_queued": 1,
         "pending": ["https://www.youtube.com/watch?v=newvideo"],
     }
+
+
+def test_reconcile_atlas_origins_marks_previously_queued_eligible_lessons():
+    db = FakeDatabase()
+
+    updated = reconcile_atlas_origins(db, [item("queuedvideo")])
+
+    assert updated == 1
+    assert db.queue[0]["origin"] == "feldenkrais_atlas"
