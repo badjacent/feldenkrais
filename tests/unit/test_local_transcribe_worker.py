@@ -22,6 +22,7 @@ def test_find_candidates_includes_bounded_local_retries():
     sql, params = cursor.execute.call_args.args
     assert "j.status = 'failed'" in sql
     assert "updated_at < NOW()" in sql
+    assert "d.origin = 'feldenkrais_atlas'" in sql
     assert params == [1, "local-mlx", 4, 90, 7]
 
 

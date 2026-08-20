@@ -193,3 +193,14 @@ class TestListDocuments:
         mock_db.get_lesson_categories()
         sql = mock_db._mock_cursor.execute.call_args[0][0]
         assert "ds.id = ANY(%s)" in sql
+
+
+class TestTranscriptionRouting:
+    def test_cloud_candidates_exclude_atlas_origin(self, mock_db):
+        mock_db._mock_cursor.fetchall.return_value = []
+
+        mock_db.get_untranscribed_documents()
+
+        sql = mock_db._mock_cursor.execute.call_args[0][0]
+        assert "d.origin" in sql
+        assert "feldenkrais_atlas" in sql
