@@ -35,16 +35,20 @@ def test_pending_query_respects_retry_time():
     assert params == (4,)
 
 
-def test_requeue_is_bounded_by_attempt_count_and_delay():
+def test_requeue_is_bounded_by_attempt_count_delay_and_processing_lease():
     db = FakeDb()
     db.cursor.rowcount = 2
 
-    assert db.requeue_retryable_youtube_urls(max_attempts=3) == 2
+    assert db.requeue_retryable_youtube_urls(
+        max_attempts=3, stale_processing_minutes=240
+    ) == 2
 
     sql, params = db.cursor.execute.call_args.args
     assert "attempts < %s" in sql
     assert "COALESCE(next_attempt_at, updated_at) <= NOW()" in sql
-    assert params == (3,)
+    assert "status = 'processing'" in sql
+    assert "updated_at <= NOW()" in sql
+    assert params == (3, 240)
 
 
 def test_failure_records_delayed_retry_without_losing_error():
