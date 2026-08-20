@@ -48,7 +48,7 @@ Sequence:
 Exit criteria:
 
 - Analysis launch agent is absent/disabled and no new attempt appears.
-- 157/157 profiled public lessons retain neighbor data in production.
+- 160/160 profiled public lessons retain neighbor data in production.
 - Projection worker completes successfully and is idempotent.
 
 ### W1 — Discovery coverage and queue retirement
@@ -59,11 +59,12 @@ bounded, auditable work rather than indefinite broad crawling.
 - Report queue age, task family, source family, partial-frontier depth, retry
   exhaustion, and yield over rolling 1/7/30-day windows.
 - Continue scheduled bounded cycles while yield is healthy.
-- Prioritize the measured 146 worker-actionable tasks: 65 seed tasks, 60
-  candidate retries, and 21 source continuations. Keep the 404 owner-review
-  proposals outside worker-backlog metrics.
-- Diagnose four historically unfinished crawl runs (17–33.4 hours old) before
-  changing their state; make future interrupted runs finalize truthfully.
+- Track claimable queued retries and continuations separately from historical
+  partial/failed attempts and the 404 owner-review proposals. Measure cohort
+  retirement and age as well as raw queue count: the initial 76-item worker
+  cohort fell while newly time-deferred candidates raised the total to 79.
+- Keep interrupted runs truthful: Ctrl-C/SIGTERM finalize directly, and the
+  locked runner audits and reconciles abandoned rows older than one hour.
 - Sample and prioritize owner-review proposals through the owner-only boundary;
   do not activate them automatically.
 - Maintain explicit coverage lanes for YouTube, SoundCloud, podcasts/RSS,
@@ -136,11 +137,11 @@ W4 durability and W5 observability support every scheduled workstream.
 ## Next decision checkpoint
 
 After W0 exits, inspect scheduled-crawl evidence and choose one primary attention
-stream. **Current choice: W1**, because the measured worker backlog contains 146
-tasks and four historical runs are unfinished. The separate 404-item owner-review
-queue is an attention decision, not crawler debt. W2 quality sampling runs
-alongside W1 reporting, but does not replace worker-backlog retirement as the
-primary attention.
+stream. **Current choice: W1**, because productive bounded runs are still
+exposing deferred candidate tails and high-yield source continuations. The
+separate 404-item owner-review queue is an attention decision, not crawler debt.
+W2 quality sampling runs alongside W1 reporting, but does not replace measured
+frontier retirement as the primary attention.
 
 - W1 if valuable queues remain high-yield or old;
 - W2 if catalog quality/freshness is the limiting user value;
