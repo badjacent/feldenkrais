@@ -3,6 +3,7 @@ set -euo pipefail
 
 repo_root=${0:A:h:h:h}
 cd "$repo_root"
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 set -a
 source .env
 set +a
