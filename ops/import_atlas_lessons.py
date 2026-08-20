@@ -83,7 +83,12 @@ def reconcile_atlas_origins(db: Database, catalog: list[dict]) -> int:
                 and youtube_id(row["url"]) in eligible_ids
             ):
                 cursor.execute(
-                    "UPDATE youtube_queue SET origin = %s, updated_at = NOW() WHERE id = %s",
+                    """UPDATE youtube_queue
+                       SET origin = %s,
+                           status = CASE WHEN status = 'pending'
+                               THEN 'local_pending' ELSE status END,
+                           updated_at = NOW()
+                       WHERE id = %s""",
                     ("feldenkrais_atlas", row["id"]),
                 )
                 updated += cursor.rowcount

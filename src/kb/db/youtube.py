@@ -15,11 +15,13 @@ class YouTubeMixin:
         Returns the queue ID, or None if URL already exists.
         """
         queue_id = str(uuid4())
+        status = "local_pending" if origin == "feldenkrais_atlas" else "pending"
         try:
             with self.get_cursor() as cursor:
                 cursor.execute(
-                    "INSERT INTO youtube_queue (id, url, origin) VALUES (%s, %s, %s)",
-                    (queue_id, url, origin),
+                    """INSERT INTO youtube_queue (id, url, origin, status)
+                       VALUES (%s, %s, %s, %s)""",
+                    (queue_id, url, origin, status),
                 )
             return queue_id
         except psycopg2.errors.UniqueViolation:
@@ -36,19 +38,25 @@ class YouTubeMixin:
         """Get pending YouTube URLs to process."""
         if origin and exclude_origin:
             raise ValueError("origin and exclude_origin are mutually exclusive")
+        status_predicate = "status IN ('pending', 'local_pending')"
         predicate = ""
         params = []
         if origin:
+            status_predicate = "status = %s"
+            params.append(
+                "local_pending" if origin == "feldenkrais_atlas" else "pending"
+            )
             predicate = " AND origin = %s"
             params.append(origin)
         elif exclude_origin:
+            status_predicate = "status = 'pending'"
             predicate = " AND COALESCE(origin, '') <> %s"
             params.append(exclude_origin)
         params.append(limit)
         with self.get_cursor(commit=False) as cursor:
             cursor.execute(
                 f"""SELECT * FROM youtube_queue
-                   WHERE status = 'pending'
+                   WHERE {status_predicate}
                      AND (next_attempt_at IS NULL OR next_attempt_at <= NOW())
                    {predicate}
                    ORDER BY created_at LIMIT %s""",
@@ -64,7 +72,7 @@ class YouTubeMixin:
                 UPDATE youtube_queue
                 SET status = 'processing', attempts = attempts + 1,
                     next_attempt_at = NULL, updated_at = NOW()
-                WHERE id = %s AND status = 'pending'
+                WHERE id = %s AND status IN ('pending', 'local_pending')
                 """,
                 (queue_id,),
             )
@@ -79,7 +87,11 @@ class YouTubeMixin:
         with self.get_cursor() as cursor:
             cursor.execute(
                 """UPDATE youtube_queue
-                   SET status = 'pending', updated_at = NOW()
+                   SET status = CASE
+                         WHEN origin = 'feldenkrais_atlas' THEN 'local_pending'
+                         ELSE 'pending'
+                       END,
+                       updated_at = NOW()
                    WHERE attempts < %s AND (
                        (status = 'failed'
                         AND COALESCE(next_attempt_at, updated_at) <= NOW())
