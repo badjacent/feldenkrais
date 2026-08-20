@@ -59,10 +59,13 @@ bounded, auditable work rather than indefinite broad crawling.
 - Report queue age, task family, source family, partial-frontier depth, retry
   exhaustion, and yield over rolling 1/7/30-day windows.
 - Continue scheduled bounded cycles while yield is healthy.
-- Prioritize 52 time-deferred seeds and 65 partial tasks before adding broad new
-  search families.
-- Review five proposed sources through the owner-only boundary; do not activate
-  them automatically.
+- Prioritize the measured 146 worker-actionable tasks: 65 seed tasks, 60
+  candidate retries, and 21 source continuations. Keep the 404 owner-review
+  proposals outside worker-backlog metrics.
+- Diagnose four historically unfinished crawl runs (17–33.4 hours old) before
+  changing their state; make future interrupted runs finalize truthfully.
+- Sample and prioritize owner-review proposals through the owner-only boundary;
+  do not activate them automatically.
 - Maintain explicit coverage lanes for YouTube, SoundCloud, podcasts/RSS,
   HTML/directories, sitemaps, OpenATM, Feldenkrais Project, Kinesophics, and
   Feldy Notebook-derived sources.
@@ -132,11 +135,12 @@ W4 durability and W5 observability support every scheduled workstream.
 
 ## Next decision checkpoint
 
-After W0 exits, inspect one week of scheduled-crawl evidence and choose one
-primary attention stream. **Current choice: W1**, because 480 queued tasks, 65
-partial tasks, and 52 time-deferred seeds are the largest evidenced active
-delta. W2 quality sampling runs alongside W1 reporting, but does not replace
-queue retirement as the primary attention.
+After W0 exits, inspect scheduled-crawl evidence and choose one primary attention
+stream. **Current choice: W1**, because the measured worker backlog contains 146
+tasks and four historical runs are unfinished. The separate 404-item owner-review
+queue is an attention decision, not crawler debt. W2 quality sampling runs
+alongside W1 reporting, but does not replace worker-backlog retirement as the
+primary attention.
 
 - W1 if valuable queues remain high-yield or old;
 - W2 if catalog quality/freshness is the limiting user value;
