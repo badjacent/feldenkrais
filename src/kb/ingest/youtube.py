@@ -254,6 +254,7 @@ def stage_video(
     audio_path: str,
     source_url: str,
     tags: Optional[list[str]] = None,
+    origin: Optional[str] = None,
     db: Optional[Database] = None,
 ) -> str:
     """
@@ -278,6 +279,7 @@ def stage_video(
         "source_id": source_id,
         "type_id": AUDIO_TYPE_ID,
         "tags": tags or [],
+        "origin": origin,
         "youtube_metadata": {
             "video_id": video_info.video_id,
             "channel_name": video_info.channel_name,
@@ -304,6 +306,7 @@ def process_url(
     queue_id: str,
     url: str,
     tags: Optional[list[str]] = None,
+    origin: Optional[str] = None,
 ) -> dict:
     """
     Process a single YouTube URL: download, extract metadata, and stage.
@@ -350,6 +353,7 @@ def process_url(
                 audio_path=audio_path,
                 source_url=url,
                 tags=tags,
+                origin=origin,
                 db=db,
             )
 
@@ -437,6 +441,7 @@ def process_queue(
             queue_id=queue_id,
             url=url,
             tags=tags,
+            origin=item.get("origin"),
         )
         results.append(result)
 

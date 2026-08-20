@@ -115,6 +115,8 @@ class DocumentsMixin:
                 """
                 SELECT d.* FROM document d
                 WHERE d.type_id IN (2, 3)
+                -- Atlas media is reserved for the Mini's local Whisper worker.
+                AND COALESCE(d.origin, '') <> 'feldenkrais_atlas'
                 -- No successful transcription yet
                 AND NOT EXISTS (
                     SELECT 1 FROM analysis a

@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS youtube_queue (
     channel_name TEXT,
     channel_id TEXT,
     duration_seconds INTEGER,
+    origin TEXT,
     error TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -350,6 +351,7 @@ class DatabaseCore:
         self._pool: Optional[pool.ThreadedConnectionPool] = None
         self._min_connections = min_connections
         self._max_connections = max_connections
+        self._legacy_lock_connections: dict[int, object] = {}
         self.public_only = False  # deprecated, kept for compat
         self.allowed_source_ids: set[int] | None = None  # None = no filtering (superuser/admin)
 
@@ -441,6 +443,7 @@ class DatabaseCore:
                 ("document", "audio_fingerprint", "TEXT"),
                 ("document", "origin", "TEXT"),
                 ("document", "presenter", "TEXT"),
+                ("youtube_queue", "origin", "TEXT"),
                 ("users", "superuser_eligible", "BOOLEAN NOT NULL DEFAULT FALSE"),
             ]:
                 cursor.execute(

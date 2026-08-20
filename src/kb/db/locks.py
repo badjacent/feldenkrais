@@ -1,5 +1,7 @@
 """PostgreSQL advisory lock operations."""
 
+from psycopg2.extras import RealDictCursor
+
 
 class LocksMixin:
     """Advisory locks for Lambda concurrency control."""
@@ -17,14 +19,40 @@ class LocksMixin:
         Returns True if lock acquired, False if already held by another process.
         Lock is automatically released when connection closes.
         """
-        with self.get_cursor(commit=False) as cursor:
+        held = getattr(self, "_legacy_lock_connections", {})
+        if lock_id in held:
+            return True
+        conn = self._get_pool().getconn()
+        try:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
             cursor.execute("SELECT pg_try_advisory_lock(%s)", (lock_id,))
             result = cursor.fetchone()
-            return result["pg_try_advisory_lock"] if result else False
+            cursor.close()
+            acquired = bool(result and result["pg_try_advisory_lock"])
+            if acquired:
+                if not hasattr(self, "_legacy_lock_connections"):
+                    self._legacy_lock_connections = {}
+                self._legacy_lock_connections[lock_id] = conn
+                return True
+            conn.rollback()
+            self._get_pool().putconn(conn)
+            return False
+        except Exception:
+            conn.rollback()
+            self._get_pool().putconn(conn)
+            raise
 
     def release_lock(self, lock_id: int) -> bool:
         """Release a PostgreSQL advisory lock."""
-        with self.get_cursor(commit=False) as cursor:
+        conn = getattr(self, "_legacy_lock_connections", {}).pop(lock_id, None)
+        if conn is None:
+            return False
+        try:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
             cursor.execute("SELECT pg_advisory_unlock(%s)", (lock_id,))
             result = cursor.fetchone()
-            return result["pg_advisory_unlock"] if result else False
+            cursor.close()
+            return bool(result and result["pg_advisory_unlock"])
+        finally:
+            conn.rollback()
+            self._get_pool().putconn(conn)

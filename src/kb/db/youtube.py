@@ -9,7 +9,7 @@ import psycopg2
 class YouTubeMixin:
     """YouTube URL queue management."""
 
-    def add_youtube_url(self, url: str) -> Optional[str]:
+    def add_youtube_url(self, url: str, origin: Optional[str] = None) -> Optional[str]:
         """
         Add a YouTube URL to the queue.
         Returns the queue ID, or None if URL already exists.
@@ -18,8 +18,8 @@ class YouTubeMixin:
         try:
             with self.get_cursor() as cursor:
                 cursor.execute(
-                    "INSERT INTO youtube_queue (id, url) VALUES (%s, %s)",
-                    (queue_id, url),
+                    "INSERT INTO youtube_queue (id, url, origin) VALUES (%s, %s, %s)",
+                    (queue_id, url, origin),
                 )
             return queue_id
         except psycopg2.errors.UniqueViolation:

@@ -94,7 +94,10 @@ def main() -> None:
         selected = report.pop("pending")[: args.limit]
         added = 0
         if args.apply:
-            added = sum(db.add_youtube_url(url) is not None for url in selected)
+            added = sum(
+                db.add_youtube_url(url, origin="feldenkrais_atlas") is not None
+                for url in selected
+            )
         report.update(
             {
                 "pending": len(selected),

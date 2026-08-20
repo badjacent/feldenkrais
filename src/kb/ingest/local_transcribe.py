@@ -60,7 +60,7 @@ def _find_candidates(
 ) -> list[dict]:
     """Return new, retriable-failed, or stale locally claimed documents."""
     sql = """
-        SELECT d.id, d.title, d.s3_key, ds.name AS source_name
+        SELECT d.id, d.title, d.s3_key, ds.name AS source_name, d.origin
         FROM document d
         JOIN document_source ds ON ds.id = d.source_id
         WHERE d.type_id IN (2, 3)
@@ -84,7 +84,7 @@ def _find_candidates(
     if source:
         sql += " AND ds.name = %s"
         params.append(source)
-    sql += " ORDER BY d.created_at LIMIT %s"
+    sql += " ORDER BY (d.origin = 'feldenkrais_atlas') DESC, d.created_at LIMIT %s"
     params.append(limit)
     with db.get_cursor(commit=False) as cur:
         cur.execute(sql, params)
