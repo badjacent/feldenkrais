@@ -45,6 +45,8 @@ class SimilarityProfilesMixin:
                          THEN (d.metadata->>'duration_seconds')::integer
                          ELSE NULL
                        END AS duration_seconds,
+                       COALESCE(NULLIF(d.metadata->>'language', ''), 'unknown')
+                         AS content_language,
                        le.embedding::text AS embedding
                 FROM lesson_rendition lr
                 JOIN document d ON d.id = lr.document_id

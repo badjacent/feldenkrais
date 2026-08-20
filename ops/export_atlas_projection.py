@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import parse_qsl, urlsplit
@@ -105,11 +106,19 @@ def export_projection(db: Database, catalog: list[dict]) -> dict:
     profile_rows = db.get_similarity_profiles(
         schema_version=PROFILE_SCHEMA_VERSION,
         extraction_model="pass0b-existing",
-        weight_set="weights-v1",
+        weight_set="weights-v2-language",
     )
     profiles = [
         profile_from_payload(row["payload"], embedding=row["embedding"]).profile
         for row in profile_rows
+    ]
+    profiles = [
+        replace(
+            profile,
+            language=(matches.get(profile.document_id) or {}).get("language")
+            or profile.language,
+        )
+        for profile in profiles
     ]
     profiles_by_id = {profile.document_id: profile for profile in profiles}
     matched_profiles = [profiles_by_id[document_id] for document_id in matches if document_id in profiles_by_id]
@@ -160,7 +169,7 @@ def export_projection(db: Database, catalog: list[dict]) -> dict:
     entries.sort(key=lambda item: item["resource_url"])
     return {
         "schema_version": 1,
-        "analysis_version": "similarity-profile-v1:weights-v1",
+        "analysis_version": "similarity-profile-v2:weights-v2-language",
         "generated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "entries": entries,
     }
