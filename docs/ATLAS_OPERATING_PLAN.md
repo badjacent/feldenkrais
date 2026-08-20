@@ -22,6 +22,13 @@ retired as the delta changes.
 
 ### W0 — Safety and operational correctness (current attention)
 
+Status: **completed 2026-08-20**. Analysis scheduling was disabled without
+changing queue contents; the worker now fails closed behind
+`ANALYSIS_ENABLED=1`; Atlas serialization and production deployment retain
+160/160 neighbor lists; and the repaired projection launch agent completed an
+idempotent `changed:false` run. Recheck the disabled launchd state after the
+former hourly interval as an operational confirmation.
+
 Outcome: unattended jobs obey owner boundaries and the deployed similarity path
 works end to end.
 
@@ -126,7 +133,10 @@ W4 durability and W5 observability support every scheduled workstream.
 ## Next decision checkpoint
 
 After W0 exits, inspect one week of scheduled-crawl evidence and choose one
-primary attention stream:
+primary attention stream. **Current choice: W1**, because 480 queued tasks, 65
+partial tasks, and 52 time-deferred seeds are the largest evidenced active
+delta. W2 quality sampling runs alongside W1 reporting, but does not replace
+queue retirement as the primary attention.
 
 - W1 if valuable queues remain high-yield or old;
 - W2 if catalog quality/freshness is the limiting user value;
