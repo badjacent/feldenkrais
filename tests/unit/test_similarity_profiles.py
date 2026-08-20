@@ -2,6 +2,7 @@ from kb.similarity.measures import TrademarkMechanism
 from kb.similarity.profiles import (
     ORDINAL_WEIGHTS,
     profile_content_hash,
+    profile_from_payload,
     profile_to_payload,
     project_existing_analysis,
 )
@@ -113,4 +114,8 @@ def test_profile_payload_is_stable_and_json_safe():
     assert payload["profile"]["diffs"] == [
         {"parts": ["ribs_chest", "shoulders_scapulae"], "weight": 1.0}
     ]
+    assert "embedding" not in payload["profile"]
+    restored = profile_from_payload(payload, embedding=[1.0, 0.0])
+    assert restored.profile.diffs == result.profile.diffs
+    assert restored.profile.embedding == [1.0, 0.0]
     assert profile_content_hash(result) == profile_content_hash(result)

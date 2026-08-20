@@ -28,9 +28,11 @@ from .profiles import (
     PROFILE_SCHEMA_VERSION,
     ProjectedProfile,
     profile_content_hash,
+    profile_from_payload,
     profile_to_payload,
     project_existing_analysis,
 )
+from .matrix import SimilarityMatrix, build_similarity_matrix
 
 __all__ = [
     "RENDITION_DETECTION_VERSION",
@@ -57,6 +59,9 @@ __all__ = [
     "PROFILE_SCHEMA_VERSION",
     "ProjectedProfile",
     "profile_content_hash",
+    "profile_from_payload",
     "profile_to_payload",
     "project_existing_analysis",
+    "SimilarityMatrix",
+    "build_similarity_matrix",
 ]

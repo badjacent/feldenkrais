@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import random
 from collections import Counter
 from dataclasses import asdict, dataclass
@@ -24,7 +25,13 @@ class CalibrationArtifact:
 
     @property
     def version(self) -> str:
-        return f"{self.schema_version}:{self.extraction_model}:{self.embedding_method}"
+        values_hash = hashlib.sha256(
+            json.dumps(self.cosine_values, separators=(",", ":")).encode()
+        ).hexdigest()[:12]
+        return (
+            f"{self.schema_version}:{self.extraction_model}:"
+            f"{self.embedding_method}:{values_hash}"
+        )
 
     def ecdf(self) -> EmbeddingECDF:
         return EmbeddingECDF(self.cosine_values, self.version)

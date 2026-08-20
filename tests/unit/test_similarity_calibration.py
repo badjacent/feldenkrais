@@ -42,3 +42,6 @@ def test_calibration_artifact_round_trips_and_supplies_ecdf(tmp_path):
 
     assert loaded == artifact
     assert loaded.ecdf().normalize(0.5) == 2 / 3
+    assert loaded.version != CalibrationArtifact(
+        "profile-v1", "pass0b-v4", "default", 17, 3, (0.1, 0.5, 0.8)
+    ).version
