@@ -104,7 +104,7 @@ def build_projection(db) -> tuple[dict, dict]:
             JOIN document_source ds ON ds.id = d.source_id
             JOIN analysis a ON a.document_id = d.id AND a.type_id = 1
             WHERE ds.name = ANY(%s) OR d.origin = 'feldenkrais_atlas'
-            ORDER BY (d.origin = 'feldenkrais_atlas') DESC, ds.name, d.title
+            ORDER BY (d.origin = 'feldenkrais_atlas') DESC NULLS LAST, ds.name, d.title
         """, (PUBLIC_SOURCES,))
         rows = [dict(r) for r in cur.fetchall()]
 

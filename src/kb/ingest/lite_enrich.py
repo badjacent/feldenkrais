@@ -61,7 +61,7 @@ def _documents(db: Database, limit: int, source: str | None, doc: str | None) ->
     if doc:
         sql += " AND d.id = %s"
         params.append(doc)
-    sql += " ORDER BY (d.origin = 'feldenkrais_atlas') DESC, d.created_at, d.id LIMIT %s"
+    sql += " ORDER BY (d.origin = 'feldenkrais_atlas') DESC NULLS LAST, d.created_at, d.id LIMIT %s"
     params.append(limit)
     with db.get_cursor(commit=False) as cur:
         cur.execute(sql, params)
