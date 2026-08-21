@@ -22,9 +22,25 @@ if ! mkdir "$lock_dir" 2>/dev/null; then
   mkdir "$lock_dir"
 fi
 print $$ > "$lock_dir/pid"
-trap 'rm -f "$lock_dir/pid"; rmdir "$lock_dir" 2>/dev/null || true' EXIT INT TERM
+
+cleanup_lock() {
+  local owned_pid=""
+  [[ -r "$lock_dir/pid" ]] && owned_pid=$(<"$lock_dir/pid")
+  if [[ "$owned_pid" == "$$" ]]; then
+    rm -f "$lock_dir/pid"
+    rmdir "$lock_dir" 2>/dev/null || true
+  fi
+}
+trap cleanup_lock EXIT INT TERM
 
 cd src/kb
+print "$(date -u +%Y-%m-%dT%H:%M:%SZ) lite enrichment batch starting (pid $$, limit ${LITE_ENRICHMENT_BATCH_LIMIT:-50})"
+set +e
 /usr/bin/caffeinate -i /usr/bin/nice -n 19 \
   ../../.venv-mini/bin/python -m ingest.lite_enrich run \
   --limit "${LITE_ENRICHMENT_BATCH_LIMIT:-50}" --apply
+worker_status=$?
+set -e
+print "$(date -u +%Y-%m-%dT%H:%M:%SZ) lite enrichment batch finished (pid $$, status $worker_status)"
+cleanup_lock
+exit "$worker_status"
