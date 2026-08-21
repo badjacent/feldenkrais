@@ -154,7 +154,9 @@ def main() -> None:
                     analysis.run_motifs_lite(text, provider_key=PROVIDER)
                     generated.append("motifs")
                 if not present["card"]:
-                    analysis.run_lesson_card(text, provider_key=PROVIDER)
+                    analysis.run_lesson_card(
+                        text, provider_key=PROVIDER, source_title=document.get("title")
+                    )
                     generated.append("card")
                 print(json.dumps({"document_id": str(document["id"]), "generated": generated}))
             except Exception as exc:  # one bad artifact cannot stop the resumable batch

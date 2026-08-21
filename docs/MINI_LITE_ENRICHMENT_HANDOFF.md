@@ -89,8 +89,8 @@ Closed-set motif assignment from the raw transcript:
 ### 2. `run_lesson_card` (new module `analysis/lesson_card.py`)
 
 One call producing public-safe display content. Prompt
-`data/lesson_card.md`, schema `data/lesson_card.schema.json`, cache suffix
-`:lesson_card:card-p1`. Fields:
+  `data/lesson_card.md`, schema `data/lesson_card.schema.json`, cache suffix
+`:lesson_card:card-p2`. Fields:
 
 ```json
 {

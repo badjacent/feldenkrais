@@ -11,7 +11,7 @@ from llm_config import DEFAULT_LLM
 
 from .core import _state
 
-PROMPT_VERSION = "card-p1"
+PROMPT_VERSION = "card-p2"
 LESSON_TYPES = {"atm", "talk", "interview", "demonstration", "mixed"}
 POSITIONS = {"lying_on_back", "lying_on_side", "lying_on_front", "sitting", "standing", "kneeling", "all_fours", "other"}
 SUPPORT_CONTEXTS = {"floor", "chair", "standing", "wall"}
@@ -30,13 +30,20 @@ def lesson_card_cache_key(lesson_text: str, provider_key: str | None = None) -> 
     return package.get_cache_key(lesson_text.strip() + suffix)
 
 
-def run_lesson_card(lesson_text: str, provider_key: str | None = None) -> dict:
+def run_lesson_card(
+    lesson_text: str,
+    provider_key: str | None = None,
+    source_title: str | None = None,
+) -> dict:
     package = sys.modules[__package__]
     cache_key = lesson_card_cache_key(lesson_text, provider_key)
     cached = package.load_cached_analysis(cache_key)
     if cached:
         return {**cached, "cached": True}
-    prompt = _data_path("lesson_card.md").read_text().format(lesson_text=lesson_text)
+    prompt = _data_path("lesson_card.md").read_text().format(
+        lesson_text=lesson_text,
+        source_title=source_title or "(missing)",
+    )
     schema = json.loads(_data_path("lesson_card.schema.json").read_text())
     llm = _state["_get_llm"](provider_key)
     t0 = time.time()

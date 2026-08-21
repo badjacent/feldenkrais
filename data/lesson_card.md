@@ -11,6 +11,10 @@ substantially begins. Include only positions and supports substantially used.
 `suggested_title` is null unless the source title is missing, generic, or numbered;
 it is conservative display copy, never canonical identity.
 
+## Source title
+
+{source_title}
+
 ## Transcript
 
 {lesson_text}
