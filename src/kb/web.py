@@ -456,6 +456,7 @@ def _pipeline_worker_locked():
     from concurrent.futures import ThreadPoolExecutor, as_completed
     max_workers = 4
     step_timeout = 300  # 5 minutes per step
+    _sweep_completed_steps: set[str] = set()
 
     try:
         while _pipeline_is_running():
@@ -509,7 +510,9 @@ def _pipeline_worker_locked():
 
                     try:
                         result = done.result()
-                        if not result["ok"] and "Timed out" in result.get("error", ""):
+                        if result["ok"]:
+                            _sweep_completed_steps.add(result["step"])
+                        elif "Timed out" in result.get("error", ""):
                             _db.mark_step_error(result["doc_id"], result["step"], result["error"])
                     except Exception:
                         pass
@@ -531,6 +534,14 @@ def _pipeline_worker_locked():
         _pending_step_keys.clear()
         _pipeline_update_active([])
         _pipeline_set_running(False)
+        # Auto-publish the Atlas projection when this sweep changed it (the
+        # analysis gates are the sole owner control; fail-soft, never raises).
+        if _sweep_completed_steps:
+            try:
+                from atlas_projection import maybe_publish_after_sweep
+                maybe_publish_after_sweep(_db, _sweep_completed_steps)
+            except Exception as e:
+                print(f"[atlas-projection] hook error (non-fatal): {e}", flush=True)
 
 # On startup, if pipeline was running, restart the worker thread
 if _db:

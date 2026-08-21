@@ -24,8 +24,12 @@ def _analysis_step_names():
         "concept_tags", "condense", "language_patterns", "spatial",
         # Level 3: depend on level 2
         "embed", "embed_positions", "index_concepts", "index_spatial",
+        "axes", "motifs", "raw_motifs",
     ]
-    return [sn for sn in ordered if sn in step_lookup], step_lookup
+    known = [sn for sn in ordered if sn in step_lookup]
+    # Any DB step missing from the display list still shows (at the end)
+    extra = sorted(sn for sn in step_lookup if sn not in ordered)
+    return known + extra, step_lookup
 
 
 _STEP_DISPLAY_NAMES = {
@@ -36,6 +40,7 @@ _STEP_DISPLAY_NAMES = {
     "language_patterns": "lang-pat", "spatial": "spatial",
     "embed": "embed", "embed_positions": "embed-pos",
     "index_concepts": "idx-conc", "index_spatial": "idx-spat",
+    "motifs": "motifs", "raw_motifs": "raw-mot", "axes": "axes",
 }
 
 
@@ -491,6 +496,45 @@ def _build_analysis_html() -> str:
 
     <div style="margin-top:16px;font-size:0.8em;color:#999;">
         Click a cell to toggle permission for the group. Click a group name to see document details.
+    </div>
+
+    {_build_atlas_projection_panel(_db)}
+    """
+
+
+def _build_atlas_projection_panel(_db) -> str:
+    """Corpus-level Atlas projection publish step (runs after motif/axes sweeps)."""
+    try:
+        from atlas_projection import LAST_PUBLICATION_KEY, PUBLIC_SOURCES
+        last = _db.get_cache(LAST_PUBLICATION_KEY)
+    except Exception:
+        last, PUBLIC_SOURCES = None, []
+    if last:
+        status = last.get("status", "?")
+        color = {"published": "#155724", "unchanged": "#155724",
+                 "dry-run": "#856404"}.get(status.split(" ")[0], "#721c24")
+        detail = (f"{status} · {last.get('exported', '?')} lessons exported "
+                  f"({last.get('missing_analysis', '?')} missing analysis) · "
+                  f"{last.get('registry_version', '')} · {last.get('at', '')}")
+    else:
+        color, detail = "#6c757d", "never run"
+    srcs = html_mod.escape(", ".join(PUBLIC_SOURCES))
+    return f"""
+    <div style="margin-top:20px;padding:12px 16px;background:#f8f9fa;border-radius:8px;">
+        <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
+            <strong>Atlas projection</strong>
+            <span style="font-size:0.85em;color:{color};">{html_mod.escape(detail)}</span>
+            <button onclick="fetch('/api/analysis/publish-atlas', {{method:'POST'}})
+                        .then(r=>r.json()).then(d=>alert(JSON.stringify(d)))
+                        .then(()=>setTimeout(refreshDashboard, 3000))"
+                    style="padding:4px 12px;background:#007bff;color:white;border:none;border-radius:4px;cursor:pointer;font-size:0.85em;">
+                Publish now
+            </button>
+        </div>
+        <div style="margin-top:6px;font-size:0.75em;color:#999;">
+            Publishes automatically after pipeline sweeps that complete motifs/axes steps.
+            Public sources: {srcs}. Requires ATLAS_PUBLISH credentials in .env for a real publish.
+        </div>
     </div>
     """
 

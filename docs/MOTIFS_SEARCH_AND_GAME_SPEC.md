@@ -4,7 +4,7 @@ Status: ready for implementation
 Audience: implementation agent working in this repo (`src/kb` web app)
 Owner: Michael Hollander
 Depends on data: distinctive-motifs pass (registry **motifs-v5**, prompt
-**motifs-p1**) and movement-axes pass (prompt **axes-p1**), both already
+**motifs-p1**) and movement-axes pass (prompt **axes-p2**), both already
 implemented in `src/kb/analysis/motifs.py` / `analysis/axes.py` and run via
 `src/kb/run_motifs.py`.
 
@@ -46,7 +46,7 @@ where `transcript` is `Database.get_document_transcription(document_id)` and:
 | Artifact | SUFFIX | Notes |
 |---|---|---|
 | Motif assignments | `:distinctive_motifs:{registry_version}:motifs-p1` | registry_version currently `motifs-v5` |
-| Movement axes | `:movement_axes:axes-p1` | registry-independent |
+| Movement axes | `:movement_axes:axes-p2` | registry-independent |
 
 Load the registry with `analysis.load_motif_registry()` (reads
 `private/data/motifs_registry.yaml`, private-first resolution). Registry
@@ -75,8 +75,9 @@ Axes payload shape (per lesson):
                           "evidence": [{"step_ids": [..], "reason": "..."}]},
    "rotation":      {"value": "none|minor|moderate|central", "evidence": [...]},
    "side_bending":  {"value": "none|minor|moderate|central", "evidence": [...]},
-   "cross_lateral": {"value": "none|minor|moderate|central", "evidence": [...]}
- }, "prompt_version": "axes-p1", ...}
+   "cross_lateral": {"value": "none|minor|moderate|central", "evidence": [...]},
+   "vigor":         {"value": "meditative|gentle|moderate|vigorous", "evidence": [...]}
+ }, "prompt_version": "axes-p2", ...}
 ```
 
 Current registry (motifs-v5), 8 established motifs, all chooser-visible:
@@ -103,14 +104,15 @@ existing subcommand pattern and the `--docs-file` convention). It:
 
 ```json
 {"built_at": "...", "registry_version": "motifs-v5",
- "motif_prompt_version": "motifs-p1", "axes_prompt_version": "axes-p1",
+ "motif_prompt_version": "motifs-p1", "axes_prompt_version": "axes-p2",
  "motifs": [{"id": "...", "label": "...", "definition": "..."}],   // chooser_visible only
  "docs": [{"document_id": "...", "title": "...", "source_id": 4,
            "source_name": "FELDENKRAIS_PROJECT", "is_atm": true,
            "duration_minutes": null,
            "motifs": [{"id": "...", "mode": "...", "role": "...", "certainty": "..."}],
            "axes": {"flexion_extension": "...", "rotation": "...",
-                    "side_bending": "...", "cross_lateral": "..."}}]}
+                    "side_bending": "...", "cross_lateral": "...",
+                    "vigor": "..."}}]}
 ```
 
    - `docs[].motifs` includes only chooser-visible motif ids.
@@ -151,7 +153,12 @@ anonymous-accessible.
 - **Rotation / Side-bending / Cross-lateral**: minimum-level select —
   "any" (default), "at least moderate", "central". ("A lot of cross-lateral
   movement" = at least moderate.)
+- **Vigor**: multi-select over meditative / gentle / moderate / vigorous
+  (e.g. meditative+gentle = "a quiet lesson").
 - **ATM only** toggle, default ON (talks/discussions hidden by default).
+
+The axes map is open-ended: render whatever axis keys the index/projection
+contains rather than hard-coding the current five.
 
 **Results**: title (linking to the existing `/lesson/{document_id}` page),
 source name, motif badges (label + role), and the four axis values rendered

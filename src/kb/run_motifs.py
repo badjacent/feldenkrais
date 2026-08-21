@@ -338,6 +338,20 @@ def cmd_sync_step(args):
                 print(f"ok       {name} v{row['current_version']}  {suffix}")
 
 
+def cmd_publish_atlas(args):
+    """Build + validate + publish the Atlas analysis projection.
+
+    Reads cached analyses only (never invokes LLMs). Without --apply, or
+    without ATLAS_PUBLISH credentials in the environment, this is a dry run.
+    """
+    from atlas_projection import publish
+    result = publish(_db, dry_run=not args.apply, out=args.out,
+                     force_decrease=args.force_decrease)
+    print(json.dumps(result, indent=1, default=str))
+    if result.get("status") in ("invalid", "error", "refused-shrink"):
+        sys.exit(1)
+
+
 def cmd_show(args):
     text = _db.get_document_transcription(args.doc)
     if not text:
@@ -435,6 +449,14 @@ def main():
     sub.add_parser("sync-step",
                    help="Register/refresh motifs+axes steps in the analysis DAG"
                    ).set_defaults(fn=cmd_sync_step)
+    pub = sub.add_parser("publish-atlas",
+                         help="Build/validate/publish the Atlas projection")
+    pub.add_argument("--apply", action="store_true",
+                     help="Actually publish to S3 (default: dry run)")
+    pub.add_argument("--out", help="Also write the projection JSON to this path")
+    pub.add_argument("--force-decrease", action="store_true",
+                     help="Allow a >20%% drop in exported lesson count")
+    pub.set_defaults(fn=cmd_publish_atlas)
     sub.add_parser("fixtures").set_defaults(fn=cmd_fixtures)
     args = ap.parse_args()
     args.fn(args)

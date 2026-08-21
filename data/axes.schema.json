@@ -76,7 +76,26 @@
         }
       },
       "required": ["value", "evidence"]
+    },
+    "vigor": {
+      "type": "object",
+      "properties": {
+        "value": { "type": "string", "enum": ["meditative", "gentle", "moderate", "vigorous"] },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "properties": {
+              "step_ids": { "type": "array", "items": { "type": "integer" } },
+              "reason": { "type": "string" }
+            },
+            "required": ["step_ids", "reason"]
+          }
+        }
+      },
+      "required": ["value", "evidence"]
     }
   },
-  "required": ["flexion_extension", "rotation", "side_bending", "cross_lateral"]
+  "required": ["flexion_extension", "rotation", "side_bending", "cross_lateral", "vigor"]
 }

@@ -189,6 +189,27 @@ async def analysis_capabilities():
     })
 
 
+@router.post("/api/analysis/publish-atlas")
+async def publish_atlas_projection(request: Request):
+    """Manually trigger the Atlas projection publish (same fail-closed path
+    as the automatic post-sweep hook). Runs in a background thread."""
+    if _web.IS_LAMBDA and _web._auth_mod.get_access_tier(request) != "admin":
+        return JSONResponse({"error": "admin only"}, status_code=403)
+    if not _web._db:
+        return JSONResponse({"error": "Database not configured"}, status_code=500)
+
+    def _run():
+        try:
+            from atlas_projection import publish
+            publish(_web._db)
+        except Exception as e:
+            print(f"[atlas-projection] manual publish failed: {e}", flush=True)
+
+    threading.Thread(target=_run, daemon=True).start()
+    return JSONResponse({"status": "started",
+                         "note": "result appears in the Atlas projection panel"})
+
+
 @router.post("/api/analysis/clear-error")
 async def clear_analysis_error(request: Request):
     """Clear the error on a document analysis state entry so it can be retried."""

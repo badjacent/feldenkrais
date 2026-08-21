@@ -487,6 +487,7 @@ def run_bounded_worker(
         if not acquired:
             return {"status": "busy", "completed": 0, "failed": 0}
 
+        completed_step_names = set()
         while completed + failed < max_steps and time.monotonic() - started < max_seconds:
             remaining = max_steps - completed - failed
             runnable = db.get_runnable_steps()
@@ -507,9 +508,17 @@ def run_bounded_worker(
                     result = future.result()
                     if result["ok"]:
                         completed += 1
+                        completed_step_names.add(result["step_name"])
                     else:
                         failed += 1
                     print(json.dumps(result, sort_keys=True), flush=True)
+
+        # Auto-publish the Atlas projection when this sweep changed it.
+        # The analysis gates above are the sole owner control (see
+        # docs/ATLAS_ANALYSIS_PROJECTION_RESPONSE.md, Governance).
+        if completed_step_names:
+            from atlas_projection import maybe_publish_after_sweep
+            maybe_publish_after_sweep(db, completed_step_names)
 
     return {
         "status": "completed",

@@ -18,7 +18,7 @@ from llm_config import DEFAULT_LLM
 from .core import _state
 from .motifs import _build_lesson_input
 
-AXES_PROMPT_VERSION = "axes-p1"
+AXES_PROMPT_VERSION = "axes-p2"
 
 AXIS_VALUES = {
     "flexion_extension": ["strongly_flexion", "flexion_leaning", "mixed_or_balanced",
@@ -26,6 +26,7 @@ AXIS_VALUES = {
     "rotation": ["none", "minor", "moderate", "central"],
     "side_bending": ["none", "minor", "moderate", "central"],
     "cross_lateral": ["none", "minor", "moderate", "central"],
+    "vigor": ["meditative", "gentle", "moderate", "vigorous"],
 }
 
 

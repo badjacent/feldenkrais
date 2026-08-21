@@ -34,6 +34,20 @@ emphasizes, not a count of every micro-movement.
    X-configurations, cross-crawl-like patterns, diagonal rolling:
    `none`, `minor`, `moderate`, `central`.
 
+5. **vigor** — the physical register a student would experience, from
+   meditative to physically demanding:
+   - `meditative`: predominantly attention, sensing, imagery, or breath;
+     movement is tiny, slow, or rare. Could be practiced near sleep.
+   - `gentle`: slow, small, comfortable movements; a restful register
+     throughout.
+   - `moderate`: ordinary ATM physicality — repeated movements of moderate
+     range and effort, some position changes.
+   - `vigorous`: large, fast, effortful, or stamina-demanding movement —
+     standing or squatting work, dynamic rolling or rocking, coming to
+     sitting/standing repeatedly, strength demands.
+   Judge the overall register, not the single most demanding moment; a
+   mostly-quiet lesson with one brief effortful variation is still `gentle`.
+
 ## Rules
 
 - Every axis needs evidence: step numbers from the supplied steps plus a
