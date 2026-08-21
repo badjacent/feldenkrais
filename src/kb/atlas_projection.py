@@ -108,18 +108,35 @@ def build_projection(db) -> tuple[dict, dict]:
         """, (PUBLIC_SOURCES,))
         rows = [dict(r) for r in cur.fetchall()]
 
-    lessons, missing = [], 0
-    for r in rows:
-        text = r["text"] or ""
+    keyed_rows = []
+    wanted_keys = []
+    for row in rows:
+        text = row["text"] or ""
         if not text.strip():
+            keyed_rows.append((row, None))
+            continue
+        keys = {
+            "motifs": _cache_key(text, f":distinctive_motifs_lite:{ver}:{motifs_lite_prompt}"),
+            "axes": _cache_key(text, f":movement_axes_lite:{axes_lite_prompt}"),
+            "card": _cache_key(text, f":lesson_card:{card_prompt}"),
+        }
+        wanted_keys.extend(keys.values())
+        keyed_rows.append((row, keys))
+    with db.get_cursor(commit=False) as cur:
+        cur.execute("SELECT key, data FROM cache WHERE key = ANY(%s)", (wanted_keys,))
+        cached = {row["key"]: row["data"] for row in cur.fetchall()}
+
+    lessons, missing = [], 0
+    for r, keys in keyed_rows:
+        text = r["text"] or ""
+        if not text.strip() or keys is None:
             missing += 1
             continue
         # Lite enrichment is the independent Atlas data contract. Full analysis
         # can later overlay these fields without changing search or game code.
-        mrow = db.get_cache(_cache_key(
-            text, f":distinctive_motifs_lite:{ver}:{motifs_lite_prompt}"))
-        arow = db.get_cache(_cache_key(text, f":movement_axes_lite:{axes_lite_prompt}"))
-        card = db.get_cache(_cache_key(text, f":lesson_card:{card_prompt}"))
+        mrow = cached.get(keys["motifs"])
+        arow = cached.get(keys["axes"])
+        card = cached.get(keys["card"])
         if not mrow or not arow or not card:
             missing += 1
             continue
