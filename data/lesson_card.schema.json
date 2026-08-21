@@ -1,11 +1,14 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": ["summary", "suggested_title", "lesson_type", "starting_position", "positions", "themes", "support_context", "equipment", "primary_language", "notable_feature", "audience_notes"],
+  "required": ["summary", "suggested_title", "is_feldenkrais_related", "feldenkrais_relevance_confidence", "relevance_reason", "lesson_type", "starting_position", "positions", "themes", "support_context", "equipment", "primary_language", "notable_feature", "audience_notes"],
   "properties": {
     "summary": {"type": "string", "minLength": 1, "maxLength": 500},
     "suggested_title": {"type": ["string", "null"], "maxLength": 160},
-    "lesson_type": {"type": "string", "enum": ["atm", "talk", "interview", "demonstration", "mixed"]},
+    "is_feldenkrais_related": {"type": "boolean"},
+    "feldenkrais_relevance_confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "relevance_reason": {"type": "string", "minLength": 1, "maxLength": 240},
+    "lesson_type": {"type": "string", "enum": ["atm", "talk", "interview", "demonstration", "mixed", "other"]},
     "starting_position": {"type": ["string", "null"], "enum": ["lying_on_back", "lying_on_side", "lying_on_front", "sitting", "standing", "kneeling", "all_fours", "other", null]},
     "positions": {"type": "array", "uniqueItems": true, "items": {"type": "string", "enum": ["lying_on_back", "lying_on_side", "lying_on_front", "sitting", "standing", "kneeling", "all_fours", "other"]}},
     "themes": {"type": "array", "minItems": 0, "maxItems": 8, "uniqueItems": true, "items": {"type": "string", "maxLength": 60}},

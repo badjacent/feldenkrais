@@ -6,13 +6,18 @@ from kb.analysis.lesson_card import run_lesson_card
 
 
 def test_lesson_card_validates_and_caches(tmp_path, monkeypatch):
-    (tmp_path / "lesson_card.md").write_text("Title: {source_title}\nTranscript: {lesson_text}")
+    (tmp_path / "lesson_card.md").write_text(
+        "Title: {source_title}\nContext: {hosting_page_context}\nTranscript: {lesson_text}"
+    )
     schema_source = __import__("pathlib").Path(__file__).parents[2] / "data" / "lesson_card.schema.json"
     (tmp_path / "lesson_card.schema.json").write_text(schema_source.read_text())
     llm = MagicMock(model="gemini-3-flash-preview", last_usage={"input_tokens": 10})
     llm.complete_structured_json.return_value = {
         "summary": "A quiet lesson explores rolling and the relationship between the eyes and pelvis.",
         "suggested_title": None,
+        "is_feldenkrais_related": True,
+        "feldenkrais_relevance_confidence": 0.99,
+        "relevance_reason": "The transcript guides an Awareness Through Movement lesson.",
         "lesson_type": "atm",
         "starting_position": "lying_on_back",
         "positions": ["lying_on_back", "sitting"],
@@ -30,9 +35,19 @@ def test_lesson_card_validates_and_caches(tmp_path, monkeypatch):
     monkeypatch.setattr(analysis, "load_cached_analysis", cache.get)
     monkeypatch.setattr(analysis, "save_cached_analysis", cache.__setitem__)
 
-    result = run_lesson_card("lesson transcript", provider_key="gemini", source_title="Lesson 12")
+    result = run_lesson_card(
+        "lesson transcript",
+        provider_key="gemini",
+        source_title="Lesson 12",
+        hosting_page_context={"page_url": "https://example.test/lesson", "description": "Audio lesson"},
+    )
 
     assert result["primary_language"] == "en"
     assert result["notable_feature"] == "The eyes repeatedly initiate rolling."
+    assert result["is_feldenkrais_related"] is True
+    assert result["feldenkrais_relevance_confidence"] == 0.99
     assert cache
-    assert "Lesson 12" in llm.complete_structured_json.call_args.kwargs["prompt"]
+    prompt = llm.complete_structured_json.call_args.kwargs["prompt"]
+    assert "Lesson 12" in prompt
+    assert "https://example.test/lesson" in prompt
+    assert "Audio lesson" in prompt

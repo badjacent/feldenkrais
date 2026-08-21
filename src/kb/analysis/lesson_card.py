@@ -11,8 +11,8 @@ from llm_config import DEFAULT_LLM
 
 from .core import _state
 
-PROMPT_VERSION = "card-p2"
-LESSON_TYPES = {"atm", "talk", "interview", "demonstration", "mixed"}
+PROMPT_VERSION = "card-p4"
+LESSON_TYPES = {"atm", "talk", "interview", "demonstration", "mixed", "other"}
 POSITIONS = {"lying_on_back", "lying_on_side", "lying_on_front", "sitting", "standing", "kneeling", "all_fours", "other"}
 SUPPORT_CONTEXTS = {"floor", "chair", "standing", "wall"}
 
@@ -34,15 +34,21 @@ def run_lesson_card(
     lesson_text: str,
     provider_key: str | None = None,
     source_title: str | None = None,
+    hosting_page_context: dict | str | None = None,
 ) -> dict:
     package = sys.modules[__package__]
     cache_key = lesson_card_cache_key(lesson_text, provider_key)
     cached = package.load_cached_analysis(cache_key)
     if cached:
         return {**cached, "cached": True}
+    if isinstance(hosting_page_context, dict):
+        context_text = json.dumps(hosting_page_context, ensure_ascii=False, default=str)
+    else:
+        context_text = str(hosting_page_context or "(missing)")
     prompt = _data_path("lesson_card.md").read_text().format(
         lesson_text=lesson_text,
         source_title=source_title or "(missing)",
+        hosting_page_context=context_text[:6000],
     )
     schema = json.loads(_data_path("lesson_card.schema.json").read_text())
     llm = _state["_get_llm"](provider_key)
@@ -50,7 +56,10 @@ def run_lesson_card(
     result = llm.complete_structured_json(
         prompt=prompt,
         schema=schema,
-        system="Produce conservative public metadata from the supplied transcript only.",
+        system=(
+            "Produce conservative public metadata. Treat the transcript as authoritative "
+            "for topical relevance; use hosting-page context only as secondary metadata."
+        ),
     )
     summary = " ".join(str(result.get("summary") or "").split())
     if not summary or len(re.findall(r"\b[\w'-]+\b", summary)) > 60:
@@ -58,6 +67,18 @@ def run_lesson_card(
     lesson_type = result.get("lesson_type")
     if lesson_type not in LESSON_TYPES:
         raise ValueError(f"invalid lesson_type: {lesson_type!r}")
+    related = result.get("is_feldenkrais_related")
+    if not isinstance(related, bool):
+        raise TypeError(f"invalid is_feldenkrais_related: {related!r}")
+    confidence = result.get("feldenkrais_relevance_confidence")
+    if not isinstance(confidence, (int, float)) or isinstance(confidence, bool):
+        raise TypeError(f"invalid feldenkrais_relevance_confidence: {confidence!r}")
+    confidence = float(confidence)
+    if not 0 <= confidence <= 1:
+        raise ValueError(f"invalid feldenkrais_relevance_confidence: {confidence!r}")
+    reason = " ".join(str(result.get("relevance_reason") or "").split())
+    if not reason:
+        raise ValueError("relevance_reason is required")
     starting = result.get("starting_position")
     if starting is not None and starting not in POSITIONS:
         raise ValueError(f"invalid starting_position: {starting!r}")
@@ -69,6 +90,9 @@ def run_lesson_card(
     payload = {
         "summary": summary,
         "suggested_title": result.get("suggested_title") or None,
+        "is_feldenkrais_related": related,
+        "feldenkrais_relevance_confidence": confidence,
+        "relevance_reason": reason,
         "lesson_type": lesson_type,
         "starting_position": starting,
         "positions": list(dict.fromkeys(positions)),

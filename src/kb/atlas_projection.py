@@ -126,7 +126,7 @@ def build_projection(db) -> tuple[dict, dict]:
         cur.execute("SELECT key, data FROM cache WHERE key = ANY(%s)", (wanted_keys,))
         cached = {row["key"]: row["data"] for row in cur.fetchall()}
 
-    lessons, missing = [], 0
+    lessons, missing, excluded_unrelated = [], 0, 0
     for r, keys in keyed_rows:
         text = r["text"] or ""
         if not text.strip() or keys is None:
@@ -139,6 +139,9 @@ def build_projection(db) -> tuple[dict, dict]:
         card = cached.get(keys["card"])
         if not mrow or not arow or not card:
             missing += 1
+            continue
+        if card.get("is_feldenkrais_related") is False:
+            excluded_unrelated += 1
             continue
         title = (r["title"] or "").replace(" - Feldenkrais Project", "")
         lt = (card.get("lesson_type") or r.get("lesson_type") or "").lower()
@@ -155,7 +158,9 @@ def build_projection(db) -> tuple[dict, dict]:
             "display": {
                 field: card.get(field)
                 for field in (
-                    "summary", "suggested_title", "lesson_type", "starting_position",
+                    "summary", "suggested_title", "is_feldenkrais_related",
+                    "feldenkrais_relevance_confidence", "relevance_reason",
+                    "lesson_type", "starting_position",
                     "positions", "themes", "support_context", "equipment",
                     "primary_language", "notable_feature", "audience_notes",
                 )
@@ -186,6 +191,7 @@ def build_projection(db) -> tuple[dict, dict]:
     }
     summary = {"eligible": len(rows), "exported": len(lessons),
                "missing_analysis": missing,
+               "excluded_unrelated": excluded_unrelated,
                "registry_version": ver}
     return projection, summary
 
@@ -199,7 +205,7 @@ _AXIS_VALUES = {
     "vigor": {"meditative", "gentle", "moderate", "vigorous"},
 }
 _FORBIDDEN_LESSON_KEYS = {"evidence", "candidate_motifs", "raw_motifs", "transcript", "text"}
-_LESSON_TYPES = {"atm", "talk", "interview", "demonstration", "mixed"}
+_LESSON_TYPES = {"atm", "talk", "interview", "demonstration", "mixed", "other"}
 _POSITIONS = {"lying_on_back", "lying_on_side", "lying_on_front", "sitting", "standing", "kneeling", "all_fours", "other"}
 _SUPPORT_CONTEXTS = {"floor", "chair", "standing", "wall"}
 
@@ -221,6 +227,17 @@ def validate_projection(proj: dict) -> list[str]:
             if ax not in _AXIS_VALUES or v not in _AXIS_VALUES[ax]:
                 errors.append(f"bad axis {ax}={v}")
         display = l.get("display") or {}
+        if not isinstance(display.get("is_feldenkrais_related"), bool):
+            errors.append("bad is_feldenkrais_related")
+        confidence = display.get("feldenkrais_relevance_confidence")
+        if (
+            not isinstance(confidence, (int, float))
+            or isinstance(confidence, bool)
+            or not 0 <= confidence <= 1
+        ):
+            errors.append("bad feldenkrais_relevance_confidence")
+        if not str(display.get("relevance_reason") or "").strip():
+            errors.append("missing relevance_reason")
         if display.get("lesson_type") not in _LESSON_TYPES:
             errors.append(f"bad lesson_type {display.get('lesson_type')}")
         if display.get("starting_position") not in _POSITIONS | {None}:

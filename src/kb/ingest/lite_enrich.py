@@ -46,7 +46,9 @@ def artifact_keys(text: str, registry_version: str) -> dict[str, str]:
 
 def _documents(db: Database, limit: int, source: str | None, doc: str | None) -> list[dict]:
     sql = """
-        SELECT d.id, d.title, ds.name AS source_name, d.origin, a.data->>'text' AS text
+        SELECT d.id, d.title, ds.name AS source_name, d.origin,
+               d.source_url, d.metadata, d.presenter, d.category_name,
+               d.lesson_date, d.tags, a.data->>'text' AS text
         FROM document d
         JOIN document_source ds ON ds.id = d.source_id
         JOIN analysis a ON a.document_id = d.id AND a.type_id = 1
@@ -66,6 +68,28 @@ def _documents(db: Database, limit: int, source: str | None, doc: str | None) ->
     with db.get_cursor(commit=False) as cur:
         cur.execute(sql, params)
         return [dict(row) for row in cur.fetchall()]
+
+
+def _hosting_page_context(document: dict) -> dict:
+    """Return bounded, public source metadata as secondary Gemini context."""
+    metadata = document.get("metadata") or {}
+    if isinstance(metadata, str):
+        try:
+            metadata = json.loads(metadata)
+        except json.JSONDecodeError:
+            metadata = {"raw": metadata[:2000]}
+    if not isinstance(metadata, dict):
+        metadata = {"raw": str(metadata)[:2000]}
+    return {
+        "page_url": document.get("source_url"),
+        "page_title": document.get("title"),
+        "source_name": document.get("source_name"),
+        "presenter": document.get("presenter"),
+        "category": document.get("category_name"),
+        "publication_date": document.get("lesson_date"),
+        "tags": document.get("tags"),
+        "captured_metadata": metadata,
+    }
 
 
 def _status(db: Database, text: str, registry_version: str) -> tuple[str, dict]:
@@ -155,7 +179,10 @@ def main() -> None:
                     generated.append("motifs")
                 if not present["card"]:
                     analysis.run_lesson_card(
-                        text, provider_key=PROVIDER, source_title=document.get("title")
+                        text,
+                        provider_key=PROVIDER,
+                        source_title=document.get("title"),
+                        hosting_page_context=_hosting_page_context(document),
                     )
                     generated.append("card")
                 print(json.dumps({"document_id": str(document["id"]), "generated": generated}))

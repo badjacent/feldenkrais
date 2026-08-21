@@ -90,13 +90,19 @@ Closed-set motif assignment from the raw transcript:
 
 One call producing public-safe display content. Prompt
   `data/lesson_card.md`, schema `data/lesson_card.schema.json`, cache suffix
-`:lesson_card:card-p2`. Fields:
+`:lesson_card:card-p4`. The call receives the transcript plus bounded hosting-page
+context (URL, title, source, presenter, date, tags, and captured scraper/YouTube
+metadata). The transcript remains authoritative for topical relevance; page context
+is secondary and cannot override it. Fields:
 
 ```json
 {
   "summary": "2–3 plain sentences: what the lesson does and how it works.",
   "suggested_title": null,                         // optional display-only title
-  "lesson_type": "atm",                           // atm|talk|interview|demonstration|mixed
+  "is_feldenkrais_related": true,                  // topical relevance, independent of source
+  "feldenkrais_relevance_confidence": 0.99,        // calibrated 0..1 confidence
+  "relevance_reason": "Guided Feldenkrais lesson.",
+  "lesson_type": "atm",                           // atm|talk|interview|demonstration|mixed|other
   "starting_position": "lying",                   // normalized primary starting position
   "positions": ["lying on back", "side lying", ...],
   "themes": ["breath", "rolling", "eyes", ...],   // 2–5 plain words each
