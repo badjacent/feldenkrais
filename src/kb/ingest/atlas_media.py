@@ -90,7 +90,9 @@ def _claim(db: Database, limit: int) -> list[dict]:
                  SELECT id FROM atlas_media_queue
                  WHERE status='pending' AND attempts < %s
                    AND (next_attempt_at IS NULL OR next_attempt_at <= NOW())
-                 ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT %s
+                 ORDER BY CASE platform
+                     WHEN 'soundcloud' THEN 0 WHEN 'podcast' THEN 1 ELSE 2 END,
+                   created_at FOR UPDATE SKIP LOCKED LIMIT %s
                )
                UPDATE atlas_media_queue q
                SET status='processing', attempts=attempts+1, error=NULL,

@@ -93,6 +93,8 @@ def test_eligible_media_accepts_free_non_youtube_lessons_only():
     catalog = [
         {**base, "url": "https://soundcloud.com/example/lesson"},
         {**base, "url": "https://example.com/lesson.mp3", "platform": "website"},
+        {**base, "url": "https://example.com/index", "platform": "website", "format": "unknown"},
+        {**base, "url": "https://example.com/guide.pdf", "platform": "website", "content_kind": "podcast_episode"},
         {**base, "url": "https://example.com/paid.mp3", "access": "paid"},
         {**base, "url": "https://example.com/article", "content_kind": "article"},
         {**base, "url": "https://youtube.com/watch?v=abc123", "platform": "youtube"},

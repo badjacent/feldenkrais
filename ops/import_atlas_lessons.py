@@ -51,8 +51,18 @@ def eligible_media(catalog: list[dict]) -> dict[str, dict]:
     """Return non-YouTube, free, on-demand media suitable for local intake."""
     result = {}
     supported_kinds = {"audio_lesson", "podcast_episode", "video_lesson"}
+    media_suffixes = {".mp3", ".m4a", ".aac", ".ogg", ".opus", ".wav", ".mp4", ".webm"}
     for item in catalog:
         url = str(item.get("url") or "")
+        platform = item.get("platform")
+        direct_media = Path(urlsplit(url).path.casefold()).suffix in media_suffixes
+        media_evidence = (
+            platform in {"soundcloud", "podcast"}
+            or direct_media
+            or item.get("media_type") in {"audio", "video"}
+            or item.get("format") == "on_demand"
+            or (item.get("duration_seconds") or 0) >= 180
+        )
         if (
             url
             and not youtube_id(url)
@@ -60,7 +70,8 @@ def eligible_media(catalog: list[dict]) -> dict[str, dict]:
             and item.get("access") == "free"
             and item.get("content_kind") in supported_kinds
             and item.get("status") != "dead"
-            and item.get("platform") in {"website", "soundcloud", "podcast"}
+            and platform in {"website", "soundcloud", "podcast"}
+            and media_evidence
         ):
             result.setdefault(url, item)
     return result
@@ -104,6 +115,20 @@ def queue_media(db: Database, items: list[dict]) -> int:
             )
             added += cursor.rowcount
     return added
+
+
+def reconcile_media_eligibility(db: Database, catalog: list[dict]) -> int:
+    """Retain but quarantine pending URLs no longer supported by the intake gate."""
+    eligible = list(eligible_media(catalog))
+    with db.get_cursor() as cursor:
+        cursor.execute(
+            """UPDATE atlas_media_queue
+               SET status='ineligible', error='catalog media eligibility changed',
+                   updated_at=NOW()
+               WHERE status='pending' AND NOT (url = ANY(%s))""",
+            (eligible,),
+        )
+        return cursor.rowcount
 
 
 def plan_intake(db: Database, catalog: list[dict]) -> dict:
@@ -176,6 +201,7 @@ def main() -> None:
         report = plan_intake(db, catalog)
         media_report = plan_media_intake(db, catalog)
         origins_reconciled = reconcile_atlas_origins(db, catalog) if args.apply else 0
+        media_reconciled = reconcile_media_eligibility(db, catalog) if args.apply else 0
         selected = report.pop("pending")[: args.limit]
         selected_media = media_report.pop("pending")[: args.limit]
         added = 0
@@ -197,6 +223,7 @@ def main() -> None:
                     **media_report,
                     "pending": len(selected_media),
                     "added": media_added,
+                    "marked_ineligible": media_reconciled,
                     "sample": [item["url"] for item in selected_media[:10]],
                 },
             }
