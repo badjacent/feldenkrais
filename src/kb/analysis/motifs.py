@@ -21,6 +21,7 @@ from .core import _state, _resolve_data_path
 
 PROMPT_VERSION = "motifs-p1"
 RAW_PROMPT_VERSION = "motifs-raw-p1"
+LITE_PROMPT_VERSION = "motifs-lite-p1"
 
 _ASSIGNMENT_MODES = {"taught", "referenced"}
 _ROLES = {"central", "supporting", "incidental"}
@@ -98,7 +99,7 @@ def load_motifs_raw() -> tuple[str, dict]:
 
 def _build_lesson_input(lesson_text: str, provider_key, debug_log) -> str:
     """Assemble the bounded analysis-artifact input shared by both motif passes."""
-    _pkg = sys.modules["analysis"]
+    _pkg = sys.modules[__package__]
     somatic_result = _pkg.run_pass_0b(lesson_text, provider_key, debug_log)
     lang_result = _pkg.run_pass_0b_lang(lesson_text, provider_key, debug_log)
     condensed = _pkg.run_pass_0b_condensed(somatic_result, lang_result, lesson_text)
@@ -275,4 +276,60 @@ def run_motifs(
         _pkg.save_prompt_io(cache_key, prompt, system_prompt, schema)
     except Exception:
         pass  # prompt archiving is best-effort
+    return {**payload, "cached": False}
+
+
+def run_motifs_lite(
+    lesson_text: str,
+    provider_key: str | None = None,
+    debug_log: list | None = None,
+) -> dict:
+    """Assign established motifs directly from a raw transcript."""
+    _pkg = sys.modules[__package__]
+    registry = load_motif_registry()
+    established = _established(registry)
+    registry_version = registry.get("version", "motifs-v0")
+    suffix = f":distinctive_motifs_lite:{registry_version}:{LITE_PROMPT_VERSION}"
+    if provider_key and provider_key != DEFAULT_LLM:
+        suffix += f":{provider_key}"
+    cache_key = _pkg.get_cache_key(lesson_text.strip() + suffix)
+    cached = _pkg.load_cached_analysis(cache_key)
+    if cached:
+        return {**cached, "cached": True}
+
+    prompt = (_state["_data_dir"] / "motifs_lite.md").read_text().format(
+        registry_version=registry_version,
+        registry_block=_registry_block(established),
+        lesson_text=lesson_text,
+    )
+    schema = json.loads((_state["_data_dir"] / "motifs_lite.schema.json").read_text())
+    ids = [motif["id"] for motif in established]
+    schema["properties"]["assignments"]["items"]["properties"]["motif_id"]["enum"] = ids
+    system_prompt = (
+        "Assign only established distinctive Feldenkrais motifs supported by "
+        "the transcript. Empty assignments are valid."
+    )
+    llm = _state["_get_llm"](provider_key)
+    t0 = time.time()
+    result = llm.complete_structured_json(prompt=prompt, schema=schema, system=system_prompt)
+    elapsed = round(time.time() - t0, 1)
+    assignments = []
+    for assignment in result.get("assignments", []) or []:
+        evidence = assignment.get("evidence") or []
+        if (assignment.get("motif_id") in ids
+                and assignment.get("mode") in _ASSIGNMENT_MODES
+                and assignment.get("role") in _ROLES
+                and assignment.get("certainty") in _CERTAINTIES
+                and all(isinstance(quote, str) and quote.strip() for quote in evidence)):
+            assignments.append({**assignment, "evidence": evidence[:2]})
+    payload = {
+        "assignments": assignments,
+        "registry_version": registry_version,
+        "prompt_version": LITE_PROMPT_VERSION,
+        "model": getattr(llm, "model", None) or (provider_key or DEFAULT_LLM),
+        "extracted_at": datetime.now(timezone.utc).isoformat(),
+        "elapsed": elapsed,
+        "usage": llm.last_usage or {},
+    }
+    _pkg.save_cached_analysis(cache_key, payload)
     return {**payload, "cached": False}

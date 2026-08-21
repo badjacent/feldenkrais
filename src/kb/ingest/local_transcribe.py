@@ -269,7 +269,10 @@ def main():
 
     config = Config.from_env()
     db = Database(config.database_url)
-    db.initialize()
+    # Runtime workers consume an already-migrated database. Re-running DDL and
+    # queue migrations on every launch can deadlock with crawler startup.
+    if os.environ.get("WORKER_INITIALIZE_DATABASE") == "1":
+        db.initialize()
     storage = Storage(config.bucket)
 
     try:
