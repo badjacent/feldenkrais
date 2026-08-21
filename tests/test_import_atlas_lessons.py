@@ -1,4 +1,5 @@
 from ops.import_atlas_lessons import (
+    eligible_media,
     eligible_urls,
     plan_intake,
     reconcile_atlas_origins,
@@ -77,6 +78,29 @@ def test_eligible_urls_enforces_public_free_video_boundary():
 
     assert eligible_urls(catalog) == {
         "yes": "https://www.youtube.com/watch?v=yes"
+    }
+
+
+def test_eligible_media_accepts_free_non_youtube_lessons_only():
+    base = {
+        "entry_kind": "resource",
+        "access": "free",
+        "content_kind": "audio_lesson",
+        "status": "live",
+        "platform": "soundcloud",
+        "title": "A lesson",
+    }
+    catalog = [
+        {**base, "url": "https://soundcloud.com/example/lesson"},
+        {**base, "url": "https://example.com/lesson.mp3", "platform": "website"},
+        {**base, "url": "https://example.com/paid.mp3", "access": "paid"},
+        {**base, "url": "https://example.com/article", "content_kind": "article"},
+        {**base, "url": "https://youtube.com/watch?v=abc123", "platform": "youtube"},
+    ]
+
+    assert set(eligible_media(catalog)) == {
+        "https://soundcloud.com/example/lesson",
+        "https://example.com/lesson.mp3",
     }
 
 

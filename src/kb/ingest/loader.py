@@ -103,6 +103,8 @@ def process_file(
         metadata["scraper"] = sidecar["scraper_metadata"]
     if sidecar.get("youtube_metadata"):
         metadata["youtube"] = sidecar["youtube_metadata"]
+    if sidecar.get("atlas_metadata"):
+        metadata["atlas"] = sidecar["atlas_metadata"]
     # FMTT (and any future scraper) enrichment blocks. These feed the /fmtt page
     # query (segment_label, lesson_type, chapter); without mapping them here the
     # data would be dropped and require a separate backfill pass.
