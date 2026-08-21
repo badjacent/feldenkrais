@@ -7,13 +7,15 @@ leaves transcription to the existing shared local transcription worker.
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import logging
 import os
 import re
 import tempfile
+import urllib.request
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 from config import Config
 from database import Database
@@ -21,6 +23,10 @@ from storage import Storage
 
 logger = logging.getLogger("atlas_media")
 AUDIO_TYPE_ID = 2
+MEDIA_URL_RE = re.compile(
+    r'''(?P<url>(?:https?:)?//[^\s"'<>]+?\.(?:mp3|m4a|aac|ogg|opus|wav)(?:\?[^\s"'<>]*)?)''',
+    re.IGNORECASE,
+)
 
 
 def _safe(value: str, limit: int = 80) -> str:
@@ -45,6 +51,37 @@ def _source_id(db: Database, item: dict) -> int:
         return cursor.fetchone()["id"]
 
 
+def _embedded_media_url(page: str, page_url: str) -> str | None:
+    match = MEDIA_URL_RE.search(html.unescape(page))
+    return urljoin(page_url, match.group("url")) if match else None
+
+
+def _resolve_media_url(url: str) -> str:
+    if Path(urlsplit(url).path).suffix.casefold() in {
+        ".mp3", ".m4a", ".aac", ".ogg", ".opus", ".wav",
+    }:
+        return url
+    if urlsplit(url).hostname in {"soundcloud.com", "www.soundcloud.com"}:
+        return url
+    request = urllib.request.Request(
+        url,
+        headers={"User-Agent": "FeldenkraisAtlasMedia/1.0 (+https://feldenkraisatlas.com)"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            content_type = response.headers.get_content_type()
+            if content_type not in {"text/html", "application/xhtml+xml"}:
+                return url
+            body = response.read(2_000_001)
+            if len(body) > 2_000_000:
+                raise ValueError("media host page exceeds 2 MB resolver limit")
+            embedded = _embedded_media_url(body.decode("utf-8", "ignore"), response.url)
+            return embedded or url
+    except (OSError, ValueError) as exc:
+        logger.info("host-page media resolution failed for %s: %s", url, exc)
+        return url
+
+
 def _extract_audio(url: str, output: Path) -> tuple[Path, dict]:
     import yt_dlp
 
@@ -61,8 +98,9 @@ def _extract_audio(url: str, output: Path) -> tuple[Path, dict]:
         "no_warnings": True,
         "noplaylist": True,
     }
+    media_url = _resolve_media_url(url)
     with yt_dlp.YoutubeDL(options) as ydl:
-        info = ydl.extract_info(url, download=True)
+        info = ydl.extract_info(media_url, download=True)
     media_id = str(info.get("id") or "media")
     result = output / f"{media_id}.mp3"
     if not result.exists():
