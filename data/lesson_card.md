@@ -15,7 +15,13 @@ the transcript says the recording is about. Give a calibrated confidence from 0 
 and one short, factual reason. Use `lesson_type: other` when the recording is unrelated.
 
 Use only the schema vocabularies. `starting_position` is where guided practice
-substantially begins. Include only positions and supports substantially used.
+substantially begins. `primary_positions` contains the one or more positions in
+which most of the substantive movement exploration occurs: use duration, repeated
+returns, and the lesson's main sequences rather than merely counting mentions. Do
+not select standing when it is only a brief orientation or closing check at the
+beginning or end, and ignore brief transitional positions. When two positions share
+the main work, include both; use at most three. Include only positions and supports
+substantially used.
 `notable_feature` is a genuinely distinctive factual characteristic, or null.
 `suggested_title` is null unless the source title is missing, generic, or numbered;
 it is conservative display copy, never canonical identity.

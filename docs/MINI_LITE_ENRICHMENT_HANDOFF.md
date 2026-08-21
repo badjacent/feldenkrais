@@ -90,7 +90,7 @@ Closed-set motif assignment from the raw transcript:
 
 One call producing public-safe display content. Prompt
   `data/lesson_card.md`, schema `data/lesson_card.schema.json`, cache suffix
-`:lesson_card:card-p4`. The call receives the transcript plus bounded hosting-page
+`:lesson_card:card-p5`. The call receives the transcript plus bounded hosting-page
 context (URL, title, source, presenter, date, tags, and captured scraper/YouTube
 metadata). The transcript remains authoritative for topical relevance; page context
 is secondary and cannot override it. Fields:
@@ -104,6 +104,7 @@ is secondary and cannot override it. Fields:
   "relevance_reason": "Guided Feldenkrais lesson.",
   "lesson_type": "atm",                           // atm|talk|interview|demonstration|mixed|other
   "starting_position": "lying",                   // normalized primary starting position
+  "primary_positions": ["lying_on_back"],         // positions containing most substantive work
   "positions": ["lying on back", "side lying", ...],
   "themes": ["breath", "rolling", "eyes", ...],   // 2–5 plain words each
   "support_context": ["floor"],                    // floor|chair|standing|wall
@@ -127,6 +128,11 @@ Additional field rules:
 - `starting_position` is the position in which the guided movement lesson
   substantially begins. Use the same normalized position vocabulary as
   `positions`; do not infer it from a passing introductory instruction.
+- `primary_positions` contains one to three positions accounting for most of the
+  substantive movement sequences, using duration and repeated returns rather than
+  incidental mentions. Exclude brief standing orientations or closing checks and
+  transitional positions. Use multiple values when the main work is genuinely
+  shared across positions.
 - `positions` includes substantially used practice positions, not incidental
   mentions. The projection may normalize surface labels further for Atlas.
 - `support_context` is a closed list drawn from `floor`, `chair`, `standing`,

@@ -160,7 +160,7 @@ def build_projection(db) -> tuple[dict, dict]:
                 for field in (
                     "summary", "suggested_title", "is_feldenkrais_related",
                     "feldenkrais_relevance_confidence", "relevance_reason",
-                    "lesson_type", "starting_position",
+                    "lesson_type", "starting_position", "primary_positions",
                     "positions", "themes", "support_context", "equipment",
                     "primary_language", "notable_feature", "audience_notes",
                 )
@@ -244,6 +244,10 @@ def validate_projection(proj: dict) -> list[str]:
             errors.append(f"bad starting_position {display.get('starting_position')}")
         if not set(display.get("positions") or []) <= _POSITIONS:
             errors.append("bad positions")
+        if not set(display.get("primary_positions") or []) <= _POSITIONS:
+            errors.append("bad primary_positions")
+        if len(display.get("primary_positions") or []) > 3:
+            errors.append("too many primary_positions")
         if not set(display.get("support_context") or []) <= _SUPPORT_CONTEXTS:
             errors.append("bad support_context")
         provenance = l.get("provenance") or {}

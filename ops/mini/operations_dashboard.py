@@ -84,6 +84,13 @@ def status() -> dict:
         ],
         timeout=20,
     )
+    atlas_operations = _command(
+        [
+            "/bin/zsh", "-lc",
+            "cd /Users/hermes/src/feldenkrais-index && set -a && source .env && set +a && .venv/bin/feldenkrais-index operations",
+        ],
+        timeout=20,
+    )
     disk = os.statvfs(ROOT)
     return {
         "reported_at": time.strftime("%Y-%m-%d %H:%M:%S %Z"),
@@ -98,6 +105,7 @@ def status() -> dict:
         "inventory": _inventory(
             atlas_health.get("data"), transcription.get("data"), youtube.get("data")
         ),
+        "atlas_operations": atlas_operations,
     }
 
 
@@ -224,12 +232,26 @@ def render(payload: dict) -> bytes:
     day = payload["activity_24h"]
     crawl = day["crawler"]
     inventory = payload["inventory"]
+    operations = payload["atlas_operations"].get("data") or {}
+    frontiers = operations.get("frontiers") or {}
+    source_performance = frontiers.get("source_performance") or []
     metric = lambda value: "—" if value is None else str(value)
     window_note = "latest crawler run within 24h" if crawl["in_window"] else "no crawler run completed within 24h"
+    source_rows = "".join(
+        "<tr>"
+        f"<td><code>{html.escape(item.get('url') or '')}</code></td>"
+        f"<td>{metric(item.get('pending_units'))}</td>"
+        f"<td>{metric((item.get('last_batch') or {}).get('fetch_attempts'))}</td>"
+        f"<td>{metric((item.get('last_batch') or {}).get('candidates'))}</td>"
+        f"<td>{metric(((item.get('last_batch') or {}).get('outcomes') or {}).get('accepted', 0))}</td>"
+        f"<td>{metric((item.get('scheduling_inputs') or {}).get('consecutive_zero_accepted'))}</td>"
+        "</tr>"
+        for item in source_performance[:12]
+    ) or '<tr><td colspan="6">No source telemetry recorded yet.</td></tr>'
     body = f"""<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
 <title>Feldenkrais Mini operations</title><style>
-:root{{--ink:#17322d;--muted:#60706b;--paper:#f4f0e5;--card:#fffdf7;--line:#d7d4c8;--moss:#426d5b;--clay:#c56f45;--sun:#edbd62}}*{{box-sizing:border-box}}body{{margin:0;background:var(--paper);color:var(--ink);font-family:Georgia,serif}}main{{width:min(1050px,90vw);margin:auto;padding:4rem 0}}h1{{font-size:clamp(2.8rem,7vw,5.5rem);font-weight:500;line-height:.95;margin:.2rem 0 1rem;max-width:12ch}}h2{{font-size:2rem;font-weight:500}}.eyebrow,.label{{color:var(--clay);font:750 .7rem system-ui;letter-spacing:.12em;text-transform:uppercase}}.lede{{color:var(--muted);font-size:1.15rem}}.grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin:3rem 0}}.card,.workers article{{padding:1.3rem;border:1px solid var(--line);border-radius:.4rem 1.3rem .4rem .4rem;background:var(--card)}}.card strong{{display:block;font-size:2.5rem;font-weight:500;margin:.6rem 0}}.card small,.workers small,footer{{color:var(--muted);font: .78rem system-ui}}.workers{{display:grid;grid-template-columns:repeat(5,1fr);gap:.7rem}}.workers article{{display:grid;grid-template-columns:auto 1fr;gap:.4rem .6rem;align-items:center}}.workers small{{grid-column:2}}.dot{{width:.65rem;height:.65rem;border-radius:50%;background:#aaa}}.dot.running{{background:var(--moss);box-shadow:0 0 0 4px #426d5b22}}.dot.waiting{{background:var(--sun)}}.day{{margin-top:3.5rem}}.day-grid{{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);border-left:1px solid var(--line)}}.day-grid article{{display:grid;gap:.25rem;padding:1rem;border-right:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--card)}}.day-grid strong{{font-size:1.8rem;font-weight:500}}.day-grid span,.day>small{{color:var(--muted);font:.75rem/1.3 system-ui}}.day>small{{display:block;margin-top:.7rem}}.logs{{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:3rem}}.log-panel{{min-width:0}}.log-panel ol{{max-height:380px;overflow:auto;margin:0;padding:0;border-top:1px solid var(--line);list-style:none}}.log-panel li{{display:grid;grid-template-columns:7rem 1fr;gap:.8rem;padding:.75rem .2rem;border-bottom:1px solid var(--line)}}.log-panel li span{{color:var(--clay);font:700 .68rem system-ui;text-transform:uppercase}}.log-panel code{{min-width:0;overflow-wrap:anywhere;color:var(--ink);font:.74rem/1.4 ui-monospace,monospace}}.log-panel .empty{{display:block;color:var(--muted)}}footer{{margin-top:3rem;border-top:1px solid var(--line);padding-top:1rem}}@media(max-width:700px){{.grid,.workers,.logs,.day-grid{{grid-template-columns:1fr 1fr}}}}@media(max-width:600px){{.logs{{grid-template-columns:1fr}}}}@media(max-width:440px){{.grid,.workers,.day-grid{{grid-template-columns:1fr}}}}
+:root{{--ink:#17322d;--muted:#60706b;--paper:#f4f0e5;--card:#fffdf7;--line:#d7d4c8;--moss:#426d5b;--clay:#c56f45;--sun:#edbd62}}*{{box-sizing:border-box}}body{{margin:0;background:var(--paper);color:var(--ink);font-family:Georgia,serif}}main{{width:min(1050px,90vw);margin:auto;padding:4rem 0}}h1{{font-size:clamp(2.8rem,7vw,5.5rem);font-weight:500;line-height:.95;margin:.2rem 0 1rem;max-width:12ch}}h2{{font-size:2rem;font-weight:500}}.eyebrow,.label{{color:var(--clay);font:750 .7rem system-ui;letter-spacing:.12em;text-transform:uppercase}}.lede{{color:var(--muted);font-size:1.15rem}}.grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin:3rem 0}}.card,.workers article{{padding:1.3rem;border:1px solid var(--line);border-radius:.4rem 1.3rem .4rem .4rem;background:var(--card)}}.card strong{{display:block;font-size:2.5rem;font-weight:500;margin:.6rem 0}}.card small,.workers small,footer{{color:var(--muted);font: .78rem system-ui}}.workers{{display:grid;grid-template-columns:repeat(5,1fr);gap:.7rem}}.workers article{{display:grid;grid-template-columns:auto 1fr;gap:.4rem .6rem;align-items:center}}.workers small{{grid-column:2}}.dot{{width:.65rem;height:.65rem;border-radius:50%;background:#aaa}}.dot.running{{background:var(--moss);box-shadow:0 0 0 4px #426d5b22}}.dot.waiting{{background:var(--sun)}}.day{{margin-top:3.5rem}}.day-grid{{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);border-left:1px solid var(--line)}}.day-grid article{{display:grid;gap:.25rem;padding:1rem;border-right:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--card)}}.day-grid strong{{font-size:1.8rem;font-weight:500}}.day-grid span,.day>small{{color:var(--muted);font:.75rem/1.3 system-ui}}.day>small{{display:block;margin-top:.7rem}}table{{width:100%;border-collapse:collapse;background:var(--card);font:.78rem/1.35 system-ui}}th,td{{padding:.65rem;border:1px solid var(--line);text-align:left;vertical-align:top}}td code{{overflow-wrap:anywhere}}.logs{{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:3rem}}.log-panel{{min-width:0}}.log-panel ol{{max-height:380px;overflow:auto;margin:0;padding:0;border-top:1px solid var(--line);list-style:none}}.log-panel li{{display:grid;grid-template-columns:7rem 1fr;gap:.8rem;padding:.75rem .2rem;border-bottom:1px solid var(--line)}}.log-panel li span{{color:var(--clay);font:700 .68rem system-ui;text-transform:uppercase}}.log-panel code{{min-width:0;overflow-wrap:anywhere;color:var(--ink);font:.74rem/1.4 ui-monospace,monospace}}.log-panel .empty{{display:block;color:var(--muted)}}footer{{margin-top:3rem;border-top:1px solid var(--line);padding-top:1rem}}@media(max-width:700px){{.grid,.workers,.logs,.day-grid{{grid-template-columns:1fr 1fr}}}}@media(max-width:600px){{.logs{{grid-template-columns:1fr}}}}@media(max-width:440px){{.grid,.workers,.day-grid{{grid-template-columns:1fr}}}}
 </style></head><body><main><p class="eyebrow">Private · tailnet only</p><h1>Work on the Mini</h1><p class="lede">Live read-only status from {html.escape(payload['host'])}. Reload the page for current status.</p>
 <section class="grid"><article class="card"><p class="label">Transcription</p><strong>{jobs.get('processing', 0)}</strong><p>processing</p><small>{trans.get('unclaimed', '?')} waiting · {jobs.get('completed', '?')} completed</small></article>
 <article class="card"><p class="label">Lite enrichment</p><strong>{enrichment.get('complete', '?')}</strong><p>lessons complete</p><small>{enrichment.get('partial', '?')} partial · {enrichment.get('missing', '?')} waiting</small></article>
@@ -256,6 +278,13 @@ def render(payload: dict) -> bytes:
 <article><strong>{metric(inventory['soundcloud_lessons'])}</strong><span>SoundCloud lessons</span></article>
 <article><strong>{metric(inventory['podcast_lessons'])}</strong><span>podcast lessons</span></article></div>
 <small>Current distinct records; crawler revisits are not counted again.</small></section>
+<section class="day"><p class="eyebrow">Crawler frontier</p><h2>Where discovery attention is going</h2><div class="day-grid">
+<article><strong>{metric(frontiers.get('pending_sources'))}</strong><span>sources with pending work</span></article>
+<article><strong>{metric(frontiers.get('pending_units'))}</strong><span>frontier items waiting</span></article>
+<article><strong>{metric(frontiers.get('continuation_sources'))}</strong><span>sources requiring continuation</span></article>
+<article><strong>{metric((operations.get('run_windows') or {}).get('1', {}).get('source_page_cap_hits'))}</strong><span>source cap hits · 24h</span></article></div>
+<table><thead><tr><th>Source</th><th>Pending</th><th>Fetches</th><th>Candidates</th><th>Accepted</th><th>Zero-yield streak</th></tr></thead><tbody>{source_rows}</tbody></table>
+<small>Ordered by unfinished frontier score and recent yield. Reload for current status.</small></section>
 <section class="logs"><article class="log-panel"><p class="eyebrow">Recent activity</p><h2>Work log</h2><ol>{activity_rows}</ol></article>
 <article class="log-panel"><p class="eyebrow">Recent errors</p><h2>Needs attention</h2><ol>{error_rows}</ol></article></section>
 <footer>Reported {html.escape(payload['reported_at'])}. This page has no controls and does not start analysis or crawling.</footer></main></body></html>"""

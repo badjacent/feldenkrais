@@ -11,7 +11,7 @@ from llm_config import DEFAULT_LLM
 
 from .core import _state
 
-PROMPT_VERSION = "card-p4"
+PROMPT_VERSION = "card-p5"
 LESSON_TYPES = {"atm", "talk", "interview", "demonstration", "mixed", "other"}
 POSITIONS = {"lying_on_back", "lying_on_side", "lying_on_front", "sitting", "standing", "kneeling", "all_fours", "other"}
 SUPPORT_CONTEXTS = {"floor", "chair", "standing", "wall"}
@@ -82,7 +82,11 @@ def run_lesson_card(
     starting = result.get("starting_position")
     if starting is not None and starting not in POSITIONS:
         raise ValueError(f"invalid starting_position: {starting!r}")
+    primary_positions = [
+        value for value in result.get("primary_positions", []) if value in POSITIONS
+    ][:3]
     positions = [value for value in result.get("positions", []) if value in POSITIONS]
+    positions = list(dict.fromkeys([*primary_positions, *positions]))
     supports = [value for value in result.get("support_context", []) if value in SUPPORT_CONTEXTS]
     language = str(result.get("primary_language") or "").lower()
     if not re.fullmatch(r"[a-z]{2,3}", language):
@@ -95,7 +99,8 @@ def run_lesson_card(
         "relevance_reason": reason,
         "lesson_type": lesson_type,
         "starting_position": starting,
-        "positions": list(dict.fromkeys(positions)),
+        "primary_positions": list(dict.fromkeys(primary_positions)),
+        "positions": positions,
         "themes": list(dict.fromkeys(result.get("themes", [])))[:8],
         "support_context": list(dict.fromkeys(supports)),
         "equipment": list(dict.fromkeys(result.get("equipment", [])))[:8],

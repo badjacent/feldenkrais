@@ -1,8 +1,17 @@
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import kb.analysis as analysis
 from kb.analysis import core
 from kb.analysis.lesson_card import run_lesson_card
+
+
+def test_lesson_card_prompt_defines_primary_position_without_brief_standing():
+    prompt = (Path(__file__).parents[2] / "data" / "lesson_card.md").read_text()
+
+    assert "`primary_positions`" in prompt
+    assert "most of the substantive movement exploration" in prompt
+    assert "brief orientation or closing check" in prompt
 
 
 def test_lesson_card_validates_and_caches(tmp_path, monkeypatch):
@@ -20,6 +29,7 @@ def test_lesson_card_validates_and_caches(tmp_path, monkeypatch):
         "relevance_reason": "The transcript guides an Awareness Through Movement lesson.",
         "lesson_type": "atm",
         "starting_position": "lying_on_back",
+        "primary_positions": ["lying_on_back", "lying_on_side"],
         "positions": ["lying_on_back", "sitting"],
         "themes": ["rolling", "eyes"],
         "support_context": ["floor"],
@@ -43,6 +53,8 @@ def test_lesson_card_validates_and_caches(tmp_path, monkeypatch):
     )
 
     assert result["primary_language"] == "en"
+    assert result["primary_positions"] == ["lying_on_back", "lying_on_side"]
+    assert result["positions"] == ["lying_on_back", "lying_on_side", "sitting"]
     assert result["notable_feature"] == "The eyes repeatedly initiate rolling."
     assert result["is_feldenkrais_related"] is True
     assert result["feldenkrais_relevance_confidence"] == 0.99
