@@ -1,0 +1,213 @@
+{
+  "type": "object",
+  "properties": {
+    "flexion_extension": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "enum": [
+            "strongly_flexion",
+            "flexion_leaning",
+            "mixed_or_balanced",
+            "extension_leaning",
+            "strongly_extension"
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "properties": {
+              "quotes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "quotes",
+              "reason"
+            ]
+          }
+        }
+      },
+      "required": [
+        "value",
+        "evidence"
+      ]
+    },
+    "rotation": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "enum": [
+            "none",
+            "minor",
+            "moderate",
+            "central"
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "properties": {
+              "quotes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "quotes",
+              "reason"
+            ]
+          }
+        }
+      },
+      "required": [
+        "value",
+        "evidence"
+      ]
+    },
+    "side_bending": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "enum": [
+            "none",
+            "minor",
+            "moderate",
+            "central"
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "properties": {
+              "quotes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "quotes",
+              "reason"
+            ]
+          }
+        }
+      },
+      "required": [
+        "value",
+        "evidence"
+      ]
+    },
+    "cross_lateral": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "enum": [
+            "none",
+            "minor",
+            "moderate",
+            "central"
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "properties": {
+              "quotes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "quotes",
+              "reason"
+            ]
+          }
+        }
+      },
+      "required": [
+        "value",
+        "evidence"
+      ]
+    },
+    "vigor": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "enum": [
+            "meditative",
+            "gentle",
+            "moderate",
+            "vigorous"
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "properties": {
+              "quotes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "quotes",
+              "reason"
+            ]
+          }
+        }
+      },
+      "required": [
+        "value",
+        "evidence"
+      ]
+    }
+  },
+  "required": [
+    "flexion_extension",
+    "rotation",
+    "side_bending",
+    "cross_lateral",
+    "vigor"
+  ]
+}

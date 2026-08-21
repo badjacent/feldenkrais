@@ -1,0 +1,25 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["assignments"],
+  "properties": {
+    "assignments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["motif_id", "mode", "role", "certainty", "evidence"],
+        "properties": {
+          "motif_id": {"type": "string"},
+          "mode": {"type": "string", "enum": ["taught", "referenced"]},
+          "role": {"type": "string", "enum": ["central", "supporting", "incidental"]},
+          "certainty": {"type": "string", "enum": ["clear", "probable", "uncertain"]},
+          "evidence": {
+            "type": "array", "minItems": 1, "maxItems": 2,
+            "items": {"type": "string", "minLength": 1, "maxLength": 240}
+          }
+        }
+      }
+    }
+  }
+}

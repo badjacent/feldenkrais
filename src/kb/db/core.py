@@ -464,6 +464,15 @@ class DatabaseCore:
     def initialize(self):
         """Initialize the database schema."""
         with self.get_cursor() as cursor:
+            # Multiple unattended workers may start on the same launchd tick.
+            # Schema setup includes DDL plus a youtube_queue migration update;
+            # allowing those transactions to interleave can deadlock Postgres.
+            # A transaction-scoped advisory lock serializes initialization while
+            # releasing automatically on commit, rollback, or process death.
+            cursor.execute(
+                "SELECT pg_advisory_xact_lock(hashtext(%s))",
+                ("feldenkrais:database-initialize",),
+            )
             # Create tables
             cursor.execute(SCHEMA)
             # Create indexes (each separately to handle IF NOT EXISTS properly)

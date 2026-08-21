@@ -88,5 +88,6 @@ def __getattr__(name):
 
 
 # ── Distinctive motifs ────────────────────────────────────────────────────
-from .motifs import load_motifs, load_motif_registry, run_motifs, run_raw_motifs  # noqa: E402
-from .axes import load_axes, run_axes  # noqa: E402
+from .motifs import load_motifs, load_motif_registry, run_motifs, run_raw_motifs, run_motifs_lite  # noqa: E402
+from .axes import load_axes, run_axes, run_axes_lite  # noqa: E402
+from .lesson_card import run_lesson_card  # noqa: E402

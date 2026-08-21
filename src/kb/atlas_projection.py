@@ -58,6 +58,13 @@ def _prompt_versions() -> tuple[str, str]:
     return PROMPT_VERSION, AXES_PROMPT_VERSION
 
 
+def _lite_prompt_versions() -> tuple[str, str, str]:
+    from analysis.motifs import LITE_PROMPT_VERSION as motifs_lite
+    from analysis.axes import LITE_PROMPT_VERSION as axes_lite
+    from analysis.lesson_card import PROMPT_VERSION as card
+    return motifs_lite, axes_lite, card
+
+
 def _cache_key(text: str, suffix: str) -> str:
     return hashlib.sha256((text.strip() + suffix).encode()).hexdigest()[:16]
 
@@ -78,6 +85,7 @@ def build_projection(db) -> tuple[dict, dict]:
     registry = _load_registry()
     ver = registry.get("version", "motifs-v0")
     motif_prompt, axes_prompt = _prompt_versions()
+    motifs_lite_prompt, axes_lite_prompt, card_prompt = _lite_prompt_versions()
     vis = sorted(
         ({"id": m["id"], "label": m["label"], "definition": m["definition"].strip()}
          for m in registry.get("motifs", [])
@@ -95,24 +103,48 @@ def build_projection(db) -> tuple[dict, dict]:
             FROM document d
             JOIN document_source ds ON ds.id = d.source_id
             JOIN analysis a ON a.document_id = d.id AND a.type_id = 1
-            WHERE ds.name = ANY(%s)
-            ORDER BY ds.name, d.title
+            WHERE ds.name = ANY(%s) OR d.origin = 'feldenkrais_atlas'
+            ORDER BY (d.origin = 'feldenkrais_atlas') DESC NULLS LAST, ds.name, d.title
         """, (PUBLIC_SOURCES,))
         rows = [dict(r) for r in cur.fetchall()]
 
-    lessons, missing = [], 0
-    for r in rows:
-        text = r["text"] or ""
+    keyed_rows = []
+    wanted_keys = []
+    for row in rows:
+        text = row["text"] or ""
         if not text.strip():
+            keyed_rows.append((row, None))
+            continue
+        keys = {
+            "motifs": _cache_key(text, f":distinctive_motifs_lite:{ver}:{motifs_lite_prompt}"),
+            "axes": _cache_key(text, f":movement_axes_lite:{axes_lite_prompt}"),
+            "card": _cache_key(text, f":lesson_card:{card_prompt}"),
+        }
+        wanted_keys.extend(keys.values())
+        keyed_rows.append((row, keys))
+    with db.get_cursor(commit=False) as cur:
+        cur.execute("SELECT key, data FROM cache WHERE key = ANY(%s)", (wanted_keys,))
+        cached = {row["key"]: row["data"] for row in cur.fetchall()}
+
+    lessons, missing, excluded_unrelated = [], 0, 0
+    for r, keys in keyed_rows:
+        text = r["text"] or ""
+        if not text.strip() or keys is None:
             missing += 1
             continue
-        mrow = db.get_cache(_cache_key(text, f":distinctive_motifs:{ver}:{motif_prompt}"))
-        arow = db.get_cache(_cache_key(text, f":movement_axes:{axes_prompt}"))
-        if not mrow or not arow:
+        # Lite enrichment is the independent Atlas data contract. Full analysis
+        # can later overlay these fields without changing search or game code.
+        mrow = cached.get(keys["motifs"])
+        arow = cached.get(keys["axes"])
+        card = cached.get(keys["card"])
+        if not mrow or not arow or not card:
             missing += 1
+            continue
+        if card.get("is_feldenkrais_related") is False:
+            excluded_unrelated += 1
             continue
         title = (r["title"] or "").replace(" - Feldenkrais Project", "")
-        lt = (r.get("lesson_type") or "").lower()
+        lt = (card.get("lesson_type") or r.get("lesson_type") or "").lower()
         is_atm = not _NON_ATM.search(title) and lt in ("", "atm", "unknown")
         lessons.append({
             "analysis_document_id": str(r["id"]),
@@ -120,9 +152,21 @@ def build_projection(db) -> tuple[dict, dict]:
             "canonical_source_url": r["source_url"],
             "title": title,
             "source_name": r["source_name"],
-            "language": "en",
+            "language": card.get("primary_language"),
             "duration_minutes": round(r["end_s"] / 60) if r.get("end_s") else None,
             "is_atm": is_atm,
+            "display": {
+                field: card.get(field)
+                for field in (
+                    "summary", "suggested_title", "is_feldenkrais_related",
+                    "feldenkrais_relevance_confidence", "relevance_reason",
+                    "lesson_type", "starting_position", "primary_positions",
+                    "positions", "themes", "support_context", "equipment",
+                    "primary_language", "notable_feature", "audience_notes",
+                )
+            },
+            "provenance": {"axes": "gemini_lite", "motifs": "gemini_lite",
+                           "display": "gemini_lite"},
             "motifs": [
                 {"id": a["motif_id"], "mode": a["mode"],
                  "role": a["role"], "certainty": a["certainty"]}
@@ -139,12 +183,15 @@ def build_projection(db) -> tuple[dict, dict]:
                        "registry_sha256": _registry_sha(ver, vis),
                        "prompt": motif_prompt},
             "axes": {"prompt": axes_prompt},
+            "lite": {"motifs_prompt": motifs_lite_prompt,
+                     "axes_prompt": axes_lite_prompt, "card_prompt": card_prompt},
         },
         "motifs": vis,
         "lessons": lessons,
     }
     summary = {"eligible": len(rows), "exported": len(lessons),
                "missing_analysis": missing,
+               "excluded_unrelated": excluded_unrelated,
                "registry_version": ver}
     return projection, summary
 
@@ -158,6 +205,9 @@ _AXIS_VALUES = {
     "vigor": {"meditative", "gentle", "moderate", "vigorous"},
 }
 _FORBIDDEN_LESSON_KEYS = {"evidence", "candidate_motifs", "raw_motifs", "transcript", "text"}
+_LESSON_TYPES = {"atm", "talk", "interview", "demonstration", "mixed", "other"}
+_POSITIONS = {"lying_on_back", "lying_on_side", "lying_on_front", "sitting", "standing", "kneeling", "all_fours", "other"}
+_SUPPORT_CONTEXTS = {"floor", "chair", "standing", "wall"}
 
 
 def validate_projection(proj: dict) -> list[str]:
@@ -176,6 +226,33 @@ def validate_projection(proj: dict) -> list[str]:
         for ax, v in l.get("axes", {}).items():
             if ax not in _AXIS_VALUES or v not in _AXIS_VALUES[ax]:
                 errors.append(f"bad axis {ax}={v}")
+        display = l.get("display") or {}
+        if not isinstance(display.get("is_feldenkrais_related"), bool):
+            errors.append("bad is_feldenkrais_related")
+        confidence = display.get("feldenkrais_relevance_confidence")
+        if (
+            not isinstance(confidence, (int, float))
+            or isinstance(confidence, bool)
+            or not 0 <= confidence <= 1
+        ):
+            errors.append("bad feldenkrais_relevance_confidence")
+        if not str(display.get("relevance_reason") or "").strip():
+            errors.append("missing relevance_reason")
+        if display.get("lesson_type") not in _LESSON_TYPES:
+            errors.append(f"bad lesson_type {display.get('lesson_type')}")
+        if display.get("starting_position") not in _POSITIONS | {None}:
+            errors.append(f"bad starting_position {display.get('starting_position')}")
+        if not set(display.get("positions") or []) <= _POSITIONS:
+            errors.append("bad positions")
+        if not set(display.get("primary_positions") or []) <= _POSITIONS:
+            errors.append("bad primary_positions")
+        if len(display.get("primary_positions") or []) > 3:
+            errors.append("too many primary_positions")
+        if not set(display.get("support_context") or []) <= _SUPPORT_CONTEXTS:
+            errors.append("bad support_context")
+        provenance = l.get("provenance") or {}
+        if any(value != "gemini_lite" for value in provenance.values()):
+            errors.append("bad lite provenance")
     return errors
 
 
