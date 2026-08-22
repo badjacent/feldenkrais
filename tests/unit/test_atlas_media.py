@@ -29,3 +29,22 @@ def test_media_timeout_is_persisted_as_failed(monkeypatch):
         result = process(db, storage, item)
     assert result["status"] == "failed"
     finish.assert_called_once_with(db, "item-1", "failed", "bounded")
+
+
+def test_soundcloud_collection_is_marked_ineligible_without_download():
+    db = MagicMock()
+    storage = MagicMock()
+    item = {
+        "id": "item-set",
+        "url": "https://soundcloud.com/feldenbear/sets/atm-ger",
+        "title": "ATM German",
+    }
+    with patch("kb.ingest.atlas_media._extract_audio") as extract, \
+         patch("kb.ingest.atlas_media._finish") as finish:
+        result = process(db, storage, item)
+    assert result["status"] == "ineligible"
+    extract.assert_not_called()
+    storage.upload_file.assert_not_called()
+    finish.assert_called_once_with(
+        db, "item-set", "ineligible", "collection URL is not a single lesson recording"
+    )
