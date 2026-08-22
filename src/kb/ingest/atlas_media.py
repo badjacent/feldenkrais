@@ -58,6 +58,14 @@ def _embedded_media_url(page: str, page_url: str) -> str | None:
     return urljoin(page_url, match.group("url")) if match else None
 
 
+def _is_collection_url(url: str) -> bool:
+    """Return true for catalog pages that are not single media recordings."""
+    parsed = urlsplit(url)
+    host = (parsed.hostname or "").casefold()
+    path_parts = {part.casefold() for part in parsed.path.split("/") if part}
+    return host in {"soundcloud.com", "www.soundcloud.com"} and "sets" in path_parts
+
+
 def _resolve_media_url(url: str) -> str:
     if Path(urlsplit(url).path).suffix.casefold() in {
         ".mp3", ".m4a", ".aac", ".ogg", ".opus", ".wav",
@@ -168,6 +176,11 @@ def _finish(db: Database, item_id: str, status: str, error: str | None = None) -
 
 def process(db: Database, storage: Storage, item: dict) -> dict:
     started = time.monotonic()
+    if _is_collection_url(item["url"]):
+        reason = "collection URL is not a single lesson recording"
+        _finish(db, str(item["id"]), "ineligible", reason)
+        return {"id": str(item["id"]), "url": item["url"], "status": "ineligible",
+                "reason": reason, "elapsed_seconds": round(time.monotonic() - started, 1)}
     timeout_seconds = int(os.getenv("ATLAS_MEDIA_ITEM_TIMEOUT_SECONDS", "600"))
     previous_handler = signal.signal(signal.SIGALRM, _timeout_handler)
     signal.alarm(timeout_seconds)
