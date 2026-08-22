@@ -83,6 +83,15 @@ def projection_equivalent(left: bytes, right: bytes) -> bool:
     return first == second
 
 
+def validate_count_change(previous: int, candidate: int, *, minimum_ratio: float = 0.8) -> None:
+    if candidate <= 0:
+        raise ValueError("refusing to publish an empty Atlas analysis projection")
+    if previous > 0 and candidate < previous * minimum_ratio:
+        raise ValueError(
+            f"refusing projection shrink from {previous} to {candidate} entries"
+        )
+
+
 def crawl_lock_path(atlas: Path) -> Path:
     """Return the exact lock file held by the Atlas crawl/publish cycle."""
     return atlas / "var/crawl-cycle.lock"
@@ -108,6 +117,13 @@ def sync(atlas: Path, *, push: bool) -> dict:
             shutil.copy2(atlas / "catalog/manifest.json", manifest)
             export_to(resources, candidate)
             entries = validate_projection(atlas, candidate)
+            previous_entries = 0
+            if target.is_file():
+                previous_payload = json.loads(target.read_bytes())
+                previous_entries = len(
+                    previous_payload.get("entries") or previous_payload.get("lessons") or []
+                )
+            validate_count_change(previous_entries, entries)
             if target.is_file() and projection_equivalent(
                 target.read_bytes(), candidate.read_bytes()
             ):

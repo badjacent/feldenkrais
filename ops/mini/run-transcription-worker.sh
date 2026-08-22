@@ -29,9 +29,16 @@ print $$ > "$lock_dir/pid"
 trap 'rm -f "$lock_dir/pid"; rmdir "$lock_dir" 2>/dev/null || true' EXIT INT TERM
 
 cd src/kb
+set +e
 /usr/bin/caffeinate -i /usr/bin/nice -n 19 \
   ../../.venv-mini/bin/python -m ingest.local_transcribe run \
   --limit "${TRANSCRIPTION_BATCH_LIMIT:-20}" \
   --max-seconds "${TRANSCRIPTION_MAX_SECONDS:-3300}" \
   --max-retries "${TRANSCRIPTION_MAX_RETRIES:-3}" \
   --stale-minutes "${TRANSCRIPTION_STALE_MINUTES:-360}"
+worker_status=$?
+set -e
+if [[ $worker_status -eq 0 ]]; then
+  /bin/launchctl kickstart "gui/$(id -u)/com.feldenkrais.lite-enrichment" 2>/dev/null || true
+fi
+exit $worker_status
