@@ -12,7 +12,7 @@ import subprocess
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -21,7 +21,7 @@ PYTHON = ROOT / ".venv-mini/bin/python"
 PORT = int(os.getenv("OPERATIONS_DASHBOARD_PORT", "8787"))
 HOST = os.getenv("OPERATIONS_DASHBOARD_HOST", "127.0.0.1")
 LABELS = (
-    "com.feldenkrais.atlas-intake",
+    "com.feldenkrais.atlas-intake", "com.feldenkrais.atlas-media",
     "com.feldenkrais.youtube-ingest", "com.feldenkrais.transcription",
     "com.feldenkrais.lite-enrichment", "com.feldenkrais.atlas-projection",
 )
@@ -92,9 +92,11 @@ def _crawler_worker() -> dict:
 
 
 def _atlas_command(command: str) -> list[str]:
-    return ["/bin/zsh", "-lc", "cd /Users/hermes/src/feldenkrais-index && "
-            "set -a && source .env && set +a && "
-            f".venv/bin/feldenkrais-index {command}"]
+    return ["/bin/zsh", "-lc", (
+        "cd /Users/hermes/src/feldenkrais-index && "
+        "set -a && source .env && set +a && "
+        f".venv/bin/feldenkrais-index {command}"
+    )]
 
 
 def status() -> dict:
@@ -102,6 +104,7 @@ def status() -> dict:
         "transcription": ([str(PYTHON), "-m", "ingest.local_transcribe", "status"], ROOT / "src/kb", 20),
         "enrichment": ([str(PYTHON), "-m", "ingest.lite_enrich", "status", "--limit", "5000"], ROOT / "src/kb", 35),
         "youtube": ([str(PYTHON), "-m", "ingest.youtube", "status"], ROOT / "src/kb", 20),
+        "atlas_media": ([str(PYTHON), "-m", "ingest.atlas_media", "status"], ROOT / "src/kb", 20),
         "atlas_health": (_atlas_command("health"), ROOT, 25),
         "atlas_operations": (_atlas_command("operations-report"), ROOT, 25),
     }
@@ -135,7 +138,7 @@ def cached_status(*, max_age_seconds: int = 15) -> dict:
 
 
 def _database_activity() -> dict:
-    empty = {window: {"transcribed": None, "audio_staged": None} for window in ("1h", "24h")}
+    empty = {window: {"transcribed": None, "audio_staged": None, "web_media_staged": None} for window in ("1h", "24h")}
     try:
         import psycopg2
         connection = psycopg2.connect(os.environ["DATABASE_URL"], connect_timeout=5)
@@ -148,9 +151,12 @@ def _database_activity() -> dict:
                     cursor.execute("SELECT count(*) FROM youtube_queue WHERE status='completed' "
                                    "AND updated_at >= NOW() - %s::interval", (interval,))
                     empty[label]["audio_staged"] = cursor.fetchone()[0]
+                    cursor.execute("SELECT count(*) FROM atlas_media_queue WHERE status='completed' "
+                                   "AND updated_at >= NOW() - %s::interval", (interval,))
+                    empty[label]["web_media_staged"] = cursor.fetchone()[0]
         finally:
             connection.close()
-    except Exception as error:  # dashboard must remain available during DB failure
+    except Exception as error:  # noqa: BLE001 - dashboard survives DB failure
         empty["error"] = _sanitize(str(error))
     return empty
 
@@ -180,7 +186,7 @@ def _parse_time(value: str | None) -> datetime | None:
     if not value:
         return None
     try:
-        result = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        result = datetime.fromisoformat(value)
         return result.replace(tzinfo=UTC) if result.tzinfo is None else result.astimezone(UTC)
     except ValueError:
         return None
@@ -229,24 +235,32 @@ def _log_rows(entries: list[dict], empty: str) -> str:
 
 def render(payload: dict) -> bytes:
     trans = payload["transcription"].get("data") or {}; jobs = trans.get("jobs") or {}
-    enrich = payload["enrichment"].get("data") or {}; youtube = payload["youtube"].get("data") or {}
+    enrich = payload["enrichment"].get("data") or {}; youtube = payload["youtube"].get("data") or {}; atlas_media = payload["atlas_media"].get("data") or {}
     health = payload["atlas_health"].get("data") or {}; quality = health.get("catalog_quality") or {}
     operations = payload["atlas_operations"].get("data") or {}; tasks = operations.get("tasks") or {}; frontiers = operations.get("frontiers") or {}
     recent = operations.get("recent_windows") or {}; db = payload["database_activity"]
     state_names = {"running": "working now", "waiting": "idle · scheduler healthy",
                    "scheduled": "idle · scheduled", "unavailable": "unavailable"}
-    workers = "".join(f'<article class="service"><i class="{item["state"]}"></i><div><strong>{html.escape(item["label"].replace("-", " ").title())}</strong><small>{html.escape(state_names.get(item["state"], item["state"]))}{f" · pid {item["pid"]}" if item.get("pid") else ""}{f" · exit {item["last_exit"]}" if item.get("last_exit") not in (None, 0) else ""}{f" · {html.escape(item["detail"])}" if item.get("detail") else ""}</small></div></article>' for item in payload["workers"])
+    def worker_card(item: dict) -> str:
+        detail = f" · {html.escape(item['detail'])}" if item.get("detail") else ""
+        pid = f" · pid {item['pid']}" if item.get("pid") else ""
+        exit_code = f" · exit {item['last_exit']}" if item.get("last_exit") not in (None, 0) else ""
+        return (f'<article class="service"><i class="{item["state"]}"></i><div><strong>'
+                f'{html.escape(item["label"].replace("-", " ").title())}</strong><small>'
+                f'{html.escape(state_names.get(item["state"], item["state"]))}'
+                f'{pid}{exit_code}{detail}</small></div></article>')
+    workers = "".join(worker_card(item) for item in payload["workers"])
     notices = "".join(f'<li class="{n["severity"]}">{html.escape(n["message"])}</li>' for n in payload["diagnostics"])
     queue_rows = []
-    for name, counts in (("Crawler tasks", tasks.get("by_status") or {}), ("Crawler task types", tasks.get("by_type") or {}), ("Transcription", jobs), ("Audio intake", youtube)):
+    for name, counts in (("Crawler tasks", tasks.get("by_status") or {}), ("Crawler task types", tasks.get("by_type") or {}), ("Transcription", jobs), ("YouTube intake", youtube), ("Web media intake", atlas_media)):
         if name == "Crawler task types":
             counts = {key: sum(v for status, v in value.items() if status in {"queued", "partial", "failed"}) for key, value in counts.items()}
         queue_rows.append((name, counts))
     queues = "".join(f'<tr><th>{html.escape(name)}</th><td>{"".join(f"<span class=chip>{html.escape(str(k))} <b>{_m(v)}</b></span>" for k,v in counts.items()) or "—"}</td></tr>' for name, counts in queue_rows)
     source_rows = "".join(f'<tr><td>{html.escape(row.get("url") or "")}</td><td>{_m(row.get("pending_units"))}</td><td>{_m((row.get("last_batch") or {}).get("fetch_attempts"))}</td><td>{_m(((row.get("last_batch") or {}).get("outcomes") or {}).get("accepted", 0))}</td><td>{_m((row.get("scheduling_inputs") or {}).get("consecutive_zero_accepted"))}</td></tr>' for row in (frontiers.get("source_performance") or [])[:50]) or '<tr><td colspan="5">No source telemetry yet.</td></tr>'
     one = recent.get("1h") or {}; day = recent.get("24h") or {}
-    hour_cards = _cards([("Crawler runs", one.get("runs"), "started"), ("Fetches", one.get("fetch_request_attempts"), "guarded requests"), ("Discovered", one.get("discovered"), "candidates"), ("Accepted", one.get("accepted"), "new resources"), ("Transcribed", (db.get("1h") or {}).get("transcribed"), "lessons"), ("Audio staged", (db.get("1h") or {}).get("audio_staged"), "files")])
-    day_cards = _cards([("Crawler runs", day.get("runs"), "started"), ("Fetches", day.get("fetch_request_attempts"), "guarded requests"), ("Discovered", day.get("discovered"), "candidates"), ("Accepted", day.get("accepted"), "new resources"), ("Transcribed", (db.get("24h") or {}).get("transcribed"), "lessons"), ("Audio staged", (db.get("24h") or {}).get("audio_staged"), "files")])
+    hour_cards = _cards([("Crawler runs", one.get("runs"), "started"), ("Fetches", one.get("fetch_request_attempts"), "guarded requests"), ("Discovered", one.get("discovered"), "candidates"), ("Accepted", one.get("accepted"), "new resources"), ("Transcribed", (db.get("1h") or {}).get("transcribed"), "lessons"), ("YouTube staged", (db.get("1h") or {}).get("audio_staged"), "files"), ("Web media staged", (db.get("1h") or {}).get("web_media_staged"), "files")])
+    day_cards = _cards([("Crawler runs", day.get("runs"), "started"), ("Fetches", day.get("fetch_request_attempts"), "guarded requests"), ("Discovered", day.get("discovered"), "candidates"), ("Accepted", day.get("accepted"), "new resources"), ("Transcribed", (db.get("24h") or {}).get("transcribed"), "lessons"), ("YouTube staged", (db.get("24h") or {}).get("audio_staged"), "files"), ("Web media staged", (db.get("24h") or {}).get("web_media_staged"), "files")])
     growth = health.get("database_growth") or {}; backup = health.get("backup_growth") or {}; cycle = operations.get("cycle_health") or health.get("cycle_health") or {}
     inventory = _cards([("Free lessons", quality.get("free_lessons"), "catalog"), ("Sources", health.get("sources"), "catalog"), ("Transcribed", jobs.get("completed"), "banked"), ("Lite complete", enrich.get("complete"), "Gemini"), ("Frontier", frontiers.get("pending_units"), "URLs/docs"), ("Disk free", payload["disk_free_gb"], "GB"), ("Crawler DB", round(growth.get("bytes", 0) / 1024**2, 1) if growth.get("bytes") is not None else None, "MB"), ("Latest backup", round(backup.get("latest_bytes", 0) / 1024**2, 1) if backup.get("latest_bytes") is not None else None, "MB"), ("Last crawl success", cycle.get("last_successful_cycle_age_hours"), "hours ago")])
     css = """:root{--ink:#172d29;--muted:#65736f;--paper:#f3efe4;--card:#fffdf7;--line:#d8d3c5;--green:#3c715c;--amber:#c68a36;--red:#b55243}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font-family:system-ui,sans-serif}main{width:min(1180px,92vw);margin:auto;padding:3rem 0 5rem}h1{font:500 clamp(2.5rem,6vw,5rem)/1 Georgia,serif;margin:.3rem 0}h2{font:500 1.8rem Georgia,serif;margin:.3rem 0 1rem}.eyebrow{color:#a85839;text-transform:uppercase;letter-spacing:.13em;font-size:.7rem;font-weight:800}.lede,small{color:var(--muted)}.title-row{display:flex;justify-content:space-between;align-items:end;gap:2rem}.title-row button{border:1px solid var(--ink);background:var(--ink);color:white;padding:.8rem 1rem;border-radius:999px;cursor:pointer}.title-row button:disabled{opacity:.6}section{margin-top:2.7rem}.services,.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:.8rem}.service,.metric{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:1rem}.service{display:flex;gap:.75rem;align-items:center}.service strong,.service small{display:block}.service i{width:.75rem;height:.75rem;border-radius:50%;background:#aaa}.service i.running{background:var(--green);box-shadow:0 0 0 4px #3c715c20}.service i.waiting,.service i.scheduled{background:var(--amber)}.metric span,.metric small{display:block}.metric span{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}.metric strong{font:500 2.1rem Georgia,serif;display:block;margin:.3rem 0}.alerts{padding:0;list-style:none}.alerts li{padding:.8rem 1rem;background:var(--card);border-left:5px solid var(--green);margin:.4rem 0}.alerts .warn{border-color:var(--amber)}.alerts .error{border-color:var(--red)}table{width:100%;border-collapse:collapse;background:var(--card);font-size:.8rem}th,td{padding:.7rem;border:1px solid var(--line);text-align:left;vertical-align:top}.chip{display:inline-block;padding:.28rem .55rem;border:1px solid var(--line);border-radius:999px;margin:.15rem}.filter{display:flex;gap:.7rem;align-items:center;margin:0 0 .7rem;color:var(--muted);font-size:.8rem}.filter input{min-width:18rem;padding:.55rem .7rem;border:1px solid var(--line);border-radius:8px;background:var(--card)}details{margin-top:1rem;background:var(--card);border:1px solid var(--line);padding:.8rem 1rem}summary{cursor:pointer;font-weight:700}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.72rem}.logs{display:grid;grid-template-columns:1fr 1fr;gap:1rem}.logs ol{list-style:none;padding:0;max-height:420px;overflow:auto}.logs li{display:grid;grid-template-columns:7rem 1fr;gap:.6rem;border-top:1px solid var(--line);padding:.6rem 0}.logs b{font-size:.68rem;color:#a85839;text-transform:uppercase}.logs code{font-size:.72rem;overflow-wrap:anywhere}footer{margin-top:3rem;border-top:1px solid var(--line);padding-top:1rem;color:var(--muted);font-size:.75rem}footer a{color:var(--ink)}@media(max-width:760px){.services,.metrics{grid-template-columns:repeat(2,1fr)}.logs{grid-template-columns:1fr}.title-row{align-items:start;flex-direction:column}.filter input{min-width:0;flex:1}}@media(max-width:460px){.services,.metrics{grid-template-columns:1fr}}"""

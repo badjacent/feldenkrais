@@ -1,11 +1,17 @@
+import pytest
+
 from ops.export_atlas_projection import (
+    _public_labels,
     build_summary,
     normalize_resource_url,
     normalize_values,
-    _public_labels,
     public_lesson_key,
 )
-from ops.sync_atlas_projection import crawl_lock_path, projection_equivalent
+from ops.sync_atlas_projection import (
+    crawl_lock_path,
+    projection_equivalent,
+    validate_count_change,
+)
 
 
 def test_normalize_resource_url_handles_aliases():
@@ -53,3 +59,11 @@ def test_projection_equivalence_ignores_only_generation_time():
 
 def test_projection_uses_the_atlas_crawl_publish_lock(tmp_path):
     assert crawl_lock_path(tmp_path) == tmp_path / "var/crawl-cycle.lock"
+
+
+def test_projection_count_guard_refuses_empty_and_large_shrink():
+    with pytest.raises(ValueError, match="empty"):
+        validate_count_change(180, 0)
+    with pytest.raises(ValueError, match="shrink"):
+        validate_count_change(180, 100)
+    validate_count_change(180, 160)

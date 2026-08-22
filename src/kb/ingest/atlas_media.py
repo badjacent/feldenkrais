@@ -12,7 +12,9 @@ import json
 import logging
 import os
 import re
+import signal
 import tempfile
+import time
 import urllib.request
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit
@@ -82,6 +84,14 @@ def _resolve_media_url(url: str) -> str:
         return url
 
 
+class MediaTimeoutError(TimeoutError):
+    pass
+
+
+def _timeout_handler(_signum, _frame):
+    raise MediaTimeoutError("media extraction exceeded bounded runtime")
+
+
 def _extract_audio(url: str, output: Path) -> tuple[Path, dict]:
     import yt_dlp
 
@@ -97,6 +107,9 @@ def _extract_audio(url: str, output: Path) -> tuple[Path, dict]:
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
+        "socket_timeout": int(os.getenv("ATLAS_MEDIA_SOCKET_TIMEOUT_SECONDS", "30")),
+        "retries": 2,
+        "fragment_retries": 2,
     }
     media_url = _resolve_media_url(url)
     with yt_dlp.YoutubeDL(options) as ydl:
@@ -152,6 +165,10 @@ def _finish(db: Database, item_id: str, status: str, error: str | None = None) -
 
 
 def process(db: Database, storage: Storage, item: dict) -> dict:
+    started = time.monotonic()
+    timeout_seconds = int(os.getenv("ATLAS_MEDIA_ITEM_TIMEOUT_SECONDS", "600"))
+    previous_handler = signal.signal(signal.SIGALRM, _timeout_handler)
+    signal.alarm(timeout_seconds)
     try:
         with tempfile.TemporaryDirectory(prefix="atlas-media-") as directory:
             audio, extracted = _extract_audio(item["url"], Path(directory))
@@ -176,11 +193,17 @@ def process(db: Database, storage: Storage, item: dict) -> dict:
             storage.put_object(f"{staging_key}.json", json.dumps(sidecar).encode())
             storage.upload_file(str(audio), staging_key)
         _finish(db, str(item["id"]), "completed")
-        return {"id": str(item["id"]), "url": item["url"], "status": "completed"}
+        return {"id": str(item["id"]), "url": item["url"], "status": "completed",
+                "elapsed_seconds": round(time.monotonic() - started, 1)}
     except Exception as exc:  # one bad source must not stop the durable queue
         logger.exception("media intake failed for %s", item["url"])
         _finish(db, str(item["id"]), "failed", str(exc))
-        return {"id": str(item["id"]), "url": item["url"], "status": "failed", "error": str(exc)[:500]}
+        return {"id": str(item["id"]), "url": item["url"], "status": "failed",
+                "error": str(exc)[:500],
+                "elapsed_seconds": round(time.monotonic() - started, 1)}
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, previous_handler)
 
 
 def status(db: Database) -> dict:
@@ -204,10 +227,21 @@ def main() -> None:
             print(json.dumps(status(db), sort_keys=True))
             return
         storage = Storage(config.bucket)
-        items = _claim(db, args.limit)
-        print(json.dumps({"claimed": len(items)}))
-        for item in items:
-            print(json.dumps(process(db, storage, item), sort_keys=True))
+        started = time.monotonic()
+        results = []
+        for _ in range(args.limit):
+            items = _claim(db, 1)
+            if not items:
+                break
+            result = process(db, storage, items[0])
+            results.append(result)
+            print(json.dumps(result, sort_keys=True), flush=True)
+        print(json.dumps({"worker_summary": {
+            "attempted": len(results),
+            "completed": sum(item["status"] == "completed" for item in results),
+            "failed": sum(item["status"] == "failed" for item in results),
+            "elapsed_seconds": round(time.monotonic() - started, 1),
+        }}, sort_keys=True), flush=True)
     finally:
         db.close()
 

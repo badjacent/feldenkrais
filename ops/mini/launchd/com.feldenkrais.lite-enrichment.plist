@@ -7,7 +7,7 @@
   <array><string>/Users/hermes/src/feldenkrais/ops/mini/run-lite-enrichment-worker.sh</string></array>
   <key>WorkingDirectory</key><string>/Users/hermes/src/feldenkrais</string>
   <key>RunAtLoad</key><true/>
-  <key>StartInterval</key><integer>300</integer>
+  <key>StartInterval</key><integer>900</integer>
   <key>StandardOutPath</key><string>/Users/hermes/src/feldenkrais/var/log/lite-enrichment-worker.log</string>
   <key>StandardErrorPath</key><string>/Users/hermes/src/feldenkrais/var/log/lite-enrichment-worker.log</string>
   <key>ProcessType</key><string>Background</string>
