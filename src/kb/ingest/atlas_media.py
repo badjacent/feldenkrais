@@ -126,7 +126,9 @@ def _extract_audio(url: str, output: Path) -> tuple[Path, dict]:
 
 def _claim(db: Database, limit: int) -> list[dict]:
     max_attempts = int(os.getenv("ATLAS_MEDIA_MAX_ATTEMPTS", "3"))
-    stale_minutes = int(os.getenv("ATLAS_MEDIA_STALE_MINUTES", "360"))
+    # Item runtime is capped at ten minutes; thirty minutes leaves ample cleanup
+    # margin while preventing a killed worker from blocking throughput for hours.
+    stale_minutes = int(os.getenv("ATLAS_MEDIA_STALE_MINUTES", "30"))
     with db.get_cursor() as cursor:
         cursor.execute(
             """UPDATE atlas_media_queue SET status='pending', updated_at=NOW()
