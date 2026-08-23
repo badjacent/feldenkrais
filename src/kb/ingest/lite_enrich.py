@@ -19,7 +19,10 @@ from database import Database  # noqa: E402
 import analysis  # noqa: E402
 import cache_helpers  # noqa: E402
 import llm_config  # noqa: E402
-from atlas_projection import PUBLIC_SOURCES  # noqa: E402
+from atlas_projection import (  # noqa: E402
+    PUBLIC_SOURCES,
+    _feldenkrais_project_public_urls,
+)
 from analysis.axes import AXES_PROMPT_VERSION, LITE_PROMPT_VERSION as AXES_LITE_VERSION  # noqa: E402
 from analysis.lesson_card import PROMPT_VERSION as CARD_VERSION  # noqa: E402
 from analysis.motifs import (  # noqa: E402
@@ -53,10 +56,11 @@ def _documents(db: Database, limit: int | None, source: str | None, doc: str | N
         JOIN document_source ds ON ds.id = d.source_id
         JOIN analysis a ON a.document_id = d.id AND a.type_id = 1
         WHERE (ds.name = ANY(%s) OR d.origin = 'feldenkrais_atlas')
+          AND (ds.name <> 'FELDENKRAIS_PROJECT' OR d.source_url = ANY(%s))
           AND d.type_id IN (2, 3)
           AND COALESCE(a.data->>'text', '') <> ''
     """
-    params: list = [PUBLIC_SOURCES]
+    params: list = [PUBLIC_SOURCES, _feldenkrais_project_public_urls()]
     if source:
         sql += " AND ds.name = %s"
         params.append(source)

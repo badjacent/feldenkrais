@@ -44,6 +44,12 @@ _REPO = Path(__file__).resolve().parent.parent.parent
 _NON_ATM = re.compile(r"\btalk\b|discussion|interview", re.I)
 
 
+def _feldenkrais_project_public_urls() -> list[str]:
+    """Return the owner-verified free Feldenkrais Project lesson allowlist."""
+    path = _REPO / "data" / "fp_free_lessons.json"
+    return [row["url"] for row in json.loads(path.read_text())]
+
+
 def _load_registry() -> dict:
     for base in (_REPO / "private" / "data", _REPO / "data"):
         p = base / "motifs_registry.yaml"
@@ -103,9 +109,10 @@ def build_projection(db) -> tuple[dict, dict]:
             FROM document d
             JOIN document_source ds ON ds.id = d.source_id
             JOIN analysis a ON a.document_id = d.id AND a.type_id = 1
-            WHERE ds.name = ANY(%s) OR d.origin = 'feldenkrais_atlas'
+            WHERE (ds.name = ANY(%s) OR d.origin = 'feldenkrais_atlas')
+              AND (ds.name <> 'FELDENKRAIS_PROJECT' OR d.source_url = ANY(%s))
             ORDER BY (d.origin = 'feldenkrais_atlas') DESC NULLS LAST, ds.name, d.title
-        """, (PUBLIC_SOURCES,))
+        """, (PUBLIC_SOURCES, _feldenkrais_project_public_urls()))
         rows = [dict(r) for r in cur.fetchall()]
 
     keyed_rows = []
