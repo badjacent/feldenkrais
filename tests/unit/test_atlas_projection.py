@@ -1,5 +1,7 @@
 import pytest
 
+from kb.atlas_projection import _public_application_ids
+
 from ops.export_atlas_projection import (
     _public_labels,
     build_summary,
@@ -67,3 +69,11 @@ def test_projection_count_guard_refuses_empty_and_large_shrink():
     with pytest.raises(ValueError, match="shrink"):
         validate_count_change(180, 100)
     validate_count_change(180, 160)
+
+
+def test_public_application_ids_are_intended_only_and_closed_set():
+    assert _public_application_ids({"applications": [
+        {"id": "everyday_movement", "strength": "intended"},
+        {"id": "pain_comfort_recovery", "strength": "mentioned"},
+        {"id": "not_a_public_category", "strength": "intended"},
+    ]}) == ["everyday_movement"]

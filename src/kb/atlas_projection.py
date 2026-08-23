@@ -82,6 +82,15 @@ def _registry_sha(registry_version: str, motifs: list[dict]) -> str:
     ).encode()).hexdigest()
 
 
+def _public_application_ids(card: dict) -> list[str]:
+    """Return only conservative, public-eligible application assignments."""
+    return sorted(
+        item["id"] for item in card.get("applications", [])
+        if item.get("strength") == "intended"
+        and item.get("id") in _APPLICATION_IDS
+    )
+
+
 def build_projection(db) -> tuple[dict, dict]:
     """Build the projection from cached analyses only (never invokes LLMs).
 
@@ -173,7 +182,10 @@ def build_projection(db) -> tuple[dict, dict]:
                 )
             },
             "provenance": {"axes": "gemini_lite", "motifs": "gemini_lite",
-                           "display": "gemini_lite"},
+                           "display": "gemini_lite", "applications": "gemini_lite"},
+            # Only the judge-approved public strength crosses the projection
+            # boundary. Reasons, evidence, and presenter intent remain private.
+            "application_ids": _public_application_ids(card),
             "motifs": [
                 {"id": a["motif_id"], "mode": a["mode"],
                  "role": a["role"], "certainty": a["certainty"]}
@@ -215,6 +227,11 @@ _FORBIDDEN_LESSON_KEYS = {"evidence", "candidate_motifs", "raw_motifs", "transcr
 _LESSON_TYPES = {"atm", "talk", "interview", "demonstration", "mixed", "other"}
 _POSITIONS = {"lying_on_back", "lying_on_side", "lying_on_front", "sitting", "standing", "kneeling", "all_fours", "other"}
 _SUPPORT_CONTEXTS = {"floor", "chair", "standing", "wall"}
+_APPLICATION_IDS = {
+    "pain_comfort_recovery", "everyday_movement", "music_voice_performance",
+    "sport_skilled_activity", "stress_rest_self_regulation",
+    "learning_across_life", "creativity_meditation_self_knowledge",
+}
 
 
 def validate_projection(proj: dict) -> list[str]:
@@ -255,6 +272,13 @@ def validate_projection(proj: dict) -> list[str]:
             errors.append("bad primary_positions")
         if len(display.get("primary_positions") or []) > 3:
             errors.append("too many primary_positions")
+        application_ids = l.get("application_ids") or []
+        if (
+            not isinstance(application_ids, list)
+            or len(application_ids) != len(set(application_ids))
+            or not set(application_ids) <= _APPLICATION_IDS
+        ):
+            errors.append("bad application_ids")
         if not set(display.get("support_context") or []) <= _SUPPORT_CONTEXTS:
             errors.append("bad support_context")
         provenance = l.get("provenance") or {}
