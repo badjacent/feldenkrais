@@ -11,10 +11,15 @@ from llm_config import DEFAULT_LLM
 
 from .core import _state
 
-PROMPT_VERSION = "card-p5"
+PROMPT_VERSION = "card-p6"
 LESSON_TYPES = {"atm", "talk", "interview", "demonstration", "mixed", "other"}
 POSITIONS = {"lying_on_back", "lying_on_side", "lying_on_front", "sitting", "standing", "kneeling", "all_fours", "other"}
 SUPPORT_CONTEXTS = {"floor", "chair", "standing", "wall"}
+APPLICATION_IDS = {
+    "pain_comfort_recovery", "everyday_movement", "music_voice_performance",
+    "sport_skilled_activity", "stress_rest_self_regulation",
+    "learning_across_life", "creativity_meditation_self_knowledge",
+}
 
 
 def _data_path(name: str) -> Path:
@@ -91,6 +96,17 @@ def run_lesson_card(
     language = str(result.get("primary_language") or "").lower()
     if not re.fullmatch(r"[a-z]{2,3}", language):
         raise ValueError(f"invalid primary_language: {language!r}")
+    applications = result.get("applications") or []
+    if len(applications) != len(APPLICATION_IDS):
+        raise ValueError("lesson card must return every application exactly once")
+    if {item.get("id") for item in applications} != APPLICATION_IDS:
+        raise ValueError("lesson card returned invalid or duplicate application ids")
+    for item in applications:
+        if item.get("strength") not in {"intended", "mentioned", "absent"}:
+            raise ValueError(f"invalid application strength: {item.get('strength')!r}")
+    presenter_intent = " ".join(str(result.get("presenter_intent") or "").split())
+    if not presenter_intent:
+        raise ValueError("presenter_intent is required")
     payload = {
         "summary": summary,
         "suggested_title": result.get("suggested_title") or None,
@@ -107,6 +123,9 @@ def run_lesson_card(
         "primary_language": language,
         "notable_feature": result.get("notable_feature") or None,
         "audience_notes": result.get("audience_notes") or None,
+        "presenter_intent": presenter_intent,
+        "intent_evidence": list(dict.fromkeys(result.get("intent_evidence") or []))[:2],
+        "applications": applications,
         "prompt_version": PROMPT_VERSION,
         "model": getattr(llm, "model", None) or (provider_key or DEFAULT_LLM),
         "extracted_at": datetime.now(timezone.utc).isoformat(),

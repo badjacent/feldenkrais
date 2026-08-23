@@ -26,6 +26,43 @@ substantially used.
 `suggested_title` is null unless the source title is missing, generic, or numbered;
 it is conservative display copy, never canonical identity.
 
+Also identify the presenter's intention: what the teacher frames this particular
+lesson as investigating or helping with, not every benefit its movements could
+theoretically provide. Return every application below exactly once:
+
+- pain_comfort_recovery: Pain, comfort, and recovery
+- everyday_movement: Everyday movement
+- music_voice_performance: Music, voice, and performance
+- sport_skilled_activity: Sport and skilled activity
+- stress_rest_self_regulation: Stress, rest, and self-regulation
+- learning_across_life: Learning across life
+- creativity_meditation_self_knowledge: Creativity, meditation, and self-knowledge
+
+Use `intended` only when the presenter explicitly frames the application as a
+principal purpose, audience, or intended use of this lesson. Use `mentioned` for
+an explicit but peripheral mention, and `absent` otherwise. Do not infer an
+application from movements that might be useful for it or from generic
+Feldenkrais conventions.
+
+Mandatory exclusions:
+
+- Breathing or airway ease is not music/voice/performance unless voice, music,
+  dance, acting, or performance is framed as an application.
+- Agility, balance, coordination, or strength is not sport/skilled activity
+  unless a sport, athletic practice, or named skilled activity is framed as an
+  application.
+- Instructions to avoid pain, stay comfortable, or recover between movements
+  are not pain/comfort/recovery unless pain, discomfort, injury, or recovery is
+  framed as a target of the lesson.
+- General Feldenkrais learning, awareness, or self-exploration framing —
+  including “learning about yourself”, “exploring yourself”, and similar
+  preamble — is not `learning_across_life` or
+  `creativity_meditation_self_knowledge` unless the presenter frames it as this
+  particular lesson’s principal purpose.
+
+Evidence must be short verbatim transcript quotations. Public use is
+`intended`-only, so precision matters more than recall.
+
 ## Source title
 
 {source_title}

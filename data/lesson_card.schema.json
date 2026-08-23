@@ -1,7 +1,7 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": ["summary", "suggested_title", "is_feldenkrais_related", "feldenkrais_relevance_confidence", "relevance_reason", "lesson_type", "starting_position", "primary_positions", "positions", "themes", "support_context", "equipment", "primary_language", "notable_feature", "audience_notes"],
+  "required": ["summary", "suggested_title", "is_feldenkrais_related", "feldenkrais_relevance_confidence", "relevance_reason", "lesson_type", "starting_position", "primary_positions", "positions", "themes", "support_context", "equipment", "primary_language", "notable_feature", "audience_notes", "presenter_intent", "intent_evidence", "applications"],
   "properties": {
     "summary": {"type": "string", "minLength": 1, "maxLength": 500},
     "suggested_title": {"type": ["string", "null"], "maxLength": 160},
@@ -17,6 +17,21 @@
     "equipment": {"type": "array", "maxItems": 8, "uniqueItems": true, "items": {"type": "string", "maxLength": 60}},
     "primary_language": {"type": "string", "pattern": "^[a-z]{2,3}$"},
     "notable_feature": {"type": ["string", "null"], "maxLength": 240},
-    "audience_notes": {"type": ["string", "null"], "maxLength": 240}
+    "audience_notes": {"type": ["string", "null"], "maxLength": 240},
+    "presenter_intent": {"type": "string", "minLength": 1, "maxLength": 500},
+    "intent_evidence": {"type": "array", "maxItems": 2, "items": {"type": "string", "maxLength": 240}},
+    "applications": {
+      "type": "array", "minItems": 7, "maxItems": 7,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "strength", "evidence", "reason"],
+        "properties": {
+          "id": {"type": "string", "enum": ["pain_comfort_recovery", "everyday_movement", "music_voice_performance", "sport_skilled_activity", "stress_rest_self_regulation", "learning_across_life", "creativity_meditation_self_knowledge"]},
+          "strength": {"type": "string", "enum": ["intended", "mentioned", "absent"]},
+          "evidence": {"type": "array", "maxItems": 2, "items": {"type": "string", "maxLength": 240}},
+          "reason": {"type": "string", "maxLength": 240}
+        }
+      }
+    }
   }
 }
