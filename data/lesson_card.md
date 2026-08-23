@@ -35,8 +35,16 @@ theoretically provide. Return every application below exactly once:
 - music_voice_performance: Music, voice, and performance
 - sport_skilled_activity: Sport and skilled activity
 - stress_rest_self_regulation: Stress, rest, and self-regulation
-- learning_across_life: Learning across life
-- creativity_meditation_self_knowledge: Creativity, meditation, and self-knowledge
+- learning_across_life: Learning across life — an explicit application to
+  education, aging, lifelong learning, or learning outside this particular
+  Feldenkrais lesson. Learning a movement, becoming more skillful during the
+  lesson, nervous-system learning, and the ordinary Feldenkrais learning
+  process do not qualify.
+- creativity_meditation_self_knowledge: Creativity, meditation, and
+  self-knowledge — an explicit application to a creative or contemplative
+  practice, or to personal self-inquiry beyond ordinary sensing of the body.
+  Body awareness, self-image, sensing differences, and noticing oneself during
+  an ATM are standard lesson methods and do not qualify by themselves.
 
 Use `intended` only when the presenter explicitly frames the application as a
 principal purpose, audience, or intended use of this lesson. Use `mentioned` for
@@ -59,6 +67,13 @@ Mandatory exclusions:
   preamble — is not `learning_across_life` or
   `creativity_meditation_self_knowledge` unless the presenter frames it as this
   particular lesson’s principal purpose.
+
+Before returning `intended` for either `learning_across_life` or
+`creativity_meditation_self_knowledge`, perform this counterfactual check: would
+the quoted evidence be unusual in an ordinary Awareness Through Movement
+lesson? If it describes only learning the lesson, becoming skillful at its
+movements, nervous-system learning, body awareness, self-image, or sensing
+oneself, the answer must be `mentioned` or `absent`, never `intended`.
 
 Evidence must be short verbatim transcript quotations. Public use is
 `intended`-only, so precision matters more than recall.
