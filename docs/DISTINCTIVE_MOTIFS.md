@@ -36,8 +36,8 @@ for existing `marks` payloads if necessary, but use the clearer terminology in
 new analysis contracts and UI-facing artifacts.
 
 Distinctive-motif extraction belongs in the **main Feldenkrais analysis tree**.
-Atlas should receive only a versioned, public-safe projection of approved motif
-IDs and labels for confirmed public lessons. Atlas should not perform this
+Atlas should receive only a versioned, public-safe projection of assignments to
+human-approved, chooser-visible motif IDs and labels for confirmed public lessons. Atlas should not perform this
 analysis independently or develop a divergent motif vocabulary.
 
 ## Controlled motif registry
@@ -248,7 +248,7 @@ Before broad extraction:
 4. Inspect every assignment and candidate proposal.
 5. Measure inter-run stability when the same inputs and versions are reused.
 6. Confirm reruns hit the cache and create no analysis-queue work.
-7. Confirm public projection contains only approved IDs and safe categorical
+7. Confirm public projection contains only assignments to human-approved visible IDs and safe categorical
    fields.
 
 ## Explicit non-goals

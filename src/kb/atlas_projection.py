@@ -82,6 +82,15 @@ def _registry_sha(registry_version: str, motifs: list[dict]) -> str:
     ).encode()).hexdigest()
 
 
+def _public_motif_ids(assignments: list[dict], visible_ids: set[str]) -> list[str]:
+    """Project assignments through the owner-controlled vocabulary gate."""
+    return list(dict.fromkeys(
+        assignment["motif_id"]
+        for assignment in assignments
+        if assignment.get("motif_id") in visible_ids
+    ))
+
+
 def _public_application_ids(card: dict) -> list[str]:
     """Return only conservative, public-eligible application assignments."""
     return sorted(
@@ -162,6 +171,15 @@ def build_projection(db) -> tuple[dict, dict]:
         title = (r["title"] or "").replace(" - Feldenkrais Project", "")
         lt = (card.get("lesson_type") or r.get("lesson_type") or "").lower()
         is_atm = not _NON_ATM.search(title) and lt in ("", "atm", "unknown")
+        nominated_motifs = [
+            {"id": a["motif_id"], "mode": a["mode"],
+             "role": a["role"], "certainty": a["certainty"]}
+            for a in mrow.get("assignments", []) if a["motif_id"] in vis_ids
+        ]
+        # Vocabulary visibility is the owner-controlled gate. Once a motif is
+        # established and chooser-visible in the registry, current machine
+        # assignments flow automatically to the public projection.
+        public_motif_ids = _public_motif_ids(mrow.get("assignments", []), vis_ids)
         lessons.append({
             "analysis_document_id": str(r["id"]),
             "atlas_resource_key": None,  # populated when the join lands
@@ -186,11 +204,8 @@ def build_projection(db) -> tuple[dict, dict]:
             # Only the judge-approved public strength crosses the projection
             # boundary. Reasons, evidence, and presenter intent remain private.
             "application_ids": _public_application_ids(card),
-            "motifs": [
-                {"id": a["motif_id"], "mode": a["mode"],
-                 "role": a["role"], "certainty": a["certainty"]}
-                for a in mrow.get("assignments", []) if a["motif_id"] in vis_ids
-            ],
+            "motifs": nominated_motifs,
+            "public_motif_ids": public_motif_ids,
             "axes": {ax: v["value"] for ax, v in arow.get("axes", {}).items()},
         })
 
@@ -247,6 +262,11 @@ def validate_projection(proj: dict) -> list[str]:
         for m in l.get("motifs", []):
             if m["id"] not in vis_ids:
                 errors.append(f"non-exported motif id {m['id']}")
+        public_motif_ids = l.get("public_motif_ids")
+        if not isinstance(public_motif_ids, list):
+            errors.append("missing public_motif_ids")
+        elif not set(public_motif_ids) <= {m["id"] for m in l.get("motifs", [])}:
+            errors.append("public motif is not currently nominated")
         for ax, v in l.get("axes", {}).items():
             if ax not in _AXIS_VALUES or v not in _AXIS_VALUES[ax]:
                 errors.append(f"bad axis {ax}={v}")

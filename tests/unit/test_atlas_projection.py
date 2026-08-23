@@ -1,6 +1,6 @@
 import pytest
 
-from kb.atlas_projection import _public_application_ids
+from kb.atlas_projection import _public_application_ids, _public_motif_ids
 
 from ops.export_atlas_projection import (
     _public_labels,
@@ -77,3 +77,16 @@ def test_public_application_ids_are_intended_only_and_closed_set():
         {"id": "pain_comfort_recovery", "strength": "mentioned"},
         {"id": "not_a_public_category", "strength": "intended"},
     ]}) == ["everyday_movement"]
+
+
+def test_public_motif_ids_are_automatic_but_vocabulary_gated():
+    assignments = [
+        {"motif_id": "bell_hands", "mode": "taught", "role": "central"},
+        {"motif_id": "clock", "mode": "referenced", "role": "incidental"},
+        {"motif_id": "candidate_from_model", "mode": "taught", "role": "central"},
+        {"motif_id": "bell_hands", "mode": "taught", "role": "supporting"},
+    ]
+    assert _public_motif_ids(assignments, {"bell_hands", "clock"}) == [
+        "bell_hands", "clock",
+    ]
+    assert _public_motif_ids(assignments, {"clock"}) == ["clock"]
