@@ -1098,6 +1098,7 @@ from routes.finder import router as finder_router
 from routes.admin import router as admin_router
 from routes.pages import router as pages_router
 from routes.lesson_data import router as lesson_data_router
+from routes.atlas_pages import router as atlas_pages_router
 
 app.include_router(auth_router)
 app.include_router(ingestion_router)
@@ -1107,6 +1108,7 @@ app.include_router(finder_router)
 app.include_router(admin_router)
 app.include_router(pages_router)
 app.include_router(lesson_data_router)
+app.include_router(atlas_pages_router)
 
 
 # ── Conditional book router mount ─────────────────────────────────────

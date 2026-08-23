@@ -89,7 +89,16 @@ runtime.
    it; code written against the four-axis fixture needs no change if it
    iterates the map.
 
-5. Everything else in the handoff's projection shape, exclusion list,
+5. **Lite-enrichment tier** (planned, 2026-08-21; see
+   `MINI_LITE_ENRICHMENT_HANDOFF.md`): lessons without full analysis may
+   carry transcript-direct ("lite") axes/motifs and a `display` block
+   (summary, positions, themes). The projection will gain additive
+   per-lesson provenance fields `axes_source` / `motifs_source`
+   (`"full" | "lite"`) and an optional `display` object. Readers must
+   tolerate these fields' absence and presence; treat unknown lesson-level
+   fields as ignorable.
+
+6. Everything else in the handoff's projection shape, exclusion list,
    publication transaction, and refresh semantics stands as written.
 
 ## Response-contract reminders for the Atlas reader

@@ -49,6 +49,12 @@ LLM_CONFIGS = {
         "api_key_env": "OPENAI_API_KEY",
         "default_max_tokens": 128000,
     },
+    "openai-luna": {
+        "provider": "openai",
+        "model": "gpt-5.6-luna",
+        "api_key_env": "OPENAI_API_KEY",
+        "default_max_tokens": 128000,
+    },
     "anthropic": {
         "provider": "anthropic",
         "model": "claude-sonnet-4-20250514",
