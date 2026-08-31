@@ -33,5 +33,6 @@ cd src/kb
   ../../.venv-mini/bin/python -m ingest.local_transcribe run \
   --limit "${TRANSCRIPTION_BATCH_LIMIT:-20}" \
   --max-seconds "${TRANSCRIPTION_MAX_SECONDS:-3300}" \
+  --document-timeout-seconds "${TRANSCRIPTION_DOCUMENT_TIMEOUT_SECONDS:-1800}" \
   --max-retries "${TRANSCRIPTION_MAX_RETRIES:-3}" \
   --stale-minutes "${TRANSCRIPTION_STALE_MINUTES:-360}"
