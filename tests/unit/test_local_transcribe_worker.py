@@ -1,7 +1,12 @@
+import subprocess
 from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
-from kb.ingest.local_transcribe import _claim, _find_candidates
+from kb.ingest.local_transcribe import (
+    _claim,
+    _find_candidates,
+    _transcribe_in_subprocess,
+)
 
 
 class FakeDb:
@@ -50,3 +55,51 @@ def test_claim_inserts_new_processing_job_when_no_retry_exists():
     assert result == "job-new"
     assert cursor.execute.call_count == 2
     assert "'processing'" in cursor.execute.call_args.args[0]
+
+
+def test_transcription_subprocess_returns_child_json():
+    child = subprocess.CompletedProcess(
+        args=[], returncode=0, stdout='{"document_id":"doc-1","words":12}\n', stderr=""
+    )
+    db = MagicMock()
+
+    with patch("kb.ingest.local_transcribe.subprocess.run", return_value=child) as run:
+        result = _transcribe_in_subprocess(
+            db,
+            {"id": "doc-1"},
+            model="test-model",
+            language=None,
+            dry_run=False,
+            max_retries=3,
+            stale_minutes=360,
+            timeout_seconds=45,
+        )
+
+    assert result == {"document_id": "doc-1", "words": 12}
+    assert run.call_args.kwargs["timeout"] == 45
+    assert "one" in run.call_args.args[0]
+
+
+def test_transcription_subprocess_fails_claim_on_timeout():
+    db = MagicMock()
+
+    with (
+        patch(
+            "kb.ingest.local_transcribe.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(cmd="worker", timeout=45),
+        ),
+        patch("kb.ingest.local_transcribe._fail_timed_out_job") as fail_job,
+    ):
+        result = _transcribe_in_subprocess(
+            db,
+            {"id": "doc-1"},
+            model="test-model",
+            language=None,
+            dry_run=False,
+            max_retries=3,
+            stale_minutes=360,
+            timeout_seconds=45,
+        )
+
+    assert result["timed_out"] is True
+    fail_job.assert_called_once_with(db, "doc-1", 45)
