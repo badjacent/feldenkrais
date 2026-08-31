@@ -66,6 +66,8 @@ async def landing_page(request: Request):
     links.append('<li><a href="/analysis">Analysis Pipeline</a></li>')
     if _web._book_available:
         links.append('<li><a href="/pipeline">Pipeline Dashboard</a></li>')
+    if user and user.get("tier") == "admin":
+        links.append('<li><a href="/admin/nyc">NYC Directory (crawler admin)</a></li>')
     dev_section = f"""<h2 style="margin-top:40px; border-top:1px solid #e0e0e0; padding-top:20px;">Dev Tools</h2>
 <ul style="list-style:none; padding:0;">{"".join(links)}</ul>"""
     return HTMLResponse(_web.build_search_home_html(extra_html=dev_section, user=user, superuser_active=su_active, get_lessons_fn=_web.get_available_lessons))

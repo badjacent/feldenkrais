@@ -587,6 +587,11 @@ resource "aws_iam_role_policy" "web_lambda_s3" {
         Effect   = "Allow"
         Action   = ["s3:GetObject"]
         Resource = "${aws_s3_bucket.main.arn}/archive/*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["s3:PutObject"]
+        Resource = "${aws_s3_bucket.main.arn}/control/atlas-nyc/requests/*"
       }
     ]
   })
