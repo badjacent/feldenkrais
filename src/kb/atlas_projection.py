@@ -22,8 +22,6 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-import yaml
-
 # Sources whose lessons are approved for public Atlas use. Owner-editable.
 PUBLIC_SOURCES = [
     "FELDENKRAIS_PROJECT",
@@ -45,6 +43,10 @@ _NON_ATM = re.compile(r"\btalk\b|discussion|interview", re.I)
 
 
 def _load_registry() -> dict:
+    # Imported lazily: routes/atlas_pages.py pulls this module in at web start-up,
+    # and PyYAML is not in the web Lambda layer.
+    import yaml
+
     for base in (_REPO / "private" / "data", _REPO / "data"):
         p = base / "motifs_registry.yaml"
         if p.exists():
