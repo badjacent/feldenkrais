@@ -28,11 +28,12 @@ import json
 import logging
 import os
 import socket
+import subprocess
 import sys
 import tempfile
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 try:
@@ -48,6 +49,7 @@ logger = logging.getLogger("local_transcribe")
 TRANSCRIPTION_TYPE_ID = 1
 DEFAULT_MODEL = os.environ.get("LOCAL_WHISPER_MODEL", "mlx-community/whisper-large-v3-turbo")
 BATCH_TAG = "local-mlx"
+DEFAULT_DOCUMENT_TIMEOUT_SECONDS = 1800
 
 
 def _find_candidates(
@@ -153,6 +155,95 @@ def _finish_job(db: Database, job_id: str, status: str, error: str | None = None
         )
 
 
+def _fail_timed_out_job(db: Database, document_id: str, timeout_seconds: int) -> None:
+    """Fail this worker's active claim after its transcription child is killed."""
+    error = f"local transcription exceeded {timeout_seconds}s wall-clock timeout"
+    with db.get_cursor() as cur:
+        cur.execute(
+            """
+            UPDATE transcription_job
+            SET status='failed', error=%s, result_data=%s::jsonb, updated_at=NOW()
+            WHERE id = (
+                SELECT id FROM transcription_job
+                WHERE document_id=%s AND batch_id=%s AND status='processing'
+                ORDER BY updated_at DESC LIMIT 1
+            )
+            """,
+            (error, json.dumps({"timeout_seconds": timeout_seconds}), document_id, BATCH_TAG),
+        )
+    db.log_event(
+        "transcription_timeout",
+        document_id=document_id,
+        detail={"engine": "mlx-whisper", "timeout_seconds": timeout_seconds},
+    )
+
+
+def _transcribe_in_subprocess(
+    db: Database,
+    doc: dict,
+    *,
+    model: str,
+    language: str | None,
+    dry_run: bool,
+    max_retries: int,
+    stale_minutes: int,
+    timeout_seconds: int,
+) -> dict:
+    """Run one recording behind a killable wall-clock boundary."""
+    doc_id = str(doc["id"])
+    command = [
+        sys.executable,
+        "-m",
+        "ingest.local_transcribe",
+        "one",
+        "--doc",
+        doc_id,
+        "--model",
+        model,
+        "--max-retries",
+        str(max_retries),
+        "--stale-minutes",
+        str(stale_minutes),
+    ]
+    if language:
+        command.extend(["--language", language])
+    if dry_run:
+        command.append("--dry-run")
+    try:
+        completed = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired:
+        if not dry_run:
+            _fail_timed_out_job(db, doc_id, timeout_seconds)
+        return {
+            "document_id": doc_id,
+            "error": f"transcription timed out after {timeout_seconds}s",
+            "timed_out": True,
+        }
+
+    output_lines = [line for line in completed.stdout.splitlines() if line.strip()]
+    if completed.returncode != 0:
+        message = completed.stderr.strip() or completed.stdout.strip()
+        return {
+            "document_id": doc_id,
+            "error": f"transcription child exited {completed.returncode}: {message[-500:]}",
+        }
+    if not output_lines:
+        return {"document_id": doc_id, "error": "transcription child returned no result"}
+    try:
+        return json.loads(output_lines[-1])
+    except json.JSONDecodeError:
+        return {
+            "document_id": doc_id,
+            "error": f"transcription child returned invalid JSON: {output_lines[-1][-500:]}",
+        }
+
+
 def _prune_segment(seg: dict) -> dict:
     keep = ("id", "start", "end", "text")
     out = {k: seg[k] for k in keep if k in seg}
@@ -189,7 +280,7 @@ def transcribe_document(
         logger.info("transcribing %s (%s, %.1f MB, model=%s)", doc_id,
                     doc.get("title", "")[:60],
                     Path(local_path).stat().st_size / 1e6, model)
-        t0 = datetime.now(timezone.utc)
+        t0 = datetime.now(UTC)
         result = mlx_whisper.transcribe(
             local_path,
             path_or_hf_repo=model,
@@ -197,7 +288,7 @@ def transcribe_document(
             language=language,
             verbose=None,
         )
-        elapsed = (datetime.now(timezone.utc) - t0).total_seconds()
+        elapsed = (datetime.now(UTC) - t0).total_seconds()
 
         segments = [_prune_segment(s) for s in result.get("segments", [])]
         words = [
@@ -213,7 +304,7 @@ def transcribe_document(
             "engine": "mlx-whisper",
             "host": socket.gethostname(),
             "chunk_count": 1,
-            "transcribed_at": datetime.now(timezone.utc).isoformat(),
+            "transcribed_at": datetime.now(UTC).isoformat(),
         }
         summary = {
             "document_id": doc_id,
@@ -236,7 +327,7 @@ def transcribe_document(
                      detail={"engine": "mlx-whisper", "model": model,
                              "elapsed_seconds": summary["elapsed_seconds"]})
         return summary
-    except Exception as e:  # noqa: BLE001 - record failure, keep the batch going
+    except Exception as e:
         logger.exception("failed on %s", doc_id)
         if job_id:
             _finish_job(db, job_id, "failed", error=str(e)[:500])
@@ -253,6 +344,13 @@ def main():
 
     sub.add_parser("list", help="Show untranscribed candidates by source")
     sub.add_parser("status", help="Print machine-readable local-worker queue health")
+    one = sub.add_parser("one", help=argparse.SUPPRESS)
+    one.add_argument("--doc", required=True)
+    one.add_argument("--model", default=DEFAULT_MODEL)
+    one.add_argument("--language", default=None)
+    one.add_argument("--dry-run", action="store_true")
+    one.add_argument("--max-retries", type=int, default=3)
+    one.add_argument("--stale-minutes", type=int, default=360)
     run = sub.add_parser("run", help="Claim and transcribe documents")
     run.add_argument("--limit", type=int, default=1)
     run.add_argument("--source", help="Restrict to a document_source name")
@@ -263,6 +361,12 @@ def main():
     run.add_argument("--dry-run", action="store_true",
                      help="Transcribe but write nothing to the database")
     run.add_argument("--max-seconds", type=int, default=3300)
+    run.add_argument(
+        "--document-timeout-seconds",
+        type=int,
+        default=DEFAULT_DOCUMENT_TIMEOUT_SECONDS,
+        help="Kill and fail one recording after this wall-clock duration",
+    )
     run.add_argument("--max-retries", type=int, default=3)
     run.add_argument("--stale-minutes", type=int, default=360)
     args = ap.parse_args()
@@ -299,18 +403,59 @@ def main():
                         (BATCH_TAG,),
                     )
                     jobs = cur.fetchall()
+                    cur.execute(
+                        """
+                        SELECT j.document_id, d.title, j.attempts,
+                               EXTRACT(EPOCH FROM (NOW() - j.updated_at))::int AS age_seconds
+                        FROM transcription_job j
+                        JOIN document d ON d.id=j.document_id
+                        WHERE j.batch_id=%s AND j.status='processing'
+                        ORDER BY j.updated_at LIMIT 1
+                        """,
+                        (BATCH_TAG,),
+                    )
+                    active = cur.fetchone()
+                    cur.execute(
+                        """
+                        SELECT
+                            count(*) FILTER (
+                                WHERE status='failed' AND attempts >= %s
+                            ) AS quarantined,
+                            count(*) FILTER (
+                                WHERE status='failed' AND error LIKE '%%wall-clock timeout%%'
+                            ) AS timed_out
+                        FROM transcription_job WHERE batch_id=%s
+                        """,
+                        (3, BATCH_TAG),
+                    )
+                    failures = cur.fetchone()
                     print(
                         json.dumps(
                             {
                                 "worker": "local-mlx",
                                 "unclaimed": sum(row["count"] for row in rows),
                                 "jobs": {row["status"]: row["count"] for row in jobs},
+                                "active": dict(active) if active else None,
+                                "quarantined": failures["quarantined"],
+                                "timed_out": failures["timed_out"],
                                 "host": socket.gethostname(),
-                                "checked_at": datetime.now(timezone.utc).isoformat(),
+                                "checked_at": datetime.now(UTC).isoformat(),
                             },
                             sort_keys=True,
                         )
                     )
+            return
+
+        if args.command == "one":
+            doc = db.get_document(args.doc)
+            if not doc:
+                sys.exit(f"no document {args.doc}")
+            result = transcribe_document(
+                db, storage, doc, args.model, args.language, args.dry_run,
+                max_retries=args.max_retries,
+                stale_minutes=args.stale_minutes,
+            )
+            print(json.dumps(result))
             return
 
         if args.doc:
@@ -332,10 +477,11 @@ def main():
         for doc in docs:
             if time.monotonic() - started >= args.max_seconds:
                 break
-            result = transcribe_document(
-                db, storage, doc, args.model, args.language, args.dry_run,
+            result = _transcribe_in_subprocess(
+                db, doc, model=args.model, language=args.language, dry_run=args.dry_run,
                 max_retries=args.max_retries,
                 stale_minutes=args.stale_minutes,
+                timeout_seconds=args.document_timeout_seconds,
             )
             print(json.dumps(result))
             if result.get("error"):
