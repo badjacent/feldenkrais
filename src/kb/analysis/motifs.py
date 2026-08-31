@@ -13,8 +13,6 @@ import sys
 import time
 from datetime import datetime, timezone
 
-import yaml
-
 from llm_config import DEFAULT_LLM
 
 from .core import _state, _resolve_data_path
@@ -38,7 +36,14 @@ def load_motifs() -> tuple[str, dict]:
 
 
 def load_motif_registry() -> dict:
-    """Load the controlled motif registry (private/data first, then data/)."""
+    """Load the controlled motif registry (private/data first, then data/).
+
+    PyYAML is imported here, not at module scope: the web Lambda's layer does
+    not carry it (and does not package the registry either), and a top-level
+    import breaks the whole app at cold start.
+    """
+    import yaml
+
     path = _resolve_data_path("motifs_registry.yaml")
     registry = yaml.safe_load(path.read_text())
     registry["motifs"] = registry.get("motifs", [])
