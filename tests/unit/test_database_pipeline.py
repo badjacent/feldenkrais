@@ -147,6 +147,21 @@ class TestLessonGroups:
         assert any("INSERT INTO lesson_group" in c for c in calls)
         assert any("INSERT INTO lesson_group_member" in c for c in calls)
 
+    def test_new_auto_group_copies_feldenkrais_first_gates(self, mock_db):
+        mock_db._mock_cursor.fetchall.return_value = [
+            {"id": 20, "name": "NEW_SOURCE"},
+        ]
+        mock_db._mock_cursor.fetchone.return_value = {"id": 30, "inserted": True}
+
+        mock_db.sync_auto_groups()
+
+        gate_calls = [
+            call for call in mock_db._mock_cursor.execute.call_args_list
+            if "INSERT INTO group_analysis_gate" in call.args[0]
+        ]
+        assert len(gate_calls) == 1
+        assert gate_calls[0].args[1] == (30, "FELDENKRAIS_FIRST")
+
 
 class TestGroupGates:
     def test_set_gate_permitted(self, mock_db):

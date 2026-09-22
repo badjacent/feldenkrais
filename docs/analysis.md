@@ -212,6 +212,23 @@ The analysis dashboard at `/analysis` shows a matrix of documents x steps:
 .venv/bin/python -m kb.pipeline.analysis run --document <doc_id>
 ```
 
+Gemini is the default analysis provider. To use a machine's existing Codex
+OAuth session, put this in that machine's untracked `.env`:
+
+```bash
+ANALYSIS_LLM_PROVIDER=codex-astra
+```
+
+The `codex-astra` profile runs `gpt-6-astra` at low reasoning effort through
+`codex exec`; it does not use `OPENAI_API_KEY`. Check the machine first with
+`codex login status`. Provider-specific cache suffixes keep Astra analysis
+separate from Gemini analysis.
+
+The worker automatically uses `~/.local/bin/codex` (the standard standalone
+installer location). Mini analysis workers default to eight concurrent steps;
+set `ANALYSIS_WORKERS` or `ANALYSIS_WORKER_CONCURRENCY` to override the CLI or
+web-consumer pool respectively.
+
 ## Key Files
 
 - `src/kb/database.py` — Schema, gate methods, dashboard query

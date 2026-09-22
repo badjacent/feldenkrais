@@ -121,17 +121,12 @@ async def create_analysis_group(request: Request):
 
 @router.post("/api/analysis/run")
 async def run_analysis_pipeline(request: Request):
-    """Toggle the pipeline on/off. Non-blocking -- runs in background thread."""
+    """Ensure the always-on queue consumer is running."""
     if not _web._db:
         return JSONResponse({"error": "Database not configured"}, status_code=500)
 
-    if _web._pipeline_is_running():
-        # Stop -- set DB flag, worker will notice and exit
-        _web._pipeline_set_running(False)
-        return JSONResponse({"status": "stopping"})
-    else:
-        _web._ensure_worker_running()
-        return JSONResponse({"status": "started"})
+    _web._ensure_worker_running()
+    return JSONResponse({"status": "running"})
 
 
 @router.get("/api/analysis/pipeline-status")

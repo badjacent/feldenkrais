@@ -1,6 +1,24 @@
 from unittest.mock import MagicMock, patch
 
-from kb.pipeline.analysis import run_bounded_worker
+from kb.pipeline.analysis import get_analysis_provider, run_bounded_worker
+
+
+def test_analysis_provider_defaults_to_gemini_without_document():
+    assert get_analysis_provider() == "gemini"
+
+
+def test_analysis_provider_uses_astra_source_suffix():
+    db = MagicMock()
+    cursor = db.get_cursor.return_value.__enter__.return_value
+    cursor.fetchone.return_value = {"name": "Anat Baniel Lessons-Astra"}
+    assert get_analysis_provider(db, "doc-1") == "codex-astra"
+
+
+def test_analysis_provider_uses_gemini_for_regular_source():
+    db = MagicMock()
+    cursor = db.get_cursor.return_value.__enter__.return_value
+    cursor.fetchone.return_value = {"name": "Anat Baniel Lessons"}
+    assert get_analysis_provider(db, "doc-1") == "gemini"
 
 
 class LockContext:

@@ -73,6 +73,9 @@ def _is_interiority_site(request: Request) -> bool:
 # ── Source access helpers ─────────────────────────────────────────────
 
 SUPERUSER_COOKIE = "fk_superuser"
+ANALYSIS_QUEUE_ENABLED = os.environ.get("ANALYSIS_QUEUE_ENABLED", "0").lower() in {
+    "1", "true", "yes", "on",
+}
 
 
 def _is_superuser_active(request: Request, user: dict | None) -> bool:
@@ -174,7 +177,11 @@ async def _lifespan(app):
             cur.execute(
                 "UPDATE pipeline_node_state SET status = 'stale' WHERE status = 'running'"
             )
-        print("[pipeline] on-demand mode (no background runner)")
+        if ANALYSIS_QUEUE_ENABLED:
+            _ensure_worker_running()
+            print("[pipeline] always-on queue worker started")
+        else:
+            print("[pipeline] queue consumer disabled for this web process")
     sync_task = None
     if _db and not IS_LAMBDA:
         sync_task = asyncio.create_task(_periodic_group_sync())
@@ -320,9 +327,12 @@ import threading
 
 _PIPELINE_KEY = "pipeline:analysis_running"
 _PIPELINE_ACTIVE_KEY = "pipeline:active_steps"
-_PIPELINE_PYTHON = str(Path(__file__).parent.parent.parent / ".venv" / "bin" / "python")
+_PIPELINE_PYTHON = os.environ.get(
+    "ANALYSIS_WORKER_PYTHON",
+    str(Path(__file__).parent.parent.parent / ".venv" / "bin" / "python"),
+)
 _PIPELINE_MODULE = "pipeline.analysis"
-_PIPELINE_CWD = str(Path(__file__).parent)
+_PIPELINE_CWD = os.environ.get("ANALYSIS_WORKER_CWD", str(Path(__file__).parent))
 
 def _pipeline_is_running() -> bool:
     """Check if pipeline is marked as running in DB."""
@@ -395,9 +405,13 @@ def _ensure_worker_running():
     but leaves the DB flag set.
     """
     global _worker_thread
+    if not ANALYSIS_QUEUE_ENABLED:
+        return
+    # Repair a stale/cleared cross-process status flag even when the local
+    # worker thread is still alive (for example during a web-service restart).
+    _pipeline_set_running(True)
     thread_alive = _worker_thread is not None and _worker_thread.is_alive()
     if not thread_alive:
-        _pipeline_set_running(True)
         _worker_thread = _threading.Thread(target=_pipeline_worker, daemon=True)
         _worker_thread.start()
 
@@ -433,13 +447,16 @@ def _get_next_step() -> dict | None:
 
 
 def _pipeline_worker():
-    """Run the web-triggered worker only while holding the cross-host lease."""
-    with _db.advisory_lock("feldenkrais:analysis-worker") as acquired:
-        if not acquired:
-            print("[pipeline] analysis worker lease is held elsewhere", flush=True)
-            _pipeline_set_running(False)
-            return
-        _pipeline_worker_locked()
+    """Keep trying to own and drain the queue for the life of the web app."""
+    import time as _time_mod
+    while _pipeline_is_running():
+        with _db.advisory_lock("feldenkrais:analysis-worker") as acquired:
+            if acquired:
+                _pipeline_worker_locked()
+            else:
+                print("[pipeline] analysis worker lease is held elsewhere; retrying", flush=True)
+        if _pipeline_is_running():
+            _time_mod.sleep(10)
 
 
 def _pipeline_worker_locked():
@@ -454,8 +471,8 @@ def _pipeline_worker_locked():
     Up to 4 steps run concurrently via a thread pool.
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
-    max_workers = 4
-    step_timeout = 300  # 5 minutes per step
+    max_workers = int(os.environ.get("ANALYSIS_WORKER_CONCURRENCY", "8"))
+    step_timeout = int(os.environ.get("ANALYSIS_STEP_TIMEOUT", "900"))
     _sweep_completed_steps: set[str] = set()
 
     try:
@@ -471,14 +488,12 @@ def _pipeline_worker_locked():
                 initial.append(r)
 
             if not initial:
-                # Check if priority queue has items (deps might not be ready yet)
-                with _priority_lock:
-                    if _priority_lessons:
-                        # Wait briefly for in-flight deps to complete
-                        import time as _time_mod
-                        _time_mod.sleep(2)
-                        continue
-                break
+                # An empty queue is an idle state, not a reason to stop the
+                # consumer. New gates/documents become runnable without a
+                # human having to push a button.
+                import time as _time_mod
+                _time_mod.sleep(5)
+                continue
 
             with ThreadPoolExecutor(max_workers=max_workers) as pool:
                 pending = {}  # future -> info dict
@@ -533,7 +548,6 @@ def _pipeline_worker_locked():
     finally:
         _pending_step_keys.clear()
         _pipeline_update_active([])
-        _pipeline_set_running(False)
         # Auto-publish the Atlas projection when this sweep changed it (the
         # analysis gates are the sole owner control; fail-soft, never raises).
         if _sweep_completed_steps:
@@ -543,11 +557,9 @@ def _pipeline_worker_locked():
             except Exception as e:
                 print(f"[atlas-projection] hook error (non-fatal): {e}", flush=True)
 
-# On startup, if pipeline was running, restart the worker thread
+# Clear stale UI state during import. The lifespan hook starts the worker.
 if _db:
     _pipeline_update_active([])
-    if _pipeline_is_running():
-        _ensure_worker_running()
 
 # ── Initialize extracted modules ──────────────────────────────────────────
 import auth as _auth_mod

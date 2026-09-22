@@ -65,6 +65,71 @@ ops/mini/run-atlas-projection-worker.sh
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.feldenkrais.atlas-projection.plist
 ```
 
+## Three tiers
+
+| Tier | Where | What runs it | Reload |
+|---|---|---|---|
+| development | this laptop | `ops/dev/run-analyzer.sh` | autoreload on edits |
+| candidate | the Mini, tailnet only | `ops/promote-candidate.sh` | promoted revisions only |
+| production | Lambda, `aionyourside.net` | `terraform apply` | deploys only |
+
+The capture server for the Chrome extension has no production tier. The
+candidate is its only deployment, and the extension points at it.
+
+Candidate addresses, reachable from the owner's devices and from nothing on the
+LAN or the internet:
+
+| Service | Address | launchd job |
+|---|---|---|
+| Analyzer web app | `http://100.85.14.17:8000` | `com.feldenkrais.analyzer-web` |
+| Chrome capture server | `http://100.85.14.17:7890` | `com.feldenkrais.ff-capture` |
+
+### Layout on the Mini
+
+The candidate has its own checkout at `/Users/hermes/src/feldenkrais-candidate`,
+separate from the worker checkout, so a promotion cannot disturb transcription,
+analysis, or the crawler. It carries its own `.venv-web` (the worker environment
+has no web framework) and symlinks the worker `.env` rather than holding a second
+copy of the secrets.
+
+The two runner scripts live at `/Users/hermes/ops/`, outside the deployed tree,
+so that promoting or rolling back the tree can never strand the launchd jobs.
+`ops/promote-candidate.sh` reinstalls them from whatever revision it promotes.
+
+### Promoting
+
+From the laptop, on committed and pushed code:
+
+```sh
+ops/promote-candidate.sh                 # promote HEAD
+ops/promote-candidate.sh --rev <ref>     # promote a specific revision
+ops/promote-candidate.sh --status        # what is deployed right now
+ops/promote-candidate.sh --rollback      # return to the previous revision
+```
+
+The build step refuses to ship uncommitted work, refuses a revision that is not
+on a remote, checks that the private submodule pointer is pushed too, and runs
+the unit suite. Pass `--allow-test-failures` to proceed anyway, which the release
+record then shows.
+
+On the Mini it checks out the revision, updates the submodule to the pointer that
+revision carries, installs dependencies, and imports both applications in the
+deployed environment *before* restarting anything. A failure at any of those
+points restores the previous revision, and the running services never stop,
+because they hold their code in memory. After the restart it polls both health
+endpoints, and writes `var/candidate-release.json` recording the revision, the
+one it replaced, and the test result.
+
+Off-Lambda the web app applies no login gate and keeps its pipeline controls
+enabled, which is why the bind address is the tailnet interface and never
+`0.0.0.0`.
+
+### The Chrome extension
+
+Loaded unpacked on the laptop, pointed at the candidate through `SERVER_URL` in
+`background.js` and `popup.js`, with matching entries in the manifest's
+`host_permissions`. Changing either file needs a reload at `chrome://extensions`.
+
 ## Install without enabling
 
 From `/Users/hermes/src/feldenkrais`:

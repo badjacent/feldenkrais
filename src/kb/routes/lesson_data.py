@@ -7,6 +7,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 import web as _web
+from cache_helpers import document_cache_key, load_document_cached_analysis
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -18,6 +19,20 @@ def _get_lesson_text(document_id: str) -> str | None:
         return None
     text = _web._db.get_document_transcription(document_id)
     return text.strip() if text else None
+
+
+def _cache_key(document_id: str, text: str, suffix: str) -> str:
+    """Build the provider-aware cache key for a document analysis result."""
+    return document_cache_key(document_id, text, suffix)
+
+
+def _load_cache(document_id: str, text: str, suffix: str) -> tuple[str, dict | None]:
+    """Load a document's provider-specific cache, with legacy fallback.
+
+    The fallback keeps older records readable while ensuring an ``-Astra``
+    document preferentially reads the Astra result.
+    """
+    return load_document_cached_analysis(document_id, text, suffix)
 
 
 # ── Prompt reconstruction (system prompts must match analysis code) ──────
@@ -50,7 +65,7 @@ _SYSTEM_PROMPTS = {
 }
 
 
-def _ensure_prompt_io(text: str, io_steps: list) -> None:
+def _ensure_prompt_io(document_id: str, text: str, io_steps: list) -> None:
     """Reconstruct and cache any missing prompt IO entries for a lesson.
 
     Uses current prompt templates + cached upstream data to re-assemble prompts.
@@ -64,8 +79,7 @@ def _ensure_prompt_io(text: str, io_steps: list) -> None:
     # Check which steps need prompt reconstruction
     missing = []
     for step in io_steps:
-        cache_key = _web.get_cache_key(text + step["suffix"])
-        result = _web.load_cached_analysis(cache_key)
+        cache_key, result = _load_cache(document_id, text, step["suffix"])
         prompt = _web.load_cached_analysis(cache_key + ":prompt")
         if result and not prompt:
             missing.append(step)
@@ -77,8 +91,7 @@ def _ensure_prompt_io(text: str, io_steps: list) -> None:
 
     try:
         # Load Pass A data (needed by most steps)
-        pa_key = _web.get_cache_key(text + ":decompose_v3")
-        pa_data = _web.load_cached_analysis(pa_key)
+        pa_key, pa_data = _load_cache(document_id, text, ":decompose_v3")
 
         # --- Decompose ---
         if ":decompose_v3" in missing_suffixes and pa_data:
@@ -97,8 +110,7 @@ def _ensure_prompt_io(text: str, io_steps: list) -> None:
             return
 
         # --- Somatic ---
-        som_key = _web.get_cache_key(text.strip() + ":somatic_v2")
-        som_data = _web.load_cached_analysis(som_key)
+        som_key, som_data = _load_cache(document_id, text, ":somatic_v2")
         if ":somatic_v2" in missing_suffixes and som_data:
             steps_text = _analysis.format_steps_for_0b(pa_data)
             tmpl, schema = _analysis.load_pass_0b()
@@ -109,8 +121,7 @@ def _ensure_prompt_io(text: str, io_steps: list) -> None:
             })
 
         # --- Language ---
-        lang_key = _web.get_cache_key(text.strip() + ":language_v1")
-        lang_data = _web.load_cached_analysis(lang_key)
+        lang_key, lang_data = _load_cache(document_id, text, ":language_v1")
         if ":language_v1" in missing_suffixes and lang_data:
             steps_text = _analysis.format_steps_for_0b(pa_data)
             tmpl, schema = _analysis.load_pass_0b_lang()
@@ -121,8 +132,7 @@ def _ensure_prompt_io(text: str, io_steps: list) -> None:
             })
 
         # --- Concepts ---
-        ct_key = _web.get_cache_key(text.strip() + ":concept_tags_v2")
-        ct_data = _web.load_cached_analysis(ct_key)
+        ct_key, ct_data = _load_cache(document_id, text, ":concept_tags_v2")
         if ":concept_tags_v2" in missing_suffixes and ct_data and som_data:
             somatic_steps = som_data.get("enriched_steps", [])
             concept_input = _analysis.format_input_for_concepts(pa_data, somatic_steps)
@@ -134,8 +144,7 @@ def _ensure_prompt_io(text: str, io_steps: list) -> None:
             })
 
         # --- Spatial ---
-        sp_key = _web.get_cache_key(text.strip() + ":spatial_v2")
-        sp_data = _web.load_cached_analysis(sp_key)
+        sp_key, sp_data = _load_cache(document_id, text, ":spatial_v2")
         if ":spatial_v2" in missing_suffixes and sp_data and som_data:
             somatic_steps = som_data.get("enriched_steps", [])
             spatial_input = _analysis.format_input_for_spatial(pa_data, somatic_steps)
@@ -147,8 +156,7 @@ def _ensure_prompt_io(text: str, io_steps: list) -> None:
             })
 
         # --- Condensed ---
-        cond_key = _web.get_cache_key(text.strip() + ":condense_v4")
-        cond_data = _web.load_cached_analysis(cond_key)
+        cond_key, cond_data = _load_cache(document_id, text, ":condense_v4")
         if ":condense_v4" in missing_suffixes and cond_data and som_data and lang_data:
             somatic_enriched = som_data.get("enriched_steps", [])
             somatic_summary = som_data.get("summary", {})
@@ -181,17 +189,16 @@ async def api_lesson_combined(document_id: str):
     # Load cached results — try pipeline key first, then legacy
     pass_a = None
     for suffix in [":decompose_v3", ":pass_a", ":pass_a_v1"]:
-        pa_key = _web.get_cache_key(text + suffix)
-        pass_a = _web.load_cached_analysis(pa_key)
+        _, pass_a = _load_cache(document_id, text, suffix)
         if pass_a:
             break
     if not pass_a:
         return JSONResponse({"error": "Decomposition not yet available. Run the analysis pipeline first."}, status_code=404)
 
-    som_key = _web.get_cache_key(text + ":somatic_v2")
-    lang_key = _web.get_cache_key(text + ":language_v1")
-    somatic_result = _web.load_cached_analysis(som_key) or {}
-    lang_result = _web.load_cached_analysis(lang_key) or {}
+    _, somatic_result = _load_cache(document_id, text, ":somatic_v2")
+    _, lang_result = _load_cache(document_id, text, ":language_v1")
+    somatic_result = somatic_result or {}
+    lang_result = lang_result or {}
 
     # Align with whisper segments if available
     pass_0 = pass_a.get("pass_0", {})
@@ -285,14 +292,12 @@ async def api_lesson_somatic(document_id: str):
     if not text:
         return JSONResponse({"error": "No transcript available"}, status_code=404)
 
-    cache_key = _web.get_cache_key(text + ":somatic_v2")
-    cached = _web.load_cached_analysis(cache_key)
+    _, cached = _load_cache(document_id, text, ":somatic_v2")
     if not cached:
         return JSONResponse({"error": "Somatic analysis not yet available. Run the analysis pipeline first."}, status_code=404)
 
     # Also load pass_a for step context
-    pa_key = _web.get_cache_key(text + ":pass_a")
-    pass_a = _web.load_cached_analysis(pa_key)
+    _, pass_a = _load_cache(document_id, text, ":decompose_v3")
 
     return JSONResponse({
         "enriched_steps": cached.get("enriched_steps", []),
@@ -310,14 +315,12 @@ async def api_lesson_language(document_id: str):
     if not text:
         return JSONResponse({"error": "No transcript available"}, status_code=404)
 
-    cache_key = _web.get_cache_key(text + ":language_v1")
-    cached = _web.load_cached_analysis(cache_key)
+    _, cached = _load_cache(document_id, text, ":language_v1")
     if not cached:
         return JSONResponse({"error": "Language analysis not yet available. Run the analysis pipeline first."}, status_code=404)
 
     # Also load pass_a for step context
-    pa_key = _web.get_cache_key(text + ":pass_a")
-    pass_a = _web.load_cached_analysis(pa_key)
+    _, pass_a = _load_cache(document_id, text, ":decompose_v3")
 
     return JSONResponse({
         "enriched_steps": cached.get("enriched_steps", []),
@@ -335,8 +338,7 @@ async def api_lesson_condensed(document_id: str):
     if not text:
         return JSONResponse({"error": "No transcript available"}, status_code=404)
 
-    cache_key = _web.get_cache_key(text + ":condense_v4")
-    cached = _web.load_cached_analysis(cache_key)
+    _, cached = _load_cache(document_id, text, ":condense_v4")
     if not cached:
         return JSONResponse({"error": "Condensed analysis not yet available. Run the analysis pipeline first."}, status_code=404)
 
@@ -357,8 +359,7 @@ async def api_lesson_classification(document_id: str):
 
     pass_a = None
     for suffix in [":decompose_v3", ":pass_a", ":pass_a_v1"]:
-        pa_key = _web.get_cache_key(text + suffix)
-        pass_a = _web.load_cached_analysis(pa_key)
+        _, pass_a = _load_cache(document_id, text, suffix)
         if pass_a:
             break
     if not pass_a:
@@ -439,12 +440,11 @@ async def api_lesson_raw_io(document_id: str):
     ]
 
     # Reconstruct missing prompts on demand from templates + cached upstream data
-    _ensure_prompt_io(text, io_steps)
+    _ensure_prompt_io(document_id, text, io_steps)
 
     results = []
     for step in io_steps:
-        cache_key = _web.get_cache_key(text + step["suffix"])
-        cached = _web.load_cached_analysis(cache_key)
+        cache_key, cached = _load_cache(document_id, text, step["suffix"])
         # Check pipeline state (stale/error/completed)
         step_state = _web._db.get_document_state(document_id, step.get("step_name", "")) if _web._db else None
         is_stale = step_state.get("stale", False) if step_state else False

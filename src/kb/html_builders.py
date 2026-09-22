@@ -469,10 +469,9 @@ def _build_analysis_html() -> str:
         <div style="background:{'#fff3cd' if runnable_count > 0 else '#d4edda'};padding:8px 16px;border-radius:8px;">
             <strong>{runnable_count}</strong> runnable steps
         </div>
-        <button id="pipeline-toggle" onclick="togglePipeline()"
-                style="padding:6px 16px;background:{'#dc3545' if _web._pipeline_is_running() else '#007bff'};color:white;border:none;border-radius:4px;cursor:pointer;"
-                {'disabled' if runnable_count == 0 and not _web._pipeline_is_running() else ''}>
-            {'Stop Pipeline' if _web._pipeline_is_running() else 'Start Pipeline'}
+        <button id="pipeline-toggle" disabled
+                style="padding:6px 16px;background:#6c757d;color:white;border:none;border-radius:4px;">
+            Queue worker always on
         </button>
         <button onclick="refreshDashboard()" style="padding:6px 16px;background:#6c757d;color:white;border:none;border-radius:4px;cursor:pointer;">
             Refresh
@@ -867,9 +866,9 @@ extract_steps ──► map_body_parts (independent)</pre>
             .then(data => {{
                 const btn = document.getElementById('pipeline-toggle');
                 if (btn) {{
-                    btn.style.background = data.running ? '#dc3545' : '#007bff';
-                    btn.textContent = data.running ? 'Stop Pipeline' : 'Start Pipeline';
-                    btn.disabled = false;
+                    btn.style.background = data.running ? '#198754' : '#6c757d';
+                    btn.textContent = data.running ? 'Queue worker on' : 'Queue worker starting';
+                    btn.disabled = true;
                 }}
             }});
     }}

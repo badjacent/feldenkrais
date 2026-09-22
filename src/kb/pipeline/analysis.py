@@ -33,6 +33,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from database import Database
+from ingest.analysis_sources import ASTRA_PROVIDER, ASTRA_SUFFIX
 from analysis import (
     run_pass_a,
     run_pass_0b,
@@ -51,9 +52,36 @@ from analysis import (
 
 logger = logging.getLogger(__name__)
 
-# Default LLM provider for analysis steps
 DEFAULT_PROVIDER = "gemini"
 ANALYZER_LOCK = "feldenkrais:analysis-worker"
+
+
+def get_analysis_provider(db: Database | None = None, document_id: str | None = None) -> str:
+    """Select the analysis model from the document's source name.
+
+    ``*-Astra`` sources use Codex OAuth with Astra/low. Every other source uses
+    Gemini. This is deliberately document-scoped so a mixed queue is safe.
+    """
+    if db is None or document_id is None:
+        return DEFAULT_PROVIDER
+    with db.get_cursor(commit=False) as cursor:
+        cursor.execute(
+            """
+            SELECT ds.name
+            FROM document d
+            JOIN document_source ds ON ds.id = d.source_id
+            WHERE d.id = %s
+            """,
+            (document_id,),
+        )
+        row = cursor.fetchone()
+    if not row:
+        raise ValueError(f"Document not found: {document_id}")
+    return ASTRA_PROVIDER if row["name"].endswith(ASTRA_SUFFIX) else DEFAULT_PROVIDER
+
+
+def _provider_cache_suffix(provider: str) -> str:
+    return "" if provider == DEFAULT_PROVIDER else f":{provider}"
 
 
 def _get_transcript(db: Database, document_id: str) -> str | None:
@@ -80,37 +108,37 @@ def _compute_upstream_hash(db: Database, document_id: str, depends_on: list[str]
 # Step execution functions — each takes (db, document_id, transcript) and returns success bool
 
 def _run_pass_a(db: Database, document_id: str, transcript: str) -> bool:
-    result = run_pass_a(transcript, DEFAULT_PROVIDER)
+    result = run_pass_a(transcript, get_analysis_provider(db, document_id))
     return result is not None
 
 
 def _run_pass_0b(db: Database, document_id: str, transcript: str) -> bool:
-    result = run_pass_0b(transcript, DEFAULT_PROVIDER)
+    result = run_pass_0b(transcript, get_analysis_provider(db, document_id))
     return result is not None
 
 
 def _run_pass_0b_lang(db: Database, document_id: str, transcript: str) -> bool:
-    result = run_pass_0b_lang(transcript, DEFAULT_PROVIDER)
+    result = run_pass_0b_lang(transcript, get_analysis_provider(db, document_id))
     return result is not None
 
 
 def _run_pass_0b_word_lang(db: Database, document_id: str, transcript: str) -> bool:
-    result = run_pass_0b_word_lang(transcript, DEFAULT_PROVIDER)
+    result = run_pass_0b_word_lang(transcript, get_analysis_provider(db, document_id))
     return result is not None
 
 
 def _run_pass_0b_concepts(db: Database, document_id: str, transcript: str) -> bool:
-    result = run_pass_0b_concepts(transcript, DEFAULT_PROVIDER)
+    result = run_pass_0b_concepts(transcript, get_analysis_provider(db, document_id))
     return result is not None
 
 
 def _run_pass_0b_spatial(db: Database, document_id: str, transcript: str) -> bool:
-    result = run_pass_0b_spatial(transcript, DEFAULT_PROVIDER)
+    result = run_pass_0b_spatial(transcript, get_analysis_provider(db, document_id))
     return result is not None
 
 
 def _run_pass_0b_spatial_v3(db: Database, document_id: str, transcript: str) -> bool:
-    result = run_pass_0b_spatial_v3(transcript, DEFAULT_PROVIDER)
+    result = run_pass_0b_spatial_v3(transcript, get_analysis_provider(db, document_id))
     if result is not None:
         # Mark embed_positions as stale so it rebuilds with the richer v3 data
         with db.get_cursor() as cur:
@@ -123,8 +151,10 @@ def _run_pass_0b_spatial_v3(db: Database, document_id: str, transcript: str) -> 
 
 def _run_pass_0b_condensed(db: Database, document_id: str, transcript: str) -> bool:
     # Condensed needs somatic + lang results as input
-    somatic_key = get_cache_key(transcript.strip() + ":somatic_v2")
-    lang_key = get_cache_key(transcript.strip() + ":language_v1")
+    provider = get_analysis_provider(db, document_id)
+    suffix = _provider_cache_suffix(provider)
+    somatic_key = get_cache_key(transcript.strip() + ":somatic_v2" + suffix)
+    lang_key = get_cache_key(transcript.strip() + ":language_v1" + suffix)
     somatic = load_cached_analysis(somatic_key)
     lang = load_cached_analysis(lang_key)
     if not somatic or not lang:
@@ -133,26 +163,26 @@ def _run_pass_0b_condensed(db: Database, document_id: str, transcript: str) -> b
     # Ensure somatic has pass_a data (groups/steps) — the condense formatter
     # needs this to produce per-group input. Load from decompose cache if missing.
     if not somatic.get("pass_a", {}).get("groups"):
-        decompose_key = get_cache_key(transcript.strip() + ":decompose_v3")
+        decompose_key = get_cache_key(transcript.strip() + ":decompose_v3" + suffix)
         decompose = load_cached_analysis(decompose_key)
         if decompose:
             somatic["pass_a"] = decompose
-    result = run_pass_0b_condensed(somatic, lang, transcript)
+    result = run_pass_0b_condensed(somatic, lang, transcript, provider_key=provider)
     return result is not None
 
 
 def _run_motifs(db: Database, document_id: str, transcript: str) -> bool:
-    result = run_motifs(transcript, DEFAULT_PROVIDER)
+    result = run_motifs(transcript, get_analysis_provider(db, document_id))
     return result is not None
 
 
 def _run_raw_motifs(db: Database, document_id: str, transcript: str) -> bool:
-    result = run_raw_motifs(transcript, DEFAULT_PROVIDER)
+    result = run_raw_motifs(transcript, get_analysis_provider(db, document_id))
     return result is not None
 
 
 def _run_axes(db: Database, document_id: str, transcript: str) -> bool:
-    result = run_axes(transcript, DEFAULT_PROVIDER)
+    result = run_axes(transcript, get_analysis_provider(db, document_id))
     return result is not None
 
 
@@ -162,7 +192,9 @@ def _run_embeddings(db: Database, document_id: str, transcript: str) -> bool:
     from llm import get_embeddings
     from cache_helpers import build_summary_from_condensed
 
-    condensed_key = get_cache_key(transcript.strip() + ":condense_v4")
+    condensed_key = get_cache_key(
+        transcript.strip() + ":condense_v4" + _provider_cache_suffix(get_analysis_provider(db, document_id))
+    )
     condensed = load_cached_analysis(condensed_key)
     if not condensed or not condensed.get("segments"):
         logger.error(f"No condensed data for embedding: {document_id[:8]}")
@@ -183,8 +215,9 @@ def _run_embed_positions(db: Database, document_id: str, transcript: str) -> boo
     import hashlib
     from llm import get_embeddings
 
+    suffix = _provider_cache_suffix(get_analysis_provider(db, document_id))
     # Try v3 first
-    v3_key = get_cache_key(transcript.strip() + ":spatial_v3")
+    v3_key = get_cache_key(transcript.strip() + ":spatial_v3" + suffix)
     v3_data = load_cached_analysis(v3_key)
 
     if v3_data:
@@ -205,7 +238,7 @@ def _run_embed_positions(db: Database, document_id: str, transcript: str) -> boo
         summary = "\n".join(parts)
     else:
         # Fall back to v2
-        v2_key = get_cache_key(transcript.strip() + ":spatial_v2")
+        v2_key = get_cache_key(transcript.strip() + ":spatial_v2" + suffix)
         v2_data = load_cached_analysis(v2_key)
         if not v2_data:
             logger.error(f"No spatial data (v2 or v3) for position embedding: {document_id[:8]}")
@@ -265,7 +298,8 @@ def _run_concept_index(db: Database, document_id: str, transcript: str) -> bool:
     """Build concept index entries from concepts analysis."""
     from search.build_concept_index import build_concept_rows, build_concept_summary
 
-    concepts_key = get_cache_key(transcript.strip() + ":concept_tags_v2")
+    suffix = _provider_cache_suffix(get_analysis_provider(db, document_id))
+    concepts_key = get_cache_key(transcript.strip() + ":concept_tags_v2" + suffix)
     concepts_data = load_cached_analysis(concepts_key)
     if not concepts_data or not concepts_data.get("concepts"):
         logger.error(f"No concepts data for indexing: {document_id[:8]}")
@@ -280,7 +314,7 @@ def _run_concept_index(db: Database, document_id: str, transcript: str) -> bool:
     from llm import get_embeddings
 
     # Check for spatial data too
-    spatial_key = get_cache_key(transcript.strip() + ":spatial_v2")
+    spatial_key = get_cache_key(transcript.strip() + ":spatial_v2" + suffix)
     spatial_data = load_cached_analysis(spatial_key)
 
     doc = db.get_document(document_id)
@@ -297,7 +331,9 @@ def _run_spatial_index(db: Database, document_id: str, transcript: str) -> bool:
     """Build spatial index entries from spatial analysis."""
     from search.build_spatial_index import build_spatial_concept_rows
 
-    spatial_key = get_cache_key(transcript.strip() + ":spatial_v2")
+    spatial_key = get_cache_key(
+        transcript.strip() + ":spatial_v2" + _provider_cache_suffix(get_analysis_provider(db, document_id))
+    )
     spatial_data = load_cached_analysis(spatial_key)
     if not spatial_data or not spatial_data.get("groups"):
         logger.error(f"No spatial data for indexing: {document_id[:8]}")
@@ -320,14 +356,14 @@ def _init_extract_map(db: Database):
 def _run_extraction(db: Database, document_id: str, transcript: str) -> bool:
     _init_extract_map(db)
     from extract_map.pipeline import run_extraction
-    result = run_extraction(transcript, DEFAULT_PROVIDER)
+    result = run_extraction(transcript, get_analysis_provider(db, document_id))
     return result is not None
 
 
 def _run_mapping(db: Database, document_id: str, transcript: str) -> bool:
     _init_extract_map(db)
     from extract_map.pipeline import run_mapping
-    result = run_mapping(transcript, DEFAULT_PROVIDER)
+    result = run_mapping(transcript, get_analysis_provider(db, document_id))
     return result is not None
 
 

@@ -37,6 +37,13 @@ class TestGetLLM:
         assert llm.provider == "gemini"
         assert llm.model == "gemini-2.0-flash"
 
+    def test_returns_codex_provider(self, llm_module):
+        llm = llm_module(
+            provider="codex", model="gpt-6-astra", reasoning_effort="low"
+        )
+        assert llm.provider == "codex"
+        assert llm.reasoning_effort == "low"
+
     def test_invalid_provider_raises(self, llm_module):
         """Should raise ValueError for unsupported provider."""
         with pytest.raises(ValueError, match="Unsupported provider"):
@@ -44,6 +51,64 @@ class TestGetLLM:
 
 
 class TestCompleteStructuredJSON:
+    def test_codex_structured_output_uses_oauth_cli(self, llm_module):
+        llm = llm_module(
+            provider="codex", model="gpt-6-astra", reasoning_effort="low"
+        )
+        schema = {"type": "object", "properties": {"result": {"type": "string"}}}
+
+        def fake_run(cmd, **_kwargs):
+            output_path = cmd[cmd.index("-o") + 1]
+            Path(output_path).write_text('{"result": "test_value"}')
+            return MagicMock(returncode=0, stderr="", stdout="")
+
+        with patch("llm.LLM._codex_bin", return_value="codex"), \
+             patch("llm.subprocess.run", side_effect=fake_run) as run:
+            result = llm.complete_structured_json("test prompt", schema)
+
+        assert result == {"result": "test_value"}
+        cmd = run.call_args.args[0]
+        assert cmd[:2] == ["codex", "exec"]
+        assert cmd[cmd.index("-m") + 1] == "gpt-6-astra"
+        assert "model_reasoning_effort=low" in cmd
+
+        schema_path = cmd[cmd.index("--output-schema") + 1]
+        # Temporary schema is removed after the subprocess completes.
+        assert not Path(schema_path).exists()
+
+    def test_codex_schema_closes_nested_objects_without_mutating_input(self, llm_module):
+        schema = {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {"name": {"type": "string"}},
+                        "required": ["name"],
+                    },
+                }
+            },
+            "required": ["items"],
+        }
+
+        closed = llm_module._codex_output_schema(schema)
+
+        assert closed["additionalProperties"] is False
+        assert closed["required"] == ["items"]
+        assert closed["properties"]["items"]["items"]["additionalProperties"] is False
+        assert closed["properties"]["items"]["items"]["required"] == ["name"]
+        assert "additionalProperties" not in schema
+
+    def test_codex_bin_prefers_standard_user_install(self, llm_module, tmp_path, monkeypatch):
+        codex = tmp_path / ".local" / "bin" / "codex"
+        codex.parent.mkdir(parents=True)
+        codex.touch()
+        monkeypatch.delenv("CODEX_BIN", raising=False)
+
+        with patch("llm.Path.home", return_value=tmp_path):
+            assert llm_module._codex_bin() == str(codex)
+
     def test_anthropic_structured_output(self, llm_module):
         """Should call Anthropic API and parse JSON response."""
         llm = llm_module(provider="anthropic", model="claude-sonnet-4-20250514", api_key="test-key")

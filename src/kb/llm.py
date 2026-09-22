@@ -23,9 +23,13 @@ Usage:
     response = claude.complete("Write a haiku", temperature=0.9, max_tokens=100)
 """
 
-import os
 import json
+import os
+import shutil
+import subprocess
+import tempfile
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Optional, Literal, Type, TypeVar
 
 from pydantic import BaseModel
@@ -62,7 +66,7 @@ def get_genai():
     return genai
 
 
-Provider = Literal["anthropic", "openai", "gemini", "zai"]
+Provider = Literal["anthropic", "openai", "gemini", "zai", "codex"]
 
 # z.ai (Zhipu GLM) exposes an OpenAI-compatible endpoint.
 ZAI_DEFAULT_BASE_URL = "https://api.z.ai/api/paas/v4"
@@ -105,13 +109,14 @@ class LLM:
     default_max_tokens: int = 4096
     default_temperature: float = 0.0
     thinking_level: Optional[str] = None  # Gemini 3 only: MINIMAL, LOW, MEDIUM, HIGH
+    reasoning_effort: Optional[str] = None  # Codex: low, medium, high, ...
 
     # Clients are created lazily
     _client: object = field(default=None, init=False, repr=False)
     last_usage: dict = field(default_factory=dict, init=False, repr=False)
 
     def __post_init__(self):
-        if self.provider not in ("anthropic", "openai", "gemini", "zai"):
+        if self.provider not in ("anthropic", "openai", "gemini", "zai", "codex"):
             raise ValueError(f"Unsupported provider: {self.provider}")
 
     @property
@@ -199,6 +204,8 @@ class LLM:
             return self._chat_openai(messages, system, max_tokens, temperature)
         elif self.provider == "gemini":
             return self._chat_gemini(messages, system, max_tokens, temperature)
+        elif self.provider == "codex":
+            raise NotImplementedError("Codex provider currently supports structured JSON analysis only")
 
     def _chat_anthropic(
         self,
@@ -378,6 +385,11 @@ class LLM:
             return self._structured_openai(prompt, response_model, system, max_tokens, temperature)
         elif self.provider == "gemini":
             return self._structured_gemini(prompt, response_model, system, max_tokens, temperature)
+        elif self.provider == "codex":
+            data = self._structured_json_codex(
+                prompt, response_model.model_json_schema(), system, max_tokens, temperature
+            )
+            return response_model.model_validate(data)
 
     def _structured_anthropic(
         self,
@@ -504,6 +516,99 @@ class LLM:
             return self._structured_json_openai(prompt, schema, system, max_tokens, temperature)
         elif self.provider == "gemini":
             return self._structured_json_gemini(prompt, schema, system, max_tokens, temperature)
+        elif self.provider == "codex":
+            return self._structured_json_codex(prompt, schema, system, max_tokens, temperature)
+
+    def _structured_json_codex(
+        self,
+        prompt: str,
+        schema: dict,
+        system: Optional[str],
+        max_tokens: int,
+        temperature: float,
+    ) -> dict:
+        """Run a schema-constrained Codex turn using the signed-in subscription."""
+        del max_tokens, temperature  # Codex CLI owns these controls.
+        codex_bin = self._codex_bin()
+        schema = self._codex_output_schema(schema)
+        full_prompt = prompt
+        if system:
+            full_prompt = f"{system}\n\n---\n\n{prompt}"
+        full_prompt += "\n\nReturn only JSON matching the supplied output schema. Do not use tools."
+
+        schema_path = output_path = None
+        try:
+            with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as schema_file:
+                json.dump(schema, schema_file)
+                schema_path = schema_file.name
+            with tempfile.NamedTemporaryFile("w+", suffix=".json", delete=False) as output_file:
+                output_path = output_file.name
+
+            cmd = [
+                codex_bin, "exec", "--skip-git-repo-check", "--ephemeral",
+                "-s", "read-only", "--output-schema", schema_path,
+                "-o", output_path, "-m", self.model,
+            ]
+            if self.reasoning_effort:
+                cmd += ["-c", f"model_reasoning_effort={self.reasoning_effort}"]
+            cmd += ["--", full_prompt]
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=900, cwd="/tmp", check=False
+            )
+            if result.returncode:
+                detail = (result.stderr or result.stdout or "unknown error")[-1000:]
+                raise RuntimeError(f"Codex exited with status {result.returncode}: {detail}")
+            raw = Path(output_path).read_text(encoding="utf-8").strip()
+            data = json.loads(raw)
+            self.last_usage = {}
+            return data
+        finally:
+            if schema_path:
+                Path(schema_path).unlink(missing_ok=True)
+            if output_path:
+                Path(output_path).unlink(missing_ok=True)
+
+    @staticmethod
+    def _codex_output_schema(schema: dict) -> dict:
+        """Close every JSON object for Codex strict structured output.
+
+        The pipeline's schemas were authored for Gemini, which permits object
+        schemas without ``additionalProperties``. Codex requires that keyword
+        to be explicitly false at every object level.
+        """
+        def close_objects(value):
+            if isinstance(value, dict):
+                result = {key: close_objects(item) for key, item in value.items()}
+                if result.get("type") == "object" or "properties" in result:
+                    result["additionalProperties"] = False
+                    # Codex strict schemas require every declared property to
+                    # appear in ``required``. Existing pipeline prompts already
+                    # ask for complete records; make that contract explicit.
+                    if "properties" in result:
+                        result["required"] = list(result["properties"])
+                return result
+            if isinstance(value, list):
+                return [close_objects(item) for item in value]
+            return value
+
+        return close_objects(schema)
+
+    @staticmethod
+    def _codex_bin() -> str:
+        """Resolve Codex with zero extra config for a standard local install."""
+        override = os.environ.get("CODEX_BIN")
+        if override:
+            return override
+        user_install = Path.home() / ".local" / "bin" / "codex"
+        if user_install.is_file():
+            return str(user_install)
+        discovered = shutil.which("codex")
+        if discovered:
+            return discovered
+        raise RuntimeError(
+            "Codex CLI not found. Install it as this worker user, then run "
+            "`codex login` and retry."
+        )
 
     def _structured_json_anthropic(
         self,

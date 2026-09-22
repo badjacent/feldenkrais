@@ -2,6 +2,8 @@
 
 from typing import Optional
 
+DEFAULT_ANALYSIS_GATE_SOURCE = "FELDENKRAIS_FIRST"
+
 
 class LessonGroupsMixin:
     """Lesson groups, group membership, and analysis gate controls."""
@@ -79,9 +81,27 @@ class LessonGroupsMixin:
                     INSERT INTO lesson_group (name, auto_source_id)
                     VALUES (%s, %s)
                     ON CONFLICT (name) DO UPDATE SET auto_source_id = EXCLUDED.auto_source_id
-                    RETURNING id
+                    RETURNING id, (xmax = 0) AS inserted
                 """, (src["name"], src["id"]))
-                group_id = cursor.fetchone()["id"]
+                group_row = cursor.fetchone()
+                group_id = group_row["id"]
+
+                # A new source inherits the curated processing surface from
+                # FELDENKRAIS_FIRST. Do not implicitly enable every registered
+                # analysis step: new steps remain owner-gated there first.
+                if group_row.get("inserted") and src["name"] != DEFAULT_ANALYSIS_GATE_SOURCE:
+                    cursor.execute("""
+                        INSERT INTO group_analysis_gate
+                            (group_id, step_name, permitted, updated_at)
+                        SELECT %s, template.step_name, template.permitted, NOW()
+                        FROM lesson_group template_group
+                        JOIN document_source template_source
+                          ON template_source.id = template_group.auto_source_id
+                        JOIN group_analysis_gate template
+                          ON template.group_id = template_group.id
+                        WHERE template_source.name = %s
+                        ON CONFLICT (group_id, step_name) DO NOTHING
+                    """, (group_id, DEFAULT_ANALYSIS_GATE_SOURCE))
 
                 # Sync members: add documents from this source that have transcriptions
                 cursor.execute("""

@@ -7,6 +7,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
 import web as _web
+from cache_helpers import load_document_cached_analysis
 
 router = APIRouter()
 
@@ -194,9 +195,7 @@ async def api_lesson_concepts(document_id: str):
         text = _web._db.get_document_transcription(document_id)
         extra = {}
         if text:
-            from cache_helpers import get_cache_key
-            cache_key = get_cache_key(text.strip() + ":concept_tags_v2")
-            cached = _web._db.get_cache(cache_key)
+            _, cached = load_document_cached_analysis(document_id, text.strip(), ":concept_tags_v2")
             if cached:
                 extra["distinctive_summary"] = cached.get("distinctive_summary", "")
                 extra["search_terms"] = cached.get("search_terms", [])
@@ -336,11 +335,8 @@ async def api_lesson_positions(document_id: str):
         text = _web._db.get_document_transcription(document_id)
         if not text:
             return JSONResponse({"error": "No transcript"}, status_code=404)
-        from cache_helpers import get_cache_key
-
         # Try v3 first
-        v3_key = get_cache_key(text.strip() + ":spatial_v3")
-        cached = _web._db.get_cache(v3_key)
+        _, cached = load_document_cached_analysis(document_id, text.strip(), ":spatial_v3")
         if cached:
             return JSONResponse({
                 "steps": cached.get("steps", []),
@@ -350,14 +346,12 @@ async def api_lesson_positions(document_id: str):
             })
 
         # Fall back to v2 → convert to v3-like format
-        v2_key = get_cache_key(text.strip() + ":spatial_v2")
-        v2 = _web._db.get_cache(v2_key)
+        _, v2 = load_document_cached_analysis(document_id, text.strip(), ":spatial_v2")
         if not v2:
             return JSONResponse({"steps": [], "position_summary": [], "available": False})
 
         # Also load pass_a for step-level data
-        pa_key = get_cache_key(text.strip() + ":decompose_v3")
-        pa = _web._db.get_cache(pa_key)
+        _, pa = load_document_cached_analysis(document_id, text.strip(), ":decompose_v3")
 
         steps, summary = _convert_v2_to_v3(v2, pa)
         return JSONResponse({

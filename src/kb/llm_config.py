@@ -55,6 +55,12 @@ LLM_CONFIGS = {
         "api_key_env": "OPENAI_API_KEY",
         "default_max_tokens": 128000,
     },
+    "codex-astra": {
+        "provider": "codex",
+        "model": "gpt-6-astra",
+        "default_max_tokens": 65536,
+        "reasoning_effort": "low",
+    },
     "anthropic": {
         "provider": "anthropic",
         "model": "claude-sonnet-4-20250514",
@@ -94,7 +100,7 @@ def get_llm(provider_key: str | None = None) -> LLM:
     """Get configured LLM instance.
 
     Args:
-        provider_key: One of 'gemini', 'openai', 'anthropic'. Defaults to DEFAULT_LLM.
+        provider_key: A key from LLM_CONFIGS. Defaults to DEFAULT_LLM.
     """
     if not _db:
         raise RuntimeError(
@@ -110,9 +116,10 @@ def get_llm(provider_key: str | None = None) -> LLM:
     if not config:
         raise ValueError(f"Unknown LLM provider: {key}. Choose from: {list(LLM_CONFIGS.keys())}")
 
-    api_key = os.environ.get(config["api_key_env"])
-    if not api_key:
-        raise ValueError(f"{config['api_key_env']} environment variable not set")
+    api_key_env = config.get("api_key_env")
+    api_key = os.environ.get(api_key_env) if api_key_env else None
+    if api_key_env and not api_key:
+        raise ValueError(f"{api_key_env} environment variable not set")
 
     return LLM(
         provider=config["provider"],
@@ -120,4 +127,5 @@ def get_llm(provider_key: str | None = None) -> LLM:
         api_key=api_key,
         default_max_tokens=config["default_max_tokens"],
         thinking_level=config.get("thinking_level"),
+        reasoning_effort=config.get("reasoning_effort"),
     )

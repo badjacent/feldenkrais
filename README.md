@@ -88,6 +88,24 @@ aws lambda invoke --function-name feldenkrais-transcription-prod \
 aws logs tail /aws/lambda/feldenkrais-transcription-prod --since 10m
 ```
 
+## Servers
+
+This project runs the analyzer on three tiers, and it is not the only project
+with servers on the Mac mini. The inventory of every long-running server across
+products lives at `~/github/servers`, which is deliberately local to this
+machine and is in no repository and on no remote. Nothing here depends on it.
+Check it before claiming a port, since `lsof` on the mini only reports the
+current account's processes.
+
+| Tier | Where | Command |
+|---|---|---|
+| development | this laptop, autoreload | `ops/dev/run-analyzer.sh` |
+| candidate | the mini, tailnet only | `ops/promote-candidate.sh` |
+| production | Lambda, aionyourside.net | `terraform apply`, below |
+
+See `ops/mini/README.md` for the mini layout and the promote gate, and
+`~/github/servers/status.sh` to probe everything that should be up.
+
 ## Deployment
 
 ### Prerequisites

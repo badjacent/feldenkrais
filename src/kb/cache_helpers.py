@@ -34,6 +34,28 @@ def save_cached_analysis(cache_key: str, data: dict) -> None:
         _db.set_cache(cache_key, data)
 
 
+def document_cache_key(document_id: str, text: str, suffix: str) -> str:
+    """Build the provider-aware cache key for a document analysis result."""
+    from ingest.analysis_sources import document_analysis_provider, provider_cache_suffix
+
+    provider = document_analysis_provider(_db, document_id) if _db else None
+    return get_cache_key(text + suffix + provider_cache_suffix(provider))
+
+
+def load_document_cached_analysis(
+    document_id: str, text: str, suffix: str
+) -> tuple[str, dict | None]:
+    """Load provider-specific analysis, falling back to a legacy cache key."""
+    key = document_cache_key(document_id, text, suffix)
+    cached = load_cached_analysis(key)
+    if cached is not None:
+        return key, cached
+    legacy_key = get_cache_key(text + suffix)
+    if legacy_key != key:
+        return legacy_key, load_cached_analysis(legacy_key)
+    return key, None
+
+
 def save_prompt_io(cache_key: str, prompt: str, system: str, schema: dict | None = None) -> None:
     """Save the prompt/system/schema used to produce a cached result.
 
