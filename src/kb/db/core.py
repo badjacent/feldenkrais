@@ -411,7 +411,8 @@ class DatabaseCore:
         named lock. The dedicated connection is never returned to the pool
         until the lock has been released.
         """
-        conn = self._get_pool().getconn()
+        connection_pool = self._get_pool()
+        conn = connection_pool.getconn()
         acquired = False
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cursor:
@@ -423,18 +424,32 @@ class DatabaseCore:
                 acquired = bool(row and row["acquired"])
             yield acquired
         finally:
-            if acquired:
-                try:
+            discard = bool(getattr(conn, "closed", False))
+            try:
+                if discard:
+                    pass
+                elif acquired:
                     with conn.cursor() as cursor:
                         cursor.execute(
                             "SELECT pg_advisory_unlock(hashtext(%s))",
                             (name,),
                         )
-                finally:
                     conn.rollback()
-            else:
-                conn.rollback()
-            self._get_pool().putconn(conn)
+                else:
+                    conn.rollback()
+            except Exception:
+                # A transient network failure can close the dedicated lock
+                # connection while the worker owns it. Never mask the original
+                # database exception with rollback/unlock cleanup, and never
+                # return a dead connection to the pool.
+                discard = True
+            finally:
+                try:
+                    connection_pool.putconn(conn, close=discard)
+                except Exception:
+                    # A closed/broken connection may already have detached
+                    # itself from the pool. There is nothing useful to return.
+                    pass
 
     @contextmanager
     def get_cursor(self, commit: bool = True):

@@ -449,14 +449,21 @@ def _get_next_step() -> dict | None:
 def _pipeline_worker():
     """Keep trying to own and drain the queue for the life of the web app."""
     import time as _time_mod
-    while _pipeline_is_running():
-        with _db.advisory_lock("feldenkrais:analysis-worker") as acquired:
-            if acquired:
-                _pipeline_worker_locked()
-            else:
-                print("[pipeline] analysis worker lease is held elsewhere; retrying", flush=True)
-        if _pipeline_is_running():
-            _time_mod.sleep(10)
+    while True:
+        try:
+            if not _pipeline_is_running():
+                return
+            with _db.advisory_lock("feldenkrais:analysis-worker") as acquired:
+                if acquired:
+                    _pipeline_worker_locked()
+                else:
+                    print("[pipeline] analysis worker lease is held elsewhere; retrying", flush=True)
+        except Exception as exc:
+            # Database connections can be severed while the long-lived worker
+            # owns its advisory-lock session. The pool discards that connection;
+            # keep the consumer alive so the next loop can reconnect.
+            print(f"[pipeline] worker database error; retrying: {exc}", flush=True)
+        _time_mod.sleep(10)
 
 
 def _pipeline_worker_locked():
