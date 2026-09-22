@@ -335,7 +335,9 @@ _PIPELINE_MODULE = "pipeline.analysis"
 _PIPELINE_CWD = os.environ.get("ANALYSIS_WORKER_CWD", str(Path(__file__).parent))
 
 def _pipeline_is_running() -> bool:
-    """Check if pipeline is marked as running in DB."""
+    """Report whether this web process owns an always-on queue consumer."""
+    if ANALYSIS_QUEUE_ENABLED:
+        return True
     if not _db:
         return False
     row = _db.get_cache(_PIPELINE_KEY)
