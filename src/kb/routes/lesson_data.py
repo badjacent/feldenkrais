@@ -520,9 +520,11 @@ async def api_lesson_raw_io(document_id: str, profile: str | None = None):
 
 @router.get("/api/lesson/{document_id}/profiles")
 async def api_lesson_profiles(document_id: str):
-    """List analysis profiles and how far each has analyzed this lesson. Local deployments only."""
-    if not _web.PIPELINE_LOCAL_CONTROLS:
-        return JSONResponse({"error": "Not found"}, status_code=404)
+    """List analysis profiles and how far each has analyzed this lesson.
+
+    Feeds the lesson page's model selector on every deployment. Whether a
+    profile is switched on is pipeline state, so it is reported only locally.
+    """
     if not _web._db:
         return JSONResponse({"error": "No database connection"}, status_code=500)
     done_by_profile: dict[str, list[str]] = {}
@@ -536,8 +538,8 @@ async def api_lesson_profiles(document_id: str):
             "model": p["model"],
             "contract_version": p["contract_version"],
             "canonical": p["canonical"],
-            "enabled": p["enabled"],
             "completed_steps": sorted(done_by_profile.get(p["key"], [])),
+            **({"enabled": p["enabled"]} if _web.PIPELINE_LOCAL_CONTROLS else {}),
         }
         for p in _web._db.get_analysis_profiles()
     ]

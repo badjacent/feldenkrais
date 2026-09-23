@@ -90,6 +90,29 @@ class AnalysisProfilesMixin:
                 return profile
         return None
 
+    def default_profile_for_document(self, document_id: str) -> str:
+        """The profile a lesson page opens on.
+
+        The canonical profile when it has decomposed the lesson; otherwise the
+        first profile (canonical first, then by key) that has; otherwise the
+        canonical profile. Lessons analyzed before per-profile progress existed
+        have no progress rows and open on the canonical profile, which owns
+        their results.
+        """
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute("""
+                SELECT p.key FROM analysis_profile p
+                WHERE EXISTS (
+                    SELECT 1 FROM document_analysis_state s
+                    WHERE s.document_id = %s AND s.profile_key = p.key
+                      AND s.step_name = 'decompose' AND s.completed_version IS NOT NULL
+                )
+                ORDER BY p.canonical DESC, p.key
+                LIMIT 1
+            """, (document_id,))
+            row = cursor.fetchone()
+        return row["key"] if row else self.get_canonical_profile()["key"]
+
     def set_profile_enabled(self, key: str, enabled: bool) -> bool:
         """Turn a profile's global switch on or off. Returns False if unknown."""
         with self.get_cursor() as cursor:

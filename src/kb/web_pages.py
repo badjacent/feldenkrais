@@ -282,20 +282,23 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None, super
 </html>"""
 
 
-def build_lesson_page_html(document_id: str, user: dict | None = None, search_mode: bool = False, superuser_active: bool = False, pipeline_visible: bool = False) -> str:
+def build_lesson_page_html(document_id: str, user: dict | None = None, search_mode: bool = False, superuser_active: bool = False, pipeline_visible: bool = False, default_profile: str | None = None) -> str:
     """Build the unified lesson detail page HTML.
 
+    Every page reads one model profile's analysis: the one named by
+    ``?profile=``, else ``default_profile`` (the canonical profile when it has
+    analyzed the lesson, otherwise one that has). A selector lists every model.
     ``pipeline_visible`` (local deployments only) adds the Pipeline tab and the
-    analysis-profile switcher. Every page reads one profile's analysis: the one
-    named by ``?profile=``, or the canonical profile.
+    model comparison link.
     """
     esc_id = html_mod.escape(document_id)
+    compare_link = f' <a href="/lesson/{esc_id}/compare">Compare models</a>' if pipeline_visible else ""
     profile_bar = (
         '<div class="source-line" id="profile-bar" style="display:none;">'
-        'Analysis: <select id="profile-select" onchange="switchProfile(this.value)"></select> '
-        f'<a href="/lesson/{esc_id}/compare">Compare models</a></div>'
-        if pipeline_visible else ""
+        'Model: <select id="profile-select" onchange="switchProfile(this.value)"></select>'
+        f'{compare_link}</div>'
     )
+    default_profile_js = json.dumps(default_profile or "")
     pipeline_tab = (
         """<button onclick="switchTab('pipeline')">Pipeline</button>"""
         if pipeline_visible else ""
@@ -761,9 +764,9 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
 // ── Constants ──
 const DOCUMENT_ID = '{esc_id}';
 
-// Every analysis endpoint reads one profile's results. Carry ?profile= from the
-// page URL to them; without it they read the canonical profile.
-const ANALYSIS_PROFILE = new URLSearchParams(window.location.search).get('profile') || '';
+// Every analysis endpoint reads one profile's results: the one named by
+// ?profile=, else the one the server chose for this lesson.
+const ANALYSIS_PROFILE = new URLSearchParams(window.location.search).get('profile') || {default_profile_js};
 const _fetchUnprofiled = window.fetch.bind(window);
 window.fetch = (url, opts) => {{
     if (ANALYSIS_PROFILE && typeof url === 'string' && url.startsWith('/api/lesson/')
@@ -791,7 +794,8 @@ function switchProfile(key) {{
         const opt = document.createElement('option');
         opt.value = p.key;
         const done = p.completed_steps.length;
-        opt.textContent = p.key + (p.canonical ? ' (canonical)' : '') + ' — ' + (done ? done + ' steps done' : 'not analyzed');
+        opt.textContent = p.key + ' · ' + p.model + (p.canonical ? ' (canonical)' : '')
+            + ' — ' + (done ? done + ' steps' : 'not analyzed');
         opt.selected = p.key === current;
         select.appendChild(opt);
     }}

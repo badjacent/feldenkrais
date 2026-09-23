@@ -182,10 +182,17 @@ async def lesson_detail_page(request: Request, document_id: str):
             _web._db.log_lesson_view(document_id, user.get("user_id") if user else None)
         except Exception:
             pass
+    default_profile = None
+    if _web._db:
+        try:
+            default_profile = _web._db.default_profile_for_document(document_id)
+        except Exception:
+            default_profile = None  # the page falls back to the canonical profile
     return HTMLResponse(_web.build_lesson_page_html(
         document_id, user=user, search_mode=_web._is_search_site(request),
         superuser_active=_web._is_superuser_active(request, user),
         pipeline_visible=_web.PIPELINE_LOCAL_CONTROLS,
+        default_profile=default_profile,
     ))
 
 

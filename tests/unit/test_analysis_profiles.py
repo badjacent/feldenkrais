@@ -171,3 +171,29 @@ def test_get_llm_keeps_historical_configs_for_existing_keys():
     assert llm.model == "gemini-3-flash-preview"
     assert llm.schema_contract == 2
     db.get_profile_by_provider_key.assert_not_called()
+
+
+def test_lesson_opens_on_a_model_that_has_analyzed_it(mock_db):
+    mock_db._mock_cursor.fetchone.return_value = {"key": "astra-low"}
+    assert mock_db.default_profile_for_document("doc-1") == "astra-low"
+    sql = mock_db._mock_cursor.execute.call_args_list[0][0][0]
+    assert "ORDER BY p.canonical DESC" in sql  # canonical wins when it has results
+
+
+def test_lesson_without_progress_opens_on_the_canonical_model(mock_db):
+    mock_db._mock_cursor.fetchone.side_effect = [None, {**GEMINI, "canonical": True}]
+    assert mock_db.default_profile_for_document("doc-1") == "gemini-3-flash"
+
+
+def test_every_lesson_page_has_the_model_selector_but_only_local_pages_compare():
+    from kb.web_pages import build_lesson_page_html
+
+    production = build_lesson_page_html("doc-1", default_profile="astra-low")
+    local = build_lesson_page_html("doc-1", default_profile="astra-low", pipeline_visible=True)
+
+    for page in (production, local):
+        assert 'id="profile-select"' in page
+        assert "|| \"astra-low\";" in page  # the server's choice is the default
+    assert "Compare models" not in production
+    assert "switchTab('pipeline')" not in production
+    assert "Compare models" in local
