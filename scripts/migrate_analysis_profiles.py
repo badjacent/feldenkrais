@@ -205,6 +205,18 @@ def migrate(db_url: str, dry_run: bool) -> int:
             conn.rollback()
             return 1
 
+        # Take every table lock up front, in the order initialize() creates its
+        # indexes (document first). Workers and Lambdas run initialize() at
+        # startup; taking locks mid-transaction deadlocks against them, while
+        # taking them first only makes a starting process wait a few seconds.
+        cur.execute("SET LOCAL lock_timeout = '60s'")
+        cur.execute("""
+            LOCK TABLE document, lesson_embedding, lesson_concept, lesson_group,
+                       lesson_group_member, group_analysis_gate, document_analysis_state,
+                       document_source
+            IN ACCESS EXCLUSIVE MODE
+        """)
+
         # ── Before ────────────────────────────────────────────────────────
         before = table_counts(cur)
         cur.execute(ASTRA_DOCS_SQL)
@@ -316,7 +328,9 @@ def migrate(db_url: str, dry_run: bool) -> int:
         fi_demo_now = sorted(s for d, p, s in new_runnable if d == FI_DEMO_ID)
 
         problems = []
-        for table in ("document_analysis_state", "lesson_embedding", "lesson_concept", "document", "cache"):
+        # The cache is never touched here but other processes write it, so it is
+        # reported, not compared.
+        for table in ("document_analysis_state", "lesson_embedding", "lesson_concept", "document"):
             if before[table] != after[table]:
                 problems.append(f"{table}: {before[table]} rows before, {after[table]} after")
         if new_gemini != old_gemini:
