@@ -576,8 +576,8 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
         Discuss elsewhere:
         <button type="button" onclick="copyLessonContext(this)"
                 title="Copy this lesson, its transcript and the selected model's analysis, ready to paste into an AI chat">Copy for AI chat</button>
-        <a href="#" onclick="this.href = contextUrl(true)"
-           title="Download the same document as a Markdown file">Download</a>
+        <button type="button" onclick="downloadLessonContext(this)"
+                title="Download the same document as a Markdown file, and copy where it was saved">Download</button>
     </div>
 
     <div class="audio-container audio-hidden" id="audio-container">
@@ -815,6 +815,56 @@ async function copyLessonContext(btn) {{
         btn.textContent = 'Copied · ' + words.toLocaleString() + ' words';
     }} catch (e) {{
         btn.textContent = 'Copy failed · use Download';
+    }}
+    setTimeout(() => {{ btn.textContent = label; btn.disabled = false; }}, 4000);
+}}
+
+// Saves the document and copies its path. Browsers never tell a page where a
+// download went, so the path assumes the default folder (~/Downloads) and the
+// server's filename; a browser that renames a duplicate adds " (1)".
+async function downloadLessonContext(btn) {{
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Preparing…';
+    const file = fetch(contextUrl(true)).then(async r => {{
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const match = /filename="([^"]+)"/.exec(r.headers.get('Content-Disposition') || '');
+        return {{name: match ? match[1] : 'lesson.md', blob: await r.blob()}};
+    }});
+    const path = file.then(f => '~/Downloads/' + f.name);
+    // Start the clipboard write inside the click, with the path still pending,
+    // as Safari requires; await it only after the download.
+    let copied;
+    try {{
+        copied = (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write)
+            ? navigator.clipboard.write([new ClipboardItem({{
+                  'text/plain': path.then(t => new Blob([t], {{type: 'text/plain'}})),
+              }})])
+            : path.then(t => navigator.clipboard.writeText(t));
+    }} catch (e) {{
+        copied = Promise.reject(e);
+    }}
+    try {{
+        const f = await file;
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(f.blob);
+        link.download = f.name;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+    }} catch (e) {{
+        copied.catch(() => {{}});
+        btn.textContent = 'Download failed';
+        setTimeout(() => {{ btn.textContent = label; btn.disabled = false; }}, 4000);
+        return;
+    }}
+    try {{
+        await copied;
+        btn.textContent = 'Saved · path copied';
+        btn.title = 'Copied: ' + await path;
+    }} catch (e) {{
+        btn.textContent = 'Saved · ' + await path;
     }}
     setTimeout(() => {{ btn.textContent = label; btn.disabled = false; }}, 4000);
 }}
