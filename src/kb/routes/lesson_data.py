@@ -5,7 +5,7 @@ import json
 import logging
 
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 
 import web as _web
 from cache_helpers import load_profile_result
@@ -665,6 +665,62 @@ async def lesson_compare(document_id: str, a: str | None = None, b: str | None =
     <div class="col">{_compare_column(by_key[b], text)}</div>
   </div>
 </body></html>""")
+
+
+@router.get("/api/lesson/{document_id}/context")
+async def api_lesson_context(request: Request, document_id: str, profile: str | None = None,
+                             download: bool = False):
+    """The lesson and one model's analysis as a Markdown document for an outside LLM.
+
+    Holds the full transcript, so it applies the same source-access check as the
+    lesson page itself.
+    """
+    from datetime import datetime, timezone
+    import lesson_context
+
+    if not _web._db:
+        return JSONResponse({"error": "No database connection"}, status_code=500)
+    _web._set_source_access(request)
+    doc = _web._db.get_document(document_id)
+    if not doc or not _web._db.is_document_accessible(document_id):
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    text = _get_lesson_text(document_id)
+    if not text:
+        return JSONResponse({"error": "No transcript available"}, status_code=404)
+    try:
+        analysis_profile = _resolve_profile(profile or _web._db.default_profile_for_document(document_id))
+    except ValueError as e:
+        return _unknown_profile(e)
+
+    results = {name: _load_cache(analysis_profile, text, suffix)[1] for name, suffix in [
+        ("pass_a", ":decompose_v3"), ("somatic", ":somatic_v2"), ("language", ":language_v1"),
+        ("condensed", ":condense_v4"), ("concepts", ":concept_tags_v2"), ("positions", ":spatial_v3"),
+    ]}
+    segments = _web._db.get_document_whisper_segments(document_id)
+    if results["pass_a"] and segments and hasattr(_web, "align_pass0_with_whisper"):
+        _web.align_pass0_with_whisper(results["pass_a"].get("pass_0", {}), segments)
+
+    source_name = ""
+    if doc.get("source_id"):
+        with _web._db.get_cursor(commit=False) as cur:
+            cur.execute("SELECT category_name, name FROM document_source WHERE id = %s", (doc["source_id"],))
+            row = cur.fetchone()
+            if row:
+                source_name = row.get("category_name") or row.get("name", "")
+
+    lesson_url = f"{_web._auth_mod._base_url(request)}/lesson/{document_id}?profile={analysis_profile['key']}"
+    body = lesson_context.build_lesson_context(
+        document=doc, source_name=source_name, lesson_url=lesson_url, profile=analysis_profile,
+        transcript=text, whisper_segments=segments,
+        field_descriptions=lesson_context.schema_field_descriptions(_web.DATA_DIR),
+        exported_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ"),
+        **results,
+    )
+    headers = {}
+    if download:
+        name = f"{lesson_context.slug(doc.get('title'))}.{analysis_profile['key']}.md"
+        headers["Content-Disposition"] = f'attachment; filename="{name}"'
+    return PlainTextResponse(body, media_type="text/markdown; charset=utf-8", headers=headers)
 
 
 @router.get("/api/lesson-info/{document_id}")

@@ -572,6 +572,13 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
     <h1 id="lesson-title">Loading...</h1>
     <div class="source-line" id="source-line"></div>
     {profile_bar}
+    <div class="source-line" id="context-actions">
+        Discuss elsewhere:
+        <button type="button" onclick="copyLessonContext(this)"
+                title="Copy this lesson, its transcript and the selected model's analysis, ready to paste into an AI chat">Copy for AI chat</button>
+        <a href="#" onclick="this.href = contextUrl(true)"
+           title="Download the same document as a Markdown file">Download</a>
+    </div>
 
     <div class="audio-container audio-hidden" id="audio-container">
         <audio id="audio-player" controls preload="auto"></audio>
@@ -775,6 +782,42 @@ window.fetch = (url, opts) => {{
     }}
     return _fetchUnprofiled(url, opts);
 }};
+
+// The lesson, its transcript and one model's analysis as a self-explaining
+// Markdown document, for discussing the lesson in an outside AI chat.
+function contextUrl(download) {{
+    let url = '/api/lesson/' + encodeURIComponent(DOCUMENT_ID) + '/context';
+    const params = new URLSearchParams();
+    if (ANALYSIS_PROFILE) params.set('profile', ANALYSIS_PROFILE);
+    if (download) params.set('download', '1');
+    return params.toString() ? url + '?' + params : url;
+}}
+
+async function copyLessonContext(btn) {{
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Preparing…';
+    const text = fetch(contextUrl(false)).then(r => {{
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text();
+    }});
+    try {{
+        // Safari only allows a clipboard write that starts inside the click,
+        // so hand it the pending text rather than awaiting it first.
+        if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {{
+            await navigator.clipboard.write([new ClipboardItem({{
+                'text/plain': text.then(t => new Blob([t], {{type: 'text/plain'}})),
+            }})]);
+        }} else {{
+            await navigator.clipboard.writeText(await text);
+        }}
+        const words = (await text).split(/\s+/).length;
+        btn.textContent = 'Copied · ' + words.toLocaleString() + ' words';
+    }} catch (e) {{
+        btn.textContent = 'Copy failed · use Download';
+    }}
+    setTimeout(() => {{ btn.textContent = label; btn.disabled = false; }}, 4000);
+}}
 
 function switchProfile(key) {{
     const url = new URL(window.location);

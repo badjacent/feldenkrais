@@ -197,3 +197,49 @@ def test_every_lesson_page_has_the_model_selector_but_only_local_pages_compare()
     assert "Compare models" not in production
     assert "switchTab('pipeline')" not in production
     assert "Compare models" in local
+
+
+def test_lesson_context_explains_itself_and_keeps_the_transcript():
+    from kb.lesson_context import build_lesson_context
+
+    doc = build_lesson_context(
+        document={"id": "doc-1", "title": "Clarifying the Feet", "source_url": "https://example.org/l13"},
+        source_name="San Francisco Evening Class Notes",
+        lesson_url="https://aionyourside.net/lesson/doc-1?profile=astra-low",
+        profile=ASTRA_LOW,
+        transcript="Lie on your back.",
+        whisper_segments=[{"id": 0, "start": 0.0, "end": 2.0, "text": " Lie on your back."}],
+        pass_a={"groups": [{"group_number": 1, "label": "Feet"}],
+                "steps": [{"step_number": 1, "group_number": 1, "instruction": "Roll the right foot",
+                           "tags": ["S", "Q"]}]},
+        somatic={"enriched_steps": [{"step_number": 1, "ground_push": "right heel",
+                                     "inhibition": "None", "differentiation": None}]},
+        language=None, condensed=None, concepts=None, positions=None,
+        field_descriptions={"ground_push": "Where the body presses into the floor. Write 'None' if not applicable."},
+        exported_at="2026-09-23T12:00Z",
+    )
+    assert "Everything else is machine analysis" in doc
+    assert "gpt-6-astra" in doc
+    assert "*ground push* — Where the body presses into the floor" in doc  # schema definition, no model instructions
+    assert "Write 'None'" not in doc
+    assert "- ground push: right heel" in doc
+    assert "inhibition" not in doc.split("## Groups and steps")[1].split("## Transcript")[0]  # placeholder dropped
+    assert "[0:00] Lie on your back." in doc
+    assert "Reference: lesson doc-1 · profile astra-low" in doc
+    assert "**Step 1**" in doc
+
+
+def test_lesson_context_for_a_text_source_does_not_claim_a_recording():
+    from kb.lesson_context import build_lesson_context
+
+    doc = build_lesson_context(
+        document={"id": "doc-2", "title": "Lesson 13"}, source_name="Evening Class Notes",
+        lesson_url="u", profile=ASTRA_LOW, transcript="Lie on your stomach.", whisper_segments=None,
+        pass_a={"groups": [{"group_number": 1, "label": "Heel", "steps": [1]}],
+                "steps": [{"step_number": 1, "instruction": "Bend the right knee"}]},
+        somatic=None, language=None, condensed=None, concepts=None, positions=None,
+        field_descriptions={},
+    )
+    assert "speech-to-text" not in doc and "timestamps" not in doc
+    assert "## Lesson text" in doc
+    assert "**Step 1**: Bend the right knee" in doc  # steps listed under their group
