@@ -131,15 +131,31 @@ CREATE TABLE IF NOT EXISTS pipeline_node_state (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS analysis_profile (
+    key TEXT PRIMARY KEY,
+    provider TEXT NOT NULL,
+    model TEXT NOT NULL,
+    params JSONB NOT NULL DEFAULT '{}'::jsonb,
+    cache_tag TEXT UNIQUE,
+    contract_version INTEGER NOT NULL DEFAULT 2,
+    enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    canonical BOOLEAN NOT NULL DEFAULT FALSE,
+    max_concurrency INTEGER NOT NULL DEFAULT 2,
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS lesson_embedding (
     document_id UUID NOT NULL REFERENCES document(id) ON DELETE CASCADE,
+    profile_key TEXT NOT NULL REFERENCES analysis_profile(key),
     method TEXT NOT NULL DEFAULT 'default',
     embedding vector(1536),
     summary_text TEXT,
     summary_hash TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
-    PRIMARY KEY (document_id, method)
+    PRIMARY KEY (document_id, profile_key, method)
 );
 
 CREATE TABLE IF NOT EXISTS lesson_rendition (
@@ -176,9 +192,10 @@ CREATE TABLE IF NOT EXISTS lesson_profile (
 
 CREATE TABLE IF NOT EXISTS lesson_concept (
     document_id UUID NOT NULL REFERENCES document(id) ON DELETE CASCADE,
+    profile_key TEXT NOT NULL REFERENCES analysis_profile(key),
     category TEXT NOT NULL,
     value TEXT NOT NULL,
-    PRIMARY KEY (document_id, category, value)
+    PRIMARY KEY (document_id, profile_key, category, value)
 );
 
 CREATE TABLE IF NOT EXISTS analysis_step (
@@ -206,22 +223,25 @@ CREATE TABLE IF NOT EXISTS lesson_group_member (
 
 CREATE TABLE IF NOT EXISTS group_analysis_gate (
     group_id INTEGER NOT NULL REFERENCES lesson_group(id) ON DELETE CASCADE,
+    profile_key TEXT NOT NULL REFERENCES analysis_profile(key),
     step_name TEXT NOT NULL REFERENCES analysis_step(name),
     permitted BOOLEAN NOT NULL DEFAULT FALSE,
     updated_at TIMESTAMPTZ DEFAULT NOW(),
-    PRIMARY KEY (group_id, step_name)
+    PRIMARY KEY (group_id, profile_key, step_name)
 );
 
 CREATE TABLE IF NOT EXISTS document_analysis_state (
     document_id UUID NOT NULL REFERENCES document(id) ON DELETE CASCADE,
+    profile_key TEXT NOT NULL REFERENCES analysis_profile(key),
     step_name TEXT NOT NULL REFERENCES analysis_step(name),
     completed_version INTEGER,
+    contract_version INTEGER,
     completed_at TIMESTAMPTZ,
     upstream_hash TEXT,
     stale BOOLEAN NOT NULL DEFAULT FALSE,
     error TEXT,
     updated_at TIMESTAMPTZ DEFAULT NOW(),
-    PRIMARY KEY (document_id, step_name)
+    PRIMARY KEY (document_id, profile_key, step_name)
 );
 
 CREATE TABLE IF NOT EXISTS search_query_log (
@@ -341,6 +361,7 @@ CREATE INDEX IF NOT EXISTS idx_pipeline_log_created ON pipeline_log(created_at D
 CREATE INDEX IF NOT EXISTS idx_pipeline_log_document ON pipeline_log(document_id);
 CREATE INDEX IF NOT EXISTS idx_lesson_embedding_hnsw ON lesson_embedding USING hnsw (embedding vector_cosine_ops);
 CREATE INDEX IF NOT EXISTS idx_lesson_embedding_method ON lesson_embedding (method);
+CREATE INDEX IF NOT EXISTS idx_lesson_embedding_profile_method ON lesson_embedding (profile_key, method);
 CREATE INDEX IF NOT EXISTS idx_lesson_rendition_key ON lesson_rendition (lesson_key);
 CREATE INDEX IF NOT EXISTS idx_lesson_rendition_evidence_right ON lesson_rendition_evidence (right_document_id);
 CREATE INDEX IF NOT EXISTS idx_lesson_profile_lesson_key ON lesson_profile (lesson_key);
@@ -351,6 +372,8 @@ CREATE INDEX IF NOT EXISTS idx_external_lesson_source ON external_lesson (lesson
 CREATE INDEX IF NOT EXISTS idx_external_lesson_embedding_hnsw ON external_lesson USING hnsw (embedding vector_cosine_ops);
 CREATE INDEX IF NOT EXISTS idx_lgm_document ON lesson_group_member (document_id);
 CREATE INDEX IF NOT EXISTS idx_gag_permitted ON group_analysis_gate (group_id, step_name) WHERE permitted = TRUE;
+CREATE INDEX IF NOT EXISTS idx_gag_profile_permitted ON group_analysis_gate (group_id, profile_key, step_name) WHERE permitted = TRUE;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_analysis_profile_one_canonical ON analysis_profile ((TRUE)) WHERE canonical;
 CREATE INDEX IF NOT EXISTS idx_das_document ON document_analysis_state (document_id);
 CREATE INDEX IF NOT EXISTS idx_das_step ON document_analysis_state (step_name);
 CREATE INDEX IF NOT EXISTS idx_lesson_view_user ON lesson_view (user_id, created_at DESC);

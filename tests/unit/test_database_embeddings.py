@@ -41,7 +41,9 @@ class TestUpsertEmbedding:
         )
         sql = mock_db._mock_cursor.execute.call_args[0][0]
         assert "INSERT INTO lesson_embedding" in sql
-        assert "ON CONFLICT (document_id, method) DO UPDATE" in sql
+        assert "ON CONFLICT (document_id, profile_key, method) DO UPDATE" in sql
+        # No profile given: the canonical profile is written.
+        assert "SELECT key FROM analysis_profile WHERE canonical" in sql
 
     def test_updates_existing_embedding(self, mock_db):
         """Upsert should update embedding, summary_text, summary_hash on conflict."""
@@ -51,11 +53,13 @@ class TestUpsertEmbedding:
             summary_text="Updated summary",
             summary_hash="def456",
             method="custom",
+            profile_key="astra-low",
         )
         sql = mock_db._mock_cursor.execute.call_args[0][0]
         params = mock_db._mock_cursor.execute.call_args[0][1]
         assert "embedding = EXCLUDED.embedding" in sql
-        assert params[1] == "custom"
+        assert params[1] == "astra-low"
+        assert params[2] == "custom"
 
 
 class TestSearchLessons:
@@ -103,10 +107,11 @@ class TestUpsertConcepts:
             mock_db.upsert_concepts("doc-1", [
                 {"category": "body_region", "value": "pelvis"},
                 {"category": "movement_pattern", "value": "rolling"},
-            ])
-        # Should delete existing concepts first
+            ], profile_key="astra-low")
+        # Should delete that profile's existing concepts first, leaving other profiles' rows
         first_call = mock_db._mock_cursor.execute.call_args_list[0]
         assert "DELETE FROM lesson_concept" in first_call[0][0]
+        assert first_call[0][1] == ("doc-1", "astra-low")
         # Then batch insert via execute_values
         mock_ev.assert_called_once()
 
@@ -122,4 +127,5 @@ class TestSearchByConcepts:
         assert len(results) == 1
         sql = mock_db._mock_cursor.execute.call_args[0][0]
         assert "ILIKE" in sql
-        assert "ORDER BY COUNT(*) DESC" in sql
+        # Ranked by match count, with full-phrase matches weighted
+        assert "ORDER BY (COUNT(*) +" in sql and ") DESC" in sql

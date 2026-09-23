@@ -34,26 +34,17 @@ def save_cached_analysis(cache_key: str, data: dict) -> None:
         _db.set_cache(cache_key, data)
 
 
-def document_cache_key(document_id: str, text: str, suffix: str) -> str:
-    """Build the provider-aware cache key for a document analysis result."""
-    from ingest.analysis_sources import document_analysis_provider, provider_cache_suffix
+def profile_result_key(text: str, suffix: str, profile: dict) -> str:
+    """Cache key of a step result produced under an analysis profile."""
+    from db.analysis_profiles import profile_cache_suffix
 
-    provider = document_analysis_provider(_db, document_id) if _db else None
-    return get_cache_key(text + suffix + provider_cache_suffix(provider))
+    return get_cache_key(text + suffix + profile_cache_suffix(profile))
 
 
-def load_document_cached_analysis(
-    document_id: str, text: str, suffix: str
-) -> tuple[str, dict | None]:
-    """Load provider-specific analysis, falling back to a legacy cache key."""
-    key = document_cache_key(document_id, text, suffix)
-    cached = load_cached_analysis(key)
-    if cached is not None:
-        return key, cached
-    legacy_key = get_cache_key(text + suffix)
-    if legacy_key != key:
-        return legacy_key, load_cached_analysis(legacy_key)
-    return key, None
+def load_profile_result(text: str, suffix: str, profile: dict) -> tuple[str, dict | None]:
+    """Load one profile's result for a step. Never falls back to another profile."""
+    key = profile_result_key(text, suffix, profile)
+    return key, load_cached_analysis(key)
 
 
 def save_prompt_io(cache_key: str, prompt: str, system: str, schema: dict | None = None) -> None:

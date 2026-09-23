@@ -7,7 +7,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
 import web as _web
-from cache_helpers import load_document_cached_analysis
+from cache_helpers import load_profile_result
 
 router = APIRouter()
 
@@ -182,20 +182,28 @@ async def lesson_detail_page(request: Request, document_id: str):
             _web._db.log_lesson_view(document_id, user.get("user_id") if user else None)
         except Exception:
             pass
-    return HTMLResponse(_web.build_lesson_page_html(document_id, user=user, search_mode=_web._is_search_site(request), superuser_active=_web._is_superuser_active(request, user)))
+    return HTMLResponse(_web.build_lesson_page_html(
+        document_id, user=user, search_mode=_web._is_search_site(request),
+        superuser_active=_web._is_superuser_active(request, user),
+        pipeline_visible=_web.PIPELINE_LOCAL_CONTROLS,
+    ))
 
 
 @router.get("/api/lesson/{document_id}/concepts")
-async def api_lesson_concepts(document_id: str):
-    """Get concept extraction data for a lesson."""
+async def api_lesson_concepts(document_id: str, profile: str | None = None):
+    """Get one profile's concept extraction data for a lesson (canonical by default)."""
     if not _web._db:
         return JSONResponse({"error": "No database connection"}, status_code=500)
     try:
-        concepts = _web._db.get_lesson_concepts(document_id)
+        analysis_profile = _web._db.resolve_analysis_profile(profile)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    try:
+        concepts = _web._db.get_lesson_concepts(document_id, analysis_profile["key"])
         text = _web._db.get_document_transcription(document_id)
         extra = {}
         if text:
-            _, cached = load_document_cached_analysis(document_id, text.strip(), ":concept_tags_v2")
+            _, cached = load_profile_result(text.strip(), ":concept_tags_v2", analysis_profile)
             if cached:
                 extra["distinctive_summary"] = cached.get("distinctive_summary", "")
                 extra["search_terms"] = cached.get("search_terms", [])
@@ -324,19 +332,23 @@ def _v2_group_to_position(v2g: dict, pa_group: dict | None = None) -> str:
 
 
 @router.get("/api/lesson/{document_id}/positions")
-async def api_lesson_positions(document_id: str):
-    """Get step-level position sequence (spatial v3) for a lesson.
+async def api_lesson_positions(document_id: str, profile: str | None = None):
+    """Get one profile's step-level position sequence (spatial v3) for a lesson.
 
-    Falls back to converting spatial v2 data if v3 isn't available.
+    Falls back to converting that profile's spatial v2 data if v3 isn't available.
     """
     if not _web._db:
         return JSONResponse({"error": "No database connection"}, status_code=500)
+    try:
+        analysis_profile = _web._db.resolve_analysis_profile(profile)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
     try:
         text = _web._db.get_document_transcription(document_id)
         if not text:
             return JSONResponse({"error": "No transcript"}, status_code=404)
         # Try v3 first
-        _, cached = load_document_cached_analysis(document_id, text.strip(), ":spatial_v3")
+        _, cached = load_profile_result(text.strip(), ":spatial_v3", analysis_profile)
         if cached:
             return JSONResponse({
                 "steps": cached.get("steps", []),
@@ -346,12 +358,12 @@ async def api_lesson_positions(document_id: str):
             })
 
         # Fall back to v2 → convert to v3-like format
-        _, v2 = load_document_cached_analysis(document_id, text.strip(), ":spatial_v2")
+        _, v2 = load_profile_result(text.strip(), ":spatial_v2", analysis_profile)
         if not v2:
             return JSONResponse({"steps": [], "position_summary": [], "available": False})
 
         # Also load pass_a for step-level data
-        _, pa = load_document_cached_analysis(document_id, text.strip(), ":decompose_v3")
+        _, pa = load_profile_result(text.strip(), ":decompose_v3", analysis_profile)
 
         steps, summary = _convert_v2_to_v3(v2, pa)
         return JSONResponse({

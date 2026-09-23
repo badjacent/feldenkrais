@@ -1,7 +1,10 @@
 #!/bin/zsh
 set -euo pipefail
 
-repo_root=${0:A:h:h:h}
+# The dedicated analysis worker. Installed to /Users/hermes/ops/ by
+# ops/promote-candidate.sh --target analysis, which sets ANALYSIS_ROOT to the
+# promoted checkout; run in-tree it uses its own checkout.
+repo_root=${ANALYSIS_ROOT:-${0:A:h:h:h}}
 cd "$repo_root"
 set -a
 source .env
@@ -13,6 +16,8 @@ if [[ "${ANALYSIS_ENABLED:-0}" != "1" ]]; then
   exit 0
 fi
 export PYTHONPATH="$repo_root/src${PYTHONPATH:+:$PYTHONPATH}"
+# Overall concurrency. Each model profile is further held to its own
+# max_concurrency, and only profiles switched on in the analysis page run.
 default_workers=8
 exec /usr/bin/caffeinate -i /usr/bin/nice -n 10 \
   .venv-mini/bin/python -m kb.pipeline.analysis run \

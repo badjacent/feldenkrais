@@ -282,9 +282,24 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None, super
 </html>"""
 
 
-def build_lesson_page_html(document_id: str, user: dict | None = None, search_mode: bool = False, superuser_active: bool = False) -> str:
-    """Build the unified lesson detail page HTML."""
+def build_lesson_page_html(document_id: str, user: dict | None = None, search_mode: bool = False, superuser_active: bool = False, pipeline_visible: bool = False) -> str:
+    """Build the unified lesson detail page HTML.
+
+    ``pipeline_visible`` (local deployments only) adds the Pipeline tab and the
+    analysis-profile switcher. Every page reads one profile's analysis: the one
+    named by ``?profile=``, or the canonical profile.
+    """
     esc_id = html_mod.escape(document_id)
+    profile_bar = (
+        '<div class="source-line" id="profile-bar" style="display:none;">'
+        'Analysis: <select id="profile-select" onchange="switchProfile(this.value)"></select> '
+        f'<a href="/lesson/{esc_id}/compare">Compare models</a></div>'
+        if pipeline_visible else ""
+    )
+    pipeline_tab = (
+        """<button onclick="switchTab('pipeline')">Pipeline</button>"""
+        if pipeline_visible else ""
+    )
 
     return f"""<!DOCTYPE html>
 <html>
@@ -553,6 +568,7 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
     <div class="back-link"><a href="/">&larr; All lessons</a></div>
     <h1 id="lesson-title">Loading...</h1>
     <div class="source-line" id="source-line"></div>
+    {profile_bar}
 
     <div class="audio-container audio-hidden" id="audio-container">
         <audio id="audio-player" controls preload="auto"></audio>
@@ -569,7 +585,7 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
         <button onclick="switchTab('somatic')">Somatic</button>
         <button onclick="switchTab('language')">Language</button>
         <button onclick="switchTab('classification')">Classification</button>
-        <button onclick="switchTab('pipeline')">Pipeline</button>
+        {pipeline_tab}
         <button onclick="switchTab('concepts')">Search Specifics</button>
         <button onclick="switchTab('transcript')">Transcript</button>
         <button onclick="switchTab('chat')">Q&amp;A</button>
@@ -744,6 +760,43 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
 <script>
 // ── Constants ──
 const DOCUMENT_ID = '{esc_id}';
+
+// Every analysis endpoint reads one profile's results. Carry ?profile= from the
+// page URL to them; without it they read the canonical profile.
+const ANALYSIS_PROFILE = new URLSearchParams(window.location.search).get('profile') || '';
+const _fetchUnprofiled = window.fetch.bind(window);
+window.fetch = (url, opts) => {{
+    if (ANALYSIS_PROFILE && typeof url === 'string' && url.startsWith('/api/lesson/')
+            && !url.includes('/profiles')) {{
+        url += (url.includes('?') ? '&' : '?') + 'profile=' + encodeURIComponent(ANALYSIS_PROFILE);
+    }}
+    return _fetchUnprofiled(url, opts);
+}};
+
+function switchProfile(key) {{
+    const url = new URL(window.location);
+    url.searchParams.set('profile', key);
+    window.location = url.toString();
+}}
+
+(async function loadProfileBar() {{
+    const bar = document.getElementById('profile-bar');
+    if (!bar) return;
+    const res = await fetch('/api/lesson/' + encodeURIComponent(DOCUMENT_ID) + '/profiles');
+    if (!res.ok) return;
+    const data = await res.json();
+    const select = document.getElementById('profile-select');
+    const current = ANALYSIS_PROFILE || (data.profiles.find(p => p.canonical) || {{}}).key;
+    for (const p of data.profiles) {{
+        const opt = document.createElement('option');
+        opt.value = p.key;
+        const done = p.completed_steps.length;
+        opt.textContent = p.key + (p.canonical ? ' (canonical)' : '') + ' — ' + (done ? done + ' steps done' : 'not analyzed');
+        opt.selected = p.key === current;
+        select.appendChild(opt);
+    }}
+    bar.style.display = '';
+}})();
 const PROVIDER = new URLSearchParams(window.location.search).get('provider') || '';
 
 // ── State ──

@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
+from tests.unit.route_helpers import app_route_map, iter_routes
 
 
 # ── Fixtures ─────────────────────────────────────────────────────────────
@@ -802,14 +803,14 @@ class TestRouteAuthorization:
     def test_nyc_routes_are_mounted_on_the_app(self):
         from kb.web import app
 
-        paths = {r.path for r in app.routes if hasattr(r, "path")}
+        paths = set(app_route_map(app))
         assert "/admin/nyc" in paths
         assert "/admin/nyc/providers/{provider_id}/review" in paths
 
     def test_no_public_json_endpoint_exposes_nyc_data(self):
         from kb.web import app
 
-        for route in app.routes:
+        for route in iter_routes(app.routes):
             path = getattr(route, "path", "")
             if "nyc" in path.lower():
                 assert path.startswith("/admin/nyc"), path

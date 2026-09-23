@@ -11,6 +11,7 @@ from .cache import CacheMixin
 from .auth import AuthMixin
 from .embeddings import EmbeddingsMixin
 from .pipeline_state import PipelineStateMixin
+from .analysis_profiles import AnalysisProfilesMixin
 from .lesson_groups import LessonGroupsMixin
 from .dashboard import DashboardMixin
 from .logging import LoggingMixin
@@ -34,6 +35,7 @@ class Database(
     AuthMixin,
     EmbeddingsMixin,
     PipelineStateMixin,
+    AnalysisProfilesMixin,
     LessonGroupsMixin,
     DashboardMixin,
     LoggingMixin,

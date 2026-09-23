@@ -92,20 +92,41 @@ analysis, or the crawler. It carries its own `.venv-web` (the worker environment
 has no web framework) and symlinks the worker `.env` rather than holding a second
 copy of the secrets.
 
-The two runner scripts live at `/Users/hermes/ops/`, outside the deployed tree,
-so that promoting or rolling back the tree can never strand the launchd jobs.
+The runner scripts live at `/Users/hermes/ops/`, outside the deployed trees,
+so that promoting or rolling back a tree can never strand the launchd jobs.
 `ops/promote-candidate.sh` reinstalls them from whatever revision it promotes.
+
+### The analysis worker
+
+Analysis runs in one dedicated launchd job, `com.feldenkrais.analysis`, from its
+own checkout at `/Users/hermes/src/feldenkrais-analysis` with its own
+`.venv-mini`. It is promoted with the same build step, `--target analysis`. The
+web app never runs analysis.
+
+Each pass drains what is runnable and exits; launchd starts the next pass up to
+five minutes later. Work is claimed as (document, model profile, step): a step
+runs when its group's gate is open for that profile and the profile is switched
+on at `/analysis`. Each profile is held to its own `max_concurrency`, within
+eight workers overall. See `docs/analysis.md` for profiles.
+
+`ANALYSIS_ENABLED=1` in the job's environment is the machine-level kill switch;
+the per-model switches are the everyday control.
 
 ### Promoting
 
 From the laptop, on committed and pushed code:
 
 ```sh
-ops/promote-candidate.sh                 # promote HEAD
-ops/promote-candidate.sh --rev <ref>     # promote a specific revision
-ops/promote-candidate.sh --status        # what is deployed right now
-ops/promote-candidate.sh --rollback      # return to the previous revision
+ops/promote-candidate.sh                      # promote HEAD to the web app
+ops/promote-candidate.sh --target analysis    # promote HEAD to the analysis worker
+ops/promote-candidate.sh --rev <ref>          # promote a specific revision
+ops/promote-candidate.sh --status             # what is deployed right now
+ops/promote-candidate.sh --rollback           # return to the previous revision
 ```
+
+`--target analysis` does not interrupt a pass already running: it finishes on
+its own code and the next pass uses the new revision. Add `--restart` to stop
+it instead; its in-flight steps become runnable again.
 
 The build step refuses to ship uncommitted work, refuses a revision that is not
 on a remote, checks that the private submodule pointer is pushed too, and runs
@@ -122,7 +143,8 @@ one it replaced, and the test result.
 
 Off-Lambda the web app applies no login gate and keeps its pipeline controls
 enabled, which is why the bind address is the tailnet interface and never
-`0.0.0.0`.
+`0.0.0.0`. Under Lambda the analysis pipeline answers 404: it is visible only
+on the laptop and the Mini.
 
 ### The Chrome extension
 

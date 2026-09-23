@@ -10,6 +10,7 @@ app with all dependencies mocked. These tests verify the route structure and API
 
 import pytest
 from unittest.mock import patch, MagicMock
+from tests.unit.route_helpers import app_route_map
 
 
 class TestAnalysisDashboardPage:
@@ -21,7 +22,7 @@ class TestAnalysisDashboardPage:
         entire web module state."""
         # Verify the route exists and has the expected signature
         from kb.web import app
-        routes = {r.path: r for r in app.routes if hasattr(r, "path")}
+        routes = app_route_map(app)
         assert "/analysis" in routes
 
     def test_shows_step_progress(self):
@@ -32,7 +33,7 @@ class TestAnalysisDashboardPage:
         integration test with a mocked database."""
         # Verify the AJAX refresh endpoint exists
         from kb.web import app
-        routes = {r.path: r for r in app.routes if hasattr(r, "path")}
+        routes = app_route_map(app)
         assert "/api/analysis/dashboard" in routes
 
 
@@ -42,44 +43,54 @@ class TestAnalysisGateAPI:
 
         Requires _db.set_group_gate(). Verify the route exists and accepts JSON body."""
         from kb.web import app
-        routes = {r.path: r for r in app.routes if hasattr(r, "path")}
+        routes = app_route_map(app)
         assert "/api/analysis/gate" in routes
 
     def test_get_group_gates(self):
         """GET /api/analysis/group/{group_id} should return gate states."""
         from kb.web import app
-        routes = {r.path: r for r in app.routes if hasattr(r, "path")}
+        routes = app_route_map(app)
         assert "/api/analysis/group/{group_id}" in routes
 
 
 class TestAnalysisPipelineRun:
-    def test_run_pipeline_starts_worker(self):
-        """POST /api/analysis/run should start background worker."""
+    def test_web_app_no_longer_runs_the_queue(self):
+        """Analysis runs in the dedicated worker; the web app has no run endpoint."""
         from kb.web import app
-        routes = {r.path: r for r in app.routes if hasattr(r, "path")}
-        assert "/api/analysis/run" in routes
+        routes = app_route_map(app)
+        assert "/api/analysis/run" not in routes
+        assert "/api/analysis/pipeline-status" not in routes
 
-    def test_run_pipeline_respects_gates(self):
-        """Should only run permitted steps.
-
-        The run endpoint calls _run_analysis_pipeline which checks gates.
-        This requires integration testing with mocked DB and pipeline executor."""
-        # Verify pipeline status endpoint exists (used to check gate state)
+    def test_each_model_has_a_switch(self):
+        """POST /api/analysis/profile turns a model's global switch on or off."""
         from kb.web import app
-        routes = {r.path: r for r in app.routes if hasattr(r, "path")}
-        assert "/api/analysis/pipeline-status" in routes
+        routes = app_route_map(app)
+        assert "/api/analysis/profile" in routes
+
+    def test_pipeline_is_hidden_from_the_production_site(self):
+        """Under Lambda every analysis route answers 404."""
+        import pytest
+        from fastapi import HTTPException
+        import kb.routes.analysis_routes as routes_mod
+
+        with patch.object(routes_mod._web, "PIPELINE_LOCAL_CONTROLS", False):
+            with pytest.raises(HTTPException) as err:
+                routes_mod._local_deployment_only()
+        assert err.value.status_code == 404
+        with patch.object(routes_mod._web, "PIPELINE_LOCAL_CONTROLS", True):
+            routes_mod._local_deployment_only()
 
 
 class TestAnalysisStatusAPI:
     def test_pipeline_progress(self):
         """GET /api/analysis/status should return step completion counts."""
         from kb.web import app
-        routes = {r.path: r for r in app.routes if hasattr(r, "path")}
+        routes = app_route_map(app)
         assert "/api/analysis/status" in routes
 
     def test_pipeline_errors(self):
         """Error clearing endpoints should exist."""
         from kb.web import app
-        routes = {r.path: r for r in app.routes if hasattr(r, "path")}
+        routes = app_route_map(app)
         assert "/api/analysis/clear-error" in routes
         assert "/api/analysis/clear-all-errors" in routes

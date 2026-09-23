@@ -49,6 +49,7 @@ class RenditionsMixin:
                 ) tx ON TRUE
                 LEFT JOIN lesson_embedding raw
                   ON raw.document_id = d.id AND raw.method = 'raw'
+                 AND raw.profile_key = (SELECT key FROM analysis_profile WHERE canonical)
                 ORDER BY d.id
                 """
             )

@@ -66,7 +66,8 @@ class TestAnalysisSteps:
 
 class TestDocumentAnalysisState:
     def test_mark_step_completed(self, mock_db):
-        mock_db.mark_step_completed("doc-1", "decompose", version=3)
+        mock_db.mark_step_completed("doc-1", "decompose", version=3,
+                                    profile_key="astra-low", contract_version=2)
         calls = mock_db._mock_cursor.execute.call_args_list
         # First call: INSERT/UPDATE the state
         sql1 = calls[0][0][0]
@@ -75,21 +76,23 @@ class TestDocumentAnalysisState:
         # Second call: mark downstream as stale
         sql2 = calls[1][0][0]
         assert "SET stale = TRUE" in sql2
+        # Only the same profile's downstream steps go stale.
+        assert "das.profile_key = %s" in sql2
 
     def test_mark_step_error(self, mock_db):
-        mock_db.mark_step_error("doc-1", "somatic", "LLM timeout")
+        mock_db.mark_step_error("doc-1", "somatic", "LLM timeout", profile_key="astra-low")
         sql = mock_db._mock_cursor.execute.call_args[0][0]
         params = mock_db._mock_cursor.execute.call_args[0][1]
         assert "INSERT INTO document_analysis_state" in sql
         assert "error = EXCLUDED.error" in sql
-        assert params == ("doc-1", "somatic", "LLM timeout")
+        assert params == ("doc-1", "astra-low", "somatic", "LLM timeout")
 
     def test_clear_step_error(self, mock_db):
-        mock_db.clear_step_error("doc-1", "somatic")
+        mock_db.clear_step_error("doc-1", "somatic", profile_key="astra-low")
         sql = mock_db._mock_cursor.execute.call_args[0][0]
         assert "SET error = NULL" in sql
         params = mock_db._mock_cursor.execute.call_args[0][1]
-        assert params == ("doc-1", "somatic")
+        assert params == ("doc-1", "somatic", "astra-low")
 
     def test_get_runnable_steps(self, mock_db):
         """Should return steps where permitted=True and not yet completed at current version."""
@@ -165,16 +168,16 @@ class TestLessonGroups:
 
 class TestGroupGates:
     def test_set_gate_permitted(self, mock_db):
-        mock_db.set_group_gate(5, "decompose", True)
+        mock_db.set_group_gate(5, "decompose", True, profile_key="gemini-3-flash")
         sql = mock_db._mock_cursor.execute.call_args[0][0]
         assert "INSERT INTO group_analysis_gate" in sql
         params = mock_db._mock_cursor.execute.call_args[0][1]
-        assert params == (5, "decompose", True)
+        assert params == (5, "gemini-3-flash", "decompose", True)
 
     def test_set_gate_not_permitted(self, mock_db):
-        mock_db.set_group_gate(5, "decompose", False)
+        mock_db.set_group_gate(5, "decompose", False, profile_key="gemini-3-flash")
         params = mock_db._mock_cursor.execute.call_args[0][1]
-        assert params == (5, "decompose", False)
+        assert params == (5, "gemini-3-flash", "decompose", False)
 
     def test_get_group_gates(self, mock_db):
         mock_db._mock_cursor.fetchall.return_value = [
@@ -201,7 +204,7 @@ class TestDashboard:
             # gate query
             [{"group_id": 1, "step_name": "decompose", "permitted": True}],
         ]
-        result = mock_db.get_group_dashboard()
+        result = mock_db.get_group_dashboard("gemini-3-flash")
         assert len(result) == 1
         assert result[0]["gates"]["decompose"] is True
 
@@ -210,7 +213,7 @@ class TestDashboard:
             {"group_id": 1, "group_name": "G1", "step_name": "decompose",
              "current_version": 3, "total": 10, "completed": 8, "stale": 1, "errors": 1},
         ]
-        result = mock_db.get_pipeline_progress()
+        result = mock_db.get_pipeline_progress("gemini-3-flash")
         assert len(result) == 1
         assert result[0]["completed"] == 8
 

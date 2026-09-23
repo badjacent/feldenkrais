@@ -35,18 +35,15 @@ if (( ${#missing} )); then
   exit 1
 fi
 if [[ "$mode" == "full" ]]; then
-  if [[ "${ANALYSIS_LLM_PROVIDER:-gemini}" == "codex-astra" ]]; then
-    codex_bin=${CODEX_BIN:-$HOME/.local/bin/codex}
-    if [[ ! -x "$codex_bin" ]]; then
-      print -u2 "not ready: Codex CLI absent: $codex_bin"
-      exit 1
-    fi
-    if ! "$codex_bin" login status 2>&1 | grep -q "Logged in using ChatGPT"; then
-      print -u2 "not ready: Codex is not logged in with ChatGPT for $(whoami)"
-      exit 1
-    fi
-  elif [[ -z "${GOOGLE_API_KEY:-}" && -z "${OPENAI_API_KEY:-}" && -z "${ANTHROPIC_API_KEY:-}" ]]; then
-    print -u2 "not ready: no configured analysis provider credential"
+  # Models come from analysis profiles. Astra profiles run through the Codex
+  # CLI session; if it is installed it must be logged in.
+  codex_bin=${CODEX_BIN:-$HOME/.local/bin/codex}
+  if [[ -x "$codex_bin" ]] && ! "$codex_bin" login status 2>&1 | grep -q "Logged in using ChatGPT"; then
+    print -u2 "not ready: Codex is installed but not logged in with ChatGPT for $(whoami)"
+    exit 1
+  fi
+  if [[ ! -x "$codex_bin" && -z "${GOOGLE_API_KEY:-}" && -z "${OPENAI_API_KEY:-}" && -z "${ANTHROPIC_API_KEY:-}" ]]; then
+    print -u2 "not ready: no analysis provider credential or Codex session"
     exit 1
   fi
 fi

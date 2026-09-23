@@ -8,20 +8,32 @@
 # The capture server has no production tier: the candidate is its only
 # deployment, and the Chrome extension points at it.
 #
-#   ops/promote-candidate.sh                 # promote HEAD
-#   ops/promote-candidate.sh --rev <ref>     # promote a specific revision
-#   ops/promote-candidate.sh --status        # what is deployed right now
-#   ops/promote-candidate.sh --rollback      # return to the previous revision
+# Two targets share this build step, each with its own checkout on the Mini:
+#   web       the analyzer web app and capture server  (feldenkrais-candidate)
+#   analysis  the dedicated analysis worker            (feldenkrais-analysis)
 #
-# A promotion never takes the candidate down on failure. The running processes
-# hold their code in memory, so a bad checkout or a failed import restores the
+#   ops/promote-candidate.sh                          # promote HEAD to the web target
+#   ops/promote-candidate.sh --target analysis        # promote HEAD to the worker
+#   ops/promote-candidate.sh --rev <ref>              # promote a specific revision
+#   ops/promote-candidate.sh --status                 # what is deployed right now
+#   ops/promote-candidate.sh --rollback               # return to the previous revision
+#   ops/promote-candidate.sh --target analysis --restart   # also stop a pass in progress
+#
+# A promotion never takes the target down on failure. Running processes hold
+# their code in memory, so a bad checkout or a failed import restores the
 # previous revision before anything is restarted.
+#
+# The analysis worker is not interrupted by default: a pass already running
+# finishes on the code it started with and the next pass (at most five minutes
+# later) uses the new revision. --restart stops the running pass instead; its
+# in-flight steps are abandoned and become runnable again.
 set -euo pipefail
 
 MINI_HOST=${MINI_HOST:-100.85.14.17}
 MINI_USER=${MINI_USER:-hermes}
 MINI_KEY=${MINI_KEY:-$HOME/.ssh/id_ed25519_codex_mini}
 CANDIDATE_ROOT=${CANDIDATE_ROOT:-/Users/hermes/src/feldenkrais-candidate}
+ANALYSIS_ROOT=${ANALYSIS_ROOT:-/Users/hermes/src/feldenkrais-analysis}
 PRIVATE_URL=${PRIVATE_URL:-git@github.com:badjacent/feldenkrais-private.git}
 ANALYZER_URL="http://${MINI_HOST}:8000/analysis"
 CAPTURE_URL="http://${MINI_HOST}:7890/health"
@@ -32,25 +44,42 @@ cd "$root"
 rev=HEAD
 skip_tests=0
 allow_test_failures=0
+restart_worker=0
+target=web
 mode=promote
 
 while (( $# )); do
   case $1 in
     --rev) rev=$2; shift 2;;
+    --target) target=$2; shift 2;;
+    --restart) restart_worker=1; shift;;
     --skip-tests) skip_tests=1; shift;;
     --allow-test-failures) allow_test_failures=1; shift;;
     --status) mode=status; shift;;
     --rollback) mode=rollback; shift;;
-    -h|--help) sed -n '2,25p' "$0"; exit 0;;
+    -h|--help) sed -n '2,32p' "$0"; exit 0;;
     *) print -u2 "unknown argument: $1"; exit 2;;
   esac
 done
+
+case $target in
+  web)      TARGET_ROOT=$CANDIDATE_ROOT; RELEASE_FILE=var/candidate-release.json;;
+  analysis) TARGET_ROOT=$ANALYSIS_ROOT;  RELEASE_FILE=var/analysis-release.json;;
+  *) print -u2 "unknown target: $target (web or analysis)"; exit 2;;
+esac
 
 mini() { ssh -i "$MINI_KEY" -o IdentitiesOnly=yes -o ConnectTimeout=10 "${MINI_USER}@${MINI_HOST}" "$@"; }
 step() { print -- "\n── $1"; }
 die()  { print -u2 -- "\nFAILED: $1"; exit 1; }
 
 health() {
+  if [[ $target == analysis ]]; then
+    local loaded
+    loaded=$(mini "launchctl list | grep -w com.feldenkrais.analysis" || true)
+    print -- "analysis worker job (pid or -, last exit status): ${loaded:-not loaded}"
+    [[ -n $loaded ]]
+    return
+  fi
   local analyzer capture
   analyzer=$(curl -s -o /dev/null -m 10 -w '%{http_code}' "$ANALYZER_URL" || true)
   capture=$(curl -s -o /dev/null -m 10 -w '%{http_code}' "$CAPTURE_URL" || true)
@@ -60,14 +89,14 @@ health() {
 }
 
 if [[ $mode == status ]]; then
-  mini "cat ${CANDIDATE_ROOT}/var/candidate-release.json 2>/dev/null || echo '{}'"
+  mini "cat ${TARGET_ROOT}/${RELEASE_FILE} 2>/dev/null || echo '{}'"
   print --
   health || true
   exit 0
 fi
 
 if [[ $mode == rollback ]]; then
-  rev=$(mini "cd ${CANDIDATE_ROOT} && python3 -c \"import json,sys; print(json.load(open('var/candidate-release.json'))['previous_revision'])\" 2>/dev/null" || true)
+  rev=$(mini "cd ${TARGET_ROOT} && python3 -c \"import json,sys; print(json.load(open('${RELEASE_FILE}'))['previous_revision'])\" 2>/dev/null" || true)
   [[ -n $rev ]] || die "no previous revision recorded on the Mini"
   print -- "rolling back to ${rev}"
   skip_tests=1
@@ -116,7 +145,9 @@ tests="skipped"
 if (( skip_tests )); then
   print -- "tests skipped"
 else
-  if .venv/bin/python -m pytest tests/unit -q > /tmp/promote-tests.log 2>&1; then
+  # Disconnected from the database: importing web runs initialize(), which
+  # would otherwise execute schema DDL against whatever DATABASE_URL names.
+  if DATABASE_URL= .venv/bin/python -m pytest tests/unit -q -p no:cacheprovider > /tmp/promote-tests.log 2>&1; then
     tests=$(tail -1 /tmp/promote-tests.log)
     print -- "$tests"
   else
@@ -129,8 +160,8 @@ else
 fi
 
 # ── Ship ────────────────────────────────────────────────────────────────────
-step "Ship to ${MINI_USER}@${MINI_HOST}"
-ship_output=$(mini "env SHA=${sha} PRIVATE_SHA=${private_sha} ROOT=${CANDIDATE_ROOT} PRIVATE_URL=${PRIVATE_URL} /bin/zsh -s" <<'REMOTE'
+step "Ship ${target} to ${MINI_USER}@${MINI_HOST}:${TARGET_ROOT}"
+ship_output=$(mini "env TARGET=${target} RESTART=${restart_worker} SHA=${sha} PRIVATE_SHA=${private_sha} ROOT=${TARGET_ROOT} PRIVATE_URL=${PRIVATE_URL} /bin/zsh -s" <<'REMOTE'
 set -euo pipefail
 cd "$ROOT"
 mkdir -p ~/ops var/log
@@ -148,13 +179,25 @@ git clean -qfd -e .venv-web -e var -e .env
 git config submodule.private.url "$PRIVATE_URL"
 git submodule update --init --force -q
 
-# Dependencies for the deployed revision.
-/opt/homebrew/bin/uv pip install -q --python .venv-web/bin/python \
-  -r terraform/lambda_web_requirements.txt uvicorn boto3 requests pyyaml yt-dlp
+# Dependencies, runners, import checks and restart differ by target.
+if [[ $TARGET == web ]]; then
+  /opt/homebrew/bin/uv pip install -q --python .venv-web/bin/python \
+    -r terraform/lambda_web_requirements.txt uvicorn boto3 requests pyyaml yt-dlp
+  runners=(run-candidate-analyzer.sh run-candidate-capture.sh)
+  checks=(
+    "src/kb|.venv-web/bin/python|import web; assert web.app"
+    "private/products/ff_capture|.venv-web/bin/python|import server; assert server.main"
+  )
+else
+  UV_PROJECT_ENVIRONMENT=.venv-mini /opt/homebrew/bin/uv sync -q --frozen \
+    --python /opt/homebrew/bin/python3.12 --extra mini
+  runners=(run-analysis-worker.sh)
+  checks=("src/kb|.venv-mini/bin/python|import pipeline.analysis as p; assert p.run_bounded_worker")
+fi
 
 # Stable runners live outside the tree so promotion and rollback cannot strand
 # the launchd jobs. Refresh them from whatever the promoted revision carries.
-for f in run-candidate-analyzer.sh run-candidate-capture.sh; do
+for f in $runners; do
   [[ -f ops/mini/$f ]] && install -m 755 "ops/mini/$f" ~/ops/$f
 done
 
@@ -162,21 +205,38 @@ done
 set -a
 source .env
 set +a
-if ! (cd src/kb && "$ROOT/.venv-web/bin/python" -c "import web; assert web.app" >/dev/null 2>/tmp/candidate-import.log); then
-  print -u2 -- "import check failed:"
-  tail -5 /tmp/candidate-import.log >&2
-  restore
-  exit 3
-fi
-if ! (cd private/products/ff_capture && "$ROOT/.venv-web/bin/python" -c "import server; assert server.main" >/dev/null 2>/tmp/candidate-import.log); then
-  print -u2 -- "capture server import check failed:"
-  tail -5 /tmp/candidate-import.log >&2
-  restore
-  exit 3
-fi
+for check in $checks; do
+  dir=${check%%|*}; rest=${check#*|}; python=${rest%%|*}; code=${rest#*|}
+  if ! (cd "$dir" && "$ROOT/$python" -c "$code" >/dev/null 2>/tmp/candidate-import.log); then
+    print -u2 -- "import check failed in $dir:"
+    tail -5 /tmp/candidate-import.log >&2
+    restore
+    exit 3
+  fi
+done
 
-launchctl kickstart -k "gui/$(id -u)/com.feldenkrais.analyzer-web"
-launchctl kickstart -k "gui/$(id -u)/com.feldenkrais.ff-capture"
+# (Re)start a job, loading it first if it is not loaded (a job that was booted
+# out, or is being installed for the first time from ~/Library/LaunchAgents).
+start_job() {
+  local label=$1 restart=$2 domain="gui/$(id -u)"
+  if launchctl print "$domain/$label" >/dev/null 2>&1; then
+    if [[ $restart == 1 ]]; then
+      launchctl kickstart -k "$domain/$label"
+    else
+      launchctl kickstart "$domain/$label" 2>/dev/null || true
+    fi
+  else
+    launchctl bootstrap "$domain" ~/Library/LaunchAgents/$label.plist
+  fi
+}
+
+if [[ $TARGET == web ]]; then
+  start_job com.feldenkrais.analyzer-web 1
+  start_job com.feldenkrais.ff-capture 1
+else
+  # Without --restart a running pass keeps its code; otherwise a pass starts now.
+  start_job com.feldenkrais.analysis "$RESTART"
+fi
 
 print -- "PREVIOUS=${previous}"
 REMOTE
@@ -194,13 +254,14 @@ done
 cat /tmp/promote-health.log
 if (( ! ok )); then
   print -u2 -- "\nthe candidate did not come up. Roll back with:"
-  print -u2 -- "  ops/promote-candidate.sh --rollback"
+  print -u2 -- "  ops/promote-candidate.sh --target ${target} --rollback"
   exit 1
 fi
 
 # ── Record ──────────────────────────────────────────────────────────────────
-mini "cd ${CANDIDATE_ROOT} && cat > var/candidate-release.json" <<JSON
+mini "cd ${TARGET_ROOT} && cat > ${RELEASE_FILE}" <<JSON
 {
+  "target": "${target}",
   "revision": "${sha}",
   "private_revision": "${private_sha}",
   "previous_revision": "${previous}",
@@ -214,5 +275,9 @@ JSON
 step "Promoted"
 print -- "revision ${sha:0:8}  ($(git log --format=%s -1 "$sha"))"
 print -- "previous ${previous:0:8}"
-print -- "analyzer $ANALYZER_URL"
-print -- "capture  $CAPTURE_URL"
+if [[ $target == web ]]; then
+  print -- "analyzer $ANALYZER_URL"
+  print -- "capture  $CAPTURE_URL"
+else
+  print -- "worker   com.feldenkrais.analysis in ${TARGET_ROOT}"
+fi

@@ -92,15 +92,15 @@ class LessonGroupsMixin:
                 if group_row.get("inserted") and src["name"] != DEFAULT_ANALYSIS_GATE_SOURCE:
                     cursor.execute("""
                         INSERT INTO group_analysis_gate
-                            (group_id, step_name, permitted, updated_at)
-                        SELECT %s, template.step_name, template.permitted, NOW()
+                            (group_id, profile_key, step_name, permitted, updated_at)
+                        SELECT %s, template.profile_key, template.step_name, template.permitted, NOW()
                         FROM lesson_group template_group
                         JOIN document_source template_source
                           ON template_source.id = template_group.auto_source_id
                         JOIN group_analysis_gate template
                           ON template.group_id = template_group.id
                         WHERE template_source.name = %s
-                        ON CONFLICT (group_id, step_name) DO NOTHING
+                        ON CONFLICT (group_id, profile_key, step_name) DO NOTHING
                     """, (group_id, DEFAULT_ANALYSIS_GATE_SOURCE))
 
                 # Sync members: add documents from this source that have transcriptions
@@ -115,24 +115,27 @@ class LessonGroupsMixin:
 
     # ── Group analysis gates ──────────────────────────────────────
 
-    def get_group_gates(self, group_id: int) -> list[dict]:
-        """Return all gate entries for a group."""
+    def get_group_gates(self, group_id: int, profile_key: str | None = None) -> list[dict]:
+        """Return gate entries for a group, for one profile or all of them."""
+        profile_filter = "AND gag.profile_key = %s" if profile_key else ""
+        params = (group_id, profile_key) if profile_key else (group_id,)
         with self.get_cursor(commit=False) as cursor:
-            cursor.execute("""
+            cursor.execute(f"""
                 SELECT gag.*, s.current_version, s.depends_on, s.description
                 FROM group_analysis_gate gag
                 JOIN analysis_step s ON s.name = gag.step_name
-                WHERE gag.group_id = %s
-                ORDER BY s.name
-            """, (group_id,))
+                WHERE gag.group_id = %s {profile_filter}
+                ORDER BY gag.profile_key, s.name
+            """, params)
             return [dict(row) for row in cursor.fetchall()]
 
-    def set_group_gate(self, group_id: int, step_name: str, permitted: bool):
-        """Set the permitted flag for a (group, step) pair."""
+    def set_group_gate(self, group_id: int, step_name: str, permitted: bool, *,
+                       profile_key: str):
+        """Set the permitted flag for a (group, profile, step) triple."""
         with self.get_cursor() as cursor:
             cursor.execute("""
-                INSERT INTO group_analysis_gate (group_id, step_name, permitted, updated_at)
-                VALUES (%s, %s, %s, NOW())
-                ON CONFLICT (group_id, step_name)
+                INSERT INTO group_analysis_gate (group_id, profile_key, step_name, permitted, updated_at)
+                VALUES (%s, %s, %s, %s, NOW())
+                ON CONFLICT (group_id, profile_key, step_name)
                 DO UPDATE SET permitted = EXCLUDED.permitted, updated_at = NOW()
-            """, (group_id, step_name, permitted))
+            """, (group_id, profile_key, step_name, permitted))

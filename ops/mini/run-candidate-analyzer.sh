@@ -16,13 +16,8 @@ set -a
 source .env
 set +a
 
-# Analysis execution belongs to the worker checkout. The candidate web tree is
-# intentionally lightweight and does not carry the worker virtualenv.
-export ANALYSIS_WORKER_PYTHON=${ANALYSIS_WORKER_PYTHON:-/Users/hermes/src/feldenkrais/.venv-mini/bin/python}
-export ANALYSIS_WORKER_CWD=${ANALYSIS_WORKER_CWD:-/Users/hermes/src/feldenkrais/src/kb}
-export ANALYSIS_QUEUE_ENABLED=${ANALYSIS_QUEUE_ENABLED:-1}
-export ANALYSIS_WORKER_CONCURRENCY=${ANALYSIS_WORKER_CONCURRENCY:-8}
-export ANALYSIS_STEP_TIMEOUT=${ANALYSIS_STEP_TIMEOUT:-900}
+# The web app never runs analysis. The dedicated worker (com.feldenkrais.analysis)
+# does, from its own promoted checkout.
 
 cd src/kb
 exec "$root/.venv-web/bin/python" -m uvicorn web:app \

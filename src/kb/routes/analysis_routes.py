@@ -1,23 +1,45 @@
-"""Analysis dashboard routes: dashboard page, gate management, pipeline run, status, error clearing."""
+"""Analysis dashboard routes: dashboard page, profile switches, gates, status, error clearing.
+
+The analysis pipeline is visible only on local deployments (this laptop and the
+Mac mini). Under Lambda every route here answers 404, so the production site
+neither shows nor exposes it.
+
+Analysis itself runs in the dedicated worker (``pipeline.analysis run``); these
+routes only change what the worker may claim.
+"""
 
 import threading
 
-from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse
 
 import web as _web
 
-router = APIRouter()
+
+def _local_deployment_only():
+    """Hide the pipeline from the production site."""
+    if not _web.PIPELINE_LOCAL_CONTROLS:
+        raise HTTPException(status_code=404)
+
+
+router = APIRouter(dependencies=[Depends(_local_deployment_only)])
+
+
+def _profile_key(value: str | None) -> str:
+    """Resolve a requested profile key (canonical when omitted); raises ValueError if unknown."""
+    return _web._db.resolve_analysis_profile(value)["key"]
 
 
 @router.get("/analysis", response_class=HTMLResponse)
 async def analysis_dashboard(request: Request):
-    """Analysis pipeline dashboard with gate management."""
-    if _web.IS_LAMBDA and _web._auth_mod.get_access_tier(request) != "admin":
-        return RedirectResponse("/")
+    """Analysis pipeline dashboard: profile switches and gate management."""
     group_id = request.query_params.get("group")
     group_id = int(group_id) if group_id else None
-    return _web._build_analysis_page(group_id)
+    try:
+        profile_key = _profile_key(request.query_params.get("profile")) if _web._db else None
+    except ValueError as e:
+        return HTMLResponse(f"<p>{e}</p>", status_code=400)
+    return _web._build_analysis_page(group_id, profile_key)
 
 
 @router.get("/pipeline", response_class=HTMLResponse)
@@ -25,50 +47,67 @@ async def pipeline_dashboard(request: Request):
     """Pipeline dashboard -- book generation. 404s when the book pipeline is dormant."""
     if not _web._book_available:
         return HTMLResponse("Not Found", status_code=404)
-    if _web.IS_LAMBDA and _web._auth_mod.get_access_tier(request) != "admin":
-        return RedirectResponse("/")
     return _web.build_pipeline_html()
 
 
 @router.get("/api/analysis/dashboard")
-async def analysis_dashboard_data():
+async def analysis_dashboard_data(profile: str | None = None):
     """Return group-level analysis dashboard HTML for AJAX refresh."""
     if not _web._db:
         return HTMLResponse("<p>Database not configured.</p>", status_code=503)
     try:
-        html = _web._build_analysis_html()
+        html = _web._build_analysis_html(_profile_key(profile))
         return HTMLResponse(html)
     except Exception as e:
         return HTMLResponse(f"<p style='color: red;'>Error: {e}</p>", status_code=500)
 
 
 @router.get("/api/analysis/group/{group_id}")
-async def analysis_group_data(group_id: int):
-    """Return document drill-down HTML for a group."""
+async def analysis_group_data(group_id: int, profile: str | None = None):
+    """Return document drill-down HTML for a group under one profile."""
     if not _web._db:
         return HTMLResponse("<p>Database not configured.</p>", status_code=503)
     try:
-        html = _web._build_analysis_group_html(group_id)
+        html = _web._build_analysis_group_html(group_id, _profile_key(profile))
         return HTMLResponse(html)
     except Exception as e:
         return HTMLResponse(f"<p style='color: red;'>Error: {e}</p>", status_code=500)
 
 
 @router.get("/api/analysis/status")
-async def analysis_status_data():
+async def analysis_status_data(profile: str | None = None):
     """Return pipeline progress + errors HTML for AJAX refresh."""
     if not _web._db:
         return HTMLResponse("<p>Database not configured.</p>", status_code=503)
     try:
-        html = _web._build_pipeline_status_html()
+        html = _web._build_pipeline_status_html(_profile_key(profile))
         return HTMLResponse(html)
     except Exception as e:
         return HTMLResponse(f"<p style='color: red;'>Error: {e}</p>", status_code=500)
 
 
+@router.post("/api/analysis/profile")
+async def update_analysis_profile(request: Request):
+    """Turn a profile's global switch on or off.
+
+    Switching off stops the worker claiming new steps for that profile; steps
+    already running finish.
+    """
+    if not _web._db:
+        return JSONResponse({"error": "Database not configured"}, status_code=500)
+    body = await request.json()
+    key = body.get("key")
+    enabled = body.get("enabled")
+    if not key or not isinstance(enabled, bool):
+        return JSONResponse({"error": "Missing key or enabled"}, status_code=400)
+    if not _web._db.set_profile_enabled(key, enabled):
+        return JSONResponse({"error": f"Unknown analysis profile: {key}"}, status_code=404)
+    return JSONResponse({"status": "ok", "key": key, "enabled": enabled})
+
+
 @router.post("/api/analysis/gate")
 async def update_analysis_gate(request: Request):
-    """Toggle permitted flag for a (group, step) pair."""
+    """Toggle the permitted flag for a (group, profile, step) triple."""
     if not _web._db:
         return JSONResponse({"error": "Database not configured"}, status_code=500)
     body = await request.json()
@@ -78,8 +117,11 @@ async def update_analysis_gate(request: Request):
     if not group_id or not step_name or permitted is None:
         return JSONResponse({"error": "Missing group_id, step_name, or permitted"}, status_code=400)
     try:
-        _web._db.set_group_gate(int(group_id), step_name, permitted)
+        profile_key = _profile_key(body.get("profile_key"))
+        _web._db.set_group_gate(int(group_id), step_name, permitted, profile_key=profile_key)
         return JSONResponse({"status": "ok"})
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
@@ -119,34 +161,14 @@ async def create_analysis_group(request: Request):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
-@router.post("/api/analysis/run")
-async def run_analysis_pipeline(request: Request):
-    """Ensure the always-on queue consumer is running."""
-    if not _web._db:
-        return JSONResponse({"error": "Database not configured"}, status_code=500)
-
-    _web._ensure_worker_running()
-    return JSONResponse({"status": "running"})
-
-
-@router.get("/api/analysis/pipeline-status")
-async def pipeline_status():
-    """Return whether the pipeline is currently running."""
-    return JSONResponse({"running": _web._pipeline_is_running()})
-
-
 @router.post("/api/analysis/run-step")
 async def run_single_step(request: Request):
-    """Run a single analysis step for one document plus all downstream dependents.
+    """Re-run one step for one document under one profile, plus its dependents.
 
-    Invalidates the step and all downstream dependents first, then queues the
-    lesson for priority processing by the pipeline worker. The worker will run
-    the invalidated step, then pick up any downstream steps that become runnable.
-
-    Only available when PIPELINE_LOCAL_CONTROLS is True.
+    Invalidates the step and everything downstream of it for that profile. The
+    dedicated worker picks the work up on its next pass, provided a gate
+    permits it and the profile is switched on.
     """
-    if not _web.PIPELINE_LOCAL_CONTROLS:
-        return JSONResponse({"error": "Step-level controls not available in this environment"}, status_code=403)
     if not _web._db:
         return JSONResponse({"error": "Database not configured"}, status_code=500)
 
@@ -156,22 +178,17 @@ async def run_single_step(request: Request):
     if not document_id or not step_name:
         return JSONResponse({"error": "Missing document_id or step_name"}, status_code=400)
 
-    # Validate step exists
     step = _web._db.get_analysis_step(step_name)
     if not step:
         return JSONResponse({"error": f"Unknown step: {step_name}"}, status_code=400)
 
     try:
-        # Invalidate this step + all downstream dependents
-        _web._db.invalidate_step(document_id, step_name)
-
-        # Queue this lesson for priority processing. The worker will run the
-        # invalidated step first, then any downstream steps as they become
-        # runnable. If the worker is already processing bulk work, this lesson
-        # jumps to the front without pre-empting in-flight steps.
-        _web.queue_lesson(document_id)
-
-        return JSONResponse({"status": "running", "document_id": document_id, "step_name": step_name})
+        profile_key = _profile_key(body.get("profile_key"))
+        _web._db.invalidate_step(document_id, step_name, profile_key=profile_key)
+        return JSONResponse({"status": "queued", "document_id": document_id,
+                             "step_name": step_name, "profile_key": profile_key})
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
@@ -188,8 +205,6 @@ async def analysis_capabilities():
 async def publish_atlas_projection(request: Request):
     """Manually trigger the Atlas projection publish (same fail-closed path
     as the automatic post-sweep hook). Runs in a background thread."""
-    if _web.IS_LAMBDA and _web._auth_mod.get_access_tier(request) != "admin":
-        return JSONResponse({"error": "admin only"}, status_code=403)
     if not _web._db:
         return JSONResponse({"error": "Database not configured"}, status_code=500)
 
@@ -207,7 +222,7 @@ async def publish_atlas_projection(request: Request):
 
 @router.post("/api/analysis/clear-error")
 async def clear_analysis_error(request: Request):
-    """Clear the error on a document analysis state entry so it can be retried."""
+    """Clear the error on one profile's state entry so it can be retried."""
     if not _web._db:
         return JSONResponse({"error": "Database not configured"}, status_code=500)
     body = await request.json()
@@ -216,19 +231,23 @@ async def clear_analysis_error(request: Request):
     if not document_id or not step_name:
         return JSONResponse({"error": "Missing document_id or step_name"}, status_code=400)
     try:
-        _web._db.clear_step_error(document_id, step_name)
+        profile_key = _profile_key(body.get("profile_key"))
+        _web._db.clear_step_error(document_id, step_name, profile_key=profile_key)
         return JSONResponse({"status": "ok"})
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
 @router.post("/api/analysis/clear-all-errors")
 async def clear_all_analysis_errors(request: Request):
-    """Clear all errors so failed steps become runnable again."""
+    """Clear errors so failed steps become runnable again, for one profile or all."""
     if not _web._db:
         return JSONResponse({"error": "Database not configured"}, status_code=500)
+    body = await request.json() if await request.body() else {}
     try:
-        count = _web._db.clear_all_errors()
+        count = _web._db.clear_all_errors(body.get("profile_key"))
         return JSONResponse({"status": "ok", "cleared": count})
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
