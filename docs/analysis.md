@@ -223,9 +223,12 @@ profile, so one lesson can carry an analysis from each model.
 
 | Profile | Cache keys | Contract | Starts |
 |---|---|---|---|
-| `gemini-3-flash` | bare (all historical results) | 2 | on, canonical |
-| `astra-low` | `:codex-astra` | 2 | on |
+| `gemini-3-flash` | bare (all historical results) | 2 | off, canonical |
+| `astra-low` | `:codex-astra` | 2 | off |
 | `gemini-3.1`, `astra-medium`, `opus-5.5` | `:c3:<key>` | 3 | off |
+
+Every profile was released switched off (2026-09-23): nothing is routed to a
+model until it is turned on at `/analysis`.
 
 A step runs for a (document, profile) when a group containing the document has
 that step's gate open **for that profile** and the profile's global switch is

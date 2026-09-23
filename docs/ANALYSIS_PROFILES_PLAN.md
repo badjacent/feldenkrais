@@ -4,7 +4,8 @@ Status: **implemented 2026-09-23** on branch `claude/analysis-profiles`. The own
 stopped the first Astra run part-way (58%) to implement this; `astra-low` resumes it.
 Additional owner requirement during implementation: the analysis pipeline is visible
 only on local deployments (laptop, Mac mini) and answers 404 on the production site.
-Deviations from the plan are noted inline.
+Deviations from the plan are noted inline. At release every profile, including
+`gemini-3-flash` and `astra-low`, was switched off at the owner's request.
 
 ## Goal
 

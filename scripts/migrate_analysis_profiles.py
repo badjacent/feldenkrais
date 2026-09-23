@@ -11,7 +11,8 @@ This script, in one transaction:
 1. Creates ``analysis_profile`` and seeds five profiles. ``gemini-3-flash`` owns
    every historical result (bare cache keys, canonical); ``astra-low`` owns the
    2026-09-22 Astra run (``:codex-astra`` keys); ``gemini-3.1``, ``astra-medium``
-   and ``opus-5.5`` start switched off under schema contract 3.
+   and ``opus-5.5`` run under schema contract 3. Every profile starts switched
+   off, so nothing is routed to any model until the owner turns one on.
 2. Adds ``profile_key`` to document_analysis_state, group_analysis_gate,
    lesson_embedding and lesson_concept, backfills it, and makes it part of each
    primary key. Completed progress rows record contract version 2.
@@ -52,10 +53,10 @@ FI_DEMO_HOME_SOURCE = "FELDENKRAIS_ACCESS_YOUTUBE"
 
 PROFILES = [
     dict(key="gemini-3-flash", provider="gemini", model="gemini-3-flash-preview", params={},
-         cache_tag=None, contract_version=2, enabled=True, canonical=True, max_concurrency=4,
+         cache_tag=None, contract_version=2, enabled=False, canonical=True, max_concurrency=4,
          notes="Every result produced before per-model profiles; bare cache keys."),
     dict(key="astra-low", provider="codex", model="gpt-6-astra", params={"reasoning_effort": "low"},
-         cache_tag="codex-astra", contract_version=2, enabled=True, canonical=False, max_concurrency=6,
+         cache_tag="codex-astra", contract_version=2, enabled=False, canonical=False, max_concurrency=6,
          notes="OpenAI Astra via the Codex CLI subscription, first run 2026-09-22. "
                "Contract 2 schemas, strictened by the Codex adapter."),
     dict(key="gemini-3.1", provider="gemini", model="gemini-3.1-pro-preview", params={},
