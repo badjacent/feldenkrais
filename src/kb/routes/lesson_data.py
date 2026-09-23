@@ -676,6 +676,7 @@ async def api_lesson_context(request: Request, document_id: str, profile: str | 
     lesson page itself.
     """
     from datetime import datetime, timezone
+    import conversation_import
     import lesson_context
 
     if not _web._db:
@@ -708,12 +709,22 @@ async def api_lesson_context(request: Request, document_id: str, profile: str | 
             if row:
                 source_name = row.get("category_name") or row.get("name", "")
 
-    lesson_url = f"{_web._auth_mod._base_url(request)}/lesson/{document_id}?profile={analysis_profile['key']}"
+    base_url = _web._auth_mod._base_url(request)
+    lesson_url = f"{base_url}/lesson/{document_id}?profile={analysis_profile['key']}"
+    saving = None
+    if _web._auth_mod.COOKIE_SECRET:
+        user = _web._auth_mod.get_current_user(request)
+        token, expires = conversation_import.issue_token(
+            _web._auth_mod.COOKIE_SECRET, document_id=document_id,
+            user_id=user.get("user_id") if user else None, profile_key=analysis_profile["key"])
+        saving = {"endpoint": base_url + conversation_import.IMPORT_PATH, "token": token,
+                  "expires": expires.strftime("%Y-%m-%d"), "bucket": _web.KB_BUCKET}
     body = lesson_context.build_lesson_context(
         document=doc, source_name=source_name, lesson_url=lesson_url, profile=analysis_profile,
         transcript=text, whisper_segments=segments,
         field_descriptions=lesson_context.schema_field_descriptions(_web.DATA_DIR),
         exported_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ"),
+        saving=saving,
         **results,
     )
     headers = {}

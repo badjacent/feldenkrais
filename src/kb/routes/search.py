@@ -109,6 +109,8 @@ async def api_lesson_chat_history(request: Request, document_id: str):
                 "user_id": t.get("user_id"),
                 "query": t["query"],
                 "response": t["response"],
+                "origin": t.get("origin") or "app",
+                "assistant": t.get("assistant"),
                 "created_at": t["created_at"].isoformat() if t.get("created_at") else None,
             }
             for t in turns

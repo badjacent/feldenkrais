@@ -922,10 +922,12 @@ async function loadHistoryTab() {{
         }}
         for (const t of data.turns) {{
             const ts = t.created_at ? new Date(t.created_at).toLocaleString() : '';
-            const userTag = (data.is_superuser_view && t.user_id) ? ' &middot; user ' + t.user_id : '';
+            const userTag = (data.is_superuser_view && t.user_id) ? ' · user ' + t.user_id : '';
+            const outside = t.origin === 'external';
+            const originTag = outside ? ' · ' + (t.assistant || 'Outside') + ' chat, saved from outside the app' : '';
             parts.push(
-                '<div style="border-left:3px solid #007bff;padding:8px 14px;margin:14px 0;background:#f8f9fa;">' +
-                '<div style="font-size:0.8em;color:#888;margin-bottom:6px;">' + escHtml(ts) + escHtml(userTag) + '</div>' +
+                '<div style="border-left:3px solid ' + (outside ? '#8e6bbf' : '#007bff') + ';padding:8px 14px;margin:14px 0;background:#f8f9fa;">' +
+                '<div style="font-size:0.8em;color:#888;margin-bottom:6px;">' + escHtml(ts + userTag + originTag) + '</div>' +
                 '<div style="font-weight:600;color:#333;margin-bottom:8px;white-space:pre-wrap;">' + escHtml(t.query) + '</div>' +
                 '<div style="color:#555;white-space:pre-wrap;line-height:1.5;">' + escHtml(t.response) + '</div>' +
                 '</div>'
@@ -2642,8 +2644,9 @@ async function toggleLesson(cardId, docId, userId) {{
             }} else {{
                 container.innerHTML = filtered.map(t => {{
                     const ts = t.created_at ? new Date(t.created_at).toLocaleString() : '';
+                    const originTag = t.origin === 'external' ? ' · ' + (t.assistant || 'Outside') + ' chat, saved from outside the app' : '';
                     return '<div class="turn">' +
-                        '<div class="turn-ts">' + escHtml(ts) + '</div>' +
+                        '<div class="turn-ts">' + escHtml(ts + originTag) + '</div>' +
                         '<div class="turn-q">' + escHtml(t.query) + '</div>' +
                         '<div class="turn-a">' + escHtml(t.response) + '</div>' +
                         '</div>';

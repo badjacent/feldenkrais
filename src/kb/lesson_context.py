@@ -16,6 +16,8 @@ import json
 import re
 from pathlib import Path
 
+import conversation_import
+
 # SPIFFER-Q step tags, as defined for the decomposition prompt
 # (data/frameworks/v1/pass_a.md, "SPIFFER-Q Decomposition").
 SPIFFER_Q = [
@@ -146,8 +148,15 @@ def build_lesson_context(
     positions: dict | None,
     field_descriptions: dict[str, str],
     exported_at: str | None = None,
+    saving: dict | None = None,
 ) -> str:
-    """Return the full context document for one lesson under one analysis profile."""
+    """Return the full context document for one lesson under one analysis profile.
+
+    ``saving`` describes how to send the conversation back: ``endpoint`` (the
+    REST import URL), ``token`` and ``expires`` (the import token and its expiry
+    date), and optionally ``bucket`` (the S3 drop point). Without it the
+    document has no saving section.
+    """
     title = document.get("title") or "Untitled lesson"
     model = f"{profile['model']} (analysis profile `{profile['key']}`)"
     out: list[str] = [f"# {title}", ""]
@@ -330,9 +339,69 @@ def build_lesson_context(
                 out += [f"- {p}"]
         out += [""]
 
+    if saving:
+        out += _saving_section(saving)
+
     out += ["## Transcript" if whisper_segments else "## Lesson text", "",
             _transcript(transcript, whisper_segments), ""]
     return "\n".join(out)
+
+
+def _saving_section(saving: dict) -> list[str]:
+    """How to send this conversation back to the lesson's Q&A history."""
+    endpoint, token = saving["endpoint"], saving["token"]
+    example = json.dumps({
+        "token": token,
+        "assistant": "<your model name>",
+        "turns": conversation_import.EXAMPLE_TURNS,
+    }, indent=2, ensure_ascii=False)
+    out = [
+        "## Saving this conversation",
+        "",
+        "The lesson-analysis tool keeps a history of questions asked about each lesson, and this "
+        "conversation can be added to it. When the user asks you to save or export the "
+        "conversation, reply with one JSON code block in exactly this form, and nothing else:",
+        "",
+        "```json", example, "```",
+        "",
+        "Include every exchange that came after this document, in order and word for word; do "
+        "not summarize or shorten them. Leave this document itself out. Copy the token exactly.",
+        "",
+        "The user sends that JSON back in one of two ways.",
+        "",
+        f"**REST.** `POST {endpoint}` with the JSON as the body:",
+        "",
+        "```sh",
+        f"curl -X POST {endpoint} \\",
+        '  -H "Content-Type: application/json" --data-binary @conversation.json',
+        "```",
+        "",
+        "A plain-text copy of the whole chat works too, with turns marked by speaker labels such "
+        "as `User:` / `Assistant:` or `You said:` / `ChatGPT said:`. The token must appear "
+        "somewhere in it (a copy that still includes this document does), or go in an "
+        f"`Authorization: Bearer {token[:12]}…` header. The reply gives the number of exchanges "
+        "saved and a link to the lesson, where they appear under History.",
+        "",
+    ]
+    if saving.get("bucket"):
+        out += [
+            f"**S3.** Drop the same file in the inbox, with credentials for the site's AWS account:",
+            "",
+            "```sh",
+            f"aws s3 cp conversation.json s3://{saving['bucket']}/conversations/inbox/",
+            "```",
+            "",
+            "It is imported within seconds and moved to `conversations/imported/`, or to "
+            "`conversations/rejected/` beside a `.error.txt` note saying why.",
+            "",
+        ]
+    out += [
+        "Saving a longer copy of the same conversation replaces the shorter one. The token only "
+        "adds conversations to this lesson, under the account that exported it, and expires "
+        f"{saving['expires']}.",
+        "",
+    ]
+    return out
 
 
 def _field_list(fields: list[str], descriptions: dict[str, str]) -> str:

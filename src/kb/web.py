@@ -261,6 +261,11 @@ async def search_site_guard(request: Request, call_next):
             return RedirectResponse("/")
         return await call_next(request)
 
+    # Outside-chat imports carry the import token from a lesson export instead
+    # of a session; the route itself refuses anything without one.
+    if path == "/api/conversations/import" and request.method == "POST":
+        return await call_next(request)
+
     # On Lambda, require login for all pages
     if IS_LAMBDA and not _auth_mod.get_current_user(request):
         return HTMLResponse(_login_page_html())
@@ -867,6 +872,7 @@ from routes.pages import router as pages_router
 from routes.lesson_data import router as lesson_data_router
 from routes.atlas_pages import router as atlas_pages_router
 from routes.nyc_admin import router as nyc_admin_router
+from routes.conversations import router as conversations_router
 
 app.include_router(auth_router)
 app.include_router(ingestion_router)
@@ -878,6 +884,7 @@ app.include_router(pages_router)
 app.include_router(lesson_data_router)
 app.include_router(atlas_pages_router)
 app.include_router(nyc_admin_router)
+app.include_router(conversations_router)
 
 
 # ── Conditional book router mount ─────────────────────────────────────
@@ -930,6 +937,14 @@ def handler(event, context):
         except ImportError:
             return {"statusCode": 501, "body": json.dumps({"error": "web_book not available"})}
         return {"statusCode": 200, "body": json.dumps({"processed": job_id})}
+
+    # Conversations dropped in the bucket's conversations/inbox/
+    import conversation_import
+    if conversation_import.is_s3_event(event):
+        import boto3
+        outcomes = conversation_import.handle_s3_event(
+            event, _db, boto3.client("s3"), _auth_mod.COOKIE_SECRET)
+        return {"statusCode": 200, "body": json.dumps(outcomes, default=str)}
 
     # Otherwise, handle as HTTP request
     return _http_handler(event, context)

@@ -178,7 +178,22 @@ resource "aws_s3_bucket_notification" "staging_trigger" {
     filter_prefix       = "staging/"
   }
 
-  depends_on = [aws_lambda_permission.allow_s3]
+  # Conversations held in an outside LLM, dropped for import (conversation_import.py)
+  lambda_function {
+    lambda_function_arn = aws_lambda_function.web.arn
+    events              = ["s3:ObjectCreated:*"]
+    filter_prefix       = "conversations/inbox/"
+  }
+
+  depends_on = [aws_lambda_permission.allow_s3, aws_lambda_permission.web_s3_conversations]
+}
+
+resource "aws_lambda_permission" "web_s3_conversations" {
+  statement_id  = "AllowS3ConversationInbox"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.web.function_name
+  principal     = "s3.amazonaws.com"
+  source_arn    = aws_s3_bucket.main.arn
 }
 
 # Scheduled trigger to process any remaining files in staging/
@@ -592,6 +607,12 @@ resource "aws_iam_role_policy" "web_lambda_s3" {
         Effect   = "Allow"
         Action   = ["s3:PutObject"]
         Resource = "${aws_s3_bucket.main.arn}/control/atlas-nyc/requests/*"
+      },
+      {
+        # Import dropped conversations and file them as imported or rejected
+        Effect   = "Allow"
+        Action   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
+        Resource = "${aws_s3_bucket.main.arn}/conversations/*"
       }
     ]
   })

@@ -339,6 +339,22 @@ CREATE TABLE IF NOT EXISTS lesson_chat_log (
     response TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Conversations about a lesson held in an outside LLM, kept verbatim as sent.
+-- Their exchanges are stored in lesson_chat_log with origin 'external'.
+CREATE TABLE IF NOT EXISTS external_conversation (
+    id SERIAL PRIMARY KEY,
+    document_id TEXT NOT NULL,
+    user_id INTEGER,
+    conversation_id TEXT NOT NULL,
+    profile_key TEXT,
+    assistant TEXT,
+    channel TEXT NOT NULL,
+    format TEXT NOT NULL,
+    exchange_count INTEGER NOT NULL,
+    raw TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
 """
 
 INDEXES = """
@@ -380,6 +396,7 @@ CREATE INDEX IF NOT EXISTS idx_lesson_view_user ON lesson_view (user_id, created
 CREATE INDEX IF NOT EXISTS idx_lesson_view_document ON lesson_view (document_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_lesson_chat_document ON lesson_chat_log (document_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_lesson_chat_user ON lesson_chat_log (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_external_conversation_doc ON external_conversation (document_id, conversation_id);
 CREATE INDEX IF NOT EXISTS idx_analysis_transcript ON analysis (document_id) WHERE type_id = 1;
 """
 
@@ -532,6 +549,10 @@ class DatabaseCore:
                 ("youtube_queue", "attempts", "INTEGER NOT NULL DEFAULT 0"),
                 ("youtube_queue", "next_attempt_at", "TIMESTAMPTZ"),
                 ("users", "superuser_eligible", "BOOLEAN NOT NULL DEFAULT FALSE"),
+                ("lesson_chat_log", "origin", "TEXT NOT NULL DEFAULT 'app'"),
+                ("lesson_chat_log", "assistant", "TEXT"),
+                ("lesson_chat_log", "conversation_id", "TEXT"),
+                ("lesson_chat_log", "profile_key", "TEXT"),
             ]:
                 cursor.execute(
                     """SELECT 1 FROM information_schema.columns
