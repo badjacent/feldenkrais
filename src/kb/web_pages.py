@@ -606,7 +606,7 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
 
     <!-- Steps/Cards tab (default) -->
     <div id="tab-steps">
-        <div class="tab-intro">Follow along with the lesson one movement at a time. Each card shows what's happening biomechanically and linguistically, synced with the transcript and audio. <a href="/lesson/{esc_id}/print" target="_blank" style="margin-left:8px;">Print sequence &rarr;</a></div>
+        <div class="tab-intro">Follow along with the lesson one movement at a time. Each card shows what's happening biomechanically and linguistically, synced with the transcript and audio. <a href="/lesson/{esc_id}/print" target="_blank" style="margin-left:8px;" onclick="if (ANALYSIS_PROFILE) this.href = '/lesson/{esc_id}/print?profile=' + encodeURIComponent(ANALYSIS_PROFILE)">Print sequence &rarr;</a></div>
         <div class="card" id="card">
             <div class="card-placeholder" id="card-placeholder">
                 <span class="spinner-inline"></span> Loading analysis...
@@ -2345,11 +2345,13 @@ async function sendChat() {{
 </html>"""
 
 
-def build_lesson_print_html(document_id: str, title: str | None = None) -> str:
+def build_lesson_print_html(document_id: str, title: str | None = None,
+                            profile: str | None = None) -> str:
     """Print-friendly view: numbered list of step instructions, grouped.
 
-    Client-side fetches /api/lesson/{id}/combined and renders one bullet per
-    step. No header/nav/auth bar — just the steps. Designed for browser print.
+    Client-side fetches /api/lesson/{id}/combined for one model profile's
+    analysis and renders one bullet per step. No header/nav/auth bar — just the
+    steps. Designed for browser print.
     """
     esc_id = html_mod.escape(document_id)
     esc_title = html_mod.escape(title or "Lesson")
@@ -2417,7 +2419,9 @@ function escHtml(s) {{
             document.getElementById('lesson-title').textContent = info.title;
         }}
 
-        const resp = await fetch('/api/lesson/' + encodeURIComponent(docId) + '/combined');
+        const profile = {json.dumps(profile)};
+        const resp = await fetch('/api/lesson/' + encodeURIComponent(docId) + '/combined'
+                                 + (profile ? '?profile=' + encodeURIComponent(profile) : ''));
         const data = await resp.json();
         console.log('print: data', {{ok: resp.ok, status: resp.status, err: data.error,
                                      steps: (data.steps || []).length,

@@ -166,11 +166,14 @@ async def lesson_print_page(request: Request, document_id: str):
     if _web._db and not _web._db.is_document_accessible(document_id):
         return HTMLResponse("<h1>Not Found</h1>", status_code=404)
     title = None
+    profile = request.query_params.get("profile")
     if _web._db:
         doc = _web._db.get_document(document_id)
         if doc:
             title = doc.get("title")
-    return HTMLResponse(_web.build_lesson_print_html(document_id, title=title))
+        # Without ?profile=, print what the lesson page opens on.
+        profile = profile or _web._db.default_profile_for_document(document_id)
+    return HTMLResponse(_web.build_lesson_print_html(document_id, title=title, profile=profile))
 
 
 @router.get("/lesson/{document_id}", response_class=HTMLResponse)
