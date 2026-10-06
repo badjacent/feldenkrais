@@ -48,3 +48,29 @@ def test_soundcloud_collection_is_marked_ineligible_without_download():
     finish.assert_called_once_with(
         db, "item-set", "ineligible", "collection URL is not a single lesson recording"
     )
+
+
+def test_media_already_ingested_under_another_signature_is_skipped():
+    """A re-signed URL for a file that already has a document is not downloaded."""
+    from kb.media_identity import media_identity
+
+    url = "https://ams3.digitaloceanspaces.com/eumov/a/lesson.mp3"
+    db = MagicMock()
+    cursor = db.get_cursor.return_value.__enter__.return_value
+    cursor.fetchall.return_value = [{"id": "doc-1", "source_url": url + "?AWSAccessKeyId=K&Signature=a&Expires=1"}]
+    item = {"id": "item-2", "url": url + "?AWSAccessKeyId=K&Signature=b&Expires=2", "title": "Lesson"}
+    with patch("kb.ingest.atlas_media._extract_audio") as extract, \
+         patch("kb.ingest.atlas_media._finish") as finish:
+        result = process(db, MagicMock(), item)
+    assert result["status"] == "ineligible"
+    extract.assert_not_called()
+    finish.assert_called_once_with(db, "item-2", "ineligible", "already ingested as document doc-1")
+    assert media_identity(item["url"]) == url
+
+
+def test_media_identity_keeps_ordinary_queries():
+    from kb.media_identity import is_signed, media_identity
+
+    assert media_identity("HTTPS://Example.com/a.mp3?X-Amz-Signature=abc&X-Amz-Expires=60") == "https://example.com/a.mp3"
+    assert media_identity("https://example.com/play.mp3?track=2") == "https://example.com/play.mp3?track=2"
+    assert not is_signed("https://example.com/play.mp3?track=2")
