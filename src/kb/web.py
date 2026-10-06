@@ -75,8 +75,27 @@ def _is_interiority_site(request: Request) -> bool:
 SUPERUSER_COOKIE = "fk_superuser"
 
 
+def _is_trusted_local(request: Request) -> bool:
+    """True where the site grants full, superuser access without signing in.
+
+    That is this laptop's dev server (a localhost Host header) and deployments
+    that opt in with FULL_ACCESS_WITHOUT_LOGIN=1: the Mac mini candidate, which
+    listens only on the tailnet, so tailnet membership is its access control.
+    Never under Lambda.
+    """
+    if IS_LAMBDA:
+        return False
+    host = request.headers.get("host", "")
+    if host.startswith("localhost") or host.startswith("127.0.0.1"):
+        return True
+    return os.environ.get("FULL_ACCESS_WITHOUT_LOGIN") == "1"
+
+
 def _is_superuser_active(request: Request, user: dict | None) -> bool:
-    """True if the user is superuser-eligible AND has the superuser cookie set."""
+    """True on a trusted local deployment, or for a superuser-eligible user with
+    the superuser cookie set."""
+    if _is_trusted_local(request):
+        return True
     if not user or not user.get("superuser_eligible"):
         return False
     return request.cookies.get(SUPERUSER_COOKIE) == "1"
@@ -89,9 +108,8 @@ def _set_source_access(request: Request) -> dict | None:
     """
     if not _db:
         return None
-    # Localhost gets full access (no filtering)
-    host = request.headers.get("host", "")
-    if host.startswith("localhost") or host.startswith("127.0.0.1"):
+    # Trusted local deployments (localhost, the Mini) get full access
+    if _is_trusted_local(request):
         _db.allowed_source_ids = None
         return _auth_mod.get_current_user(request)
     user = _auth_mod.get_current_user(request)

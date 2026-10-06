@@ -2629,7 +2629,7 @@ def build_fmtt_page_html(
 </html>"""
 
 
-def build_conversations_page_html(user: dict, superuser_active: bool = False) -> str:
+def build_conversations_page_html(user: dict | None, superuser_active: bool = False) -> str:
     """Central page listing the user's chat history grouped by lesson.
 
     Superusers in superuser mode see every user's chats; everyone else sees

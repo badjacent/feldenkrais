@@ -7,7 +7,7 @@ pasted chat, or as ``Authorization: Bearer``), so it works from curl or a script
 without a browser session. The login gate lets this one path through; this
 route enforces the token instead.
 
-Without a token, a signed-in visitor (or any visitor on localhost) may import by
+Without a token, a signed-in visitor (or any visitor on a trusted local deployment) may import by
 naming ``document_id`` in the JSON body, subject to the lesson page's own access
 check.
 """
@@ -19,11 +19,6 @@ import conversation_import as ci
 import web as _web
 
 router = APIRouter()
-
-
-def _is_localhost(request: Request) -> bool:
-    host = request.headers.get("host", "")
-    return host.startswith("localhost") or host.startswith("127.0.0.1")
 
 
 @router.post(ci.IMPORT_PATH)
@@ -42,7 +37,7 @@ async def import_conversation(request: Request):
                                          submission=submission, raw=raw_text, channel="rest")
         else:
             user = _web._set_source_access(request)
-            if not user and not _is_localhost(request):
+            if not user and not _web._is_trusted_local(request):
                 return JSONResponse({"error": "Send the import token from the lesson export, or sign in"},
                                     status_code=401)
             document_id = submission.document_id

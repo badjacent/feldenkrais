@@ -92,7 +92,7 @@ async def api_lesson_chat_history(request: Request, document_id: str):
     if not _web._db:
         return JSONResponse({"error": "Database not configured"}, status_code=500)
     user = _web._auth_mod.get_current_user(request) if _web._auth_mod else None
-    is_super = bool(user and _web._is_superuser_active(request, user))
+    is_super = _web._is_superuser_active(request, user)
 
     if is_super:
         turns = _web._db.get_lesson_chat_history_all(document_id)
@@ -124,7 +124,7 @@ async def api_conversations(request: Request):
     if not _web._db:
         return JSONResponse({"error": "Database not configured"}, status_code=500)
     user = _web._auth_mod.get_current_user(request) if _web._auth_mod else None
-    is_super = bool(user and _web._is_superuser_active(request, user))
+    is_super = _web._is_superuser_active(request, user)
 
     rows = _web._db.get_chat_lessons_summary(
         user_id=user.get("user_id") if user else None,
@@ -151,7 +151,7 @@ async def api_conversations(request: Request):
 async def conversations_page(request: Request):
     """Central page listing the current user's chat history across all lessons."""
     user = _web._set_source_access(request)
-    if not user:
+    if not user and not _web._is_trusted_local(request):
         return HTMLResponse("<h1>Sign in to view your conversations.</h1>", status_code=401)
     return HTMLResponse(_web.build_conversations_page_html(
         user=user,

@@ -20,5 +20,9 @@ set +a
 # does, from its own promoted checkout.
 
 cd src/kb
+# Full, superuser access without login, as on localhost. The server binds only
+# to the tailnet address, so tailnet membership is the access control.
+export FULL_ACCESS_WITHOUT_LOGIN=1
+
 exec "$root/.venv-web/bin/python" -m uvicorn web:app \
   --host "$host" --port "$port" --no-access-log
