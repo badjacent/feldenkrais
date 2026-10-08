@@ -8,7 +8,14 @@
 set -euo pipefail
 
 root=${CANDIDATE_ROOT:-/Users/hermes/src/feldenkrais-candidate}
-host=${CANDIDATE_WEB_HOST:-100.85.14.17}
+# The Mini's current Tailscale address (100.64.0.0/10), read from its interfaces:
+# the Tailscale app belongs to another account, so its CLI is not usable here.
+# Never fall back to every interface: tailnet membership is the access control.
+tailnet_address() {
+  ifconfig | awk '/inet 100\./ { split($2, a, "."); if (a[2] >= 64 && a[2] <= 127) { print $2; exit } }'
+}
+host=${CANDIDATE_WEB_HOST:-$(tailnet_address)}
+[[ -n $host ]] || { print -u2 "no tailnet address on this machine; not starting"; exit 1; }
 port=${CANDIDATE_WEB_PORT:-8000}
 
 cd "$root"

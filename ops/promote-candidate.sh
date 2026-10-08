@@ -29,7 +29,7 @@
 # in-flight steps are abandoned and become runnable again.
 set -euo pipefail
 
-MINI_HOST=${MINI_HOST:-100.85.14.17}
+MINI_HOST=${MINI_HOST:-locals-mac-mini.tailed6642.ts.net}
 MINI_USER=${MINI_USER:-hermes}
 MINI_KEY=${MINI_KEY:-$HOME/.ssh/id_ed25519_codex_mini}
 CANDIDATE_ROOT=${CANDIDATE_ROOT:-/Users/hermes/src/feldenkrais-candidate}

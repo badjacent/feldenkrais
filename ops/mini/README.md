@@ -81,8 +81,8 @@ LAN or the internet:
 
 | Service | Address | launchd job |
 |---|---|---|
-| Analyzer web app | `http://100.85.14.17:8000` | `com.feldenkrais.analyzer-web` |
-| Chrome capture server | `http://100.85.14.17:7890` | `com.feldenkrais.ff-capture` |
+| Analyzer web app | `http://locals-mac-mini.tailed6642.ts.net:8000` | `com.feldenkrais.analyzer-web` |
+| Chrome capture server | `http://locals-mac-mini.tailed6642.ts.net:7890` | `com.feldenkrais.ff-capture` |
 
 ### Layout on the Mini
 

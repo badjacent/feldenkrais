@@ -17,7 +17,7 @@ def test_localhost_is_trusted_and_superuser():
 
 
 def test_mini_is_trusted_when_its_runner_opts_in(monkeypatch):
-    request = _request("100.85.14.17:8000")
+    request = _request("100.108.196.80:8000")
     with patch.object(web, "IS_LAMBDA", False):
         monkeypatch.delenv("FULL_ACCESS_WITHOUT_LOGIN", raising=False)
         assert not web._is_trusted_local(request)
