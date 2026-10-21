@@ -156,7 +156,7 @@ async def api_atlas_lesson(request: Request, document_id: str):
     if ext in ("mp3", "wav", "m4a", "aac", "ogg", "flac", "opus", "mp4", "webm") and _web.KB_BUCKET:
         try:
             from storage import Storage
-            audio_url = Storage(_web.KB_BUCKET).generate_presigned_url(s3_key, expiry_seconds=7200)
+            audio_url = Storage(_web.KB_BUCKET).generate_presigned_url(s3_key, expiry_seconds=43200)
         except Exception:
             pass
     if not audio_url:
@@ -312,7 +312,7 @@ async function load() {{
     p.className = 'prov prov-' + d.axes_source; p.textContent = d.axes_source;
     panel.appendChild(p);
   }}
-  if (d.audio_url) {{ audio.src = d.audio_url; }}
+  if (d.audio_url) {{ audio.src = d.audio_url; audioUrlIssuedAt = Date.now(); }}
   else {{ audio.style.display = 'none'; document.getElementById('no-audio').style.display = ''; }}
 
   const tr = document.getElementById('transcript');
@@ -360,8 +360,28 @@ function findSeg(t) {{
   return ans;
 }}
 
+// The audio src is usually a presigned S3 link; if it expires mid-session the
+// element errors and resets to 0:00. Fetch a fresh link and resume where we were.
+let audioUrlIssuedAt = 0, audioLastGoodTime = 0;
+audio.addEventListener('error', async () => {{
+  if (!audioUrlIssuedAt || Date.now() - audioUrlIssuedAt < 30000) return;
+  audioUrlIssuedAt = Date.now();
+  try {{
+    const r = await fetch('/api/atlas-view/lesson/' + encodeURIComponent(DOC));
+    const d = r.ok ? await r.json() : null;
+    if (!d || !d.audio_url) return;
+    const resumeAt = audioLastGoodTime;
+    audio.src = d.audio_url;
+    audio.addEventListener('loadedmetadata', () => {{
+      if (resumeAt > 0) audio.currentTime = resumeAt;
+    }}, {{ once: true }});
+    audio.load();
+  }} catch (e) {{ console.warn('audio url refresh failed', e); }}
+}});
+
 audio.addEventListener('timeupdate', () => {{
   const t = audio.currentTime;
+  if (t > 0) audioLastGoodTime = t;
   const i = findSeg(t);
   if (i !== activeSeg) {{
     if (activeSeg >= 0 && segEls[activeSeg]) segEls[activeSeg].classList.remove('active');
