@@ -1,1 +1,1 @@
-/Users/michaelhollander/github/feldenkrais/private/commands/restart-ff-capture-server.md
+../../private/ops/commands/restart-ff-capture-server.md

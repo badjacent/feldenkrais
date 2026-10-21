@@ -1,1 +1,1 @@
-/Users/michaelhollander/github/feldenkrais/private/commands/start-feldenkrais-first-capture.md
+../../private/ops/commands/start-feldenkrais-first-capture.md

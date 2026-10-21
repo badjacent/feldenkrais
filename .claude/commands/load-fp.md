@@ -1,1 +1,1 @@
-/Users/michaelhollander/github/feldenkrais/private/commands/load-fp.md
+../../private/ops/commands/load-fp.md
