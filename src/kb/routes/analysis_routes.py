@@ -39,7 +39,7 @@ async def analysis_dashboard(request: Request):
         profile_key = _profile_key(request.query_params.get("profile")) if _web._db else None
     except ValueError as e:
         return HTMLResponse(f"<p>{e}</p>", status_code=400)
-    return _web._build_analysis_page(group_id, profile_key)
+    return _web._build_analysis_page(group_id, profile_key, _web._show_unanalyzed(request))
 
 
 @router.get("/pipeline", response_class=HTMLResponse)
@@ -51,24 +51,24 @@ async def pipeline_dashboard(request: Request):
 
 
 @router.get("/api/analysis/dashboard")
-async def analysis_dashboard_data(profile: str | None = None):
+async def analysis_dashboard_data(request: Request, profile: str | None = None):
     """Return group-level analysis dashboard HTML for AJAX refresh."""
     if not _web._db:
         return HTMLResponse("<p>Database not configured.</p>", status_code=503)
     try:
-        html = _web._build_analysis_html(_profile_key(profile))
+        html = _web._build_analysis_html(_profile_key(profile), _web._show_unanalyzed(request))
         return HTMLResponse(html)
     except Exception as e:
         return HTMLResponse(f"<p style='color: red;'>Error: {e}</p>", status_code=500)
 
 
 @router.get("/api/analysis/group/{group_id}")
-async def analysis_group_data(group_id: int, profile: str | None = None):
+async def analysis_group_data(request: Request, group_id: int, profile: str | None = None):
     """Return document drill-down HTML for a group under one profile."""
     if not _web._db:
         return HTMLResponse("<p>Database not configured.</p>", status_code=503)
     try:
-        html = _web._build_analysis_group_html(group_id, _profile_key(profile))
+        html = _web._build_analysis_group_html(group_id, _profile_key(profile), _web._show_unanalyzed(request))
         return HTMLResponse(html)
     except Exception as e:
         return HTMLResponse(f"<p style='color: red;'>Error: {e}</p>", status_code=500)
@@ -136,6 +136,7 @@ async def list_analysis_groups():
         return JSONResponse([{
             "id": g["id"], "name": g["name"],
             "doc_count": g["doc_count"],
+            "analyzed_count": g["analyzed_count"],
             "auto_source_id": g.get("auto_source_id"),
         } for g in groups])
     except Exception as e:

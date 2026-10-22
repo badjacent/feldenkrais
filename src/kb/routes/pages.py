@@ -51,12 +51,13 @@ async def landing_page(request: Request):
     user = _web._set_source_access(request)
     search_mode = _web._is_search_site(request)
     su_active = _web._is_superuser_active(request, user)
+    show_unanalyzed = _web._show_unanalyzed(request)
     # Search subdomain: always show clean search page, no dev tools
     if search_mode:
-        return HTMLResponse(_web.build_search_home_html(user=user, superuser_active=su_active, get_lessons_fn=_web.get_available_lessons))
+        return HTMLResponse(_web.build_search_home_html(user=user, superuser_active=su_active, get_lessons_fn=_web.get_lesson_listing, include_unanalyzed=show_unanalyzed))
     show_dev = not _web.IS_LAMBDA or (user and user.get("tier") == "admin")
     if not show_dev:
-        return HTMLResponse(_web.build_search_home_html(user=user, superuser_active=su_active, get_lessons_fn=_web.get_available_lessons))
+        return HTMLResponse(_web.build_search_home_html(user=user, superuser_active=su_active, get_lessons_fn=_web.get_lesson_listing, include_unanalyzed=show_unanalyzed))
     # Show dev tool links for admin or local dev
     links = []
     if _web._book_available:
@@ -72,4 +73,4 @@ async def landing_page(request: Request):
         links.append('<li><a href="/admin/nyc">NYC Directory (crawler admin)</a></li>')
     dev_section = f"""<h2 style="margin-top:40px; border-top:1px solid #e0e0e0; padding-top:20px;">Dev Tools</h2>
 <ul style="list-style:none; padding:0;">{"".join(links)}</ul>"""
-    return HTMLResponse(_web.build_search_home_html(extra_html=dev_section, user=user, superuser_active=su_active, get_lessons_fn=_web.get_available_lessons))
+    return HTMLResponse(_web.build_search_home_html(extra_html=dev_section, user=user, superuser_active=su_active, get_lessons_fn=_web.get_lesson_listing, include_unanalyzed=show_unanalyzed))

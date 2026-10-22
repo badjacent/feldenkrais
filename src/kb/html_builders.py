@@ -462,12 +462,23 @@ def _build_profiles_panel(profile_key: str) -> str:
     """
 
 
-def _build_analysis_html(profile_key: str) -> str:
-    """Build the group-level analysis dashboard content HTML for one profile's gates."""
+def _build_analysis_html(profile_key: str, include_unanalyzed: bool = False) -> str:
+    """Build the group-level analysis dashboard content HTML for one profile's gates.
+
+    Unless ``include_unanalyzed``, groups count only analyzed lessons and groups
+    holding nothing but transcript-only lessons are left out.
+    """
     import web as _web
+    from web_pages import unanalyzed_filter_html
     _db = _web._db
 
-    groups = _db.get_group_dashboard(profile_key)
+    all_groups = _db.get_group_dashboard(profile_key)
+    unanalyzed_total = sum(g["doc_count"] - g["analyzed_count"] for g in all_groups)
+    if include_unanalyzed:
+        groups = all_groups
+    else:
+        groups = [g for g in all_groups if g["analyzed_count"]]
+    hidden_groups = len(all_groups) - len(groups)
     step_names, step_lookup = _analysis_step_names()
 
     def step_tooltip(sn):
@@ -487,6 +498,15 @@ def _build_analysis_html(profile_key: str) -> str:
         group_id = group["id"]
         name = html_mod.escape(group.get("name", ""))
         doc_count = group.get("doc_count", 0)
+        analyzed_count = group.get("analyzed_count", 0)
+        if include_unanalyzed and analyzed_count < doc_count:
+            count_cell = f'{analyzed_count} <span style="color:#aaa;">/ {doc_count}</span>'
+            count_title = f"{analyzed_count} analyzed of {doc_count}"
+        elif include_unanalyzed:
+            count_cell, count_title = str(doc_count), f"{doc_count} analyzed"
+        else:
+            count_cell = str(analyzed_count)
+            count_title = f"{analyzed_count} analyzed; {doc_count - analyzed_count} transcript-only hidden"
         gate_cells = ""
         for sn in step_names:
             permitted = group["gates"].get(sn, False)
@@ -507,7 +527,7 @@ def _build_analysis_html(profile_key: str) -> str:
         rows.append(
             f'<tr>'
             f'<td style="font-size:0.85em;"><a href="/analysis?group={group_id}&profile={html_mod.escape(profile_key)}" style="color:#007bff;text-decoration:none;">{name}</a></td>'
-            f'<td style="text-align:center;font-size:0.85em;color:#666;">{doc_count}</td>'
+            f'<td style="text-align:center;font-size:0.85em;color:#666;" title="{count_title}">{count_cell}</td>'
             f'{gate_cells}'
             f'</tr>'
         )
@@ -517,12 +537,18 @@ def _build_analysis_html(profile_key: str) -> str:
     )
 
     runnable_count = _db.count_runnable_steps(profile_key=profile_key, enabled_only=False)
+    groups_note = ""
+    if hidden_groups:
+        groups_note = (f'<div style="font-size:0.85em;color:#666;margin:-4px 0 12px;">'
+                       f'{hidden_groups} groups hold only transcript-only lessons and are hidden.</div>')
+
 
     return f"""
     {_build_profiles_panel(profile_key)}
 
     <h2 style="font-size:1.1em;margin:0 0 8px;">Gates for {html_mod.escape(profile_key)}</h2>
-    <div style="display:flex;gap:16px;margin-bottom:16px;align-items:center;">
+    {unanalyzed_filter_html(unanalyzed_total, include_unanalyzed)}
+    {groups_note}    <div style="display:flex;gap:16px;margin-bottom:16px;align-items:center;">
         <div style="background:#f0f7ff;padding:8px 16px;border-radius:8px;">
             <strong>{len(groups)}</strong> groups
         </div>
@@ -594,9 +620,13 @@ def _build_atlas_projection_panel(_db) -> str:
     """
 
 
-def _build_analysis_group_html(group_id: int, profile_key: str) -> str:
-    """Build the document drill-down view for a specific group under one profile."""
+def _build_analysis_group_html(group_id: int, profile_key: str, include_unanalyzed: bool = False) -> str:
+    """Build the document drill-down view for a specific group under one profile.
+
+    Transcript-only lessons are left out unless ``include_unanalyzed``.
+    """
     import web as _web
+    from web_pages import TRANSCRIPT_ONLY_BADGE, unanalyzed_filter_html
     _db = _web._db
 
     local_controls = _web.PIPELINE_LOCAL_CONTROLS
@@ -606,6 +636,9 @@ def _build_analysis_group_html(group_id: int, profile_key: str) -> str:
         return "<p>Group not found.</p>"
 
     docs = _db.get_document_dashboard(group_id, profile_key)
+    unanalyzed_count = sum(1 for d in docs if not d.get("analyzed"))
+    if not include_unanalyzed:
+        docs = [d for d in docs if d.get("analyzed")]
     step_names, step_lookup = _analysis_step_names()
 
     def step_tooltip(sn):
@@ -677,7 +710,8 @@ def _build_analysis_group_html(group_id: int, profile_key: str) -> str:
         rows.append(
             f'<tr>'
             f'<td style="font-size:0.85em;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{html_mod.escape(doc.get("title", ""))}">'
-            f'<a href="/lesson/{doc_id}?profile={html_mod.escape(profile_key)}" style="color:#007bff;text-decoration:none;">{html_mod.escape(title)}</a></td>'
+            f'<a href="/lesson/{doc_id}?profile={html_mod.escape(profile_key)}" style="color:#007bff;text-decoration:none;">{html_mod.escape(title)}</a>'
+            f'{"" if doc.get("analyzed") else TRANSCRIPT_ONLY_BADGE}</td>'
             f'{gate_cells}'
             f'</tr>'
         )
@@ -693,6 +727,7 @@ def _build_analysis_group_html(group_id: int, profile_key: str) -> str:
         <a href="/analysis?profile={html_mod.escape(profile_key)}" style="color:#007bff;text-decoration:none;">&larr; Back to groups</a>
         <h2 style="margin:8px 0;">{group_name}</h2>
         <span style="color:#666;font-size:0.9em;">{len(docs)} documents · model {html_mod.escape(profile_key)}</span>
+        {unanalyzed_filter_html(unanalyzed_count, include_unanalyzed, corpus_wide=False)}
     </div>
 
     <div style="overflow-x:auto;">
@@ -719,7 +754,8 @@ def _build_analysis_group_html(group_id: int, profile_key: str) -> str:
     """
 
 
-def _build_analysis_page(group_id: int | None = None, profile_key: str | None = None) -> str:
+def _build_analysis_page(group_id: int | None = None, profile_key: str | None = None,
+                         include_unanalyzed: bool = False) -> str:
     """Build the full analysis dashboard HTML page."""
     import web as _web
     _db = _web._db
@@ -731,10 +767,10 @@ def _build_analysis_page(group_id: int | None = None, profile_key: str | None = 
 </head><body><h1>Analysis Pipeline</h1><p>Database not configured.</p></body></html>"""
 
     if group_id is not None:
-        content = _build_analysis_group_html(group_id, profile_key)
+        content = _build_analysis_group_html(group_id, profile_key, include_unanalyzed)
         status_panels = ""
     else:
-        content = _build_analysis_html(profile_key)
+        content = _build_analysis_html(profile_key, include_unanalyzed)
         status_panels = _build_pipeline_status_html(profile_key)
 
     return f"""
@@ -889,7 +925,9 @@ decompose ──┬──► somatic ──┬──► condense ──► embed
     function refreshDashboard() {{
         const url = new URL(window.location);
         const groupId = url.searchParams.get('group');
-        const q = '?profile=' + encodeURIComponent(ANALYSIS_PROFILE);
+        let q = '?profile=' + encodeURIComponent(ANALYSIS_PROFILE);
+        const unanalyzed = url.searchParams.get('unanalyzed');
+        if (unanalyzed) q += '&unanalyzed=' + encodeURIComponent(unanalyzed);
         const endpoint = groupId
             ? '/api/analysis/group/' + groupId + q
             : '/api/analysis/dashboard' + q;

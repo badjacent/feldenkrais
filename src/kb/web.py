@@ -375,6 +375,7 @@ PROMPTS_DIR = _analysis_mod.PROMPTS_DIR
 # ── Page builders (extracted to web_pages.py) ─────────────────────────────
 from web_pages import (  # noqa: E402
     _AUTH_BAR_CSS, _auth_bar_html,
+    UNANALYZED_COOKIE,
     build_search_home_html,
     build_lesson_page_html,
     build_conversations_page_html,
@@ -485,7 +486,24 @@ def align_pass0_with_whisper(pass_0_result: dict, whisper_segments: list) -> Non
 
 
 
-def get_available_lessons() -> tuple[dict[str, list[tuple[str, str]]], dict[str, str]]:
+def _show_unanalyzed(request: Request) -> bool:
+    """Whether lesson lists include transcript-only lessons. Hidden by default.
+
+    ``?unanalyzed=show|hide`` overrides the remembered cookie for one view.
+    """
+    requested = request.query_params.get("unanalyzed")
+    if requested in ("show", "hide"):
+        return requested == "show"
+    return request.cookies.get(UNANALYZED_COOKIE) == "1"
+
+
+def get_available_lessons() -> tuple[dict[str, list[tuple]], dict[str, str]]:
+    """Every lesson with content, as (categories, display_names); see get_lesson_listing."""
+    categories, display_names, _ = get_lesson_listing(include_unanalyzed=True)
+    return categories, display_names
+
+
+def get_lesson_listing(include_unanalyzed: bool = True) -> tuple[dict[str, list[tuple]], dict[str, str], int]:
     """Get categories and their display names.
 
     DB documents with category_name set are grouped under that name (override).
@@ -493,13 +511,18 @@ def get_available_lessons() -> tuple[dict[str, list[tuple[str, str]]], dict[str,
 
     Uses _db.allowed_source_ids (set by _set_source_access) to filter sources.
 
-    Returns (categories_dict, display_names_dict).
-    - categories: category_key -> [(lesson_key, display_name)]
+    Transcript-only lessons (never analyzed) are dropped unless
+    ``include_unanalyzed``.
+
+    Returns (categories_dict, display_names_dict, unanalyzed_count).
+    - categories: category_key -> [(lesson_key, display_name, source_url, analyzed)]
     - display_names: category_key -> display_name
+    - unanalyzed_count: transcript-only lessons hidden, or included when shown
     All DB keys start with 'db:'.
     """
     categories = {}
     display_names = {}
+    unanalyzed_count = 0
 
     # 1. Database sources (if available)
     if _db:
@@ -523,13 +546,17 @@ def get_available_lessons() -> tuple[dict[str, list[tuple[str, str]]], dict[str,
                     instructor = doc.get("instructor")
                     display = f"{title} ({instructor})" if instructor else title
                     source_url = doc.get("source_url") or ""
+                    analyzed = bool(doc.get("analyzed"))
+                    if not analyzed:
+                        unanalyzed_count += 1
+                        if not include_unanalyzed:
+                            continue
                     doc_cat = doc.get("category_name")
+                    entry = (str(doc["id"]), display, source_url, analyzed)
                     if doc_cat:
-                        override_buckets.setdefault(doc_cat, []).append(
-                            (str(doc["id"]), display, source_url)
-                        )
+                        override_buckets.setdefault(doc_cat, []).append(entry)
                     else:
-                        source_bucket.append((str(doc["id"]), display, source_url))
+                        source_bucket.append(entry)
 
                 # Add override buckets as separate categories
                 for cat_name, lessons in override_buckets.items():
@@ -558,7 +585,7 @@ def get_available_lessons() -> tuple[dict[str, list[tuple[str, str]]], dict[str,
     sorted_keys = sorted(categories.keys(), key=lambda k: display_names.get(k, k).lower())
     categories = {k: categories[k] for k in sorted_keys}
 
-    return categories, display_names
+    return categories, display_names, unanalyzed_count
 
 
 def load_lesson(category: str, lesson_key: str) -> str:

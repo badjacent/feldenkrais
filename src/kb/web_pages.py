@@ -8,6 +8,49 @@ import html as html_mod
 import json
 from typing import Callable
 
+# Cookie remembering whether transcript-only lessons are listed; hidden unless "1".
+UNANALYZED_COOKIE = "show_unanalyzed"
+
+
+def unanalyzed_filter_html(count: int, showing: bool, corpus_wide: bool = True) -> str:
+    """Notice + toggle for the transcript-only filter, shared by every lesson list.
+
+    ``count`` is how many transcript-only lessons the list hides (or, when
+    ``showing``, includes). Renders nothing when there are none. Lists drawn
+    from the whole corpus note that most of these are Atlas ingests.
+    """
+    if not count:
+        return ""
+    plural = "lesson" if count == 1 else "lessons"
+    what = "transcribed but never analyzed by any model"
+    if corpus_wide:
+        what += " (mostly Feldenkrais Atlas ingests)"
+    if showing:
+        text = f"Showing {count:,} transcript-only {plural}, marked <em>transcript only</em>: {what}."
+        action, label = "false", "Hide them"
+    else:
+        text = f"Hiding {count:,} transcript-only {plural}: {what}."
+        action, label = "true", "Show them"
+    return f"""<div class="unanalyzed-filter" style="display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;
+    background:#fff8e1;border:1px solid #f0d58c;border-radius:6px;padding:8px 12px;margin:12px 0;font-size:0.88em;color:#5c4a00;">
+    <span>{text}</span>
+    <button type="button" onclick="setShowUnanalyzed({action})" style="padding:3px 12px;font-size:0.95em;
+        border:1px solid #c9a227;border-radius:4px;background:#fff;color:#5c4a00;cursor:pointer;">{label}</button>
+</div>
+<script>
+function setShowUnanalyzed(on) {{
+    document.cookie = '{UNANALYZED_COOKIE}=' + (on ? '1' : '0') + '; path=/; max-age=31536000; samesite=lax';
+    const u = new URL(location.href);
+    u.searchParams.delete('unanalyzed');
+    location.href = u.toString();
+}}
+</script>"""
+
+
+TRANSCRIPT_ONLY_BADGE = ('<span title="Transcribed but never analyzed by any model" '
+                         'style="margin-left:8px;padding:0 6px;border-radius:8px;background:#eee;'
+                         'color:#777;font-size:0.75em;white-space:nowrap;">transcript only</span>')
+
 
 
 def _auth_bar_html(user: dict | None, superuser_active: bool = False) -> str:
@@ -33,9 +76,14 @@ _AUTH_BAR_CSS = """
 """
 
 
-def build_search_home_html(extra_html: str = "", user: dict | None = None, superuser_active: bool = False, get_lessons_fn: Callable | None = None) -> str:
-    """Build the search subdomain home page with search box and browse-by-source."""
-    categories, display_names = get_lessons_fn()
+def build_search_home_html(extra_html: str = "", user: dict | None = None, superuser_active: bool = False, get_lessons_fn: Callable | None = None,
+                           include_unanalyzed: bool = False) -> str:
+    """Build the search subdomain home page with search box and browse-by-source.
+
+    Transcript-only lessons are left out of the browse list unless
+    ``include_unanalyzed``; a notice says how many and toggles them.
+    """
+    categories, display_names, unanalyzed_count = get_lessons_fn(include_unanalyzed=include_unanalyzed)
 
     # Count total lessons across all categories
     total_lessons = sum(len(lessons) for lessons in categories.values())
@@ -47,9 +95,10 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None, super
         lesson_list_html += f'<h3 class="source-header">{source_name} ({len(lessons)})</h3>\n'
         lesson_list_html += '<ul class="lesson-list">\n'
         for lesson in lessons:
-            doc_id, display_name = lesson[0], lesson[1]
+            doc_id, display_name, analyzed = lesson[0], lesson[1], lesson[3]
             esc_name = html_mod.escape(display_name)
-            lesson_list_html += f'<li><a href="/lesson/{html_mod.escape(doc_id)}">{esc_name}</a></li>\n'
+            badge = "" if analyzed else TRANSCRIPT_ONLY_BADGE
+            lesson_list_html += f'<li><a href="/lesson/{html_mod.escape(doc_id)}">{esc_name}</a>{badge}</li>\n'
         lesson_list_html += '</ul>\n'
 
     return f"""<!DOCTYPE html>
@@ -136,9 +185,10 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None, super
 <body>
     {_auth_bar_html(user, superuser_active=superuser_active)}
     <h1>Feldenkrais Lesson Search</h1>
-    <p class="subtitle">Search across {total_lessons} lessons by meaning, not keywords.<br>
-    Each lesson is automatically analyzed into movement steps, body positions,
-    and somatic cues &mdash; search runs against that structured understanding.</p>
+    <p class="subtitle">Search lessons by meaning, not keywords.<br>
+    Analyzed lessons are broken into movement steps, body positions,
+    and somatic cues &mdash; search runs against that structured understanding,
+    so it only finds analyzed lessons.</p>
 
     <div class="search-box">
         <input type="text" id="search-query" placeholder="e.g. rolling pelvis, eyes and head..."
@@ -163,6 +213,7 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None, super
 
     <div id="all-lessons">
     <h2>All Lessons ({total_lessons})</h2>
+    {unanalyzed_filter_html(unanalyzed_count, include_unanalyzed)}
     {lesson_list_html}
     </div>
 
