@@ -153,3 +153,46 @@ def test_a_result_records_the_model_that_actually_ran():
     assert run["profile"] == "gemini-3-flash"
     assert (run["provider"], run["model"]) == ("codex", "gpt-6-astra")
     assert run["llm_override"] == "codex-astra"
+
+
+def _gate_db(profiles, runnable):
+    db = MagicMock()
+    db.get_analysis_profiles.return_value = profiles
+    db.count_runnable_steps_by_profile.return_value = runnable
+    return db
+
+
+def test_a_profile_with_nothing_to_run_is_switched_off(tmp_path, monkeypatch):
+    from kb.pipeline.analysis import switch_off_idle_profiles
+
+    wake = tmp_path / "analysis-active"
+    wake.touch()
+    monkeypatch.setenv("ANALYSIS_WAKE_FILE", str(wake))
+    db = _gate_db([_profile("gemini-3-flash", canonical=True), _profile("astra-low"),
+                   _profile("opus-5.5", enabled=False)], {"gemini-3-flash": 3})
+
+    assert switch_off_idle_profiles(db) == ["astra-low"]
+    db.set_profile_enabled.assert_called_once_with("astra-low", False)
+    assert wake.exists()  # gemini still has work, so the worker stays awake
+
+
+def test_when_no_profile_is_left_on_the_worker_goes_to_sleep(tmp_path, monkeypatch):
+    from kb.pipeline.analysis import switch_off_idle_profiles
+
+    wake = tmp_path / "analysis-active"
+    wake.touch()
+    monkeypatch.setenv("ANALYSIS_WAKE_FILE", str(wake))
+    db = _gate_db([_profile("gemini-3-flash", canonical=True), _profile("astra-low")], {})
+
+    assert sorted(switch_off_idle_profiles(db)) == ["astra-low", "gemini-3-flash"]
+    assert not wake.exists()
+
+
+def test_the_worker_never_switches_a_profile_on(tmp_path, monkeypatch):
+    from kb.pipeline.analysis import switch_off_idle_profiles
+
+    monkeypatch.setenv("ANALYSIS_WAKE_FILE", str(tmp_path / "analysis-active"))
+    db = _gate_db([_profile("gemini-3-flash", enabled=False, canonical=True)], {"gemini-3-flash": 5})
+
+    assert switch_off_idle_profiles(db) == []
+    db.set_profile_enabled.assert_not_called()

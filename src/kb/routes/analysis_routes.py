@@ -13,6 +13,7 @@ import threading
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
+import analysis_wake
 import web as _web
 
 
@@ -102,6 +103,10 @@ async def update_analysis_profile(request: Request):
         return JSONResponse({"error": "Missing key or enabled"}, status_code=400)
     if not _web._db.set_profile_enabled(key, enabled):
         return JSONResponse({"error": f"Unknown analysis profile: {key}"}, status_code=404)
+    if enabled:
+        # The manual gate restart: the worker switches idle profiles off and
+        # stops checking the database until a profile is switched on again.
+        analysis_wake.wake()
     return JSONResponse({"status": "ok", "key": key, "enabled": enabled})
 
 
@@ -187,6 +192,7 @@ async def run_single_step(request: Request):
     try:
         profile_key = _profile_key(body.get("profile_key"))
         _web._db.invalidate_step(document_id, step_name, profile_key=profile_key)
+        analysis_wake.wake()
         return JSONResponse({"status": "queued", "document_id": document_id,
                              "step_name": step_name, "profile_key": profile_key})
     except ValueError as e:

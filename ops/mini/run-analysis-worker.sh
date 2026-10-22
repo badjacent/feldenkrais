@@ -15,6 +15,15 @@ if [[ "${ANALYSIS_ENABLED:-0}" != "1" ]]; then
   print -r -- '{"status":"disabled","reason":"ANALYSIS_ENABLED is not 1"}'
   exit 0
 fi
+# The worker switches each model profile off once it has nothing to run, and
+# removes this file when none is left on. Without it, exit before touching the
+# database, so an idle worker lets Neon suspend. Switching a profile on in the
+# analyzer on this machine (or `touch` by hand) creates it again.
+export ANALYSIS_WAKE_FILE=${ANALYSIS_WAKE_FILE:-$HOME/ops/analysis-active}
+if [[ ! -e $ANALYSIS_WAKE_FILE ]]; then
+  print -r -- '{"status":"asleep","reason":"no model profile is switched on; switch one on in /analysis to wake the worker"}'
+  exit 0
+fi
 export PYTHONPATH="$repo_root/src${PYTHONPATH:+:$PYTHONPATH}"
 # Overall concurrency. Each model profile is further held to its own
 # max_concurrency, and only profiles switched on in the analysis page run.

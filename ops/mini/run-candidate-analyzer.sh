@@ -24,7 +24,9 @@ source .env
 set +a
 
 # The web app never runs analysis. The dedicated worker (com.feldenkrais.analysis)
-# does, from its own promoted checkout.
+# does, from its own promoted checkout. Switching a profile on here creates the
+# worker's wake file (see run-analysis-worker.sh), the manual gate restart.
+export ANALYSIS_WAKE_FILE=${ANALYSIS_WAKE_FILE:-$HOME/ops/analysis-active}
 
 cd src/kb
 # Full, superuser access without login, as on localhost. The server binds only

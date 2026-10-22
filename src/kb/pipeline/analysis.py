@@ -541,6 +541,32 @@ def _claim_key(row: dict) -> tuple[str, str, str]:
     return (str(row["document_id"]), row["profile_key"], row["step_name"])
 
 
+def switch_off_idle_profiles(db: Database) -> list[str]:
+    """Switch off every profile that has nothing left to run.
+
+    A profile stays off until someone switches it on again (the /analysis page,
+    or ``set_profile_enabled``): the worker never turns one on. When no profile
+    is left on, the wake file goes too, so later scheduled runs exit without
+    touching the database (see analysis_wake).
+    """
+    import analysis_wake
+
+    runnable = db.count_runnable_steps_by_profile()
+    switched_off, still_on = [], []
+    for profile in db.get_analysis_profiles():
+        if not profile["enabled"]:
+            continue
+        if runnable.get(profile["key"], 0):
+            still_on.append(profile["key"])
+        else:
+            db.set_profile_enabled(profile["key"], False)
+            switched_off.append(profile["key"])
+            logger.info(f"Profile {profile['key']} has nothing left to run; switched it off")
+    if not still_on:
+        analysis_wake.sleep()
+    return switched_off
+
+
 def run_bounded_worker(
     db: Database,
     *,
@@ -640,11 +666,14 @@ def run_bounded_worker(
         # from any analysis step, so the lite enrichment worker publishes it
         # (ingest/lite_enrich.py).
 
+        switched_off = switch_off_idle_profiles(db)
+
     return {
         "status": "completed",
         "completed": completed,
         "failed": failed,
         "skipped": skipped,
+        "switched_off": switched_off,
         "elapsed_seconds": round(time.monotonic() - started, 1),
         "remaining_runnable": db.count_runnable_steps(),
     }
