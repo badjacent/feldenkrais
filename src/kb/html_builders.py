@@ -20,6 +20,8 @@ def _analysis_step_names():
         "decompose", "extract_steps",
         # Level 1: depend on level 0
         "language", "map_body_parts", "somatic", "spatial_v3",
+        # Level 2a: depends on decompose + spatial_v3
+        "print_prep",
         # Level 2: depend on level 1
         "concept_tags", "condense", "language_patterns", "spatial",
         # Level 3: depend on level 2
@@ -41,6 +43,7 @@ _STEP_DISPLAY_NAMES = {
     "embed": "embed", "embed_positions": "embed-pos",
     "index_concepts": "idx-conc", "index_spatial": "idx-spat",
     "motifs": "motifs", "raw_motifs": "raw-mot", "axes": "axes",
+    "print_prep": "print-prep",
 }
 
 
@@ -782,7 +785,8 @@ decompose ──┬──► somatic ──┬──► condense ──► embed
             │    (needs    └──► embed_positions
             │     decompose + somatic)
             │
-            └──► spatial_v3</pre>
+            └──► spatial_v3 ──► print_prep
+                 (print_prep needs decompose + spatial_v3)</pre>
     </details>
 
     <div id="analysis-content">

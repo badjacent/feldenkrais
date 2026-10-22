@@ -47,6 +47,7 @@ from analysis import (
     run_pass_0b_spatial,
     run_pass_0b_spatial_v3,
     run_pass_0b_condensed,
+    run_print_prep,
     run_motifs,
     run_raw_motifs,
     run_axes,
@@ -134,6 +135,14 @@ def _run_pass_0b_spatial_v3(db: Database, document_id: str, transcript: str, pro
                 WHERE document_id = %s AND profile_key = %s AND step_name = 'embed_positions'
             """, (document_id, profile["key"]))
     return result is not None
+
+
+def _run_print_prep(db: Database, document_id: str, transcript: str, profile: dict) -> bool:
+    result = run_print_prep(transcript, profile_provider_key(profile))
+    rejected = len(result.get("validation", {}).get("rejected_quotes", []))
+    if rejected:
+        logger.info(f"print_prep {document_id[:8]}: dropped {rejected} quotes that were not exact excerpts")
+    return True
 
 
 def _run_pass_0b_condensed(db: Database, document_id: str, transcript: str, profile: dict) -> bool:
@@ -348,6 +357,7 @@ STEP_EXECUTORS = {
     "concept_tags": _run_pass_0b_concepts,
     "spatial": _run_pass_0b_spatial,
     "spatial_v3": _run_pass_0b_spatial_v3,
+    "print_prep": _run_print_prep,
     "embed_positions": _run_embed_positions,
     "condense": _run_pass_0b_condensed,
     "embed": _run_embeddings,

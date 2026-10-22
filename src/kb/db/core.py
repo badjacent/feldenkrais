@@ -417,7 +417,9 @@ INSERT INTO analysis_step (name, current_version, cache_suffix, depends_on, desc
     ('index_concepts', 1, NULL, '{concept_tags}', 'Concept index build'),
     ('index_spatial', 1, NULL, '{spatial}', 'Spatial index build'),
     ('extract_steps', 2, ':extract_steps_v2', '{}', 'Step instruction extraction'),
-    ('map_body_parts', 3, ':map_body_parts_v3', '{extract_steps}', 'Body part mapping')
+    ('map_body_parts', 3, ':map_body_parts_v3', '{extract_steps}', 'Body part mapping'),
+    ('spatial_v3', 1, ':spatial_v3', '{decompose}', 'Step-level position sequence'),
+    ('print_prep', 1, ':print_prep_v1', '{decompose,spatial_v3}', 'Print model: positions, brief summaries, verbatim quotes')
 ON CONFLICT DO NOTHING;
 """
 

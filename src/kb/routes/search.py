@@ -343,6 +343,34 @@ def _v2_group_to_position(v2g: dict, pa_group: dict | None = None) -> str:
     return ", ".join(parts)
 
 
+@router.get("/api/lesson/{document_id}/print-model")
+async def api_lesson_print_model(request: Request, document_id: str, profile: str | None = None):
+    """Get one profile's print model (print_prep) for a lesson, read-only.
+
+    Never starts an analysis: a lesson without a prepared model reports what is
+    missing.
+    """
+    if not _web._db:
+        return JSONResponse({"error": "No database connection"}, status_code=500)
+    _web._set_source_access(request)
+    if not _web._db.is_document_accessible(document_id):
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    try:
+        analysis_profile = _web._db.resolve_analysis_profile(profile)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    text = _web._db.get_document_transcription(document_id)
+    if not text:
+        return JSONResponse({"error": "No transcript"}, status_code=404)
+    _, model = load_profile_result(text.strip(), ":print_prep_v1", analysis_profile)
+    if not model:
+        return JSONResponse({"available": False, "profile": analysis_profile["key"],
+                             "needs": ["decompose", "spatial_v3", "print_prep"]})
+    state = _web._db.get_document_state(document_id, "print_prep", analysis_profile["key"])
+    return JSONResponse({"available": True, "profile": analysis_profile["key"],
+                         "stale": bool(state and state.get("stale")), "model": model})
+
+
 @router.get("/api/lesson/{document_id}/positions")
 async def api_lesson_positions(document_id: str, profile: str | None = None):
     """Get one profile's step-level position sequence (spatial v3) for a lesson.

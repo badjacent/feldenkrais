@@ -414,7 +414,7 @@ async def api_lesson_pipeline_status(document_id: str, profile: str | None = Non
     # Topological order (DAG depth), alphabetical tiebreaker
     _DAG_ORDER = [
         "decompose", "extract_steps",
-        "language", "map_body_parts", "somatic", "spatial_v3",
+        "language", "map_body_parts", "somatic", "spatial_v3", "print_prep",
         "concept_tags", "condense", "language_patterns", "spatial",
         "embed", "embed_positions", "index_concepts", "index_spatial",
     ]
