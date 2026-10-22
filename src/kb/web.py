@@ -375,6 +375,7 @@ PROMPTS_DIR = _analysis_mod.PROMPTS_DIR
 # ── Page builders (extracted to web_pages.py) ─────────────────────────────
 from web_pages import (  # noqa: E402
     _AUTH_BAR_CSS, _auth_bar_html,
+    UNANALYZED_COOKIE,
     build_search_home_html,
     build_lesson_page_html,
     build_conversations_page_html,
@@ -485,7 +486,37 @@ def align_pass0_with_whisper(pass_0_result: dict, whisper_segments: list) -> Non
 
 
 
-def get_available_lessons() -> tuple[dict[str, list[tuple[str, str]]], dict[str, str]]:
+def _show_unanalyzed(request: Request) -> bool:
+    """Whether lesson lists include transcript-only lessons. Hidden by default.
+
+    ``?unanalyzed=show|hide`` overrides the remembered cookie for one view.
+    """
+    requested = request.query_params.get("unanalyzed")
+    if requested in ("show", "hide"):
+        return requested == "show"
+    return request.cookies.get(UNANALYZED_COOKIE) == "1"
+
+
+def _natural_key(text: str | None) -> list:
+    """Sort key that orders "part 2" before "part 10"."""
+    import re
+    return [(0, int(part), "") if part.isdigit() else (1, 0, part)
+            for part in re.split(r"(\d+)", (text or "").lower()) if part]
+
+
+def _lesson_order_key(doc: dict) -> tuple:
+    """Series order within a source: dated lessons first by date, then index, then title."""
+    date = doc.get("lesson_date")
+    return (date is None, date or "", _natural_key(doc.get("lesson_index")), _natural_key(doc.get("title")))
+
+
+def get_available_lessons() -> tuple[dict[str, list[tuple]], dict[str, str]]:
+    """Every lesson with content, as (categories, display_names); see get_lesson_listing."""
+    categories, display_names, _ = get_lesson_listing(include_unanalyzed=True)
+    return categories, display_names
+
+
+def get_lesson_listing(include_unanalyzed: bool = True) -> tuple[dict[str, list[tuple]], dict[str, str], int]:
     """Get categories and their display names.
 
     DB documents with category_name set are grouped under that name (override).
@@ -493,18 +524,26 @@ def get_available_lessons() -> tuple[dict[str, list[tuple[str, str]]], dict[str,
 
     Uses _db.allowed_source_ids (set by _set_source_access) to filter sources.
 
-    Returns (categories_dict, display_names_dict).
-    - categories: category_key -> [(lesson_key, display_name)]
+    Transcript-only lessons (never analyzed) are dropped unless
+    ``include_unanalyzed``.
+
+    Returns (categories_dict, display_names_dict, unanalyzed_count).
+    - categories: category_key -> [(lesson_key, display_name, source_url, analyzed)]
     - display_names: category_key -> display_name
+    - unanalyzed_count: transcript-only lessons hidden, or included when shown
     All DB keys start with 'db:'.
     """
     categories = {}
     display_names = {}
+    unanalyzed_count = 0
 
     # 1. Database sources (if available)
     if _db:
         try:
-            for src in _db.get_lesson_categories():
+            sources = _db.get_lesson_categories()
+            lessons_by_source = _db.get_lessons_by_source(
+                [src["source_id"] for src in sources if src["source_id"] != 3])
+            for src in sources:
                 source_display = (
                     src.get("source_category_name")
                     or src["source_name"].replace("_", " ").title()
@@ -517,19 +556,23 @@ def get_available_lessons() -> tuple[dict[str, list[tuple[str, str]]], dict[str,
                 # /fmtt page — drop it from the home-page browse.
                 if src["source_id"] == 3:
                     continue
-                for doc in _db.get_source_lessons(src["source_id"]):
+                for doc in sorted(lessons_by_source.get(src["source_id"], []), key=_lesson_order_key):
                     lesson_type = doc.get("lesson_type")
                     title = doc["title"]
                     instructor = doc.get("instructor")
                     display = f"{title} ({instructor})" if instructor else title
                     source_url = doc.get("source_url") or ""
+                    analyzed = bool(doc.get("analyzed"))
+                    if not analyzed:
+                        unanalyzed_count += 1
+                        if not include_unanalyzed:
+                            continue
                     doc_cat = doc.get("category_name")
+                    entry = (str(doc["id"]), display, source_url, analyzed)
                     if doc_cat:
-                        override_buckets.setdefault(doc_cat, []).append(
-                            (str(doc["id"]), display, source_url)
-                        )
+                        override_buckets.setdefault(doc_cat, []).append(entry)
                     else:
-                        source_bucket.append((str(doc["id"]), display, source_url))
+                        source_bucket.append(entry)
 
                 # Add override buckets as separate categories
                 for cat_name, lessons in override_buckets.items():
@@ -550,15 +593,11 @@ def get_available_lessons() -> tuple[dict[str, list[tuple[str, str]]], dict[str,
     # Skip empty sources (e.g. OTHER with no documents)
     categories = {k: v for k, v in categories.items() if v}
 
-    # Sort lessons within each category alphabetically by display name
-    for key in categories:
-        categories[key].sort(key=lambda x: x[1].lower())
-
     # Sort categories alphabetically by display name
     sorted_keys = sorted(categories.keys(), key=lambda k: display_names.get(k, k).lower())
     categories = {k: categories[k] for k in sorted_keys}
 
-    return categories, display_names
+    return categories, display_names, unanalyzed_count
 
 
 def load_lesson(category: str, lesson_key: str) -> str:

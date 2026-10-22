@@ -4,6 +4,17 @@ import json
 from typing import Optional
 
 
+def analyzed_sql(doc_col: str = "d.id") -> str:
+    """SQL predicate: the document has a completed analysis step under any profile.
+
+    Lessons failing it are transcript-only (transcribed, never analyzed). Keyed on
+    per-lesson state rather than source because sources are mixed: some Atlas
+    lessons are analyzed, and some non-Atlas sources are only partly analyzed.
+    """
+    return (f"EXISTS (SELECT 1 FROM document_analysis_state das"
+            f" WHERE das.document_id = {doc_col} AND das.completed_at IS NOT NULL)")
+
+
 class LessonMetadataMixin:
     """Lesson field updates, category browsing, and content retrieval."""
 
@@ -55,12 +66,13 @@ class LessonMetadataMixin:
         Includes documents that have a transcription (type_id=1 analysis)
         OR text documents (document type_id=1) which have content directly.
 
-        Returns list of dicts with: id, title, category_name, created_at.
+        Returns list of dicts with: id, title, category_name, created_at, analyzed.
         Uses tiered override: document.category_name > source.category_name > source.name.
         """
         with self.get_cursor(commit=False) as cursor:
-            cursor.execute("""
+            cursor.execute(f"""
                 SELECT d.id, d.title, d.category_name,
+                       {analyzed_sql()} as analyzed,
                        d.lesson_date, d.lesson_index, d.created_at,
                        d.metadata->'scraper'->>'instructor' as instructor,
                        d.metadata->>'lesson_type' as lesson_type,
@@ -73,6 +85,29 @@ class LessonMetadataMixin:
                 ORDER BY d.lesson_date NULLS LAST, d.lesson_index NULLS LAST, d.title
             """, (source_id,))
             return [dict(row) for row in cursor.fetchall()]
+
+    def get_lessons_by_source(self, source_ids: list[int]) -> dict[int, list[dict]]:
+        """get_source_lessons for many sources in one query, keyed by source_id."""
+        by_source: dict[int, list[dict]] = {sid: [] for sid in source_ids}
+        if not source_ids:
+            return by_source
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute(f"""
+                SELECT d.source_id, d.id, d.title, d.category_name,
+                       {analyzed_sql()} as analyzed,
+                       d.lesson_date, d.lesson_index, d.created_at,
+                       d.metadata->'scraper'->>'instructor' as instructor,
+                       d.metadata->>'lesson_type' as lesson_type,
+                       d.source_url
+                FROM document d
+                WHERE d.source_id = ANY(%s)
+                  AND (d.type_id = 1
+                       OR EXISTS (SELECT 1 FROM analysis a
+                                  WHERE a.document_id = d.id AND a.type_id = 1))
+            """, (list(source_ids),))
+            for row in cursor.fetchall():
+                by_source[row["source_id"]].append(dict(row))
+        return by_source
 
     def get_fmtt_lessons(self) -> list[dict]:
         """All FMTT (source_id=3) lessons, with the metadata the /fmtt page needs.

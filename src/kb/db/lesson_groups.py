@@ -2,6 +2,8 @@
 
 from typing import Optional
 
+from .lesson_metadata import analyzed_sql
+
 DEFAULT_ANALYSIS_GATE_SOURCE = "FELDENKRAIS_FIRST"
 
 
@@ -9,10 +11,12 @@ class LessonGroupsMixin:
     """Lesson groups, group membership, and analysis gate controls."""
 
     def get_lesson_groups(self) -> list[dict]:
-        """Return all lesson groups with member counts."""
+        """Return all lesson groups with member counts (all, and analyzed only)."""
         with self.get_cursor(commit=False) as cursor:
-            cursor.execute("""
-                SELECT lg.*, COUNT(lgm.document_id) as doc_count
+            cursor.execute(f"""
+                SELECT lg.*, COUNT(lgm.document_id) as doc_count,
+                       COUNT(lgm.document_id) FILTER (
+                           WHERE {analyzed_sql("lgm.document_id")}) as analyzed_count
                 FROM lesson_group lg
                 LEFT JOIN lesson_group_member lgm ON lgm.group_id = lg.id
                 GROUP BY lg.id
@@ -50,11 +54,11 @@ class LessonGroupsMixin:
                 """, (group_id, doc_id))
 
     def get_group_members(self, group_id: int) -> list[dict]:
-        """Return documents in a lesson group."""
+        """Return documents in a lesson group, flagged analyzed or transcript-only."""
         with self.get_cursor(commit=False) as cursor:
-            cursor.execute("""
+            cursor.execute(f"""
                 SELECT d.id as document_id, d.title, d.created_at,
-                       ds.name as source_name
+                       ds.name as source_name, {analyzed_sql()} as analyzed
                 FROM lesson_group_member lgm
                 JOIN document d ON d.id = lgm.document_id
                 JOIN document_source ds ON ds.id = d.source_id
