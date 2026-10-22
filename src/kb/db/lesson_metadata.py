@@ -86,6 +86,29 @@ class LessonMetadataMixin:
             """, (source_id,))
             return [dict(row) for row in cursor.fetchall()]
 
+    def get_lessons_by_source(self, source_ids: list[int]) -> dict[int, list[dict]]:
+        """get_source_lessons for many sources in one query, keyed by source_id."""
+        by_source: dict[int, list[dict]] = {sid: [] for sid in source_ids}
+        if not source_ids:
+            return by_source
+        with self.get_cursor(commit=False) as cursor:
+            cursor.execute(f"""
+                SELECT d.source_id, d.id, d.title, d.category_name,
+                       {analyzed_sql()} as analyzed,
+                       d.lesson_date, d.lesson_index, d.created_at,
+                       d.metadata->'scraper'->>'instructor' as instructor,
+                       d.metadata->>'lesson_type' as lesson_type,
+                       d.source_url
+                FROM document d
+                WHERE d.source_id = ANY(%s)
+                  AND (d.type_id = 1
+                       OR EXISTS (SELECT 1 FROM analysis a
+                                  WHERE a.document_id = d.id AND a.type_id = 1))
+            """, (list(source_ids),))
+            for row in cursor.fetchall():
+                by_source[row["source_id"]].append(dict(row))
+        return by_source
+
     def get_fmtt_lessons(self) -> list[dict]:
         """All FMTT (source_id=3) lessons, with the metadata the /fmtt page needs.
 

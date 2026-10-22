@@ -92,14 +92,17 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None, super
     lesson_list_html = ""
     for cat_key, lessons in categories.items():
         source_name = html_mod.escape(display_names.get(cat_key, cat_key))
-        lesson_list_html += f'<h3 class="source-header">{source_name} ({len(lessons)})</h3>\n'
+        lesson_list_html += f'<section class="source-block" data-source="{source_name.lower()}">\n'
+        lesson_list_html += f'<h3 class="source-header">{source_name} (<span class="source-count">{len(lessons)}</span>)</h3>\n'
         lesson_list_html += '<ul class="lesson-list">\n'
         for lesson in lessons:
             doc_id, display_name, analyzed = lesson[0], lesson[1], lesson[3]
             esc_name = html_mod.escape(display_name)
             badge = "" if analyzed else TRANSCRIPT_ONLY_BADGE
             lesson_list_html += f'<li><a href="/lesson/{html_mod.escape(doc_id)}">{esc_name}</a>{badge}</li>\n'
-        lesson_list_html += '</ul>\n'
+        lesson_list_html += '</ul>\n</section>\n'
+    # Search results name their source from the category key the API returns.
+    source_names_js = json.dumps(display_names).replace("</", "<\\/")
 
     return f"""<!DOCTYPE html>
 <html>
@@ -169,31 +172,37 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None, super
         .lesson-list li {{ padding: 4px 0 4px 16px; }}
         .lesson-list li a {{ color: #007bff; text-decoration: none; }}
         .lesson-list li a:hover {{ text-decoration: underline; }}
-        /* Scored lesson list (after search) */
-        .scored-lesson-list {{ list-style: none; padding: 0; margin: 4px 0 0 0; }}
-        .scored-lesson-list li {{
-            padding: 4px 16px; display: flex; justify-content: space-between; align-items: baseline;
-        }}
-        .scored-lesson-list li a {{ color: #007bff; text-decoration: none; }}
-        .scored-lesson-list li a:hover {{ text-decoration: underline; }}
-        .scored-lesson-list .score {{ color: #28a745; font-size: 0.82em; white-space: nowrap; margin-left: 12px; }}
+        .search-result .source {{ color: #888; font-size: 0.8em; }}
+        .search-note {{ font-size: 0.8em; color: #888; margin: 4px 0 8px; }}
+        .search-more {{ margin: 8px 12px; padding: 4px 12px; font-size: 0.85em; border: 1px solid #ccc;
+            border-radius: 4px; background: #fff; cursor: pointer; }}
         .clear-search {{ font-size: 0.85em; color: #007bff; cursor: pointer; text-decoration: none; margin-left: 12px; }}
         .clear-search:hover {{ text-decoration: underline; }}
+        .searching {{ color: #666; padding: 8px; font-size: 0.9em; }}
+        .spinner-inline {{
+            display: inline-block; width: 12px; height: 12px; border: 2px solid #ddd; border-top-color: #007bff;
+            border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 6px;
+        }}
+        @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
+        /* Title filter over the browse list */
+        .lesson-filter {{ display: flex; gap: 10px; align-items: center; margin: 0 0 8px; }}
+        .lesson-filter input {{ flex: 1; padding: 7px 12px; font-size: 14px; border: 1px solid #ccc; border-radius: 6px; }}
+        .lesson-filter span {{ font-size: 0.85em; color: #888; white-space: nowrap; }}
 {_AUTH_BAR_CSS}
     </style>
 </head>
 <body>
     {_auth_bar_html(user, superuser_active=superuser_active)}
     <h1>Feldenkrais Lesson Search</h1>
-    <p class="subtitle">Search lessons by meaning, not keywords.<br>
-    Analyzed lessons are broken into movement steps, body positions,
-    and somatic cues &mdash; search runs against that structured understanding,
-    so it only finds analyzed lessons.</p>
+    <p class="subtitle">Search lessons by meaning, not keywords. Search runs against each lesson's
+    analysis (movement steps, body positions, somatic cues), so it only finds analyzed lessons &mdash;
+    for now only those analyzed by the canonical model, and ranking is still rough.
+    To find a lesson by name, use the title filter below.</p>
 
     <div class="search-box">
         <input type="text" id="search-query" placeholder="e.g. rolling pelvis, eyes and head..."
                onkeydown="if(event.key==='Enter'){{event.preventDefault();searchLessons();}}">
-        <select id="search-method" style="padding:8px 10px;font-size:14px;border:1px solid #ccc;border-radius:6px;background:#fff;">
+        <select id="search-method" title="Search method" style="padding:8px 10px;font-size:14px;border:1px solid #ccc;border-radius:6px;background:#fff;">
             <option value="combined">Combined</option>
             <option value="default">Standard</option>
             <option value="concepts">Distinctive</option>
@@ -214,19 +223,32 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None, super
     <div id="all-lessons">
     <h2>All Lessons ({total_lessons})</h2>
     {unanalyzed_filter_html(unanalyzed_count, include_unanalyzed)}
+    <div class="lesson-filter">
+        <input type="search" id="lesson-filter" placeholder="Filter by title, teacher or source..." oninput="filterLessons()">
+        <span id="lesson-filter-count"></span>
+    </div>
     {lesson_list_html}
     </div>
 
     <script>
+        const SOURCE_NAMES = {source_names_js};
+        const PAGE_SIZE = 10;
+        let lastResults = [];
+        let shownCount = 0;
+
         async function searchLessons() {{
             const query = document.getElementById('search-query').value.trim();
             if (!query) return;
             const method = document.getElementById('search-method').value;
             const btn = document.getElementById('search-btn');
             const resultsDiv = document.getElementById('search-results');
+            const u = new URL(location.href);
+            u.searchParams.set('q', query);
+            u.searchParams.set('method', method);
+            history.replaceState(null, '', u.toString());
             btn.disabled = true;
             btn.textContent = 'Searching...';
-            resultsDiv.innerHTML = '';
+            resultsDiv.innerHTML = '<div class="searching"><span class="spinner-inline"></span>Searching&hellip; this can take ten seconds.</div>';
             try {{
                 const fd = new FormData();
                 fd.append('query', query);
@@ -236,90 +258,87 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None, super
                 if (data.error) {{
                     resultsDiv.innerHTML = '<div style="color:#999;padding:8px;">Error: ' + escHtml(data.error) + '</div>';
                 }} else if (data.results && data.results.length > 0) {{
-                    let html = '';
-                    if (data.method) {{
-                        const methodLabels = {{combined:'Combined',default:'Standard',concepts:'Distinctive',tags:'Tag Match'}};
-                        html += '<div style="font-size:0.8em;color:#888;margin-bottom:4px;">Method: <strong>' + (methodLabels[data.method] || data.method) + '</strong></div>';
-                    }}
-                    if (data.specificity) {{
-                        const s = data.specificity;
-                        const bandColors = {{low:'#dc3545',mid:'#fd7e14','mid-high':'#28a745',high:'#007bff'}};
-                        const bandLabels = {{low:'Low',mid:'Mid','mid-high':'Mid-High',high:'High'}};
-                        const bandExplainers = {{
-                            low:'Many lessons match equally well.',
-                            mid:'Several good matches \u2014 top results are somewhat differentiated.',
-                            'mid-high':'Top results stand out \u2014 your query is fairly specific.',
-                            high:'Strong match \u2014 the top result is a clear winner.'
-                        }};
-                        const color = bandColors[s.band] || '#666';
-                        const label = bandLabels[s.band] || s.band;
-                        const explainer = bandExplainers[s.band] || '';
-                        const cascadeMode = data.cascade_mode || '';
-                        let specHtml = 'Specificity: <span style="color:'+color+';font-weight:600;">'+label+'</span> \u2014 '+explainer;
-                        if (cascadeMode === 'confident') specHtml += '<br><span style="color:#555;font-size:0.95em;">Ranked by distinctive movement patterns unique to each lesson.</span>';
-                        else if (cascadeMode === 'blended') specHtml += '<br><span style="color:#555;font-size:0.95em;">Blended ranking: combining semantic meaning with distinctive movement patterns.</span>';
-                        html += '<div style="font-size:0.8em;color:#888;margin-bottom:6px;">'+specHtml+'</div>';
-                    }}
-                    const isTagSearch = data.method === 'tags';
-                    const topResults = data.results.slice(0, 10);
-                    topResults.forEach(r => {{
-                        let scoreDisplay;
-                        if (isTagSearch) scoreDisplay = r.similarity + ' matches';
-                        else scoreDisplay = Math.round(r.similarity * 100) + '%';
-                        let snippet = (r.snippet || '').replace(/</g, '&lt;').replace(/\\n/g, ' ');
-                        snippet = snippet.replace(/^Setting:\s*/i, '');
-                        html += '<div class="search-result">';
-                        html += '<div style="display:flex;justify-content:space-between;align-items:baseline;">';
-                        html += '<a href="/lesson/'+r.document_id+'">' + escHtml(r.title || '') + '</a>';
-                        html += '<span class="similarity">'+scoreDisplay+'</span>';
-                        html += '</div>';
-                        if (snippet) html += '<div class="snippet">'+snippet+'</div>';
-                        html += '</div>';
-                    }});
-                    resultsDiv.innerHTML = html;
-                    // Update All Lessons section with scored list
-                    updateAllLessons(data.results, data.method);
+                    lastResults = data.results;
+                    shownCount = 0;
+                    resultsDiv.innerHTML = '<div class="search-note">Closest matches first.' +
+                        ' <a class="clear-search" onclick="clearSearch()">Clear search</a></div>' +
+                        '<div id="result-list"></div>';
+                    showMoreResults(data.method === 'tags');
                 }} else {{
                     resultsDiv.innerHTML = '<div style="color:#999;padding:8px;">No results found.</div>';
                 }}
             }} catch (error) {{
-                resultsDiv.innerHTML = '<div style="color:red;padding:8px;">Search failed: '+error.message+'</div>';
+                resultsDiv.innerHTML = '<div style="color:red;padding:8px;">Search failed: '+escHtml(error.message)+'</div>';
             }}
             btn.disabled = false;
             btn.textContent = 'Search';
         }}
 
-        // Save original All Lessons HTML for restore
-        var originalAllLessons = document.getElementById('all-lessons').innerHTML;
+        // Snippets are the analysis summary; drop the leading title and "Setting:" label they repeat.
+        function cleanSnippet(r) {{
+            let s = (r.snippet || '').replace(/\\n/g, ' ').trim();
+            const title = (r.title || '').trim();
+            if (title && s.startsWith(title)) s = s.slice(title.length).trim();
+            return s.replace(/^Setting:\\s*/i, '');
+        }}
 
-        function updateAllLessons(results, method) {{
-            const container = document.getElementById('all-lessons');
-            const isTagSearch = method === 'tags';
-            let html = '<h2>All Lessons \u2014 sorted by relevance (' + results.length + ') <a class="clear-search" onclick="clearSearch()">Clear search</a></h2>';
-            html += '<ul class="scored-lesson-list">';
-            results.forEach(r => {{
-                let scoreDisplay;
-                if (isTagSearch) scoreDisplay = r.similarity + ' matches';
-                else scoreDisplay = Math.round(r.similarity * 100) + '%';
-                html += '<li>';
-                html += '<a href="/lesson/' + r.document_id + '">' + escHtml(r.title || '') + '</a>';
-                html += '<span class="score">' + scoreDisplay + '</span>';
-                html += '</li>';
+        function showMoreResults(isTagSearch) {{
+            const list = document.getElementById('result-list');
+            const next = lastResults.slice(shownCount, shownCount + PAGE_SIZE);
+            let html = '';
+            next.forEach(r => {{
+                const source = SOURCE_NAMES[r.category] || '';
+                const snippet = cleanSnippet(r);
+                html += '<div class="search-result">';
+                html += '<a href="/lesson/' + encodeURIComponent(r.document_id) + '">' + escHtml(r.title || '') + '</a>';
+                if (source) html += ' <span class="source">&middot; ' + escHtml(source) + '</span>';
+                if (isTagSearch) html += ' <span class="source">&middot; ' + r.similarity + ' tag matches</span>';
+                if (snippet) html += '<div class="snippet">' + escHtml(snippet) + '</div>';
+                html += '</div>';
             }});
-            html += '</ul>';
-            container.innerHTML = html;
+            const oldMore = document.getElementById('search-more');
+            if (oldMore) oldMore.remove();
+            list.insertAdjacentHTML('beforeend', html);
+            shownCount += next.length;
+            if (shownCount < lastResults.length) {{
+                list.insertAdjacentHTML('afterend', '<button type="button" class="search-more" id="search-more" ' +
+                    'onclick="showMoreResults(' + isTagSearch + ')">Show ' +
+                    Math.min(PAGE_SIZE, lastResults.length - shownCount) + ' more</button>');
+            }}
         }}
 
         function clearSearch() {{
-            document.getElementById('all-lessons').innerHTML = originalAllLessons;
             document.getElementById('search-results').innerHTML = '';
             document.getElementById('search-query').value = '';
+            const u = new URL(location.href);
+            u.searchParams.delete('q');
+            u.searchParams.delete('method');
+            history.replaceState(null, '', u.toString());
         }}
 
         function tryQuery(el) {{
-            const input = document.getElementById('search-query');
-            input.value = el.textContent;
+            document.getElementById('search-query').value = el.textContent;
             searchLessons();
+        }}
+
+        function filterLessons() {{
+            const terms = document.getElementById('lesson-filter').value.toLowerCase().split(/\\s+/).filter(Boolean);
+            let shown = 0, total = 0;
+            document.querySelectorAll('.source-block').forEach(block => {{
+                const source = block.dataset.source;
+                let visible = 0;
+                block.querySelectorAll('li').forEach(li => {{
+                    const hay = li.textContent.toLowerCase() + ' ' + source;
+                    const match = terms.every(t => hay.includes(t));
+                    li.style.display = match ? '' : 'none';
+                    if (match) visible++;
+                    total++;
+                }});
+                block.style.display = visible ? '' : 'none';
+                block.querySelector('.source-count').textContent = visible;
+                shown += visible;
+            }});
+            document.getElementById('lesson-filter-count').textContent = terms.length ? shown + ' of ' + total : '';
         }}
 
         function escHtml(str) {{
@@ -327,6 +346,18 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None, super
             d.textContent = str;
             return d.innerHTML;
         }}
+
+        // Restore a search from the URL (?q=&method=), e.g. after Back from a lesson.
+        (function restoreSearch() {{
+            const params = new URLSearchParams(location.search);
+            const q = params.get('q');
+            if (!q) return;
+            document.getElementById('search-query').value = q;
+            const m = params.get('method');
+            if (m && document.querySelector('#search-method option[value="' + m + '"]'))
+                document.getElementById('search-method').value = m;
+            searchLessons();
+        }})();
     </script>
     {extra_html}
 </body>

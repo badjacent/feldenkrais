@@ -497,6 +497,19 @@ def _show_unanalyzed(request: Request) -> bool:
     return request.cookies.get(UNANALYZED_COOKIE) == "1"
 
 
+def _natural_key(text: str | None) -> list:
+    """Sort key that orders "part 2" before "part 10"."""
+    import re
+    return [(0, int(part), "") if part.isdigit() else (1, 0, part)
+            for part in re.split(r"(\d+)", (text or "").lower()) if part]
+
+
+def _lesson_order_key(doc: dict) -> tuple:
+    """Series order within a source: dated lessons first by date, then index, then title."""
+    date = doc.get("lesson_date")
+    return (date is None, date or "", _natural_key(doc.get("lesson_index")), _natural_key(doc.get("title")))
+
+
 def get_available_lessons() -> tuple[dict[str, list[tuple]], dict[str, str]]:
     """Every lesson with content, as (categories, display_names); see get_lesson_listing."""
     categories, display_names, _ = get_lesson_listing(include_unanalyzed=True)
@@ -527,7 +540,10 @@ def get_lesson_listing(include_unanalyzed: bool = True) -> tuple[dict[str, list[
     # 1. Database sources (if available)
     if _db:
         try:
-            for src in _db.get_lesson_categories():
+            sources = _db.get_lesson_categories()
+            lessons_by_source = _db.get_lessons_by_source(
+                [src["source_id"] for src in sources if src["source_id"] != 3])
+            for src in sources:
                 source_display = (
                     src.get("source_category_name")
                     or src["source_name"].replace("_", " ").title()
@@ -540,7 +556,7 @@ def get_lesson_listing(include_unanalyzed: bool = True) -> tuple[dict[str, list[
                 # /fmtt page — drop it from the home-page browse.
                 if src["source_id"] == 3:
                     continue
-                for doc in _db.get_source_lessons(src["source_id"]):
+                for doc in sorted(lessons_by_source.get(src["source_id"], []), key=_lesson_order_key):
                     lesson_type = doc.get("lesson_type")
                     title = doc["title"]
                     instructor = doc.get("instructor")
@@ -576,10 +592,6 @@ def get_lesson_listing(include_unanalyzed: bool = True) -> tuple[dict[str, list[
 
     # Skip empty sources (e.g. OTHER with no documents)
     categories = {k: v for k, v in categories.items() if v}
-
-    # Sort lessons within each category alphabetically by display name
-    for key in categories:
-        categories[key].sort(key=lambda x: x[1].lower())
 
     # Sort categories alphabetically by display name
     sorted_keys = sorted(categories.keys(), key=lambda k: display_names.get(k, k).lower())

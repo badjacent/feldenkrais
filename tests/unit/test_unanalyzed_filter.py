@@ -58,11 +58,11 @@ def _listing_db():
         {"source_id": 10, "source_name": "ATLAS_X", "source_category_name": "Atlas X"},
         {"source_id": 11, "source_name": "MIXED", "source_category_name": None},
     ]
-    db.get_source_lessons.side_effect = lambda sid: {
+    db.get_lessons_by_source.return_value = {
         10: [{"id": "a1", "title": "Atlas lesson", "analyzed": False}],
         11: [{"id": "m1", "title": "Analyzed", "analyzed": True},
              {"id": "m2", "title": "Not yet", "analyzed": False}],
-    }[sid]
+    }
     return db
 
 
@@ -152,3 +152,31 @@ class TestAnalysisDashboard:
         assert "Transcript lesson" not in hidden
         assert "Hiding 1 transcript-only lesson:" in hidden
         assert "Transcript lesson" in shown and ">transcript only</span>" in shown
+
+
+class TestHomeListing:
+    def test_one_query_for_all_sources(self):
+        db = _listing_db()
+        with patch.object(web, "_db", db):
+            web.get_lesson_listing()
+        db.get_lessons_by_source.assert_called_once_with([10, 11])
+        db.get_source_lessons.assert_not_called()
+
+    def test_series_keep_their_order(self):
+        db = MagicMock()
+        db.get_lesson_categories.return_value = [
+            {"source_id": 5, "source_name": "S", "source_category_name": None}]
+        db.get_lessons_by_source.return_value = {5: [
+            {"id": t, "title": t, "analyzed": True}
+            for t in ["Pelvic clock part 10", "Pelvic clock part 2", "Pelvic clock part 1"]]}
+        with patch.object(web, "_db", db):
+            categories, _, _ = web.get_lesson_listing()
+        assert [lesson[0] for lesson in categories["db:5"]] == [
+            "Pelvic clock part 1", "Pelvic clock part 2", "Pelvic clock part 10"]
+
+    def test_page_has_title_filter_and_search_restore(self):
+        with patch.object(web, "_db", _listing_db()):
+            page = build_search_home_html(get_lessons_fn=web.get_lesson_listing)
+        assert 'id="lesson-filter"' in page
+        assert "restoreSearch" in page
+        assert '"db:11": "Mixed"' in page
