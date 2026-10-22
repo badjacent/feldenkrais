@@ -84,7 +84,7 @@ for agent in $agent_files; do
   fi
 
   mkdir -p "$retired"
-  chown $user:staff "$retired"
+  chown "${user}:staff" "$retired"
   mv "$agent" "$retired/"
   print "installed $daemon$( (( disabled )) && print ' (disabled, not loaded)')"
 done
