@@ -534,6 +534,12 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
         }}
 
         /* Segment highlight box */
+        /* Empty until playback reaches a segment: hide rather than show a blank box */
+        .segment-box:has(#segment-text:empty) {{ display: none; }}
+        .not-analyzed {{
+            background: #f5f7fa; border: 1px solid #dde3ea; border-radius: 6px;
+            padding: 10px 14px; margin: 12px 0; font-size: 0.9em; color: #444;
+        }}
         .segment-box {{
             background: #fffde7; border: 2px solid #fdd835;
             border-radius: 6px; padding: 12px 16px;
@@ -938,25 +944,54 @@ function switchProfile(key) {{
     window.location = url.toString();
 }}
 
+// Which models have analyzed this lesson; shared by the model picker and the not-analyzed notice.
+const lessonProfiles = fetch('/api/lesson/' + encodeURIComponent(DOCUMENT_ID) + '/profiles')
+    .then(r => r.ok ? r.json() : {{profiles: []}})
+    .then(d => d.profiles || [])
+    .catch(() => []);
+
+// The picker lists only models with results here (plus the one in view, if it has none).
 (async function loadProfileBar() {{
     const bar = document.getElementById('profile-bar');
     if (!bar) return;
-    const res = await fetch('/api/lesson/' + encodeURIComponent(DOCUMENT_ID) + '/profiles');
-    if (!res.ok) return;
-    const data = await res.json();
+    const profiles = await lessonProfiles;
     const select = document.getElementById('profile-select');
-    const current = ANALYSIS_PROFILE || (data.profiles.find(p => p.canonical) || {{}}).key;
-    for (const p of data.profiles) {{
+    const current = ANALYSIS_PROFILE || (profiles.find(p => p.canonical) || {{}}).key;
+    const listed = profiles.filter(p => p.completed_steps.length || p.key === current);
+    if (!listed.some(p => p.completed_steps.length)) return;
+    for (const p of listed) {{
         const opt = document.createElement('option');
         opt.value = p.key;
         const done = p.completed_steps.length;
         opt.textContent = p.key + ' · ' + p.model + (p.canonical ? ' (canonical)' : '')
-            + ' — ' + (done ? done + ' steps' : 'not analyzed');
+            + ' — ' + (done ? done + ' analysis step' + (done === 1 ? '' : 's') + ' done' : 'not analyzed');
         opt.selected = p.key === current;
         select.appendChild(opt);
     }}
     bar.style.display = '';
 }})();
+
+const ANALYSIS_TABS = ['steps', 'condensed', 'somatic', 'language'];
+
+// Not analyzed (by any model, or by the model in view): say so plainly, hide the
+// analysis tabs and open the transcript, instead of showing an error.
+async function showNotAnalyzed(profileKey) {{
+    const others = (await lessonProfiles).filter(p => p.completed_steps.length && p.key !== profileKey);
+    let msg;
+    if (others.length) {{
+        const links = others.map(p => '<a href="?profile=' + encodeURIComponent(p.key) + '">' + escHtml(p.key) + '</a>').join(', ');
+        msg = 'This lesson has no analysis from <strong>' + escHtml(profileKey || 'this model') + '</strong>. ' +
+              'See it as analyzed by ' + links + '.';
+    }} else {{
+        msg = 'This lesson has a transcript but has not been analyzed by any model yet. ' +
+              'The transcript and Q&amp;A work; the step-by-step views need an analysis.';
+    }}
+    document.getElementById('status-area').innerHTML = '<div class="not-analyzed">' + msg + '</div>';
+    document.querySelectorAll('.tab-bar button').forEach(b => {{
+        if (ANALYSIS_TABS.includes(b.dataset.tab)) b.style.display = 'none';
+    }});
+    switchTab('transcript');
+}}
 const PROVIDER = new URLSearchParams(window.location.search).get('provider') || '';
 
 // ── State ──
@@ -1421,7 +1456,7 @@ async function loadPipelineTab() {{
         html += '<tr><td style="padding:4px 12px 4px 0;font-weight:600;color:#666;white-space:nowrap;">Document ID</td><td style="padding:4px 0;font-family:monospace;font-size:0.9em;">' + escHtml(doc.document_id || '') + '</td></tr>';
         html += '<tr><td style="padding:4px 12px 4px 0;font-weight:600;color:#666;">Title</td><td style="padding:4px 0;">' + escHtml(doc.title || '') + '</td></tr>';
         html += '<tr><td style="padding:4px 12px 4px 0;font-weight:600;color:#666;">Created</td><td style="padding:4px 0;">' + escHtml(doc.created_at || 'N/A') + '</td></tr>';
-        html += '<tr><td style="padding:4px 12px 4px 0;font-weight:600;color:#666;">Status</td><td style="padding:4px 0;">' + escHtml(doc.status || 'N/A') + '</td></tr>';
+        html += '<tr><td style="padding:4px 12px 4px 0;font-weight:600;color:#666;" title="Where ingestion left the document; unrelated to analysis">Ingestion status</td><td style="padding:4px 0;">' + escHtml(doc.status || 'N/A') + '</td></tr>';
         if (doc.s3_key) html += '<tr><td style="padding:4px 12px 4px 0;font-weight:600;color:#666;">Media</td><td style="padding:4px 0;font-family:monospace;font-size:0.85em;">' + escHtml(doc.s3_key) + '</td></tr>';
         html += '</table></div>';
         // Pipeline steps
@@ -1512,10 +1547,10 @@ async function loadRawIOTab() {{
             html += '<summary style="padding:14px 18px;cursor:pointer;font-weight:600;color:#333;font-size:0.95em;">';
             html += escHtml(step.name);
             if (step.has_data) {{
-                html += ' <span style="display:inline-block;padding:1px 8px;border-radius:8px;font-size:0.75em;font-weight:600;color:#fff;background:#2e7d32;margin-left:8px;">cached</span>';
+                html += ' <span style="display:inline-block;padding:1px 8px;border-radius:8px;font-size:0.75em;font-weight:600;color:#fff;background:#2e7d32;margin-left:8px;">has output</span>';
                 if (step.raw_json_length) html += ' <span style="color:#888;font-size:0.8em;font-weight:400;">(' + (step.raw_json_length / 1024).toFixed(1) + ' KB)</span>';
             }} else {{
-                html += ' <span style="display:inline-block;padding:1px 8px;border-radius:8px;font-size:0.75em;font-weight:600;color:#fff;background:#757575;margin-left:8px;">not cached</span>';
+                html += ' <span style="display:inline-block;padding:1px 8px;border-radius:8px;font-size:0.75em;font-weight:600;color:#fff;background:#757575;margin-left:8px;">not run for this model</span>';
             }}
             if (step.stale) {{
                 html += ' <span style="display:inline-block;padding:1px 8px;border-radius:8px;font-size:0.75em;font-weight:600;color:#856404;background:#fff3cd;margin-left:4px;">stale</span>';
@@ -2196,6 +2231,10 @@ async function sendChat() {{
         showStatus('<span class="spinner-inline"></span> Loading analysis...');
         const res = await fetch('/api/lesson/' + encodeURIComponent(DOCUMENT_ID) + '/combined');
         const data = await res.json();
+        if (data.not_analyzed) {{
+            await showNotAnalyzed(data.profile);
+            return;
+        }}
         if (data.error) {{
             showStatus('Error: ' + data.error, true);
             document.getElementById('card-placeholder').innerHTML = 'Analysis failed.';

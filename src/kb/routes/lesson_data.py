@@ -201,7 +201,8 @@ async def api_lesson_combined(document_id: str, profile: str | None = None):
         if pass_a:
             break
     if not pass_a:
-        return JSONResponse({"error": "Decomposition not yet available. Run the analysis pipeline first."}, status_code=404)
+        return JSONResponse({"error": "Decomposition not yet available. Run the analysis pipeline first.",
+                             "not_analyzed": True, "profile": analysis_profile["key"]}, status_code=404)
 
     _, somatic_result = _load_cache(analysis_profile, text, ":somatic_v2")
     _, lang_result = _load_cache(analysis_profile, text, ":language_v1")
