@@ -11,7 +11,7 @@ from llm_config import DEFAULT_LLM
 
 from .core import _state
 
-PROMPT_VERSION = "card-p6"
+PROMPT_VERSION = "card-p7"
 LESSON_TYPES = {"atm", "talk", "interview", "demonstration", "mixed", "other"}
 POSITIONS = {"lying_on_back", "lying_on_side", "lying_on_front", "sitting", "standing", "kneeling", "all_fours", "other"}
 SUPPORT_CONTEXTS = {"floor", "chair", "standing", "wall"}

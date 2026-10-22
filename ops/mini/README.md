@@ -61,9 +61,10 @@ their processes) so they bind to the new one.
 
 ## Atlas lesson intake
 
-The Atlas catalog can feed newly discovered free YouTube lessons into the
-existing private ingest queue. The command is deliberately dry-run by default
-and deduplicates by YouTube video ID against both documents and queued work:
+The Atlas catalog feeds newly discovered free media into durable private ingest
+queues. YouTube resources use the existing YouTube queue; website, SoundCloud,
+and podcast media use `atlas_media_queue`. The command is deliberately dry-run
+by default and deduplicates against both documents and queued work:
 
 ```sh
 set -a; source .env; set +a
@@ -86,6 +87,15 @@ tests have passed:
 ```sh
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.feldenkrais.atlas-intake.plist
 launchctl kickstart gui/$(id -u)/com.feldenkrais.atlas-intake
+```
+
+The non-YouTube media worker asks yt-dlp for an audio-only rendition, uploads
+only that audio plus a loader sidecar to S3, and never archives source video:
+
+```sh
+PYTHONPATH=src/kb .venv-mini/bin/python -m ingest.atlas_media status
+ATLAS_MEDIA_BATCH_LIMIT=1 ops/mini/run-atlas-media-worker.sh
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.feldenkrais.atlas-media.plist
 ```
 
 ## Public Atlas projection

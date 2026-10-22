@@ -92,6 +92,23 @@ CREATE TABLE IF NOT EXISTS youtube_queue (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS atlas_media_queue (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    url TEXT NOT NULL UNIQUE,
+    title TEXT NOT NULL,
+    source_key TEXT,
+    platform TEXT,
+    content_kind TEXT,
+    teacher TEXT,
+    metadata JSONB,
+    status TEXT NOT NULL DEFAULT 'pending',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at TIMESTAMPTZ,
+    error TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS fm_lesson_status (
     lesson_url TEXT PRIMARY KEY,
     lesson_title TEXT,
@@ -369,6 +386,7 @@ CREATE INDEX IF NOT EXISTS idx_transcription_job_document ON transcription_job(d
 CREATE INDEX IF NOT EXISTS idx_transcription_job_status ON transcription_job(status);
 CREATE INDEX IF NOT EXISTS idx_transcription_job_batch ON transcription_job(batch_id);
 CREATE INDEX IF NOT EXISTS idx_youtube_queue_status ON youtube_queue(status);
+CREATE INDEX IF NOT EXISTS idx_atlas_media_queue_status ON atlas_media_queue(status);
 CREATE INDEX IF NOT EXISTS idx_fm_lesson_status ON fm_lesson_status(status);
 CREATE INDEX IF NOT EXISTS idx_fm_lesson_youtube ON fm_lesson_status(youtube_id);
 CREATE INDEX IF NOT EXISTS idx_document_lesson_date ON document(lesson_date);

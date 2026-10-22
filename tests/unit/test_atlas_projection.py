@@ -1,11 +1,19 @@
+import pytest
+
+from kb.atlas_projection import _public_application_ids, _public_motif_ids
+
 from ops.export_atlas_projection import (
+    _public_labels,
     build_summary,
     normalize_resource_url,
     normalize_values,
-    _public_labels,
     public_lesson_key,
 )
-from ops.sync_atlas_projection import crawl_lock_path, projection_equivalent
+from ops.sync_atlas_projection import (
+    crawl_lock_path,
+    projection_equivalent,
+    validate_count_change,
+)
 
 
 def test_normalize_resource_url_handles_aliases():
@@ -53,3 +61,32 @@ def test_projection_equivalence_ignores_only_generation_time():
 
 def test_projection_uses_the_atlas_crawl_publish_lock(tmp_path):
     assert crawl_lock_path(tmp_path) == tmp_path / "var/crawl-cycle.lock"
+
+
+def test_projection_count_guard_refuses_empty_and_large_shrink():
+    with pytest.raises(ValueError, match="empty"):
+        validate_count_change(180, 0)
+    with pytest.raises(ValueError, match="shrink"):
+        validate_count_change(180, 100)
+    validate_count_change(180, 160)
+
+
+def test_public_application_ids_are_intended_only_and_closed_set():
+    assert _public_application_ids({"applications": [
+        {"id": "everyday_movement", "strength": "intended"},
+        {"id": "pain_comfort_recovery", "strength": "mentioned"},
+        {"id": "not_a_public_category", "strength": "intended"},
+    ]}) == ["everyday_movement"]
+
+
+def test_public_motif_ids_are_automatic_but_vocabulary_gated():
+    assignments = [
+        {"motif_id": "bell_hands", "mode": "taught", "role": "central"},
+        {"motif_id": "clock", "mode": "referenced", "role": "incidental"},
+        {"motif_id": "candidate_from_model", "mode": "taught", "role": "central"},
+        {"motif_id": "bell_hands", "mode": "taught", "role": "supporting"},
+    ]
+    assert _public_motif_ids(assignments, {"bell_hands", "clock"}) == [
+        "bell_hands", "clock",
+    ]
+    assert _public_motif_ids(assignments, {"clock"}) == ["clock"]

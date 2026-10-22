@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.feldenkrais.atlas-media</string>
+  <key>ProgramArguments</key>
+  <array><string>/Users/hermes/src/feldenkrais/ops/mini/run-atlas-media-worker.sh</string></array>
+  <key>WorkingDirectory</key><string>/Users/hermes/src/feldenkrais</string>
+  <key>RunAtLoad</key><false/>
+  <key>StartInterval</key><integer>300</integer>
+  <key>StandardOutPath</key><string>/Users/hermes/src/feldenkrais/var/log/atlas-media-worker.log</string>
+  <key>StandardErrorPath</key><string>/Users/hermes/src/feldenkrais/var/log/atlas-media-worker.log</string>
+  <key>ProcessType</key><string>Background</string>
+  <key>LowPriorityIO</key><true/>
+</dict>
+</plist>

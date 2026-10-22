@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Queue newly cataloged public YouTube lessons for private analysis.
+"""Queue newly cataloged public lessons for private transcription.
 
 The Atlas remains the discovery authority and this repository remains the
 transcript/analysis authority.  This bridge copies URLs only: transcripts,
@@ -45,6 +45,90 @@ def eligible_urls(catalog: list[dict]) -> dict[str, str]:
         ):
             result.setdefault(native_id, url)
     return result
+
+
+def eligible_media(catalog: list[dict]) -> dict[str, dict]:
+    """Return non-YouTube, free, on-demand media suitable for local intake."""
+    result = {}
+    supported_kinds = {"audio_lesson", "podcast_episode", "video_lesson"}
+    media_suffixes = {".mp3", ".m4a", ".aac", ".ogg", ".opus", ".wav", ".mp4", ".webm"}
+    for item in catalog:
+        url = str(item.get("url") or "")
+        platform = item.get("platform")
+        direct_media = Path(urlsplit(url).path.casefold()).suffix in media_suffixes
+        media_evidence = (
+            platform in {"soundcloud", "podcast"}
+            or direct_media
+            or item.get("media_type") in {"audio", "video"}
+            or item.get("format") == "on_demand"
+            or (item.get("duration_seconds") or 0) >= 180
+        )
+        if (
+            url
+            and not youtube_id(url)
+            and item.get("entry_kind") == "resource"
+            and item.get("access") == "free"
+            and item.get("content_kind") in supported_kinds
+            and item.get("status") != "dead"
+            and platform in {"website", "soundcloud", "podcast"}
+            and media_evidence
+        ):
+            result.setdefault(url, item)
+    return result
+
+
+def plan_media_intake(db: Database, catalog: list[dict]) -> dict:
+    eligible = eligible_media(catalog)
+    with db.get_cursor(commit=False) as cursor:
+        cursor.execute("SELECT source_url FROM document WHERE source_url = ANY(%s)", (list(eligible),))
+        documents = {row["source_url"] for row in cursor.fetchall()}
+        cursor.execute("SELECT url FROM atlas_media_queue WHERE url = ANY(%s)", (list(eligible),))
+        queued = {row["url"] for row in cursor.fetchall()}
+    pending = [eligible[url] for url in sorted(set(eligible) - documents - queued)]
+    return {
+        "eligible": len(eligible),
+        "already_document": len(set(eligible) & documents),
+        "already_queued": len((set(eligible) - documents) & queued),
+        "pending": pending,
+    }
+
+
+def queue_media(db: Database, items: list[dict]) -> int:
+    added = 0
+    with db.get_cursor() as cursor:
+        for item in items:
+            cursor.execute(
+                """INSERT INTO atlas_media_queue
+                       (url, title, source_key, platform, content_kind, teacher, metadata)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb)
+                   ON CONFLICT (url) DO NOTHING""",
+                (
+                    item["url"], item.get("title") or item["url"],
+                    item.get("source_key"), item.get("platform"),
+                    item.get("content_kind"), item.get("teacher"),
+                    json.dumps({
+                        "duration_seconds": item.get("duration_seconds"),
+                        "language": item.get("language"),
+                        "description": item.get("description"),
+                    }),
+                ),
+            )
+            added += cursor.rowcount
+    return added
+
+
+def reconcile_media_eligibility(db: Database, catalog: list[dict]) -> int:
+    """Retain but quarantine pending URLs no longer supported by the intake gate."""
+    eligible = list(eligible_media(catalog))
+    with db.get_cursor() as cursor:
+        cursor.execute(
+            """UPDATE atlas_media_queue
+               SET status='ineligible', error='catalog media eligibility changed',
+                   updated_at=NOW()
+               WHERE status='pending' AND NOT (url = ANY(%s))""",
+            (eligible,),
+        )
+        return cursor.rowcount
 
 
 def plan_intake(db: Database, catalog: list[dict]) -> dict:
@@ -115,14 +199,19 @@ def main() -> None:
     db = Database(database_url)
     try:
         report = plan_intake(db, catalog)
+        media_report = plan_media_intake(db, catalog)
         origins_reconciled = reconcile_atlas_origins(db, catalog) if args.apply else 0
+        media_reconciled = reconcile_media_eligibility(db, catalog) if args.apply else 0
         selected = report.pop("pending")[: args.limit]
+        selected_media = media_report.pop("pending")[: args.limit]
         added = 0
+        media_added = 0
         if args.apply:
             added = sum(
                 db.add_youtube_url(url, origin="feldenkrais_atlas") is not None
                 for url in selected
             )
+            media_added = queue_media(db, selected_media)
         report.update(
             {
                 "pending": len(selected),
@@ -130,6 +219,13 @@ def main() -> None:
                 "origins_reconciled": origins_reconciled,
                 "dry_run": not args.apply,
                 "sample": selected[:10],
+                "media": {
+                    **media_report,
+                    "pending": len(selected_media),
+                    "added": media_added,
+                    "marked_ineligible": media_reconciled,
+                    "sample": [item["url"] for item in selected_media[:10]],
+                },
             }
         )
     finally:

@@ -22,6 +22,7 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
+
 # Sources whose lessons are approved for public Atlas use. Owner-editable.
 PUBLIC_SOURCES = [
     "FELDENKRAIS_PROJECT",
@@ -42,11 +43,16 @@ _REPO = Path(__file__).resolve().parent.parent.parent
 _NON_ATM = re.compile(r"\btalk\b|discussion|interview", re.I)
 
 
+def _feldenkrais_project_public_urls() -> list[str]:
+    """Return the owner-verified free Feldenkrais Project lesson allowlist."""
+    path = _REPO / "data" / "fp_free_lessons.json"
+    return [row["url"] for row in json.loads(path.read_text())]
+
+
 def _load_registry() -> dict:
     # Imported lazily: routes/atlas_pages.py pulls this module in at web start-up,
     # and PyYAML is not in the web Lambda layer.
     import yaml
-
     for base in (_REPO / "private" / "data", _REPO / "data"):
         p = base / "motifs_registry.yaml"
         if p.exists():
@@ -78,6 +84,24 @@ def _registry_sha(registry_version: str, motifs: list[dict]) -> str:
     ).encode()).hexdigest()
 
 
+def _public_motif_ids(assignments: list[dict], visible_ids: set[str]) -> list[str]:
+    """Project assignments through the owner-controlled vocabulary gate."""
+    return list(dict.fromkeys(
+        assignment["motif_id"]
+        for assignment in assignments
+        if assignment.get("motif_id") in visible_ids
+    ))
+
+
+def _public_application_ids(card: dict) -> list[str]:
+    """Return only conservative, public-eligible application assignments."""
+    return sorted(
+        item["id"] for item in card.get("applications", [])
+        if item.get("strength") == "intended"
+        and item.get("id") in _APPLICATION_IDS
+    )
+
+
 def build_projection(db) -> tuple[dict, dict]:
     """Build the projection from cached analyses only (never invokes LLMs).
 
@@ -105,9 +129,10 @@ def build_projection(db) -> tuple[dict, dict]:
             FROM document d
             JOIN document_source ds ON ds.id = d.source_id
             JOIN analysis a ON a.document_id = d.id AND a.type_id = 1
-            WHERE ds.name = ANY(%s) OR d.origin = 'feldenkrais_atlas'
+            WHERE (ds.name = ANY(%s) OR d.origin = 'feldenkrais_atlas')
+              AND (ds.name <> 'FELDENKRAIS_PROJECT' OR d.source_url = ANY(%s))
             ORDER BY (d.origin = 'feldenkrais_atlas') DESC NULLS LAST, ds.name, d.title
-        """, (PUBLIC_SOURCES,))
+        """, (PUBLIC_SOURCES, _feldenkrais_project_public_urls()))
         rows = [dict(r) for r in cur.fetchall()]
 
     keyed_rows = []
@@ -148,6 +173,15 @@ def build_projection(db) -> tuple[dict, dict]:
         title = (r["title"] or "").replace(" - Feldenkrais Project", "")
         lt = (card.get("lesson_type") or r.get("lesson_type") or "").lower()
         is_atm = not _NON_ATM.search(title) and lt in ("", "atm", "unknown")
+        nominated_motifs = [
+            {"id": a["motif_id"], "mode": a["mode"],
+             "role": a["role"], "certainty": a["certainty"]}
+            for a in mrow.get("assignments", []) if a["motif_id"] in vis_ids
+        ]
+        # Vocabulary visibility is the owner-controlled gate. Once a motif is
+        # established and chooser-visible in the registry, current machine
+        # assignments flow automatically to the public projection.
+        public_motif_ids = _public_motif_ids(mrow.get("assignments", []), vis_ids)
         lessons.append({
             "analysis_document_id": str(r["id"]),
             "atlas_resource_key": None,  # populated when the join lands
@@ -168,12 +202,12 @@ def build_projection(db) -> tuple[dict, dict]:
                 )
             },
             "provenance": {"axes": "gemini_lite", "motifs": "gemini_lite",
-                           "display": "gemini_lite"},
-            "motifs": [
-                {"id": a["motif_id"], "mode": a["mode"],
-                 "role": a["role"], "certainty": a["certainty"]}
-                for a in mrow.get("assignments", []) if a["motif_id"] in vis_ids
-            ],
+                           "display": "gemini_lite", "applications": "gemini_lite"},
+            # Only the judge-approved public strength crosses the projection
+            # boundary. Reasons, evidence, and presenter intent remain private.
+            "application_ids": _public_application_ids(card),
+            "motifs": nominated_motifs,
+            "public_motif_ids": public_motif_ids,
             "axes": {ax: v["value"] for ax, v in arow.get("axes", {}).items()},
         })
 
@@ -210,6 +244,11 @@ _FORBIDDEN_LESSON_KEYS = {"evidence", "candidate_motifs", "raw_motifs", "transcr
 _LESSON_TYPES = {"atm", "talk", "interview", "demonstration", "mixed", "other"}
 _POSITIONS = {"lying_on_back", "lying_on_side", "lying_on_front", "sitting", "standing", "kneeling", "all_fours", "other"}
 _SUPPORT_CONTEXTS = {"floor", "chair", "standing", "wall"}
+_APPLICATION_IDS = {
+    "pain_comfort_recovery", "everyday_movement", "music_voice_performance",
+    "sport_skilled_activity", "stress_rest_self_regulation",
+    "learning_across_life", "creativity_meditation_self_knowledge",
+}
 
 
 def validate_projection(proj: dict) -> list[str]:
@@ -225,6 +264,11 @@ def validate_projection(proj: dict) -> list[str]:
         for m in l.get("motifs", []):
             if m["id"] not in vis_ids:
                 errors.append(f"non-exported motif id {m['id']}")
+        public_motif_ids = l.get("public_motif_ids")
+        if not isinstance(public_motif_ids, list):
+            errors.append("missing public_motif_ids")
+        elif not set(public_motif_ids) <= {m["id"] for m in l.get("motifs", [])}:
+            errors.append("public motif is not currently nominated")
         for ax, v in l.get("axes", {}).items():
             if ax not in _AXIS_VALUES or v not in _AXIS_VALUES[ax]:
                 errors.append(f"bad axis {ax}={v}")
@@ -250,6 +294,13 @@ def validate_projection(proj: dict) -> list[str]:
             errors.append("bad primary_positions")
         if len(display.get("primary_positions") or []) > 3:
             errors.append("too many primary_positions")
+        application_ids = l.get("application_ids") or []
+        if (
+            not isinstance(application_ids, list)
+            or len(application_ids) != len(set(application_ids))
+            or not set(application_ids) <= _APPLICATION_IDS
+        ):
+            errors.append("bad application_ids")
         if not set(display.get("support_context") or []) <= _SUPPORT_CONTEXTS:
             errors.append("bad support_context")
         provenance = l.get("provenance") or {}

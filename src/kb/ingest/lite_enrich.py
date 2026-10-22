@@ -19,7 +19,10 @@ from database import Database  # noqa: E402
 import analysis  # noqa: E402
 import cache_helpers  # noqa: E402
 import llm_config  # noqa: E402
-from atlas_projection import PUBLIC_SOURCES  # noqa: E402
+from atlas_projection import (  # noqa: E402
+    PUBLIC_SOURCES,
+    _feldenkrais_project_public_urls,
+)
 from analysis.axes import AXES_PROMPT_VERSION, LITE_PROMPT_VERSION as AXES_LITE_VERSION  # noqa: E402
 from analysis.lesson_card import PROMPT_VERSION as CARD_VERSION  # noqa: E402
 from analysis.motifs import (  # noqa: E402
@@ -44,7 +47,7 @@ def artifact_keys(text: str, registry_version: str) -> dict[str, str]:
     }
 
 
-def _documents(db: Database, limit: int, source: str | None, doc: str | None) -> list[dict]:
+def _documents(db: Database, limit: int | None, source: str | None, doc: str | None) -> list[dict]:
     sql = """
         SELECT d.id, d.title, ds.name AS source_name, d.origin,
                d.source_url, d.metadata, d.presenter, d.category_name,
@@ -53,18 +56,21 @@ def _documents(db: Database, limit: int, source: str | None, doc: str | None) ->
         JOIN document_source ds ON ds.id = d.source_id
         JOIN analysis a ON a.document_id = d.id AND a.type_id = 1
         WHERE (ds.name = ANY(%s) OR d.origin = 'feldenkrais_atlas')
+          AND (ds.name <> 'FELDENKRAIS_PROJECT' OR d.source_url = ANY(%s))
           AND d.type_id IN (2, 3)
           AND COALESCE(a.data->>'text', '') <> ''
     """
-    params: list = [PUBLIC_SOURCES]
+    params: list = [PUBLIC_SOURCES, _feldenkrais_project_public_urls()]
     if source:
         sql += " AND ds.name = %s"
         params.append(source)
     if doc:
         sql += " AND d.id = %s"
         params.append(doc)
-    sql += " ORDER BY (d.origin = 'feldenkrais_atlas') DESC NULLS LAST, d.created_at, d.id LIMIT %s"
-    params.append(limit)
+    sql += " ORDER BY (d.origin = 'feldenkrais_atlas') DESC NULLS LAST, d.created_at, d.id"
+    if limit is not None:
+        sql += " LIMIT %s"
+        params.append(limit)
     with db.get_cursor(commit=False) as cur:
         cur.execute(sql, params)
         return [dict(row) for row in cur.fetchall()]
@@ -120,6 +126,30 @@ def _coverage(db: Database, documents: list[dict], registry_version: str) -> dic
     return {"worker": "gemini-lite", **counts, "artifacts": artifacts}
 
 
+def _pending_documents(
+    db: Database,
+    documents: list[dict],
+    registry_version: str,
+    limit: int,
+) -> list[dict]:
+    """Apply the batch limit only after excluding current-version completions."""
+    keyed = [(document, artifact_keys(document["text"], registry_version)) for document in documents]
+    wanted = [
+        keys[name]
+        for _, keys in keyed
+        for name in ("lite_axes", "lite_motifs", "card")
+    ]
+    with db.get_cursor(commit=False) as cur:
+        cur.execute("SELECT key FROM cache WHERE key = ANY(%s)", (wanted,))
+        existing = {row["key"] for row in cur.fetchall()}
+    pending = [
+        document
+        for document, keys in keyed
+        if not all(keys[name] in existing for name in ("lite_axes", "lite_motifs", "card"))
+    ]
+    return pending[:limit]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Gemini transcript-direct enrichment worker")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -152,10 +182,13 @@ def main() -> None:
             Path(args.out).write_text(json.dumps(projection, ensure_ascii=False, sort_keys=True))
             print(json.dumps({**summary, "out": args.out}, sort_keys=True))
             return
-        documents = _documents(db, args.limit, args.source, args.doc)
+        document_limit = None if args.command == "run" else args.limit
+        documents = _documents(db, document_limit, args.source, args.doc)
         if args.command == "status":
             print(json.dumps(_coverage(db, documents, registry_version), sort_keys=True))
             return
+        if args.command == "run":
+            documents = _pending_documents(db, documents, registry_version, args.limit)
         generated_total = 0
         for document in documents:
             text = document["text"]

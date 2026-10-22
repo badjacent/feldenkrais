@@ -12,6 +12,9 @@ def test_lesson_card_prompt_defines_primary_position_without_brief_standing():
     assert "`primary_positions`" in prompt
     assert "most of the substantive movement exploration" in prompt
     assert "brief orientation or closing check" in prompt
+    assert "ordinary Feldenkrais learning" in prompt
+    assert "process do not qualify" in prompt
+    assert "standard lesson methods and do not qualify" in prompt
 
 
 def test_lesson_card_validates_and_caches(tmp_path, monkeypatch):
