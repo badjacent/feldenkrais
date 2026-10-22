@@ -161,6 +161,13 @@ def process_file(
                 logger.info(f"Stored text content as analysis for {doc_id}")
             except Exception as e:
                 logger.warning(f"Could not store text content for {doc_id}: {e}")
+        else:
+            # Audio or video needs transcribing: wake the Mini's transcription
+            # worker, which checks this marker before it queries the database.
+            try:
+                storage.put_object("control/transcription/pending", b"")
+            except Exception as e:
+                logger.warning(f"Could not write the transcription wake marker: {e}")
 
         # Delete from staging
         logger.info(f"Cleaning up staging: {main_key}, {sidecar_key}")
