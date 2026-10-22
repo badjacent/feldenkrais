@@ -181,6 +181,8 @@ async def run_single_step(request: Request):
     step = _web._db.get_analysis_step(step_name)
     if not step:
         return JSONResponse({"error": f"Unknown step: {step_name}"}, status_code=400)
+    if step.get("retired"):
+        return JSONResponse({"error": f"Step {step_name} is retired"}, status_code=400)
 
     try:
         profile_key = _profile_key(body.get("profile_key"))

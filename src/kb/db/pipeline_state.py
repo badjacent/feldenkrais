@@ -25,14 +25,20 @@ class PipelineStateMixin:
                 )
             """)
 
-    def get_analysis_steps(self) -> list[dict]:
-        """Return all registered analysis steps."""
+    def get_analysis_steps(self, include_retired: bool = False) -> list[dict]:
+        """Return the registered analysis steps.
+
+        A retired step is one whose output nothing reads any more. It is left
+        out unless asked for, so it disappears from every page and dashboard
+        that lists steps; its cached results and progress rows are kept.
+        """
+        retired_filter = "" if include_retired else "WHERE NOT retired "
         with self.get_cursor(commit=False) as cursor:
-            cursor.execute("SELECT * FROM analysis_step ORDER BY name")
+            cursor.execute(f"SELECT * FROM analysis_step {retired_filter}ORDER BY name")
             return [dict(row) for row in cursor.fetchall()]
 
     def get_analysis_step(self, name: str) -> Optional[dict]:
-        """Return a single analysis step by name."""
+        """Return a single analysis step by name, retired or not."""
         with self.get_cursor(commit=False) as cursor:
             cursor.execute("SELECT * FROM analysis_step WHERE name = %s", (name,))
             row = cursor.fetchone()
@@ -186,7 +192,8 @@ class PipelineStateMixin:
     # A (document, profile, step) needs work when a permitted gate reaches it
     # and it has never completed, completed under an older step version or a
     # different schema contract than its profile runs now, or is stale.
-    # Dependencies must be complete for the same profile.
+    # Dependencies must be complete for the same profile. A retired step never
+    # runs, whatever its gates say.
     _RUNNABLE_CTE = """
         WITH candidates AS (
             SELECT DISTINCT d.id as document_id, d.title as document_title,
@@ -196,7 +203,7 @@ class PipelineStateMixin:
             FROM lesson_group_member lgm
             JOIN group_analysis_gate gag ON gag.group_id = lgm.group_id AND gag.permitted = TRUE
             JOIN analysis_profile p ON p.key = gag.profile_key {profile_filter}
-            JOIN analysis_step s ON s.name = gag.step_name
+            JOIN analysis_step s ON s.name = gag.step_name AND NOT s.retired
             JOIN document d ON d.id = lgm.document_id
             LEFT JOIN document_analysis_state das
               ON das.document_id = d.id AND das.step_name = s.name AND das.profile_key = p.key

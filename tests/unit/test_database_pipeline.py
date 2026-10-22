@@ -44,6 +44,13 @@ class TestAnalysisSteps:
         assert len(result) == 2
         assert result[0]["name"] == "decompose"
         sql = mock_db._mock_cursor.execute.call_args[0][0]
+        assert "SELECT * FROM analysis_step WHERE NOT retired ORDER BY name" in sql
+
+    def test_get_analysis_steps_can_include_retired(self, mock_db):
+        mock_db._mock_cursor.fetchall.return_value = []
+        mock_db.get_analysis_steps(include_retired=True)
+        sql = mock_db._mock_cursor.execute.call_args[0][0]
+        assert "retired" not in sql
         assert "SELECT * FROM analysis_step ORDER BY name" in sql
 
     def test_update_step_version(self, mock_db):
@@ -106,6 +113,8 @@ class TestDocumentAnalysisState:
         sql = mock_db._mock_cursor.execute.call_args[0][0]
         assert "group_analysis_gate" in sql
         assert "gag.permitted = TRUE" in sql
+        # A retired step never runs, even behind an open gate.
+        assert "JOIN analysis_step s ON s.name = gag.step_name AND NOT s.retired" in sql
 
     def test_count_runnable_steps(self, mock_db):
         mock_db._mock_cursor.fetchone.return_value = {"count": 42}
@@ -164,10 +173,13 @@ class TestLessonGroups:
         ]
         assert len(gate_calls) == 1
         assert gate_calls[0].args[1] == (30, "FELDENKRAIS_FIRST")
+        # A new group does not inherit gates for retired steps.
+        assert "NOT step.retired" in gate_calls[0].args[0]
 
 
 class TestGroupGates:
     def test_set_gate_permitted(self, mock_db):
+        mock_db._mock_cursor.fetchone.return_value = {"name": "decompose", "retired": False}
         mock_db.set_group_gate(5, "decompose", True, profile_key="gemini-3-flash")
         sql = mock_db._mock_cursor.execute.call_args[0][0]
         assert "INSERT INTO group_analysis_gate" in sql
@@ -178,6 +190,18 @@ class TestGroupGates:
         mock_db.set_group_gate(5, "decompose", False, profile_key="gemini-3-flash")
         params = mock_db._mock_cursor.execute.call_args[0][1]
         assert params == (5, "gemini-3-flash", "decompose", False)
+
+    def test_retired_step_gate_cannot_be_opened(self, mock_db):
+        mock_db._mock_cursor.fetchone.return_value = {"name": "motifs", "retired": True}
+        with pytest.raises(ValueError, match="retired"):
+            mock_db.set_group_gate(5, "motifs", True, profile_key="gemini-3-flash")
+        assert not any("INSERT INTO group_analysis_gate" in c.args[0]
+                       for c in mock_db._mock_cursor.execute.call_args_list)
+
+    def test_retired_step_gate_can_be_closed(self, mock_db):
+        mock_db.set_group_gate(5, "motifs", False, profile_key="gemini-3-flash")
+        params = mock_db._mock_cursor.execute.call_args[0][1]
+        assert params == (5, "gemini-3-flash", "motifs", False)
 
     def test_get_group_gates(self, mock_db):
         mock_db._mock_cursor.fetchall.return_value = [

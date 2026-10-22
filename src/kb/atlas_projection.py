@@ -348,16 +348,15 @@ def publish(db, dry_run: bool = False, out: str | None = None,
             "previous": current.get("projection_key") if current else None})
 
 
-PROJECTION_STEPS = {"motifs", "axes"}
+def maybe_publish_after_enrichment(db, generated_count: int) -> dict | None:
+    """Auto-publish hook for the lite enrichment worker. Fail-soft: never raises.
 
-
-def maybe_publish_after_sweep(db, completed_step_names) -> dict | None:
-    """Auto-publish hook for the analysis workers. Fail-soft: never raises.
-
-    Publishes only when the sweep completed steps that change the projection.
-    The analysis gates are the sole owner control; this runs unattended.
+    The projection is built from the lite artifacts (lite motifs, lite axes,
+    lesson cards), so a batch that generated any of them may have changed it.
+    publish() compares content hashes and does nothing when it has not. This
+    runs unattended.
     """
-    if not PROJECTION_STEPS & set(completed_step_names):
+    if not generated_count:
         return None
     try:
         result = publish(db)

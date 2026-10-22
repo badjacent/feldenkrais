@@ -168,7 +168,7 @@ class DashboardMixin:
                 JOIN group_analysis_gate gag
                     ON gag.group_id = lg.id AND gag.permitted = TRUE AND gag.profile_key = %s
                 JOIN analysis_profile p ON p.key = gag.profile_key
-                JOIN analysis_step s ON s.name = gag.step_name
+                JOIN analysis_step s ON s.name = gag.step_name AND NOT s.retired
                 JOIN lesson_group_member lgm ON lgm.group_id = lg.id
                 LEFT JOIN document_analysis_state das
                     ON das.document_id = lgm.document_id AND das.step_name = gag.step_name

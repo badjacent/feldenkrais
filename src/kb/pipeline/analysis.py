@@ -394,7 +394,7 @@ def run_step(db: Database, document_id: str, step_name: str, profile_key: str) -
     """Execute a single analysis step for a document under one profile.
 
     Returns True on success, False on failure, and None when the profile's
-    switch is off (nothing is run or recorded). Designed to run in its own
+    switch is off or the step is retired (nothing is run or recorded). Designed to run in its own
     process — no shared state.
     """
     executor = STEP_EXECUTORS.get(step_name)
@@ -410,14 +410,17 @@ def run_step(db: Database, document_id: str, step_name: str, profile_key: str) -
         logger.info(f"Profile {profile_key} is switched off; not running {step_name}")
         return None
 
-    transcript = _get_transcript(db, document_id)
-    if not transcript:
-        db.mark_step_error(document_id, step_name, "No transcript available", profile_key=profile_key)
-        return False
-
     step = db.get_analysis_step(step_name)
     if not step:
         logger.error(f"Unknown step: {step_name}")
+        return False
+    if step.get("retired"):
+        logger.info(f"Step {step_name} is retired; not running it")
+        return None
+
+    transcript = _get_transcript(db, document_id)
+    if not transcript:
+        db.mark_step_error(document_id, step_name, "No transcript available", profile_key=profile_key)
         return False
 
     depends_on = step.get("depends_on") or []
@@ -543,8 +546,6 @@ def run_bounded_worker(
         if not acquired:
             return {"status": "busy", "completed": 0, "failed": 0, "skipped": 0}
 
-        canonical_key = db.get_canonical_profile()["key"]
-        completed_canonical_steps: set[str] = set()
         in_flight: dict = {}  # future -> row
         in_flight_keys: set[tuple[str, str, str]] = set()
         per_profile: Counter = Counter()
@@ -615,18 +616,13 @@ def run_bounded_worker(
                         skipped += 1
                     elif result["ok"]:
                         completed += 1
-                        if row["profile_key"] == canonical_key:
-                            completed_canonical_steps.add(result["step_name"])
                     else:
                         failed += 1
                     print(json.dumps(result, sort_keys=True), flush=True)
 
-        # Auto-publish the Atlas projection when this sweep changed it. Only the
-        # canonical profile feeds the projection. The analysis gates are the sole
-        # owner control (see docs/ATLAS_ANALYSIS_PROJECTION_RESPONSE.md, Governance).
-        if completed_canonical_steps:
-            from atlas_projection import maybe_publish_after_sweep
-            maybe_publish_after_sweep(db, completed_canonical_steps)
+        # The Atlas projection is built from the lite enrichment artifacts, not
+        # from any analysis step, so the lite enrichment worker publishes it
+        # (ingest/lite_enrich.py).
 
     return {
         "status": "completed",

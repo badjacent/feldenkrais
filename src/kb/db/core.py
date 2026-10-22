@@ -204,6 +204,7 @@ CREATE TABLE IF NOT EXISTS analysis_step (
     cache_suffix TEXT,
     depends_on TEXT[] NOT NULL DEFAULT '{}',
     description TEXT,
+    retired BOOLEAN NOT NULL DEFAULT FALSE,
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -553,6 +554,7 @@ class DatabaseCore:
                 ("lesson_chat_log", "assistant", "TEXT"),
                 ("lesson_chat_log", "conversation_id", "TEXT"),
                 ("lesson_chat_log", "profile_key", "TEXT"),
+                ("analysis_step", "retired", "BOOLEAN NOT NULL DEFAULT FALSE"),
             ]:
                 cursor.execute(
                     """SELECT 1 FROM information_schema.columns

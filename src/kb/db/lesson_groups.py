@@ -99,6 +99,8 @@ class LessonGroupsMixin:
                           ON template_source.id = template_group.auto_source_id
                         JOIN group_analysis_gate template
                           ON template.group_id = template_group.id
+                        JOIN analysis_step step
+                          ON step.name = template.step_name AND NOT step.retired
                         WHERE template_source.name = %s
                         ON CONFLICT (group_id, profile_key, step_name) DO NOTHING
                     """, (group_id, DEFAULT_ANALYSIS_GATE_SOURCE))
@@ -123,7 +125,7 @@ class LessonGroupsMixin:
             cursor.execute(f"""
                 SELECT gag.*, s.current_version, s.depends_on, s.description
                 FROM group_analysis_gate gag
-                JOIN analysis_step s ON s.name = gag.step_name
+                JOIN analysis_step s ON s.name = gag.step_name AND NOT s.retired
                 WHERE gag.group_id = %s {profile_filter}
                 ORDER BY gag.profile_key, s.name
             """, params)
@@ -131,7 +133,14 @@ class LessonGroupsMixin:
 
     def set_group_gate(self, group_id: int, step_name: str, permitted: bool, *,
                        profile_key: str):
-        """Set the permitted flag for a (group, profile, step) triple."""
+        """Set the permitted flag for a (group, profile, step) triple.
+
+        A retired step can be closed but never opened.
+        """
+        if permitted:
+            step = self.get_analysis_step(step_name)
+            if step and step.get("retired"):
+                raise ValueError(f"Step {step_name} is retired and cannot be permitted")
         with self.get_cursor() as cursor:
             cursor.execute("""
                 INSERT INTO group_analysis_gate (group_id, profile_key, step_name, permitted, updated_at)

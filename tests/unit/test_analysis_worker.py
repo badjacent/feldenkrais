@@ -2,7 +2,7 @@ import threading
 import time
 from unittest.mock import MagicMock, patch
 
-from kb.pipeline.analysis import EXIT_PROFILE_DISABLED, run_bounded_worker
+from kb.pipeline.analysis import EXIT_PROFILE_DISABLED, run_bounded_worker, run_step
 
 
 class LockContext:
@@ -57,15 +57,12 @@ def test_worker_drains_runnable_steps_under_their_profiles():
         calls.append((document_id, step_name, profile_key))
         return {"ok": True, "document_id": document_id, "step_name": step_name, "profile": profile_key}
 
-    with patch("kb.pipeline.analysis._run_step_process", side_effect=run), \
-         patch("atlas_projection.maybe_publish_after_sweep") as publish:
+    with patch("kb.pipeline.analysis._run_step_process", side_effect=run):
         result = run_bounded_worker(db, max_steps=10, max_seconds=60, workers=2, step_timeout=30)
 
     assert result["status"] == "completed"
     assert result["completed"] == 2
     assert sorted(calls) == [("doc-1", "decompose", "astra-low"), ("doc-1", "decompose", "gemini-3-flash")]
-    # Only the canonical profile's completions feed the Atlas projection.
-    publish.assert_called_once_with(db, {"decompose"})
 
 
 def test_worker_does_not_claim_for_a_switched_off_profile():
@@ -74,8 +71,7 @@ def test_worker_does_not_claim_for_a_switched_off_profile():
         [_profile("gemini-3-flash", canonical=True), _profile("astra-low", enabled=False)],
     )
     with patch("kb.pipeline.analysis._run_step_process",
-               return_value={"ok": True, "step_name": "somatic"}) as run, \
-         patch("atlas_projection.maybe_publish_after_sweep"):
+               return_value={"ok": True, "step_name": "somatic"}) as run:
         result = run_bounded_worker(db, max_steps=10, max_seconds=60, workers=4, step_timeout=30)
 
     claimed = [c.args[2] for c in run.call_args_list]
@@ -100,8 +96,7 @@ def test_worker_holds_each_profile_to_its_concurrency_limit():
             active[0] -= 1
         return {"ok": True, "step_name": step_name}
 
-    with patch("kb.pipeline.analysis._run_step_process", side_effect=run), \
-         patch("atlas_projection.maybe_publish_after_sweep"):
+    with patch("kb.pipeline.analysis._run_step_process", side_effect=run):
         result = run_bounded_worker(db, max_steps=10, max_seconds=60, workers=4, step_timeout=30)
 
     assert result["completed"] == 3
@@ -112,10 +107,26 @@ def test_worker_counts_a_step_skipped_because_its_profile_was_switched_off():
     db = _worker_db([[_row("doc-1", "language", "astra-low")]],
                     [_profile("gemini-3-flash", canonical=True), _profile("astra-low")])
     with patch("kb.pipeline.analysis._run_step_process",
-               return_value={"ok": False, "skipped": True, "step_name": "language"}), \
-         patch("atlas_projection.maybe_publish_after_sweep"):
+               return_value={"ok": False, "skipped": True, "step_name": "language"}):
         result = run_bounded_worker(db, max_steps=10, max_seconds=60, workers=1, step_timeout=30)
 
     assert result["skipped"] == 1
     assert result["failed"] == 0
     assert EXIT_PROFILE_DISABLED == 3
+
+
+def test_a_retired_step_is_skipped_without_running():
+    db = MagicMock()
+    db.get_analysis_profile.return_value = {"key": "gemini-3-flash", "enabled": True,
+                                            "contract_version": 2}
+    db.get_analysis_step.return_value = {"name": "motifs", "retired": True,
+                                         "current_version": 1, "depends_on": []}
+    executor = MagicMock()
+    with patch.dict("kb.pipeline.analysis.STEP_EXECUTORS", {"motifs": executor}):
+        result = run_step(db, "doc-1", "motifs", "gemini-3-flash")
+
+    # None means skipped: nothing run, nothing recorded.
+    assert result is None
+    executor.assert_not_called()
+    db.mark_step_completed.assert_not_called()
+    db.mark_step_error.assert_not_called()
