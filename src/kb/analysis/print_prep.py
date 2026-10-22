@@ -14,7 +14,7 @@ import hashlib
 import json
 import sys
 
-from llm_config import DEFAULT_LLM
+from llm_config import DEFAULT_LLM, effective_llm_key
 
 from .core import _state
 
@@ -191,6 +191,7 @@ def run_print_prep(lesson_text: str, provider_key: str | None = None) -> dict:
         "spatial": ":spatial_v3",
         "prompt_sha256": hashlib.sha256((prompt_template + json.dumps(schema, sort_keys=True)).encode()).hexdigest()[:16],
         "provider": provider_key or DEFAULT_LLM,
+        "llm": effective_llm_key(provider_key),
     }
     model["usage"] = llm.last_usage or {}
     _pkg.save_cached_analysis(cache_key, model)

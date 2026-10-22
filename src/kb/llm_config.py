@@ -95,6 +95,35 @@ LLM_CONFIGS = {
 
 DEFAULT_LLM = "gemini"
 
+# A one-off run can send the canonical (bare-key) profile's calls to another
+# model, e.g. ANALYSIS_LLM_OVERRIDE=codex-astra, so that model fills gaps on top
+# of results already cached under that profile. Cache keys still follow the
+# profile; each result records the model that actually ran (describe_llm).
+# Set it only on the run's own process.
+LLM_OVERRIDE_ENV = "ANALYSIS_LLM_OVERRIDE"
+
+
+def effective_llm_key(provider_key: str | None = None) -> str:
+    """Return the LLM_CONFIGS or profile key a call with this provider key uses."""
+    key = provider_key or DEFAULT_LLM
+    override = os.environ.get(LLM_OVERRIDE_ENV)
+    if override and key == DEFAULT_LLM:
+        return override
+    return key
+
+
+def describe_llm(provider_key: str | None = None) -> dict:
+    """Name the provider and model a call with this provider key runs on."""
+    key = effective_llm_key(provider_key)
+    config = LLM_CONFIGS.get(key) or (_profile_config(key) if _db else None) or {}
+    return {
+        "llm_key": key,
+        "provider": config.get("provider"),
+        "model": config.get("model"),
+        "reasoning_effort": config.get("reasoning_effort"),
+        "overridden": key != (provider_key or DEFAULT_LLM),
+    }
+
 
 def get_llm(provider_key: str | None = None) -> LLM:
     """Get configured LLM instance.
@@ -111,7 +140,7 @@ def get_llm(provider_key: str | None = None) -> LLM:
         raise RuntimeError(
             "LLM calls are disabled. Run /enable-llm to enable."
         )
-    key = provider_key or DEFAULT_LLM
+    key = effective_llm_key(provider_key)
     config = LLM_CONFIGS.get(key) or _profile_config(key)
     if not config:
         raise ValueError(f"Unknown LLM provider: {key}. Choose from: {list(LLM_CONFIGS.keys())}")

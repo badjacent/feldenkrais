@@ -243,3 +243,31 @@ def test_lesson_context_for_a_text_source_does_not_claim_a_recording():
     assert "speech-to-text" not in doc and "timestamps" not in doc
     assert "## Lesson text" in doc
     assert "**Step 1**: Bend the right knee" in doc  # steps listed under their group
+
+
+def test_a_run_override_sends_only_the_canonical_profiles_calls_elsewhere():
+    from kb import llm_config
+
+    db = MagicMock()
+    db.get_cache.return_value = {"enabled": True}
+    with patch.object(llm_config, "_db", db), \
+         patch.dict("os.environ", {"ANALYSIS_LLM_OVERRIDE": "codex-astra", "GOOGLE_API_KEY": "k"}):
+        canonical = llm_config.get_llm("gemini")
+        other = llm_config.get_llm("codex-astra")
+        described = llm_config.describe_llm("gemini")
+
+    assert (canonical.provider, canonical.model) == ("codex", "gpt-6-astra")
+    assert other.model == "gpt-6-astra"
+    assert described == {"llm_key": "codex-astra", "provider": "codex", "model": "gpt-6-astra",
+                         "reasoning_effort": "low", "overridden": True}
+
+
+def test_without_the_override_the_canonical_profile_runs_gemini():
+    from kb import llm_config
+
+    with patch.dict("os.environ", {}, clear=False):
+        import os
+        os.environ.pop("ANALYSIS_LLM_OVERRIDE", None)
+        assert llm_config.effective_llm_key("gemini") == "gemini"
+        assert llm_config.effective_llm_key(None) == "gemini"
+        assert llm_config.describe_llm("gemini")["overridden"] is False

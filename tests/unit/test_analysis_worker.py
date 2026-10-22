@@ -130,3 +130,26 @@ def test_a_retired_step_is_skipped_without_running():
     executor.assert_not_called()
     db.mark_step_completed.assert_not_called()
     db.mark_step_error.assert_not_called()
+
+
+def test_a_result_records_the_model_that_actually_ran():
+    import importlib
+    import sys
+
+    from kb.pipeline import analysis as pipeline
+
+    # Other test modules leave a mock llm_config in sys.modules; use the real one.
+    real_llm_config = importlib.import_module("kb.llm_config")
+    stored = {}
+    profile = {"key": "gemini-3-flash", "provider": "gemini", "model": "gemini-3-flash-preview",
+               "params": {}, "contract_version": 2, "cache_tag": None}
+    with patch.object(pipeline, "load_cached_analysis", return_value={"steps": []}), \
+         patch.object(pipeline, "save_cached_analysis", side_effect=lambda k, v: stored.update(v)), \
+         patch.dict("os.environ", {"ANALYSIS_LLM_OVERRIDE": "codex-astra"}), \
+         patch.dict(sys.modules, {"llm_config": real_llm_config}):
+        pipeline._record_run(MagicMock(), "lesson text", {"cache_suffix": ":spatial_v3"}, profile, 12.0)
+
+    run = stored["_run"]
+    assert run["profile"] == "gemini-3-flash"
+    assert (run["provider"], run["model"]) == ("codex", "gpt-6-astra")
+    assert run["llm_override"] == "codex-astra"

@@ -386,12 +386,18 @@ def _record_run(db: Database, transcript: str, step: dict, profile: dict, elapse
     if not isinstance(result, dict) or "_run" in result:
         return
     from llm import process_usage
+    from llm_config import describe_llm
 
+    # The model that actually ran: a one-off run may override the profile's.
+    ran = describe_llm(profile_provider_key(profile))
+    overridden = ran["overridden"] and ran["model"]
     result["_run"] = {
         "profile": profile["key"],
-        "provider": profile["provider"],
-        "model": profile["model"],
-        "params": profile.get("params") or {},
+        "provider": ran["provider"] if overridden else profile["provider"],
+        "model": ran["model"] if overridden else profile["model"],
+        "params": ({"reasoning_effort": ran["reasoning_effort"]} if overridden
+                   else profile.get("params") or {}),
+        "llm_override": ran["llm_key"] if overridden else None,
         "contract_version": profile["contract_version"],
         "elapsed_seconds": round(elapsed, 1),
         "usage": process_usage(),
