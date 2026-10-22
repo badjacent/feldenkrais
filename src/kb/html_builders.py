@@ -584,7 +584,7 @@ def _build_atlas_projection_panel(_db) -> str:
             </button>
         </div>
         <div style="margin-top:6px;font-size:0.75em;color:#999;">
-            Publishes automatically after pipeline sweeps that complete motifs/axes steps.
+            Publishes automatically after a lite enrichment batch that adds lite motifs, lite axes or lesson cards.
             Public sources: {srcs}. Requires ATLAS_PUBLISH credentials in .env for a real publish.
         </div>
     </div>
@@ -778,11 +778,11 @@ decompose ──┬──► somatic ──┬──► condense ──► embed
             ├──► concept_tags ──► index_concepts
             │    (needs decompose + somatic)
             │
-            └──► spatial ──► index_spatial
-                 (needs decompose + somatic)
-
-language_patterns (depends on decompose + language)
-extract_steps ──► map_body_parts (independent)</pre>
+            ├──► spatial ──┬──► index_spatial
+            │    (needs    └──► embed_positions
+            │     decompose + somatic)
+            │
+            └──► spatial_v3</pre>
     </details>
 
     <div id="analysis-content">
