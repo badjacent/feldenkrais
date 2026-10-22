@@ -41,8 +41,12 @@ As hermes, without sudo:
   (`sudo launchctl kickstart system/com.feldenkrais.<job>`); otherwise it runs on
   its schedule.
 
-The servers bind to the tailnet address and exit if it is not up yet; launchd
-retries them, so they start once Tailscale connects.
+Tailscale is the `tailscaled` system daemon (Homebrew formula), installed the
+same day, so the tailnet is also up at boot without a login; the Tailscale app it
+replaced ran only inside `localmini`'s session. The servers bind to the tailnet
+address and exit if it is not up yet; launchd retries them, so they start once
+Tailscale connects. If the address changes while they run, restart them (kill
+their processes) so they bind to the new one.
 
 ## Atlas lesson intake
 
