@@ -92,15 +92,16 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None, super
     lesson_list_html = ""
     for cat_key, lessons in categories.items():
         source_name = html_mod.escape(display_names.get(cat_key, cat_key))
-        lesson_list_html += f'<section class="source-block" data-source="{source_name.lower()}">\n'
-        lesson_list_html += f'<h3 class="source-header">{source_name} (<span class="source-count">{len(lessons)}</span>)</h3>\n'
+        # Collapsed by default: the page opens as a list of sources.
+        lesson_list_html += f'<details class="source-block" data-source="{source_name.lower()}">\n'
+        lesson_list_html += f'<summary class="source-header">{source_name} (<span class="source-count">{len(lessons)}</span>)</summary>\n'
         lesson_list_html += '<ul class="lesson-list">\n'
         for lesson in lessons:
             doc_id, display_name, analyzed = lesson[0], lesson[1], lesson[3]
             esc_name = html_mod.escape(display_name)
             badge = "" if analyzed else TRANSCRIPT_ONLY_BADGE
             lesson_list_html += f'<li><a href="/lesson/{html_mod.escape(doc_id)}">{esc_name}</a>{badge}</li>\n'
-        lesson_list_html += '</ul>\n</section>\n'
+        lesson_list_html += '</ul>\n</details>\n'
     # Search results name their source from the category key the API returns.
     source_names_js = json.dumps(display_names).replace("</", "<\\/")
 
@@ -167,7 +168,12 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None, super
 
         /* Browse */
         h2 {{ font-size: 1.15em; color: #444; margin-top: 32px; margin-bottom: 12px; }}
-        .source-header {{ font-size: 1em; color: #555; margin-top: 24px; margin-bottom: 4px; }}
+        .source-header {{ font-size: 1em; font-weight: 600; color: #555; padding: 6px 0; cursor: pointer; }}
+        .source-header:hover {{ color: #007bff; }}
+        .source-block {{ border-bottom: 1px solid #eee; }}
+        .source-block[open] {{ padding-bottom: 8px; }}
+        .expand-controls {{ font-size: 0.85em; margin: 0 0 6px; }}
+        .expand-controls a {{ color: #007bff; cursor: pointer; margin-right: 12px; }}
         .lesson-list {{ list-style: none; padding: 0; margin: 4px 0 0 0; }}
         .lesson-list li {{ padding: 4px 0 4px 16px; }}
         .lesson-list li a {{ color: #007bff; text-decoration: none; }}
@@ -227,6 +233,8 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None, super
         <input type="search" id="lesson-filter" placeholder="Filter by title, teacher or source..." oninput="filterLessons()">
         <span id="lesson-filter-count"></span>
     </div>
+    <div class="expand-controls">{len(categories)} sources &middot;
+        <a onclick="setAllSources(true)">Expand all</a><a onclick="setAllSources(false)">Collapse all</a></div>
     {lesson_list_html}
     </div>
 
@@ -339,6 +347,27 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None, super
                 shown += visible;
             }});
             document.getElementById('lesson-filter-count').textContent = terms.length ? shown + ' of ' + total : '';
+            // While filtering, open every source with a match; afterwards, back to what the user had open.
+            filtering = terms.length > 0;
+            document.querySelectorAll('.source-block').forEach(block => {{
+                block.open = filtering ? block.style.display !== 'none' : block.dataset.userOpen === '1';
+            }});
+        }}
+
+        // Remember which sources the user opened by hand, so clearing the filter restores them.
+        let filtering = false;
+        document.querySelectorAll('.source-block').forEach(block => {{
+            block.addEventListener('toggle', () => {{
+                if (!filtering) block.dataset.userOpen = block.open ? '1' : '';
+            }});
+        }});
+
+        function setAllSources(open) {{
+            document.querySelectorAll('.source-block').forEach(block => {{
+                if (block.style.display === 'none') return;
+                block.open = open;
+                if (!filtering) block.dataset.userOpen = open ? '1' : '';
+            }});
         }}
 
         function escHtml(str) {{

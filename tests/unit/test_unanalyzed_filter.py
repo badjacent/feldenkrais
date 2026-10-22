@@ -196,3 +196,12 @@ class TestAnalysisSafety:
             page = html_builders._build_analysis_group_html(1, "gemini-3-flash", False)
         assert 'class="run-btn"' in page
         assert "A" * 80 in page
+
+
+def test_home_page_lists_sources_collapsed():
+    with patch.object(web, "_db", _listing_db()):
+        page = build_search_home_html(get_lessons_fn=web.get_lesson_listing, include_unanalyzed=True)
+    assert page.count('<details class="source-block"') == 2
+    assert "<details class=\"source-block\" data-source=\"atlas x\" open" not in page
+    assert '<summary class="source-header">Atlas X (<span class="source-count">1</span>)</summary>' in page
+    assert "Expand all" in page and "2 sources" in page
