@@ -75,8 +75,12 @@ die()  { print -u2 -- "\nFAILED: $1"; exit 1; }
 health() {
   if [[ $target == analysis ]]; then
     local loaded
-    loaded=$(mini "launchctl list | grep -w com.feldenkrais.analysis" || true)
-    print -- "analysis worker job (pid or -, last exit status): ${loaded:-not loaded}"
+    # A system daemon on a converted Mini (ops/mini/install-launch-daemons.sh),
+    # otherwise a launch agent in hermes's login session.
+    loaded=$(mini "launchctl print system/com.feldenkrais.analysis 2>/dev/null \
+      | awk '\$1 == \"state\" || (\$1 == \"last\" && \$2 == \"exit\") { printf \"%s \", \$0 }' \
+      | grep . || launchctl list | grep -w com.feldenkrais.analysis" || true)
+    print -- "analysis worker job: ${loaded:-not loaded}"
     [[ -n $loaded ]]
     return
   fi
@@ -215,11 +219,21 @@ for check in $checks; do
   fi
 done
 
-# (Re)start a job, loading it first if it is not loaded (a job that was booted
-# out, or is being installed for the first time from ~/Library/LaunchAgents).
+# (Re)start a job. On the Mini the jobs are system launch daemons that run as
+# hermes (ops/mini/install-launch-daemons.sh). hermes can read those but not
+# kickstart them; it can stop its own process instead, and launchd starts a
+# KeepAlive job again at once. An interval job picks up the new code on its
+# next scheduled run. A job still installed as a launch agent (a machine not yet
+# converted) is loaded or kickstarted in the login session, as before.
 start_job() {
   local label=$1 restart=$2 domain="gui/$(id -u)"
-  if launchctl print "$domain/$label" >/dev/null 2>&1; then
+  if launchctl print "system/$label" >/dev/null 2>&1; then
+    local pid
+    pid=$(launchctl print "system/$label" | awk '$1 == "pid" { print $3; exit }')
+    if [[ $restart == 1 && -n $pid ]]; then
+      kill "$pid"
+    fi
+  elif launchctl print "$domain/$label" >/dev/null 2>&1; then
     if [[ $restart == 1 ]]; then
       launchctl kickstart -k "$domain/$label"
     else

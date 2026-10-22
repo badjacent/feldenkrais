@@ -17,6 +17,33 @@ The queues remain domain-specific. A future operational status projection may
 join their run IDs and heartbeats, but it must not replace their authoritative
 tables.
 
+## Jobs are system launch daemons
+
+Since 2026-10-21 every `com.feldenkrais.*` job is a system launch daemon in
+`/Library/LaunchDaemons/` that runs as `hermes`, so the Mini's servers and
+workers start at boot with nobody logged in. (As launch agents they started only
+inside a hermes login session, so after the 2026-10-19 reboot nothing ran for two
+days.) `install-launch-daemons.sh` did the conversion; the old agent plists are
+in `~hermes/Library/LaunchAgents/retired-to-daemons/`.
+
+The plist files under `ops/mini/launchd/` and the agent commands in the sections
+below describe each job's program and schedule. On the Mini, install a new or
+changed job by placing its agent plist in `~/Library/LaunchAgents/` and running
+`sudo /Users/hermes/ops/install-launch-daemons.sh`; do not `launchctl bootstrap
+gui/...` it there.
+
+As hermes, without sudo:
+
+- Status: `launchctl print system/com.feldenkrais.<job> | head -20`
+- Restart a server (`analyzer-web`, `ff-capture`, `operations-dashboard`): stop
+  its process, `kill <pid>`, and launchd starts it again.
+- An interval job cannot be started early without sudo
+  (`sudo launchctl kickstart system/com.feldenkrais.<job>`); otherwise it runs on
+  its schedule.
+
+The servers bind to the tailnet address and exit if it is not up yet; launchd
+retries them, so they start once Tailscale connects.
+
 ## Atlas lesson intake
 
 The Atlas catalog can feed newly discovered free YouTube lessons into the

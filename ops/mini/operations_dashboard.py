@@ -64,8 +64,13 @@ def _command(arguments: list[str], *, cwd: Path = ROOT, timeout: int = 20) -> di
 
 
 def _worker(label: str) -> dict:
-    result = subprocess.run(["launchctl", "print", f"gui/{os.getuid()}/{label}"],
-                            capture_output=True, text=True, timeout=3, check=False)
+    # The jobs are system launch daemons running as hermes; a machine not yet
+    # converted (ops/mini/install-launch-daemons.sh) still has them as agents.
+    for domain in ("system", f"gui/{os.getuid()}"):
+        result = subprocess.run(["launchctl", "print", f"{domain}/{label}"],
+                                capture_output=True, text=True, timeout=3, check=False)
+        if not result.returncode:
+            break
     if result.returncode:
         return {"label": label.removeprefix("com.feldenkrais."), "state": "unavailable",
                 "detail": _sanitize(result.stderr.strip())}
