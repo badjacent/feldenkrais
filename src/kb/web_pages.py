@@ -351,7 +351,7 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
     )
     default_profile_js = json.dumps(default_profile or "")
     pipeline_tab = (
-        """<button onclick="switchTab('pipeline')">Pipeline</button>"""
+        """<button data-tab="pipeline" onclick="switchTab('pipeline')">Pipeline</button>"""
         if pipeline_visible else ""
     )
 
@@ -563,6 +563,21 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
         }}
         @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
 
+        /* Earlier Q&A on this lesson, above the chat */
+        .chat-earlier {{ margin-bottom: 12px; font-size: 0.9em; }}
+        .chat-earlier > summary {{ cursor: pointer; color: #555; font-weight: 600; padding: 4px 0; }}
+        .chat-earlier-turn {{ border-left: 3px solid #007bff; background: #f8f9fa; margin: 8px 0; padding: 6px 12px; }}
+        .chat-earlier-turn.outside {{ border-left-color: #8e6bbf; }}
+        .chat-earlier-turn > summary {{ cursor: pointer; font-weight: 600; color: #333; }}
+        .chat-earlier-meta {{ font-size: 0.8em; color: #888; font-weight: normal; margin-left: 6px; }}
+        .chat-earlier-answer {{ color: #555; line-height: 1.5; margin: 8px 0; }}
+        .chat-earlier-turn button {{
+            padding: 3px 10px; font-size: 0.85em; border: 1px solid #1976d2; border-radius: 4px;
+            background: #fff; color: #1976d2; cursor: pointer;
+        }}
+        #chat-earlier-list {{ max-height: 260px; overflow-y: auto; }}
+        .chat-earlier-foot {{ font-size: 0.85em; margin-top: 4px; }}
+
         /* Chat panel */
         .chat-panel {{
             border: 1px solid #e0e0e0; border-radius: 10px;
@@ -641,17 +656,14 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
     <div id="no-audio-msg" style="display:none; color: #888; font-size: 0.9em; font-style: italic; margin-bottom: 12px;">No recording available.</div>
 
     <div class="tab-bar" id="tab-bar">
-        <button class="active" onclick="switchTab('steps')">Step by Step</button>
-        <button onclick="switchTab('condensed')">Overview</button>
-        <button onclick="switchTab('somatic')">Somatic</button>
-        <button onclick="switchTab('language')">Language</button>
-        <button onclick="switchTab('classification')">Classification</button>
+        <button class="active" data-tab="steps" onclick="switchTab('steps')">Step by Step</button>
+        <button data-tab="condensed" onclick="switchTab('condensed')">Overview</button>
+        <button data-tab="somatic" onclick="switchTab('somatic')">Somatic</button>
+        <button data-tab="language" onclick="switchTab('language')">Language</button>
         {pipeline_tab}
-        <button onclick="switchTab('concepts')">Search Specifics</button>
-        <button onclick="switchTab('transcript')">Transcript</button>
-        <button onclick="switchTab('chat')">Q&amp;A</button>
-        <button onclick="switchTab('history')">History</button>
-        <button onclick="switchTab('rawio')">Raw I/O</button>
+        <button data-tab="transcript" onclick="switchTab('transcript')">Transcript</button>
+        <button data-tab="chat" onclick="switchTab('chat')">Q&amp;A</button>
+        <button data-tab="rawio" onclick="switchTab('rawio')">Raw I/O</button>
     </div>
     <div id="status-area"></div>
 
@@ -716,39 +728,11 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
         </div>
     </div>
 
-    <!-- Classification tab -->
-    <div id="tab-classification" style="display:none;">
-        <div class="tab-intro">Pass A decomposition and framework classification for this lesson.</div>
-        <div id="classification-tab-content">
-            <div style="color:#999; padding:16px;"><span class="spinner-inline"></span> Loading classification data...</div>
-        </div>
-    </div>
-
     <!-- Pipeline tab -->
     <div id="tab-pipeline" style="display:none;">
         <div class="tab-intro">Pipeline analysis status: which steps have been completed, their versions, and any errors.</div>
         <div id="pipeline-tab-content">
             <div style="color:#999; padding:16px;"><span class="spinner-inline"></span> Loading pipeline status...</div>
-        </div>
-    </div>
-
-    <!-- Search Specifics tab -->
-    <div id="tab-concepts" style="display:none;">
-        <div class="tab-intro">How this lesson is indexed for search &mdash; what makes it distinctive, and how different search methods find it.</div>
-        <div style="background:#f8f9fa;border:1px solid #e9ecef;border-radius:8px;padding:14px 18px;margin-bottom:16px;font-size:0.88em;line-height:1.6;color:#555;">
-            <div style="font-weight:600;color:#333;margin-bottom:6px;">How search works</div>
-            All Feldenkrais lessons share common vocabulary &mdash; &ldquo;lie on your back,&rdquo; &ldquo;notice the difference&rdquo; &mdash;
-            which makes them hard to distinguish by text similarity alone. To improve search, each lesson goes through a concept extraction pass
-            that identifies what is <em>specific and distinctive</em> about it. This produces three things used by four search methods:
-            <ul style="margin:8px 0 4px 0;padding-left:20px;">
-                <li><strong>Combined</strong> (default) &mdash; Fuses results from all three methods below using reciprocal rank fusion. Lessons that score well across multiple signals rise to the top.</li>
-                <li><strong>Standard</strong> &mdash; Embedding similarity against the full lesson analysis. Broadest coverage (all lessons), but generic language can make results muddy.</li>
-                <li><strong>Distinctive</strong> &mdash; Embedding similarity against a detailed physical description of what makes this lesson unique. Captures specific positions, movement sequences, and key connections.</li>
-                <li><strong>Tag Match</strong> &mdash; Direct text matching against concept tags and search terms. Best for specific queries like body parts or named movement patterns.</li>
-            </ul>
-        </div>
-        <div id="concepts-content">
-            <div style="color:#999; padding:16px;"><span class="spinner-inline"></span> Loading concept data...</div>
         </div>
     </div>
 
@@ -766,6 +750,11 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
     <!-- Q&A tab -->
     <div id="tab-chat" style="display:none;">
         <div class="tab-intro">Ask any question about this lesson. Answers draw from the transcript and all analyses.</div>
+        <details class="chat-earlier" id="chat-earlier" style="display:none;" open>
+            <summary id="chat-earlier-summary">Earlier questions on this lesson</summary>
+            <div id="chat-earlier-list"></div>
+            <div class="chat-earlier-foot"><a href="/conversations">All conversations &rarr;</a></div>
+        </details>
         <div class="chat-panel">
             <div class="chat-context-config" id="chat-context-config" {'style="display:none;"' if search_mode else ''}>
                 <strong>Context:</strong>
@@ -799,14 +788,6 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
     <!-- Annotated tab (hidden) -->
     <div id="tab-annotated" style="display:none;">
         <div class="progress-bar" id="annotated-progress"></div>
-    </div>
-
-    <!-- History tab: prior Q&A on this lesson -->
-    <div id="tab-history" style="display:none;">
-        <div class="tab-intro">Previous Q&amp;A conversations on this lesson. <a href="/conversations" style="margin-left:8px;">All conversations &rarr;</a></div>
-        <div id="history-tab-content">
-            <div style="color:#999; padding:16px;"><span class="spinner-inline"></span> Loading history...</div>
-        </div>
     </div>
 
     <!-- Raw I/O tab -->
@@ -967,20 +948,18 @@ const audioContainer = document.getElementById('audio-container');
 
 // ── Tab switching ──
 
-const TAB_ORDER = ['steps', 'condensed', 'somatic', 'language', 'classification', 'pipeline', 'concepts', 'transcript', 'chat', 'history', 'rawio'];
-let conceptsLoaded = false;
+const TAB_ORDER = ['steps', 'condensed', 'somatic', 'language', 'pipeline', 'transcript', 'chat', 'rawio'];
 let transcriptRendered = false;
 let somaticTabLoaded = false;
 let languageTabLoaded = false;
-let classificationTabLoaded = false;
 let pipelineTabLoaded = false;
 let rawioTabLoaded = false;
-let historyTabLoaded = false;
+let chatHistoryLoaded = false;
 
 function switchTab(tab) {{
     activeTab = tab;
-    document.querySelectorAll('.tab-bar button').forEach((b, i) => {{
-        b.classList.toggle('active', TAB_ORDER[i] === tab);
+    document.querySelectorAll('.tab-bar button').forEach(b => {{
+        b.classList.toggle('active', b.dataset.tab === tab);
     }});
     TAB_ORDER.concat(['annotated']).forEach(t => {{
         const el = document.getElementById('tab-' + t);
@@ -989,55 +968,69 @@ function switchTab(tab) {{
 
     if (tab === 'condensed' && !condensedLoaded) loadCondensed();
     if (tab === 'annotated' && !annotatedLoaded) loadAnnotated();
-    if (tab === 'concepts' && !conceptsLoaded) loadConcepts();
     if (tab === 'transcript' && !transcriptRendered) renderTranscript();
 if (tab === 'steps' && analysisData) renderCard();
-    if (tab === 'chat') document.getElementById('chat-input').focus();
+    if (tab === 'chat') {{
+        document.getElementById('chat-input').focus();
+        if (!chatHistoryLoaded) loadChatHistory();
+    }}
     if (tab === 'somatic' && !somaticTabLoaded) loadSomaticTab();
     if (tab === 'language' && !languageTabLoaded) loadLanguageTab();
-    if (tab === 'classification' && !classificationTabLoaded) loadClassificationTab();
     if (tab === 'pipeline' && !pipelineTabLoaded) loadPipelineTab();
     if (tab === 'rawio' && !rawioTabLoaded) loadRawIOTab();
-    if (tab === 'history' && !historyTabLoaded) loadHistoryTab();
 }}
 
-// ── History tab (per-lesson chat history) ──
+// ── Earlier Q&A on this lesson (shown above the chat) ──
 
-async function loadHistoryTab() {{
-    historyTabLoaded = true;
-    const div = document.getElementById('history-tab-content');
+let earlierTurns = [];
+
+async function loadChatHistory() {{
+    chatHistoryLoaded = true;
+    const box = document.getElementById('chat-earlier');
+    const list = document.getElementById('chat-earlier-list');
     try {{
         const res = await fetch('/api/lesson-chat-history/' + encodeURIComponent(DOCUMENT_ID));
         const data = await res.json();
-        if (data.error) {{
-            div.innerHTML = '<div style="color:#999;padding:16px;">' + escHtml(data.error) + '</div>';
-            return;
-        }}
-        if (!data.turns || data.turns.length === 0) {{
-            div.innerHTML = '<div style="color:#999;padding:16px;">No previous Q&amp;A on this lesson yet.</div>';
-            return;
-        }}
-        const parts = [];
-        if (data.is_superuser_view) {{
-            parts.push('<div style="font-size:0.85em;color:#888;padding:0 0 12px 0;">Superuser view: showing all users.</div>');
-        }}
-        for (const t of data.turns) {{
+        if (data.error || !data.turns || data.turns.length === 0) return;
+        earlierTurns = data.turns;
+        const who = data.is_superuser_view ? ' (all users)' : '';
+        document.getElementById('chat-earlier-summary').textContent =
+            'Earlier questions on this lesson' + who + ' (' + data.turns.length + ')';
+        list.innerHTML = data.turns.map((t, i) => {{
             const ts = t.created_at ? new Date(t.created_at).toLocaleString() : '';
             const userTag = (data.is_superuser_view && t.user_id) ? ' · user ' + t.user_id : '';
             const outside = t.origin === 'external';
             const originTag = outside ? ' · ' + (t.assistant || 'Outside') + ' chat, saved from outside the app' : '';
-            parts.push(
-                '<div style="border-left:3px solid ' + (outside ? '#8e6bbf' : '#007bff') + ';padding:8px 14px;margin:14px 0;background:#f8f9fa;">' +
-                '<div style="font-size:0.8em;color:#888;margin-bottom:6px;">' + escHtml(ts + userTag + originTag) + '</div>' +
-                '<div style="font-weight:600;color:#333;margin-bottom:8px;white-space:pre-wrap;">' + escHtml(t.query) + '</div>' +
-                '<div style="color:#555;white-space:pre-wrap;line-height:1.5;">' + escHtml(t.response) + '</div>' +
-                '</div>'
-            );
-        }}
-        div.innerHTML = parts.join('');
+            const cont = outside ? '' :
+                '<button type="button" onclick="continueEarlierTurn(' + i + ')" ' +
+                'title="Reload the questions up to this one into the chat, then ask a follow-up">Continue from here</button>';
+            return '<details class="chat-earlier-turn' + (outside ? ' outside' : '') + '">' +
+                '<summary>' + escHtml(t.query) +
+                '<span class="chat-earlier-meta">' + escHtml(ts + userTag + originTag) + '</span></summary>' +
+                '<div class="chat-earlier-answer">' + marked.parse(t.response || '') + '</div>' + cont +
+                '</details>';
+        }}).join('');
+        box.style.display = '';
     }} catch (e) {{
-        div.innerHTML = '<div style="color:#c62828;padding:16px;">Failed to load history: ' + escHtml(e.message) + '</div>';
+        list.innerHTML = '<div style="color:#c62828;">Failed to load earlier questions: ' + escHtml(e.message) + '</div>';
+        box.style.display = '';
     }}
+}}
+
+// Earlier turns are saved one question at a time; rebuild the conversation up to
+// turn i from the same user's in-app turns so a follow-up keeps its context.
+function continueEarlierTurn(i) {{
+    const t = earlierTurns[i];
+    if (!t) return;
+    chatMessages = [];
+    earlierTurns.slice(0, i + 1)
+        .filter(e => e.origin !== 'external' && e.user_id === t.user_id)
+        .forEach(e => chatMessages.push({{role: 'user', content: e.query}}, {{role: 'assistant', content: e.response}}));
+    const hint = document.getElementById('chat-hint');
+    if (hint) hint.remove();
+    renderChatMessages();
+    document.getElementById('chat-earlier').open = false;
+    document.getElementById('chat-input').focus();
 }}
 
 // ── Transcript rendering ──
@@ -1175,134 +1168,6 @@ function downloadTranscript() {{
     URL.revokeObjectURL(a.href);
 }}
 
-// ── Concepts loading ──
-
-async function loadConcepts() {{
-    conceptsLoaded = true;
-    const div = document.getElementById('concepts-content');
-    try {{
-        // Load concepts and positions in parallel
-        const [res, posRes] = await Promise.all([
-            fetch('/api/lesson/' + DOCUMENT_ID + '/concepts'),
-            fetch('/api/lesson/' + DOCUMENT_ID + '/positions'),
-        ]);
-        const data = await res.json();
-        const posData = await posRes.json();
-        if (data.error) {{
-            div.innerHTML = '<div style="color:#999;padding:16px;">No concept data available for this lesson.</div>';
-            return;
-        }}
-        let html = '';
-        // Distinctive summary
-        if (data.distinctive_summary) {{
-            html += '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
-            html += '<div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#1a73e8;margin-bottom:6px;">What Makes This Lesson Distinctive</div>';
-            html += '<div style="font-size:0.95em;line-height:1.6;color:#333;">' + escConcept(data.distinctive_summary) + '</div>';
-            html += '</div>';
-        }}
-        // Search terms
-        if (data.search_terms && data.search_terms.length) {{
-            html += '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
-            html += '<div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#e65100;margin-bottom:8px;">Search Terms</div>';
-            html += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
-            data.search_terms.forEach(t => {{
-                html += '<span style="padding:4px 12px;background:#fff3e0;border:1px solid #ffe0b2;border-radius:14px;font-size:0.85em;color:#e65100;">' + escConcept(t) + '</span>';
-            }});
-            html += '</div></div>';
-        }}
-        // Position sequence (spatial v3)
-        if (posData.available && posData.steps && posData.steps.length) {{
-            html += '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
-            html += '<div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#00695c;margin-bottom:8px;">Positions Through the Lesson</div>';
-            if (posData.position_summary && posData.position_summary.length) {{
-                html += '<div style="margin-bottom:12px;">';
-                posData.position_summary.forEach((p, i) => {{
-                    const pos = typeof p === 'string' ? p : p.position;
-                    const alts = (typeof p === 'object' && p.alternates) ? p.alternates : [];
-                    html += '<div style="margin-bottom:6px;">';
-                    html += '<span style="padding:4px 10px;background:#e0f2f1;border:1px solid #b2dfdb;border-radius:14px;font-size:0.82em;color:#00695c;">' + escConcept(pos) + '</span>';
-                    if (alts.length) {{
-                        html += '<div style="margin-left:16px;margin-top:3px;display:flex;flex-wrap:wrap;gap:4px;">';
-                        alts.forEach(a => {{
-                            html += '<span style="padding:2px 8px;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:10px;font-size:0.75em;color:#888;">' + escConcept(a) + '</span>';
-                        }});
-                        html += '</div>';
-                    }}
-                    html += '</div>';
-                }});
-                html += '</div>';
-            }}
-            let curGroup = -1;
-            posData.steps.forEach(s => {{
-                if (s.group_number !== curGroup) {{
-                    if (curGroup !== -1) html += '</div>';
-                    curGroup = s.group_number;
-                    html += '<div style="margin-bottom:8px;">';
-                    html += '<div style="font-size:0.78em;font-weight:600;color:#666;margin-top:8px;margin-bottom:4px;">Group ' + s.group_number + '</div>';
-                }}
-                const posStyle = 'font-weight:500;color:#00796b;';
-                const actionStyle = 'color:#555;';
-                const tagStyle = 'display:inline-block;font-size:0.7em;padding:1px 5px;border-radius:3px;margin-left:4px;';
-                let tags = '';
-                if (s.is_rest) tags += '<span style="' + tagStyle + 'background:#e8eaf6;color:#5c6bc0;">rest</span>';
-                if (s.is_transition) tags += '<span style="' + tagStyle + 'background:#fff3e0;color:#e65100;">transition</span>';
-                html += '<div style="font-size:0.85em;line-height:1.5;padding:2px 0;">';
-                html += '<span style="color:#999;font-size:0.8em;margin-right:4px;">' + s.step_number + '.</span>';
-                html += '<span style="' + posStyle + '">[' + escConcept(s.position) + ']</span> ';
-                html += '<span style="' + actionStyle + '">' + escConcept(s.action) + '</span>';
-                html += tags;
-                html += '</div>';
-            }});
-            if (curGroup !== -1) html += '</div>';
-            html += '</div>';
-        }}
-        // Concepts by category
-        if (data.concepts && data.concepts.length) {{
-            const byCategory = {{}};
-            data.concepts.forEach(c => {{
-                if (!byCategory[c.category]) byCategory[c.category] = [];
-                byCategory[c.category].push(c.value);
-            }});
-            const catColors = {{
-                body_region: '#2196f3', movement_pattern: '#4caf50', position: '#9c27b0',
-                feldenkrais_concept: '#ff9800', teaching_strategy: '#e91e63', theme: '#607d8b',
-                spatial_config: '#00897b', contact_point: '#5c6bc0', constraint: '#c62828', working_position: '#6a1b9a',
-                position_v3: '#00695c', position_alt: '#26a69a'
-            }};
-            const catLabels = {{
-                body_region: 'Body Region', movement_pattern: 'Movement Pattern', position: 'Position',
-                feldenkrais_concept: 'Feldenkrais Concept', teaching_strategy: 'Teaching Strategy', theme: 'Theme',
-                spatial_config: 'Spatial Configuration', contact_point: 'Contact Point', constraint: 'Constraint', working_position: 'Working Position',
-                position_v3: 'Position (detailed)', position_alt: 'Position (alternate phrasing)'
-            }};
-            html += '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
-            html += '<div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#333;margin-bottom:12px;">Concept Tags</div>';
-            Object.keys(byCategory).sort().forEach(cat => {{
-                const color = catColors[cat] || '#666';
-                const label = catLabels[cat] || cat.replace(/_/g, ' ');
-                html += '<div style="margin-bottom:10px;">';
-                html += '<div style="font-size:0.8em;font-weight:600;color:' + color + ';margin-bottom:4px;text-transform:capitalize;">' + label + '</div>';
-                html += '<div style="display:flex;flex-wrap:wrap;gap:5px;">';
-                byCategory[cat].forEach(v => {{
-                    html += '<span style="padding:3px 10px;border:1px solid #ddd;border-radius:12px;font-size:0.85em;color:#444;background:#fafafa;">' + escConcept(v) + '</span>';
-                }});
-                html += '</div></div>';
-            }});
-            html += '</div>';
-        }}
-        if (!html) html = '<div style="color:#999;padding:16px;">No concept data available for this lesson.</div>';
-        div.innerHTML = html;
-    }} catch (e) {{
-        div.innerHTML = '<div style="color:#999;padding:16px;">Failed to load concept data.</div>';
-    }}
-}}
-
-function escConcept(str) {{
-    const d = document.createElement('div');
-    d.textContent = str;
-    return d.innerHTML;
-}}
-
 // ── Somatic tab ──
 
 async function loadSomaticTab() {{
@@ -1417,75 +1282,6 @@ async function loadLanguageTab() {{
     }}
 }}
 
-// ── Classification tab ──
-
-async function loadClassificationTab() {{
-    classificationTabLoaded = true;
-    const div = document.getElementById('classification-tab-content');
-    try {{
-        const res = await fetch('/api/lesson/' + DOCUMENT_ID + '/classification');
-        const data = await res.json();
-        if (data.error) {{
-            div.innerHTML = '<div style="color:#999;padding:16px;">' + escHtml(data.error) + '</div>';
-            return;
-        }}
-        let html = '';
-        // Framework classification if present
-        if (data.primary_framework || data.classification) {{
-            html += '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
-            html += '<div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#e65100;margin-bottom:8px;">Framework Classification</div>';
-            if (data.primary_framework) html += '<p style="margin:0 0 8px 0;"><strong>Primary Framework:</strong> ' + escHtml(data.primary_framework) + '</p>';
-            if (data.rationale) html += '<p style="margin:0 0 12px 0;color:#555;font-size:0.9em;">' + escHtml(data.rationale) + '</p>';
-            // Bar chart for classification scores
-            const scores = data.classification || {{}};
-            const entries = Object.entries(scores).sort((a, b) => b[1] - a[1]);
-            if (entries.length) {{
-                const maxVal = Math.max(...entries.map(e => e[1]), 1);
-                html += '<div style="margin-top:8px;">';
-                entries.forEach(([name, score]) => {{
-                    const pct = Math.round((score / maxVal) * 100);
-                    const barColor = name === data.primary_framework ? '#e65100' : '#90a4ae';
-                    html += '<div style="display:flex;align-items:center;margin-bottom:6px;">';
-                    html += '<div style="width:140px;font-size:0.85em;color:#333;font-weight:500;flex-shrink:0;">' + escHtml(name) + '</div>';
-                    html += '<div style="flex:1;height:20px;background:#f0f0f0;border-radius:4px;overflow:hidden;margin:0 10px;">';
-                    html += '<div style="width:' + pct + '%;height:100%;background:' + barColor + ';border-radius:4px;transition:width 0.3s;"></div>';
-                    html += '</div>';
-                    html += '<div style="width:40px;text-align:right;font-size:0.85em;color:#666;">' + (typeof score === 'number' ? score.toFixed(2) : score) + '</div>';
-                    html += '</div>';
-                }});
-                html += '</div>';
-            }}
-            html += '</div>';
-        }}
-        // Groups summary
-        const groups = data.groups || [];
-        if (groups.length) {{
-            html += '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
-            html += '<div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#1a73e8;margin-bottom:8px;">Movement Groups (' + groups.length + ')</div>';
-            groups.forEach(g => {{
-                html += '<div style="padding:8px 0;border-bottom:1px solid #f0f0f0;">';
-                html += '<strong>Group ' + g.group_number + ':</strong> ' + escHtml(g.label || '');
-                if (g.starting_position) html += ' <span style="color:#888;font-size:0.85em;">(' + escHtml(g.starting_position) + ')</span>';
-                if (g.description) html += '<div style="color:#555;font-size:0.9em;margin-top:2px;">' + escHtml(g.description) + '</div>';
-                html += '</div>';
-            }});
-            html += '</div>';
-        }}
-        // Steps count
-        const steps = data.steps || [];
-        if (steps.length) {{
-            html += '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
-            html += '<div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#333;margin-bottom:8px;">Steps (' + steps.length + ')</div>';
-            html += '<div style="font-size:0.9em;color:#555;">Pass A decomposed this lesson into ' + steps.length + ' steps across ' + groups.length + ' groups.</div>';
-            html += '</div>';
-        }}
-        if (!html) html = '<div style="color:#999;padding:16px;">No classification data available.</div>';
-        div.innerHTML = html;
-    }} catch (e) {{
-        div.innerHTML = '<div style="color:#999;padding:16px;">Failed to load classification data.</div>';
-    }}
-}}
-
 // ── Pipeline tab ──
 
 // ── Pipeline controls (shared by pipeline + raw I/O tabs) ──
@@ -1558,7 +1354,6 @@ async function _pollPipeline() {{
             condensedLoaded = false;
             somaticTabLoaded = false;
             languageTabLoaded = false;
-            classificationTabLoaded = false;
             rawioTabLoaded = false;
             // Re-fetch the main analysis data (steps/groups may have changed)
             try {{
