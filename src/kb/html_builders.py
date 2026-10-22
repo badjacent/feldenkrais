@@ -462,6 +462,10 @@ def _build_profiles_panel(profile_key: str) -> str:
     """
 
 
+# Opening a gate on a group larger than this asks for confirmation first.
+GATE_CONFIRM_THRESHOLD = 20
+
+
 def _build_analysis_html(profile_key: str, include_unanalyzed: bool = False) -> str:
     """Build the group-level analysis dashboard content HTML for one profile's gates.
 
@@ -517,7 +521,8 @@ def _build_analysis_html(profile_key: str, include_unanalyzed: bool = False) -> 
             else:
                 label, bg, fg = "off", "#e2e3e5", "#6c757d"
                 title = f"Click to permit v{sv}"
-            onclick = f"toggleGroupGate({group_id}, '{sn}', {str(not permitted).lower()})"
+            onclick = (f"toggleGroupGate({group_id}, '{sn}', {str(not permitted).lower()}, "
+                       f"{doc_count}, this.closest('tr').dataset.name)")
             gate_cells += (
                 f'<td style="text-align:center;padding:4px 6px;cursor:pointer;" title="{title}" onclick="{onclick}">'
                 f'<span style="padding:2px 6px;border-radius:8px;font-size:0.75em;'
@@ -525,7 +530,7 @@ def _build_analysis_html(profile_key: str, include_unanalyzed: bool = False) -> 
             )
 
         rows.append(
-            f'<tr>'
+            f'<tr class="filterable" data-name="{name}">'
             f'<td style="font-size:0.85em;"><a href="/analysis?group={group_id}&profile={html_mod.escape(profile_key)}" style="color:#007bff;text-decoration:none;">{name}</a></td>'
             f'<td style="text-align:center;font-size:0.85em;color:#666;" title="{count_title}">{count_cell}</td>'
             f'{gate_cells}'
@@ -560,6 +565,7 @@ def _build_analysis_html(profile_key: str, include_unanalyzed: bool = False) -> 
         </button>
     </div>
 
+    <input type="search" class="row-filter" placeholder="Filter groups..." oninput="applyRowFilter()">
     <div style="overflow-x:auto;">
     <table style="width:100%;border-collapse:collapse;">
         <thead>
@@ -576,7 +582,8 @@ def _build_analysis_html(profile_key: str, include_unanalyzed: bool = False) -> 
     </div>
 
     <div style="margin-top:16px;font-size:0.8em;color:#999;">
-        Click a cell to toggle permission for the group under this model. Click a group name to see document details.
+        Click a cell to toggle permission for the group under this model (opening a gate on a group of more than
+        {GATE_CONFIRM_THRESHOLD} lessons asks first). Click a group name to see document details.
     </div>
 
     {_build_atlas_projection_panel(_db)}
@@ -657,8 +664,6 @@ def _build_analysis_group_html(group_id: int, profile_key: str, include_unanalyz
     for doc in docs:
         doc_id = str(doc["document_id"])
         title = doc.get("title", "")
-        if len(title) > 50:
-            title = title[:47] + "..."
 
         gate_cells = ""
         for sn in step_names:
@@ -693,7 +698,7 @@ def _build_analysis_group_html(group_id: int, profile_key: str, include_unanalyz
             run_btn = ""
             if local_controls:
                 run_btn = (
-                    f'<button onclick="event.stopPropagation();runStep(\'{doc_id}\',\'{sn}\')" '
+                    f'<button class="run-btn" onclick="event.stopPropagation();runStep(\'{doc_id}\',\'{sn}\')" '
                     f'title="Run {sn}" '
                     f'style="font-size:0.6em;padding:1px 4px;margin-left:3px;border:1px solid #007bff;'
                     f'border-radius:3px;background:white;color:#007bff;cursor:pointer;vertical-align:middle;"'
@@ -708,8 +713,8 @@ def _build_analysis_group_html(group_id: int, profile_key: str, include_unanalyz
             )
 
         rows.append(
-            f'<tr>'
-            f'<td style="font-size:0.85em;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{html_mod.escape(doc.get("title", ""))}">'
+            f'<tr class="filterable" data-name="{html_mod.escape(title.lower())}">'
+            f'<td style="font-size:0.85em;max-width:360px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{html_mod.escape(doc.get("title", ""))}">'
             f'<a href="/lesson/{doc_id}?profile={html_mod.escape(profile_key)}" style="color:#007bff;text-decoration:none;">{html_mod.escape(title)}</a>'
             f'{"" if doc.get("analyzed") else TRANSCRIPT_ONLY_BADGE}</td>'
             f'{gate_cells}'
@@ -727,6 +732,7 @@ def _build_analysis_group_html(group_id: int, profile_key: str, include_unanalyz
         <a href="/analysis?profile={html_mod.escape(profile_key)}" style="color:#007bff;text-decoration:none;">&larr; Back to groups</a>
         <h2 style="margin:8px 0;">{group_name}</h2>
         <span style="color:#666;font-size:0.9em;">{len(docs)} documents · model {html_mod.escape(profile_key)}</span>
+        <input type="search" class="row-filter" placeholder="Filter lessons..." oninput="applyRowFilter()">
         {unanalyzed_filter_html(unanalyzed_count, include_unanalyzed, corpus_wide=False)}
     </div>
 
@@ -750,6 +756,7 @@ def _build_analysis_group_html(group_id: int, profile_key: str, include_unanalyz
         <span style="background:#fff3cd;padding:1px 6px;border-radius:4px;">stale (will run)</span>
         <span style="background:#f8d7da;padding:1px 6px;border-radius:4px;">error (click to clear)</span>
         <span style="background:#f8f9fa;padding:1px 6px;border-radius:4px;color:#adb5bd;">not started</span>
+        · hover a row to show its &#9654; run buttons
     </div>
     """
 
@@ -794,6 +801,11 @@ def _build_analysis_page(group_id: int | None = None, profile_key: str | None = 
         th, td {{ border-bottom: 1px solid #eee; }}
         th {{ position: sticky; top: 0; background: white; z-index: 1; }}
         tr:hover {{ background: #f8f9fa; }}
+        /* Run buttons appear on the hovered row only, so a stray click can't queue work */
+        .run-btn {{ visibility: hidden; }}
+        tr:hover .run-btn, .run-btn:focus, .run-btn:disabled {{ visibility: visible; }}
+        .row-filter {{ display: block; width: 320px; max-width: 100%; margin: 8px 0; padding: 5px 10px;
+            font-size: 0.9em; border: 1px solid #ccc; border-radius: 4px; }}
     </style>
 </head>
 <body>
@@ -852,7 +864,13 @@ decompose ──┬──► somatic ──┬──► condense ──► embed
         .catch(err => alert('Error: ' + err));
     }}
 
-    function toggleGroupGate(groupId, stepName, newPermitted) {{
+    // Opening a gate lets the worker run that step on every lesson in the group
+    // (hidden transcript-only ones included) once the model is on: ask first on big groups.
+    function toggleGroupGate(groupId, stepName, newPermitted, docCount, groupName) {{
+        if (newPermitted && docCount > {GATE_CONFIRM_THRESHOLD} && !confirm(
+                'Open ' + stepName + ' for "' + groupName + '" (' + docCount + ' lessons) under ' + ANALYSIS_PROFILE + '?\\n\\n' +
+                'While this model is switched on, the worker will run ' + stepName +
+                ' on every lesson in the group that needs it, including transcript-only lessons hidden from this list.')) return;
         fetch('/api/analysis/gate', {{
             method: 'POST',
             headers: {{'Content-Type': 'application/json'}},
@@ -922,6 +940,15 @@ decompose ──┬──► somatic ──┬──► condense ──► embed
         .catch(err => alert('Error: ' + err));
     }}
 
+    function applyRowFilter() {{
+        const input = document.querySelector('#analysis-content .row-filter');
+        const terms = (input ? input.value : '').toLowerCase().split(/\\s+/).filter(Boolean);
+        document.querySelectorAll('#analysis-content tr.filterable').forEach(tr => {{
+            const name = (tr.dataset.name || '').toLowerCase();
+            tr.style.display = terms.every(t => name.includes(t)) ? '' : 'none';
+        }});
+    }}
+
     function refreshDashboard() {{
         const url = new URL(window.location);
         const groupId = url.searchParams.get('group');
@@ -934,7 +961,11 @@ decompose ──┬──► somatic ──┬──► condense ──► embed
         fetch(endpoint)
             .then(r => r.text())
             .then(html => {{
+                const filter = document.querySelector('#analysis-content .row-filter');
+                const kept = filter ? filter.value : '';
                 document.getElementById('analysis-content').innerHTML = html;
+                const fresh = document.querySelector('#analysis-content .row-filter');
+                if (fresh && kept) {{ fresh.value = kept; applyRowFilter(); }}
             }});
         const statusEl = document.getElementById('analysis-status');
         if (statusEl && !groupId) {{

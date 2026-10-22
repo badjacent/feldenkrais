@@ -180,3 +180,19 @@ class TestHomeListing:
         assert 'id="lesson-filter"' in page
         assert "restoreSearch" in page
         assert '"db:11": "Mixed"' in page
+
+
+class TestAnalysisSafety:
+    def test_gate_click_carries_group_size_for_the_confirm(self):
+        page = TestAnalysisDashboard()._groups(True)
+        assert "toggleGroupGate(2, 'decompose', true, 4, this.closest('tr').dataset.name)" in page
+        assert 'data-name="Atlas only group"' in page
+        assert 'class="row-filter"' in page
+
+    def test_run_buttons_are_hover_only_and_titles_uncut(self):
+        db = _analysis_db()
+        db.get_document_dashboard.return_value[0]["title"] = "A" * 80
+        with patch.object(web, "_db", db), patch.object(web, "PIPELINE_LOCAL_CONTROLS", True):
+            page = html_builders._build_analysis_group_html(1, "gemini-3-flash", False)
+        assert 'class="run-btn"' in page
+        assert "A" * 80 in page
