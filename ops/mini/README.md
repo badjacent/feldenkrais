@@ -17,6 +17,17 @@ The queues remain domain-specific. A future operational status projection may
 join their run IDs and heartbeats, but it must not replace their authoritative
 tables.
 
+## The analysis worker sleeps when there is nothing to do
+
+At the end of each pass the worker switches off every model profile that has
+nothing left to run; it never switches one on. When no profile is left on it
+removes `~/ops/analysis-active`, and from then on its scheduled runs print
+`{"status":"asleep"}` and exit without touching the database, so Neon can
+suspend. To start analysis again, switch a profile on in `/analysis` on the Mini
+(or re-run a step there): that recreates the file and the next pass, within five
+minutes, picks the work up. By hand: `touch ~/ops/analysis-active` after
+switching the profile on.
+
 ## Jobs are system launch daemons
 
 Since 2026-10-21 every `com.feldenkrais.*` job is a system launch daemon in
