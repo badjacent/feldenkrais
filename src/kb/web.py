@@ -174,16 +174,6 @@ def _is_pipeline_locked() -> bool:
 _pipeline_run_lock = asyncio.Lock()
 
 
-async def _periodic_group_sync():
-    """Periodically sync auto-groups so newly transcribed lessons enter the analysis pipeline."""
-    while True:
-        await asyncio.sleep(300)  # every 5 minutes
-        try:
-            _db.sync_auto_groups()
-        except Exception as e:
-            print(f"[sync] auto-group sync error: {e}")
-
-
 @asynccontextmanager
 async def _lifespan(app):
     if _db and not IS_LAMBDA:
@@ -193,16 +183,10 @@ async def _lifespan(app):
                 "UPDATE pipeline_node_state SET status = 'stale' WHERE status = 'running'"
             )
         # Analysis runs in the dedicated worker (python -m kb.pipeline.analysis run),
-        # never in the web process.
-    sync_task = None
-    if _db and not IS_LAMBDA:
-        sync_task = asyncio.create_task(_periodic_group_sync())
-        print("[sync] auto-group sync running every 5 minutes")
-    try:
-        yield
-    finally:
-        if sync_task:
-            sync_task.cancel()
+        # never in the web process. Auto-groups are synced when the worker starts
+        # a pass and when /analysis is opened, not on a timer, so an idle analyzer
+        # sends Neon no queries and it can suspend.
+    yield
 
 
 app = FastAPI(title="Feldenkrais Lesson Analyzer", lifespan=_lifespan)

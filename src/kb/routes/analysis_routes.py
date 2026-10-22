@@ -40,6 +40,12 @@ async def analysis_dashboard(request: Request):
         profile_key = _profile_key(request.query_params.get("profile")) if _web._db else None
     except ValueError as e:
         return HTMLResponse(f"<p>{e}</p>", status_code=400)
+    if _web._db and group_id is None:
+        # Show newly transcribed lessons in their groups (no longer synced on a timer).
+        try:
+            _web._db.sync_auto_groups()
+        except Exception as e:
+            print(f"[sync] auto-group sync error: {e}")
     return _web._build_analysis_page(group_id, profile_key, _web._show_unanalyzed(request))
 
 

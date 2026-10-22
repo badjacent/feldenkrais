@@ -588,6 +588,13 @@ def run_bounded_worker(
         if not acquired:
             return {"status": "busy", "completed": 0, "failed": 0, "skipped": 0}
 
+        # Newly transcribed lessons join their source's group before the pass
+        # reads what is runnable (the web app no longer syncs on a timer).
+        try:
+            db.sync_auto_groups()
+        except Exception as e:
+            logger.warning(f"auto-group sync failed: {e}")
+
         in_flight: dict = {}  # future -> row
         in_flight_keys: set[tuple[str, str, str]] = set()
         per_profile: Counter = Counter()
