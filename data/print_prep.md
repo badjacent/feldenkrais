@@ -40,10 +40,13 @@ the teacher. You never change the structure.
      clean up, correct, join two segments, or add ellipses.
    - An excerpt can be the whole segment or part of it. No two excerpts in a step
      may repeat or overlap.
-   - Quote in the language of the transcript.
+   - Quote in the language of the transcript, even when it is not English.
 5. **`editorial_notes`: rarely.** Only for a material ambiguity a reader should
    know about (for example, the teacher names one side and then demonstrates the
    other). Minor transcription quirks need no note. Usually return an empty list.
+6. **Language: English, except quotes.** Write `position`, `brief_summary` and
+   any `editorial_notes` in English for every lesson, whatever language it is
+   taught in. Only `notable_quotes` stay in the transcript's own language.
 
 ## Input
 
