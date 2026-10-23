@@ -317,6 +317,7 @@ def transcribe_document(
             summary["dry_run"] = True
             return summary
 
+        _reconnect(db)  # the pooled connection may have died during transcription
         db.create_analysis(document_id=doc_id, type_id=TRANSCRIPTION_TYPE_ID,
                            data=json.dumps(analysis_data))
         _finish_job(db, job_id, "completed",
@@ -334,6 +335,24 @@ def transcribe_document(
         return {"document_id": doc_id, "error": str(e)}
     finally:
         Path(local_path).unlink(missing_ok=True)
+
+
+def _reconnect(db: Database) -> None:
+    """Make sure the next statement gets a live connection.
+
+    A long transcription leaves the pooled connection idle for minutes, and the
+    server may drop it. The first statement on a dead connection fails and marks
+    it closed, so get_cursor discards it; a second try gets a fresh one.
+    """
+    for attempt in (1, 2):
+        try:
+            with db.get_cursor(commit=False) as cursor:
+                cursor.execute("SELECT 1")
+            return
+        except Exception:
+            if attempt == 2:
+                raise
+            logger.info("database connection was dropped; reconnecting")
 
 
 def main():

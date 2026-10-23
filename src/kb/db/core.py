@@ -442,6 +442,12 @@ ON CONFLICT DO NOTHING;
 """
 
 
+def _is_closed(conn) -> bool:
+    """psycopg2 sets ``closed`` to a nonzero int once a connection is unusable."""
+    closed = getattr(conn, "closed", 0)
+    return isinstance(closed, int) and closed != 0
+
+
 class DatabaseCore:
     """Core database infrastructure: connection pool, cursor, schema."""
 
@@ -520,17 +526,25 @@ class DatabaseCore:
         Yields a cursor and handles connection management.
         Commits by default; set commit=False for read-only operations.
         """
-        conn = self._get_pool().getconn()
+        pool = self._get_pool()
+        conn = pool.getconn()
+        if _is_closed(conn):
+            # The server dropped it while it sat idle in the pool (Neon closes
+            # idle connections, e.g. during a long transcription). Use a new one.
+            pool.putconn(conn, close=True)
+            conn = pool.getconn()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cursor:
                 yield cursor
                 if commit:
                     conn.commit()
         except Exception:
-            conn.rollback()
+            if not _is_closed(conn):
+                conn.rollback()
             raise
         finally:
-            self._get_pool().putconn(conn)
+            # Never return a dead connection to the pool.
+            pool.putconn(conn, close=_is_closed(conn))
 
     def close(self):
         """Close all database connections."""
