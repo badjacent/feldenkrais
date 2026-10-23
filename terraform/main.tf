@@ -130,6 +130,12 @@ data "archive_file" "loader_lambda" {
 }
 
 resource "aws_lambda_function" "loader" {
+  # Throttles (reserved concurrency) are set by hand during a takedown
+  # (notes kept locally in ~/github/servers); a deploy must not lift them.
+  lifecycle {
+    ignore_changes = [reserved_concurrent_executions]
+  }
+
   filename         = data.archive_file.loader_lambda.output_path
   function_name    = "feldenkrais-loader-${var.environment}"
   role             = aws_iam_role.loader_lambda.arn
@@ -289,6 +295,12 @@ data "archive_file" "transcription_lambda" {
 }
 
 resource "aws_lambda_function" "transcription" {
+  # Throttles (reserved concurrency) are set by hand during a takedown
+  # (notes kept locally in ~/github/servers); a deploy must not lift them.
+  lifecycle {
+    ignore_changes = [reserved_concurrent_executions]
+  }
+
   count = var.groq_api_key != "" ? 1 : 0
 
   filename         = data.archive_file.transcription_lambda.output_path
@@ -404,6 +416,12 @@ data "archive_file" "scraper_lambda" {
 }
 
 resource "aws_lambda_function" "scraper" {
+  # Throttles (reserved concurrency) are set by hand during a takedown
+  # (notes kept locally in ~/github/servers); a deploy must not lift them.
+  lifecycle {
+    ignore_changes = [reserved_concurrent_executions]
+  }
+
   filename         = data.archive_file.scraper_lambda.output_path
   function_name    = "feldenkrais-scraper-${var.environment}"
   role             = aws_iam_role.scraper_lambda.arn
@@ -486,6 +504,12 @@ data "archive_file" "youtube_lambda" {
 }
 
 resource "aws_lambda_function" "youtube" {
+  # Throttles (reserved concurrency) are set by hand during a takedown
+  # (notes kept locally in ~/github/servers); a deploy must not lift them.
+  lifecycle {
+    ignore_changes = [reserved_concurrent_executions]
+  }
+
   count = var.groq_api_key != "" ? 1 : 0 # Reuse same condition as transcription
 
   filename         = data.archive_file.youtube_lambda.output_path
@@ -641,6 +665,12 @@ resource "aws_iam_role_policy" "web_lambda_invoke" {
 # The script packages src/kb/ code + data files + docs into lambda_web.zip.
 
 resource "aws_lambda_function" "web" {
+  # Throttles (reserved concurrency) are set by hand during a takedown
+  # (notes kept locally in ~/github/servers); a deploy must not lift them.
+  lifecycle {
+    ignore_changes = [reserved_concurrent_executions]
+  }
+
   filename         = "${path.module}/lambda_web.zip"
   function_name    = "feldenkrais-web-${var.environment}"
   role             = aws_iam_role.web_lambda.arn
