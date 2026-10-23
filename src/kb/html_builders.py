@@ -20,6 +20,8 @@ def _analysis_step_names():
         "decompose", "extract_steps",
         # Level 1: depend on level 0
         "language", "map_body_parts", "somatic", "spatial_v3",
+        # Level 2a: depends on decompose + spatial_v3
+        "print_prep",
         # Level 2: depend on level 1
         "concept_tags", "condense", "language_patterns", "spatial",
         # Level 3: depend on level 2
@@ -41,6 +43,7 @@ _STEP_DISPLAY_NAMES = {
     "embed": "embed", "embed_positions": "embed-pos",
     "index_concepts": "idx-conc", "index_spatial": "idx-spat",
     "motifs": "motifs", "raw_motifs": "raw-mot", "axes": "axes",
+    "print_prep": "print-prep",
 }
 
 
@@ -312,7 +315,7 @@ def _build_ingestion_page() -> str:
     </style>
 </head>
 <body>
-    <div class="nav"><a href="/">&larr; Home</a> <a href="/analysis">Analysis</a></div>
+    <div class="nav"><a href="/">&larr; Home</a>{' <a href="/analysis">Analysis</a>' if _web.PIPELINE_LOCAL_CONTROLS else ''}</div>
     <h1>Ingestion Dashboard</h1>
 
     <div id="ingestion-content">
@@ -405,12 +408,81 @@ def _build_ingestion_page() -> str:
 """
 
 
-def _build_analysis_html() -> str:
-    """Build the group-level analysis dashboard content HTML."""
+def _build_profiles_panel(profile_key: str) -> str:
+    """One row per analysis profile, with its global switch and waiting work."""
     import web as _web
     _db = _web._db
 
-    groups = _db.get_group_dashboard()
+    runnable = _db.count_runnable_steps_by_profile()
+    rows = []
+    for p in _db.get_analysis_profiles():
+        key = p["key"]
+        selected = key == profile_key
+        params = ", ".join(f"{k}={v}" for k, v in sorted((p.get("params") or {}).items())) or "—"
+        badges = ""
+        if p["canonical"]:
+            badges += ' <span style="font-size:0.7em;padding:1px 6px;border-radius:8px;background:#e7f1ff;color:#084298;">canonical</span>'
+        if p["enabled"]:
+            switch = (f'<button onclick="toggleProfile(\'{key}\', false)" title="Stop claiming new steps for this model" '
+                      f'style="padding:2px 12px;border:none;border-radius:10px;background:#198754;color:white;cursor:pointer;">On</button>')
+        else:
+            switch = (f'<button onclick="toggleProfile(\'{key}\', true)" title="Let the worker claim steps for this model" '
+                      f'style="padding:2px 12px;border:1px solid #adb5bd;border-radius:10px;background:white;color:#6c757d;cursor:pointer;">Off</button>')
+        waiting = runnable.get(key, 0)
+        waiting_label = f"{waiting} waiting" if p["enabled"] else f"{waiting} would run"
+        name = html_mod.escape(key)
+        rows.append(
+            f'<tr style="{"background:#f0f7ff;" if selected else ""}">'
+            f'<td style="padding:4px 8px;"><a href="/analysis?profile={name}" style="color:#007bff;text-decoration:none;'
+            f'{"font-weight:600;" if selected else ""}">{name}</a>{badges}</td>'
+            f'<td style="padding:4px 8px;font-size:0.85em;">{html_mod.escape(p["provider"])} / {html_mod.escape(p["model"])}</td>'
+            f'<td style="padding:4px 8px;font-size:0.8em;color:#666;">{html_mod.escape(params)}</td>'
+            f'<td style="padding:4px 8px;font-size:0.85em;text-align:center;">v{p["contract_version"]}</td>'
+            f'<td style="padding:4px 8px;font-size:0.85em;text-align:right;">{waiting_label}</td>'
+            f'<td style="padding:4px 8px;text-align:center;">{switch}</td>'
+            f'</tr>'
+        )
+    return f"""
+    <h2 style="font-size:1.1em;margin:0 0 8px;">Models</h2>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
+        <thead><tr style="border-bottom:2px solid #dee2e6;">
+            <th style="text-align:left;padding:4px 8px;">Profile</th>
+            <th style="text-align:left;padding:4px 8px;">Provider / model</th>
+            <th style="text-align:left;padding:4px 8px;">Params</th>
+            <th style="padding:4px 8px;">Contract</th>
+            <th style="text-align:right;padding:4px 8px;">Steps</th>
+            <th style="padding:4px 8px;">Switch</th>
+        </tr></thead>
+        <tbody>{"".join(rows)}</tbody>
+    </table>
+    <div style="font-size:0.8em;color:#999;margin:-12px 0 20px;">
+        A step runs when its group's gate for that model is open and the model is switched on.
+        Switching off stops new claims; steps already running finish.
+    </div>
+    """
+
+
+# Opening a gate on a group larger than this asks for confirmation first.
+GATE_CONFIRM_THRESHOLD = 20
+
+
+def _build_analysis_html(profile_key: str, include_unanalyzed: bool = False) -> str:
+    """Build the group-level analysis dashboard content HTML for one profile's gates.
+
+    Unless ``include_unanalyzed``, groups count only analyzed lessons and groups
+    holding nothing but transcript-only lessons are left out.
+    """
+    import web as _web
+    from web_pages import unanalyzed_filter_html
+    _db = _web._db
+
+    all_groups = _db.get_group_dashboard(profile_key)
+    unanalyzed_total = sum(g["doc_count"] - g["analyzed_count"] for g in all_groups)
+    if include_unanalyzed:
+        groups = all_groups
+    else:
+        groups = [g for g in all_groups if g["analyzed_count"]]
+    hidden_groups = len(all_groups) - len(groups)
     step_names, step_lookup = _analysis_step_names()
 
     def step_tooltip(sn):
@@ -430,6 +502,15 @@ def _build_analysis_html() -> str:
         group_id = group["id"]
         name = html_mod.escape(group.get("name", ""))
         doc_count = group.get("doc_count", 0)
+        analyzed_count = group.get("analyzed_count", 0)
+        if include_unanalyzed and analyzed_count < doc_count:
+            count_cell = f'{analyzed_count} <span style="color:#aaa;">/ {doc_count}</span>'
+            count_title = f"{analyzed_count} analyzed of {doc_count}"
+        elif include_unanalyzed:
+            count_cell, count_title = str(doc_count), f"{doc_count} analyzed"
+        else:
+            count_cell = str(analyzed_count)
+            count_title = f"{analyzed_count} analyzed; {doc_count - analyzed_count} transcript-only hidden"
         gate_cells = ""
         for sn in step_names:
             permitted = group["gates"].get(sn, False)
@@ -440,7 +521,8 @@ def _build_analysis_html() -> str:
             else:
                 label, bg, fg = "off", "#e2e3e5", "#6c757d"
                 title = f"Click to permit v{sv}"
-            onclick = f"toggleGroupGate({group_id}, '{sn}', {str(not permitted).lower()})"
+            onclick = (f"toggleGroupGate({group_id}, '{sn}', {str(not permitted).lower()}, "
+                       f"{doc_count}, this.closest('tr').dataset.name)")
             gate_cells += (
                 f'<td style="text-align:center;padding:4px 6px;cursor:pointer;" title="{title}" onclick="{onclick}">'
                 f'<span style="padding:2px 6px;border-radius:8px;font-size:0.75em;'
@@ -448,9 +530,9 @@ def _build_analysis_html() -> str:
             )
 
         rows.append(
-            f'<tr>'
-            f'<td style="font-size:0.85em;"><a href="/analysis?group={group_id}" style="color:#007bff;text-decoration:none;">{name}</a></td>'
-            f'<td style="text-align:center;font-size:0.85em;color:#666;">{doc_count}</td>'
+            f'<tr class="filterable" data-name="{name}">'
+            f'<td style="font-size:0.85em;"><a href="/analysis?group={group_id}&profile={html_mod.escape(profile_key)}" style="color:#007bff;text-decoration:none;">{name}</a></td>'
+            f'<td style="text-align:center;font-size:0.85em;color:#666;" title="{count_title}">{count_cell}</td>'
             f'{gate_cells}'
             f'</tr>'
         )
@@ -459,26 +541,31 @@ def _build_analysis_html() -> str:
         f'<tr><td colspan="{2 + len(step_names)}" style="text-align:center;color:#999;">No groups found. Run sync to create groups from sources.</td></tr>'
     )
 
-    runnable_count = _db.count_runnable_steps()
+    runnable_count = _db.count_runnable_steps(profile_key=profile_key, enabled_only=False)
+    groups_note = ""
+    if hidden_groups:
+        groups_note = (f'<div style="font-size:0.85em;color:#666;margin:-4px 0 12px;">'
+                       f'{hidden_groups} groups hold only transcript-only lessons and are hidden.</div>')
+
 
     return f"""
-    <div style="display:flex;gap:16px;margin-bottom:16px;align-items:center;">
+    {_build_profiles_panel(profile_key)}
+
+    <h2 style="font-size:1.1em;margin:0 0 8px;">Gates for {html_mod.escape(profile_key)}</h2>
+    {unanalyzed_filter_html(unanalyzed_total, include_unanalyzed)}
+    {groups_note}    <div style="display:flex;gap:16px;margin-bottom:16px;align-items:center;">
         <div style="background:#f0f7ff;padding:8px 16px;border-radius:8px;">
             <strong>{len(groups)}</strong> groups
         </div>
         <div style="background:{'#fff3cd' if runnable_count > 0 else '#d4edda'};padding:8px 16px;border-radius:8px;">
-            <strong>{runnable_count}</strong> runnable steps
+            <strong>{runnable_count}</strong> runnable steps for this model
         </div>
-        <button id="pipeline-toggle" onclick="togglePipeline()"
-                style="padding:6px 16px;background:{'#dc3545' if _web._pipeline_is_running() else '#007bff'};color:white;border:none;border-radius:4px;cursor:pointer;"
-                {'disabled' if runnable_count == 0 and not _web._pipeline_is_running() else ''}>
-            {'Stop Pipeline' if _web._pipeline_is_running() else 'Start Pipeline'}
-        </button>
         <button onclick="refreshDashboard()" style="padding:6px 16px;background:#6c757d;color:white;border:none;border-radius:4px;cursor:pointer;">
             Refresh
         </button>
     </div>
 
+    <input type="search" class="row-filter" placeholder="Filter groups..." oninput="applyRowFilter()">
     <div style="overflow-x:auto;">
     <table style="width:100%;border-collapse:collapse;">
         <thead>
@@ -495,7 +582,8 @@ def _build_analysis_html() -> str:
     </div>
 
     <div style="margin-top:16px;font-size:0.8em;color:#999;">
-        Click a cell to toggle permission for the group. Click a group name to see document details.
+        Click a cell to toggle permission for the group under this model (opening a gate on a group of more than
+        {GATE_CONFIRM_THRESHOLD} lessons asks first). Click a group name to see document details.
     </div>
 
     {_build_atlas_projection_panel(_db)}
@@ -532,16 +620,20 @@ def _build_atlas_projection_panel(_db) -> str:
             </button>
         </div>
         <div style="margin-top:6px;font-size:0.75em;color:#999;">
-            Publishes automatically after pipeline sweeps that complete motifs/axes steps.
+            Publishes automatically after a lite enrichment batch that adds lite motifs, lite axes or lesson cards.
             Public sources: {srcs}. Requires ATLAS_PUBLISH credentials in .env for a real publish.
         </div>
     </div>
     """
 
 
-def _build_analysis_group_html(group_id: int) -> str:
-    """Build the document drill-down view for a specific group."""
+def _build_analysis_group_html(group_id: int, profile_key: str, include_unanalyzed: bool = False) -> str:
+    """Build the document drill-down view for a specific group under one profile.
+
+    Transcript-only lessons are left out unless ``include_unanalyzed``.
+    """
     import web as _web
+    from web_pages import TRANSCRIPT_ONLY_BADGE, unanalyzed_filter_html
     _db = _web._db
 
     local_controls = _web.PIPELINE_LOCAL_CONTROLS
@@ -550,7 +642,10 @@ def _build_analysis_group_html(group_id: int) -> str:
     if not group:
         return "<p>Group not found.</p>"
 
-    docs = _db.get_document_dashboard(group_id)
+    docs = _db.get_document_dashboard(group_id, profile_key)
+    unanalyzed_count = sum(1 for d in docs if not d.get("analyzed"))
+    if not include_unanalyzed:
+        docs = [d for d in docs if d.get("analyzed")]
     step_names, step_lookup = _analysis_step_names()
 
     def step_tooltip(sn):
@@ -569,8 +664,6 @@ def _build_analysis_group_html(group_id: int) -> str:
     for doc in docs:
         doc_id = str(doc["document_id"])
         title = doc.get("title", "")
-        if len(title) > 50:
-            title = title[:47] + "..."
 
         gate_cells = ""
         for sn in step_names:
@@ -587,7 +680,7 @@ def _build_analysis_group_html(group_id: int) -> str:
             elif state == "stale":
                 label = f"v{cv}" if cv else "new"
                 bg, fg = "#fff3cd", "#856404"
-                title_attr = f"Stale — will run (current: v{sv})"
+                title_attr = f"Needs work — runs when this model is switched on (current: v{sv})"
             elif state == "error":
                 label = "err"
                 bg, fg = "#f8d7da", "#721c24"
@@ -605,7 +698,7 @@ def _build_analysis_group_html(group_id: int) -> str:
             run_btn = ""
             if local_controls:
                 run_btn = (
-                    f'<button onclick="event.stopPropagation();runStep(\'{doc_id}\',\'{sn}\')" '
+                    f'<button class="run-btn" onclick="event.stopPropagation();runStep(\'{doc_id}\',\'{sn}\')" '
                     f'title="Run {sn}" '
                     f'style="font-size:0.6em;padding:1px 4px;margin-left:3px;border:1px solid #007bff;'
                     f'border-radius:3px;background:white;color:#007bff;cursor:pointer;vertical-align:middle;"'
@@ -620,9 +713,10 @@ def _build_analysis_group_html(group_id: int) -> str:
             )
 
         rows.append(
-            f'<tr>'
-            f'<td style="font-size:0.85em;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{html_mod.escape(doc.get("title", ""))}">'
-            f'<a href="/lesson/{doc_id}" style="color:#007bff;text-decoration:none;">{html_mod.escape(title)}</a></td>'
+            f'<tr class="filterable" data-name="{html_mod.escape(title.lower())}">'
+            f'<td style="font-size:0.85em;max-width:360px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{html_mod.escape(doc.get("title", ""))}">'
+            f'<a href="/lesson/{doc_id}?profile={html_mod.escape(profile_key)}" style="color:#007bff;text-decoration:none;">{html_mod.escape(title)}</a>'
+            f'{"" if doc.get("analyzed") else TRANSCRIPT_ONLY_BADGE}</td>'
             f'{gate_cells}'
             f'</tr>'
         )
@@ -635,9 +729,11 @@ def _build_analysis_group_html(group_id: int) -> str:
 
     return f"""
     <div style="margin-bottom:16px;">
-        <a href="/analysis" style="color:#007bff;text-decoration:none;">&larr; Back to groups</a>
+        <a href="/analysis?profile={html_mod.escape(profile_key)}" style="color:#007bff;text-decoration:none;">&larr; Back to groups</a>
         <h2 style="margin:8px 0;">{group_name}</h2>
-        <span style="color:#666;font-size:0.9em;">{len(docs)} documents</span>
+        <span style="color:#666;font-size:0.9em;">{len(docs)} documents · model {html_mod.escape(profile_key)}</span>
+        <input type="search" class="row-filter" placeholder="Filter lessons..." oninput="applyRowFilter()">
+        {unanalyzed_filter_html(unanalyzed_count, include_unanalyzed, corpus_wide=False)}
     </div>
 
     <div style="overflow-x:auto;">
@@ -660,11 +756,13 @@ def _build_analysis_group_html(group_id: int) -> str:
         <span style="background:#fff3cd;padding:1px 6px;border-radius:4px;">stale (will run)</span>
         <span style="background:#f8d7da;padding:1px 6px;border-radius:4px;">error (click to clear)</span>
         <span style="background:#f8f9fa;padding:1px 6px;border-radius:4px;color:#adb5bd;">not started</span>
+        · hover a row to show its &#9654; run buttons
     </div>
     """
 
 
-def _build_analysis_page(group_id: int | None = None) -> str:
+def _build_analysis_page(group_id: int | None = None, profile_key: str | None = None,
+                         include_unanalyzed: bool = False) -> str:
     """Build the full analysis dashboard HTML page."""
     import web as _web
     _db = _web._db
@@ -676,11 +774,11 @@ def _build_analysis_page(group_id: int | None = None) -> str:
 </head><body><h1>Analysis Pipeline</h1><p>Database not configured.</p></body></html>"""
 
     if group_id is not None:
-        content = _build_analysis_group_html(group_id)
+        content = _build_analysis_group_html(group_id, profile_key, include_unanalyzed)
         status_panels = ""
     else:
-        content = _build_analysis_html()
-        status_panels = _build_pipeline_status_html()
+        content = _build_analysis_html(profile_key, include_unanalyzed)
+        status_panels = _build_pipeline_status_html(profile_key)
 
     return f"""
 <!DOCTYPE html>
@@ -703,6 +801,11 @@ def _build_analysis_page(group_id: int | None = None) -> str:
         th, td {{ border-bottom: 1px solid #eee; }}
         th {{ position: sticky; top: 0; background: white; z-index: 1; }}
         tr:hover {{ background: #f8f9fa; }}
+        /* Run buttons appear on the hovered row only, so a stray click can't queue work */
+        .run-btn {{ visibility: hidden; }}
+        tr:hover .run-btn, .run-btn:focus, .run-btn:disabled {{ visibility: visible; }}
+        .row-filter {{ display: block; width: 320px; max-width: 100%; margin: 8px 0; padding: 5px 10px;
+            font-size: 0.9em; border: 1px solid #ccc; border-radius: 4px; }}
     </style>
 </head>
 <body>
@@ -713,8 +816,8 @@ def _build_analysis_page(group_id: int | None = None) -> str:
     </div>
     <h1>Analysis Pipeline</h1>
     <p style="color:#666;font-size:0.9em;margin-bottom:16px;">
-        Toggle steps at the group level. Click a group name to see per-document completion states.
-        Only permitted + pending steps will run when you click "Run Pipeline".
+        Each model has its own switch and its own gates. The analysis worker on the Mac mini claims
+        a step when the group's gate for that model is open and the model is switched on.
     </p>
     <details style="margin-bottom:16px;font-size:0.85em;">
         <summary style="cursor:pointer;color:#007bff;">Show step dependency graph</summary>
@@ -726,11 +829,12 @@ decompose ──┬──► somatic ──┬──► condense ──► embed
             ├──► concept_tags ──► index_concepts
             │    (needs decompose + somatic)
             │
-            └──► spatial ──► index_spatial
-                 (needs decompose + somatic)
-
-language_patterns (depends on decompose + language)
-extract_steps ──► map_body_parts (independent)</pre>
+            ├──► spatial ──┬──► index_spatial
+            │    (needs    └──► embed_positions
+            │     decompose + somatic)
+            │
+            └──► spatial_v3 ──► print_prep
+                 (print_prep needs decompose + spatial_v3)</pre>
     </details>
 
     <div id="analysis-content">
@@ -742,12 +846,14 @@ extract_steps ──► map_body_parts (independent)</pre>
     </div>
 
     <script>
+    const ANALYSIS_PROFILE = {json.dumps(profile_key or "")};
+
     function clearAllErrors() {{
-        if (!confirm('Clear all errors? These steps will become runnable again.')) return;
+        if (!confirm('Clear all errors for ' + ANALYSIS_PROFILE + '? These steps will become runnable again.')) return;
         fetch('/api/analysis/clear-all-errors', {{
             method: 'POST',
             headers: {{'Content-Type': 'application/json'}},
-            body: '{{}}'
+            body: JSON.stringify({{profile_key: ANALYSIS_PROFILE}})
         }})
         .then(r => r.json())
         .then(data => {{
@@ -758,11 +864,17 @@ extract_steps ──► map_body_parts (independent)</pre>
         .catch(err => alert('Error: ' + err));
     }}
 
-    function toggleGroupGate(groupId, stepName, newPermitted) {{
+    // Opening a gate lets the worker run that step on every lesson in the group
+    // (hidden transcript-only ones included) once the model is on: ask first on big groups.
+    function toggleGroupGate(groupId, stepName, newPermitted, docCount, groupName) {{
+        if (newPermitted && docCount > {GATE_CONFIRM_THRESHOLD} && !confirm(
+                'Open ' + stepName + ' for "' + groupName + '" (' + docCount + ' lessons) under ' + ANALYSIS_PROFILE + '?\\n\\n' +
+                'While this model is switched on, the worker will run ' + stepName +
+                ' on every lesson in the group that needs it, including transcript-only lessons hidden from this list.')) return;
         fetch('/api/analysis/gate', {{
             method: 'POST',
             headers: {{'Content-Type': 'application/json'}},
-            body: JSON.stringify({{group_id: groupId, step_name: stepName, permitted: newPermitted}})
+            body: JSON.stringify({{group_id: groupId, step_name: stepName, permitted: newPermitted, profile_key: ANALYSIS_PROFILE}})
         }})
         .then(r => r.json())
         .then(data => {{
@@ -776,7 +888,7 @@ extract_steps ──► map_body_parts (independent)</pre>
         fetch('/api/analysis/clear-error', {{
             method: 'POST',
             headers: {{'Content-Type': 'application/json'}},
-            body: JSON.stringify({{document_id: docId, step_name: stepName}})
+            body: JSON.stringify({{document_id: docId, step_name: stepName, profile_key: ANALYSIS_PROFILE}})
         }})
         .then(r => r.json())
         .then(data => {{
@@ -793,125 +905,91 @@ extract_steps ──► map_body_parts (independent)</pre>
         fetch('/api/analysis/run-step', {{
             method: 'POST',
             headers: {{'Content-Type': 'application/json'}},
-            body: JSON.stringify({{document_id: docId, step_name: stepName}})
+            body: JSON.stringify({{document_id: docId, step_name: stepName, profile_key: ANALYSIS_PROFILE}})
         }})
         .then(r => r.json())
         .then(data => {{
-            if (data.status === 'running') {{
-                // Start polling for completion
-                pollStepStatus(docId, stepName, btn);
+            if (data.status === 'queued') {{
+                btn.textContent = '\u2713';
+                btn.title = 'Queued: the worker picks this up on its next pass';
+                refreshDashboard();
             }} else {{
                 alert(data.error || 'Error');
                 btn.disabled = false;
-                btn.textContent = '\\u25b6';
+                btn.textContent = '\u25b6';
             }}
         }})
         .catch(err => {{
             alert('Error: ' + err);
             btn.disabled = false;
-            btn.textContent = '\\u25b6';
+            btn.textContent = '\u25b6';
         }});
     }}
 
-    function pollStepStatus(docId, stepName, btn) {{
-        // Refresh the dashboard every 2s until the step is no longer stale
-        let polls = 0;
-        const maxPolls = 90; // 3 minutes
-        const timer = setInterval(() => {{
-            polls++;
-            refreshDashboard();
-            if (polls >= maxPolls) {{
-                clearInterval(timer);
-                btn.disabled = false;
-                btn.textContent = '\\u25b6';
-            }}
-        }}, 2000);
+    function toggleProfile(key, enabled) {{
+        fetch('/api/analysis/profile', {{
+            method: 'POST',
+            headers: {{'Content-Type': 'application/json'}},
+            body: JSON.stringify({{key: key, enabled: enabled}})
+        }})
+        .then(r => r.json())
+        .then(data => {{
+            if (data.status === 'ok') refreshDashboard();
+            else alert(data.error || 'Error');
+        }})
+        .catch(err => alert('Error: ' + err));
+    }}
 
-        // Also check completion by looking at the step state
-        const checkDone = setInterval(() => {{
-            fetch('/api/analysis/group/' + new URL(window.location).searchParams.get('group'))
-                .then(r => r.text())
-                .then(html => {{
-                    // If step is no longer stale (it completed or errored), stop polling
-                    // We detect this by checking if the button still says '...'
-                    const newBtn = document.querySelector(`button[onclick*="runStep('${{docId}}','${{stepName}}')"]`);
-                    if (!newBtn || newBtn.textContent !== '...') {{
-                        clearInterval(timer);
-                        clearInterval(checkDone);
-                    }}
-                }});
-        }}, 3000);
+    function applyRowFilter() {{
+        const input = document.querySelector('#analysis-content .row-filter');
+        const terms = (input ? input.value : '').toLowerCase().split(/\\s+/).filter(Boolean);
+        document.querySelectorAll('#analysis-content tr.filterable').forEach(tr => {{
+            const name = (tr.dataset.name || '').toLowerCase();
+            tr.style.display = terms.every(t => name.includes(t)) ? '' : 'none';
+        }});
     }}
 
     function refreshDashboard() {{
         const url = new URL(window.location);
         const groupId = url.searchParams.get('group');
+        let q = '?profile=' + encodeURIComponent(ANALYSIS_PROFILE);
+        const unanalyzed = url.searchParams.get('unanalyzed');
+        if (unanalyzed) q += '&unanalyzed=' + encodeURIComponent(unanalyzed);
         const endpoint = groupId
-            ? '/api/analysis/group/' + groupId
-            : '/api/analysis/dashboard';
+            ? '/api/analysis/group/' + groupId + q
+            : '/api/analysis/dashboard' + q;
         fetch(endpoint)
             .then(r => r.text())
             .then(html => {{
+                const filter = document.querySelector('#analysis-content .row-filter');
+                const kept = filter ? filter.value : '';
                 document.getElementById('analysis-content').innerHTML = html;
+                const fresh = document.querySelector('#analysis-content .row-filter');
+                if (fresh && kept) {{ fresh.value = kept; applyRowFilter(); }}
             }});
-        // Refresh status panels (only on group view)
         const statusEl = document.getElementById('analysis-status');
         if (statusEl && !groupId) {{
-            fetch('/api/analysis/status')
+            fetch('/api/analysis/status' + q)
                 .then(r => r.text())
                 .then(html => {{ statusEl.innerHTML = html; }});
         }}
-        // Update pipeline button state
-        fetch('/api/analysis/pipeline-status')
-            .then(r => r.json())
-            .then(data => {{
-                const btn = document.getElementById('pipeline-toggle');
-                if (btn) {{
-                    btn.style.background = data.running ? '#dc3545' : '#007bff';
-                    btn.textContent = data.running ? 'Stop Pipeline' : 'Start Pipeline';
-                    btn.disabled = false;
-                }}
-            }});
     }}
 
-    // Auto-refresh every 10s while the pipeline is running. Also refresh once
-    // after running -> stopped so the dashboard catches the final step that
-    // completed in the same tick the worker shut down.
-    let _prevPipelineRunning = false;
-    setInterval(() => {{
-        fetch('/api/analysis/pipeline-status')
-            .then(r => r.json())
-            .then(data => {{
-                if (data.running || _prevPipelineRunning) refreshDashboard();
-                _prevPipelineRunning = data.running;
-            }});
-    }}, 10000);
-
-    function togglePipeline() {{
-        fetch('/api/analysis/run', {{
-            method: 'POST',
-            headers: {{'Content-Type': 'application/json'}},
-            body: '{{}}'
-        }})
-        .then(r => r.json())
-        .then(data => {{
-            refreshDashboard();
-        }})
-        .catch(err => alert('Error: ' + err));
-    }}
+    // The worker runs on its own schedule; refresh periodically to follow it.
+    setInterval(refreshDashboard, 20000);
     </script>
 </body>
 </html>
 """
 
 
-def _build_pipeline_status_html() -> str:
-    """Build the pipeline progress + errors panels."""
+def _build_pipeline_status_html(profile_key: str) -> str:
+    """Build one profile's pipeline progress + errors panels."""
     import web as _web
     _db = _web._db
 
-    progress = _db.get_pipeline_progress()
-    errors = _db.get_pipeline_errors()
+    progress = _db.get_pipeline_progress(profile_key)
+    errors = _db.get_pipeline_errors(profile_key=profile_key)
 
     # Progress table: group x step with completion bars
     if progress:
@@ -1027,7 +1105,7 @@ def _build_pipeline_status_html() -> str:
     remaining = total_steps - completed_steps - error_steps
 
     if progress:
-        rate = _db.get_recent_completion_rate(5)
+        rate = _db.get_recent_completion_rate(5, profile_key=profile_key)
         if rate > 0 and remaining > 0:
             eta_minutes = remaining / rate
             if eta_minutes >= 60:
@@ -1045,39 +1123,11 @@ def _build_pipeline_status_html() -> str:
     else:
         remaining_badge = ""
 
-    # Active steps
-    import datetime
-    active_data = _db.get_cache(_web._PIPELINE_ACTIVE_KEY) if _db else None
-    active_steps = (active_data or {}).get("steps", [])
-    now = datetime.datetime.utcnow()
-    if active_steps and _web._pipeline_is_running():
-        active_items = ""
-        for s in active_steps:
-            started = s.get("started")
-            if started:
-                try:
-                    elapsed = (now - datetime.datetime.fromisoformat(started)).total_seconds()
-                    if elapsed >= 60:
-                        elapsed_str = f"{int(elapsed // 60)}m{int(elapsed % 60)}s"
-                    else:
-                        elapsed_str = f"{int(elapsed)}s"
-                except (ValueError, TypeError):
-                    elapsed_str = ""
-            else:
-                elapsed_str = ""
-            time_span = f' <span style="color:#999;font-size:0.8em;">({elapsed_str})</span>' if elapsed_str else ""
-            active_items += f'<li style="font-size:0.85em;"><strong>{html_mod.escape(s["step"])}</strong> — {html_mod.escape(s["title"])}{time_span}</li>'
-        active_html = f'<ul style="margin:0;padding-left:20px;">{active_items}</ul>'
-    else:
-        active_html = ""
-
     return f"""
     <div style="margin-top:32px;">
-        <h2 style="font-size:1.1em;margin-bottom:12px;">Pipeline Progress{remaining_badge}</h2>
+        <h2 style="font-size:1.1em;margin-bottom:12px;">Progress for {html_mod.escape(profile_key)}{remaining_badge}</h2>
         {progress_html}
     </div>
-
-    {f'<div style="margin-top:32px;"><h2 style="font-size:1.1em;margin-bottom:8px;">Currently Running</h2>{active_html}</div>' if active_html else ''}
 
     <div style="margin-top:32px;">
         <h2 style="font-size:1.1em;margin-bottom:12px;">

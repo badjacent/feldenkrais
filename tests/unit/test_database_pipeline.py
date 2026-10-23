@@ -44,6 +44,13 @@ class TestAnalysisSteps:
         assert len(result) == 2
         assert result[0]["name"] == "decompose"
         sql = mock_db._mock_cursor.execute.call_args[0][0]
+        assert "SELECT * FROM analysis_step WHERE NOT retired ORDER BY name" in sql
+
+    def test_get_analysis_steps_can_include_retired(self, mock_db):
+        mock_db._mock_cursor.fetchall.return_value = []
+        mock_db.get_analysis_steps(include_retired=True)
+        sql = mock_db._mock_cursor.execute.call_args[0][0]
+        assert "retired" not in sql
         assert "SELECT * FROM analysis_step ORDER BY name" in sql
 
     def test_update_step_version(self, mock_db):
@@ -66,7 +73,8 @@ class TestAnalysisSteps:
 
 class TestDocumentAnalysisState:
     def test_mark_step_completed(self, mock_db):
-        mock_db.mark_step_completed("doc-1", "decompose", version=3)
+        mock_db.mark_step_completed("doc-1", "decompose", version=3,
+                                    profile_key="astra-low", contract_version=2)
         calls = mock_db._mock_cursor.execute.call_args_list
         # First call: INSERT/UPDATE the state
         sql1 = calls[0][0][0]
@@ -75,21 +83,23 @@ class TestDocumentAnalysisState:
         # Second call: mark downstream as stale
         sql2 = calls[1][0][0]
         assert "SET stale = TRUE" in sql2
+        # Only the same profile's downstream steps go stale.
+        assert "das.profile_key = %s" in sql2
 
     def test_mark_step_error(self, mock_db):
-        mock_db.mark_step_error("doc-1", "somatic", "LLM timeout")
+        mock_db.mark_step_error("doc-1", "somatic", "LLM timeout", profile_key="astra-low")
         sql = mock_db._mock_cursor.execute.call_args[0][0]
         params = mock_db._mock_cursor.execute.call_args[0][1]
         assert "INSERT INTO document_analysis_state" in sql
         assert "error = EXCLUDED.error" in sql
-        assert params == ("doc-1", "somatic", "LLM timeout")
+        assert params == ("doc-1", "astra-low", "somatic", "LLM timeout")
 
     def test_clear_step_error(self, mock_db):
-        mock_db.clear_step_error("doc-1", "somatic")
+        mock_db.clear_step_error("doc-1", "somatic", profile_key="astra-low")
         sql = mock_db._mock_cursor.execute.call_args[0][0]
         assert "SET error = NULL" in sql
         params = mock_db._mock_cursor.execute.call_args[0][1]
-        assert params == ("doc-1", "somatic")
+        assert params == ("doc-1", "somatic", "astra-low")
 
     def test_get_runnable_steps(self, mock_db):
         """Should return steps where permitted=True and not yet completed at current version."""
@@ -103,6 +113,8 @@ class TestDocumentAnalysisState:
         sql = mock_db._mock_cursor.execute.call_args[0][0]
         assert "group_analysis_gate" in sql
         assert "gag.permitted = TRUE" in sql
+        # A retired step never runs, even behind an open gate.
+        assert "JOIN analysis_step s ON s.name = gag.step_name AND NOT s.retired" in sql
 
     def test_count_runnable_steps(self, mock_db):
         mock_db._mock_cursor.fetchone.return_value = {"count": 42}
@@ -147,19 +159,49 @@ class TestLessonGroups:
         assert any("INSERT INTO lesson_group" in c for c in calls)
         assert any("INSERT INTO lesson_group_member" in c for c in calls)
 
+    def test_new_auto_group_copies_feldenkrais_first_gates(self, mock_db):
+        mock_db._mock_cursor.fetchall.return_value = [
+            {"id": 20, "name": "NEW_SOURCE"},
+        ]
+        mock_db._mock_cursor.fetchone.return_value = {"id": 30, "inserted": True}
+
+        mock_db.sync_auto_groups()
+
+        gate_calls = [
+            call for call in mock_db._mock_cursor.execute.call_args_list
+            if "INSERT INTO group_analysis_gate" in call.args[0]
+        ]
+        assert len(gate_calls) == 1
+        assert gate_calls[0].args[1] == (30, "FELDENKRAIS_FIRST")
+        # A new group does not inherit gates for retired steps.
+        assert "NOT step.retired" in gate_calls[0].args[0]
+
 
 class TestGroupGates:
     def test_set_gate_permitted(self, mock_db):
-        mock_db.set_group_gate(5, "decompose", True)
+        mock_db._mock_cursor.fetchone.return_value = {"name": "decompose", "retired": False}
+        mock_db.set_group_gate(5, "decompose", True, profile_key="gemini-3-flash")
         sql = mock_db._mock_cursor.execute.call_args[0][0]
         assert "INSERT INTO group_analysis_gate" in sql
         params = mock_db._mock_cursor.execute.call_args[0][1]
-        assert params == (5, "decompose", True)
+        assert params == (5, "gemini-3-flash", "decompose", True)
 
     def test_set_gate_not_permitted(self, mock_db):
-        mock_db.set_group_gate(5, "decompose", False)
+        mock_db.set_group_gate(5, "decompose", False, profile_key="gemini-3-flash")
         params = mock_db._mock_cursor.execute.call_args[0][1]
-        assert params == (5, "decompose", False)
+        assert params == (5, "gemini-3-flash", "decompose", False)
+
+    def test_retired_step_gate_cannot_be_opened(self, mock_db):
+        mock_db._mock_cursor.fetchone.return_value = {"name": "motifs", "retired": True}
+        with pytest.raises(ValueError, match="retired"):
+            mock_db.set_group_gate(5, "motifs", True, profile_key="gemini-3-flash")
+        assert not any("INSERT INTO group_analysis_gate" in c.args[0]
+                       for c in mock_db._mock_cursor.execute.call_args_list)
+
+    def test_retired_step_gate_can_be_closed(self, mock_db):
+        mock_db.set_group_gate(5, "motifs", False, profile_key="gemini-3-flash")
+        params = mock_db._mock_cursor.execute.call_args[0][1]
+        assert params == (5, "gemini-3-flash", "motifs", False)
 
     def test_get_group_gates(self, mock_db):
         mock_db._mock_cursor.fetchall.return_value = [
@@ -186,7 +228,7 @@ class TestDashboard:
             # gate query
             [{"group_id": 1, "step_name": "decompose", "permitted": True}],
         ]
-        result = mock_db.get_group_dashboard()
+        result = mock_db.get_group_dashboard("gemini-3-flash")
         assert len(result) == 1
         assert result[0]["gates"]["decompose"] is True
 
@@ -195,7 +237,7 @@ class TestDashboard:
             {"group_id": 1, "group_name": "G1", "step_name": "decompose",
              "current_version": 3, "total": 10, "completed": 8, "stale": 1, "errors": 1},
         ]
-        result = mock_db.get_pipeline_progress()
+        result = mock_db.get_pipeline_progress("gemini-3-flash")
         assert len(result) == 1
         assert result[0]["completed"] == 8
 

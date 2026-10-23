@@ -11,6 +11,7 @@ from .cache import CacheMixin
 from .auth import AuthMixin
 from .embeddings import EmbeddingsMixin
 from .pipeline_state import PipelineStateMixin
+from .analysis_profiles import AnalysisProfilesMixin
 from .lesson_groups import LessonGroupsMixin
 from .dashboard import DashboardMixin
 from .logging import LoggingMixin
@@ -23,6 +24,7 @@ from .external_lessons import ExternalLessonsMixin
 from .lesson_views import LessonViewsMixin
 from .renditions import RenditionsMixin
 from .similarity_profiles import SimilarityProfilesMixin
+from .nyc import NycAdminMixin
 
 
 class Database(
@@ -33,6 +35,7 @@ class Database(
     AuthMixin,
     EmbeddingsMixin,
     PipelineStateMixin,
+    AnalysisProfilesMixin,
     LessonGroupsMixin,
     DashboardMixin,
     LoggingMixin,
@@ -45,6 +48,7 @@ class Database(
     LessonViewsMixin,
     RenditionsMixin,
     SimilarityProfilesMixin,
+    NycAdminMixin,
 ):
     """PostgreSQL database wrapper for the knowledge base.
 

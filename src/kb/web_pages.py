@@ -8,6 +8,49 @@ import html as html_mod
 import json
 from typing import Callable
 
+# Cookie remembering whether transcript-only lessons are listed; hidden unless "1".
+UNANALYZED_COOKIE = "show_unanalyzed"
+
+
+def unanalyzed_filter_html(count: int, showing: bool, corpus_wide: bool = True) -> str:
+    """Notice + toggle for the transcript-only filter, shared by every lesson list.
+
+    ``count`` is how many transcript-only lessons the list hides (or, when
+    ``showing``, includes). Renders nothing when there are none. Lists drawn
+    from the whole corpus note that most of these are Atlas ingests.
+    """
+    if not count:
+        return ""
+    plural = "lesson" if count == 1 else "lessons"
+    what = "transcribed but never analyzed by any model"
+    if corpus_wide:
+        what += " (mostly Feldenkrais Atlas ingests)"
+    if showing:
+        text = f"Showing {count:,} transcript-only {plural}, marked <em>transcript only</em>: {what}."
+        action, label = "false", "Hide them"
+    else:
+        text = f"Hiding {count:,} transcript-only {plural}: {what}."
+        action, label = "true", "Show them"
+    return f"""<div class="unanalyzed-filter" style="display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;
+    background:#fff8e1;border:1px solid #f0d58c;border-radius:6px;padding:8px 12px;margin:12px 0;font-size:0.88em;color:#5c4a00;">
+    <span>{text}</span>
+    <button type="button" onclick="setShowUnanalyzed({action})" style="padding:3px 12px;font-size:0.95em;
+        border:1px solid #c9a227;border-radius:4px;background:#fff;color:#5c4a00;cursor:pointer;">{label}</button>
+</div>
+<script>
+function setShowUnanalyzed(on) {{
+    document.cookie = '{UNANALYZED_COOKIE}=' + (on ? '1' : '0') + '; path=/; max-age=31536000; samesite=lax';
+    const u = new URL(location.href);
+    u.searchParams.delete('unanalyzed');
+    location.href = u.toString();
+}}
+</script>"""
+
+
+TRANSCRIPT_ONLY_BADGE = ('<span title="Transcribed but never analyzed by any model" '
+                         'style="margin-left:8px;padding:0 6px;border-radius:8px;background:#eee;'
+                         'color:#777;font-size:0.75em;white-space:nowrap;">transcript only</span>')
+
 
 
 def _auth_bar_html(user: dict | None, superuser_active: bool = False) -> str:
@@ -33,9 +76,14 @@ _AUTH_BAR_CSS = """
 """
 
 
-def build_search_home_html(extra_html: str = "", user: dict | None = None, superuser_active: bool = False, get_lessons_fn: Callable | None = None) -> str:
-    """Build the search subdomain home page with search box and browse-by-source."""
-    categories, display_names = get_lessons_fn()
+def build_search_home_html(extra_html: str = "", user: dict | None = None, superuser_active: bool = False, get_lessons_fn: Callable | None = None,
+                           include_unanalyzed: bool = False) -> str:
+    """Build the search subdomain home page with search box and browse-by-source.
+
+    Transcript-only lessons are left out of the browse list unless
+    ``include_unanalyzed``; a notice says how many and toggles them.
+    """
+    categories, display_names, unanalyzed_count = get_lessons_fn(include_unanalyzed=include_unanalyzed)
 
     # Count total lessons across all categories
     total_lessons = sum(len(lessons) for lessons in categories.values())
@@ -44,13 +92,18 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None, super
     lesson_list_html = ""
     for cat_key, lessons in categories.items():
         source_name = html_mod.escape(display_names.get(cat_key, cat_key))
-        lesson_list_html += f'<h3 class="source-header">{source_name} ({len(lessons)})</h3>\n'
+        # Collapsed by default: the page opens as a list of sources.
+        lesson_list_html += f'<details class="source-block" data-source="{source_name.lower()}">\n'
+        lesson_list_html += f'<summary class="source-header">{source_name} (<span class="source-count">{len(lessons)}</span>)</summary>\n'
         lesson_list_html += '<ul class="lesson-list">\n'
         for lesson in lessons:
-            doc_id, display_name = lesson[0], lesson[1]
+            doc_id, display_name, analyzed = lesson[0], lesson[1], lesson[3]
             esc_name = html_mod.escape(display_name)
-            lesson_list_html += f'<li><a href="/lesson/{html_mod.escape(doc_id)}">{esc_name}</a></li>\n'
-        lesson_list_html += '</ul>\n'
+            badge = "" if analyzed else TRANSCRIPT_ONLY_BADGE
+            lesson_list_html += f'<li><a href="/lesson/{html_mod.escape(doc_id)}">{esc_name}</a>{badge}</li>\n'
+        lesson_list_html += '</ul>\n</details>\n'
+    # Search results name their source from the category key the API returns.
+    source_names_js = json.dumps(display_names).replace("</", "<\\/")
 
     return f"""<!DOCTYPE html>
 <html>
@@ -115,35 +168,47 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None, super
 
         /* Browse */
         h2 {{ font-size: 1.15em; color: #444; margin-top: 32px; margin-bottom: 12px; }}
-        .source-header {{ font-size: 1em; color: #555; margin-top: 24px; margin-bottom: 4px; }}
+        .source-header {{ font-size: 1em; font-weight: 600; color: #555; padding: 6px 0; cursor: pointer; }}
+        .source-header:hover {{ color: #007bff; }}
+        .source-block {{ border-bottom: 1px solid #eee; }}
+        .source-block[open] {{ padding-bottom: 8px; }}
+        .expand-controls {{ font-size: 0.85em; margin: 0 0 6px; }}
+        .expand-controls a {{ color: #007bff; cursor: pointer; margin-right: 12px; }}
         .lesson-list {{ list-style: none; padding: 0; margin: 4px 0 0 0; }}
         .lesson-list li {{ padding: 4px 0 4px 16px; }}
         .lesson-list li a {{ color: #007bff; text-decoration: none; }}
         .lesson-list li a:hover {{ text-decoration: underline; }}
-        /* Scored lesson list (after search) */
-        .scored-lesson-list {{ list-style: none; padding: 0; margin: 4px 0 0 0; }}
-        .scored-lesson-list li {{
-            padding: 4px 16px; display: flex; justify-content: space-between; align-items: baseline;
-        }}
-        .scored-lesson-list li a {{ color: #007bff; text-decoration: none; }}
-        .scored-lesson-list li a:hover {{ text-decoration: underline; }}
-        .scored-lesson-list .score {{ color: #28a745; font-size: 0.82em; white-space: nowrap; margin-left: 12px; }}
+        .search-result .source {{ color: #888; font-size: 0.8em; }}
+        .search-note {{ font-size: 0.8em; color: #888; margin: 4px 0 8px; }}
+        .search-more {{ margin: 8px 12px; padding: 4px 12px; font-size: 0.85em; border: 1px solid #ccc;
+            border-radius: 4px; background: #fff; cursor: pointer; }}
         .clear-search {{ font-size: 0.85em; color: #007bff; cursor: pointer; text-decoration: none; margin-left: 12px; }}
         .clear-search:hover {{ text-decoration: underline; }}
+        .searching {{ color: #666; padding: 8px; font-size: 0.9em; }}
+        .spinner-inline {{
+            display: inline-block; width: 12px; height: 12px; border: 2px solid #ddd; border-top-color: #007bff;
+            border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 6px;
+        }}
+        @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
+        /* Title filter over the browse list */
+        .lesson-filter {{ display: flex; gap: 10px; align-items: center; margin: 0 0 8px; }}
+        .lesson-filter input {{ flex: 1; padding: 7px 12px; font-size: 14px; border: 1px solid #ccc; border-radius: 6px; }}
+        .lesson-filter span {{ font-size: 0.85em; color: #888; white-space: nowrap; }}
 {_AUTH_BAR_CSS}
     </style>
 </head>
 <body>
     {_auth_bar_html(user, superuser_active=superuser_active)}
     <h1>Feldenkrais Lesson Search</h1>
-    <p class="subtitle">Search across {total_lessons} lessons by meaning, not keywords.<br>
-    Each lesson is automatically analyzed into movement steps, body positions,
-    and somatic cues &mdash; search runs against that structured understanding.</p>
+    <p class="subtitle">Search lessons by meaning, not keywords. Search runs against each lesson's
+    analysis (movement steps, body positions, somatic cues), so it only finds analyzed lessons &mdash;
+    for now only those analyzed by the canonical model, and ranking is still rough.
+    To find a lesson by name, use the title filter below.</p>
 
     <div class="search-box">
         <input type="text" id="search-query" placeholder="e.g. rolling pelvis, eyes and head..."
                onkeydown="if(event.key==='Enter'){{event.preventDefault();searchLessons();}}">
-        <select id="search-method" style="padding:8px 10px;font-size:14px;border:1px solid #ccc;border-radius:6px;background:#fff;">
+        <select id="search-method" title="Search method" style="padding:8px 10px;font-size:14px;border:1px solid #ccc;border-radius:6px;background:#fff;">
             <option value="combined">Combined</option>
             <option value="default">Standard</option>
             <option value="concepts">Distinctive</option>
@@ -163,19 +228,35 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None, super
 
     <div id="all-lessons">
     <h2>All Lessons ({total_lessons})</h2>
+    {unanalyzed_filter_html(unanalyzed_count, include_unanalyzed)}
+    <div class="lesson-filter">
+        <input type="search" id="lesson-filter" placeholder="Filter by title, teacher or source..." oninput="filterLessons()">
+        <span id="lesson-filter-count"></span>
+    </div>
+    <div class="expand-controls">{len(categories)} sources &middot;
+        <a onclick="setAllSources(true)">Expand all</a><a onclick="setAllSources(false)">Collapse all</a></div>
     {lesson_list_html}
     </div>
 
     <script>
+        const SOURCE_NAMES = {source_names_js};
+        const PAGE_SIZE = 10;
+        let lastResults = [];
+        let shownCount = 0;
+
         async function searchLessons() {{
             const query = document.getElementById('search-query').value.trim();
             if (!query) return;
             const method = document.getElementById('search-method').value;
             const btn = document.getElementById('search-btn');
             const resultsDiv = document.getElementById('search-results');
+            const u = new URL(location.href);
+            u.searchParams.set('q', query);
+            u.searchParams.set('method', method);
+            history.replaceState(null, '', u.toString());
             btn.disabled = true;
             btn.textContent = 'Searching...';
-            resultsDiv.innerHTML = '';
+            resultsDiv.innerHTML = '<div class="searching"><span class="spinner-inline"></span>Searching&hellip; this can take ten seconds.</div>';
             try {{
                 const fd = new FormData();
                 fd.append('query', query);
@@ -185,90 +266,108 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None, super
                 if (data.error) {{
                     resultsDiv.innerHTML = '<div style="color:#999;padding:8px;">Error: ' + escHtml(data.error) + '</div>';
                 }} else if (data.results && data.results.length > 0) {{
-                    let html = '';
-                    if (data.method) {{
-                        const methodLabels = {{combined:'Combined',default:'Standard',concepts:'Distinctive',tags:'Tag Match'}};
-                        html += '<div style="font-size:0.8em;color:#888;margin-bottom:4px;">Method: <strong>' + (methodLabels[data.method] || data.method) + '</strong></div>';
-                    }}
-                    if (data.specificity) {{
-                        const s = data.specificity;
-                        const bandColors = {{low:'#dc3545',mid:'#fd7e14','mid-high':'#28a745',high:'#007bff'}};
-                        const bandLabels = {{low:'Low',mid:'Mid','mid-high':'Mid-High',high:'High'}};
-                        const bandExplainers = {{
-                            low:'Many lessons match equally well.',
-                            mid:'Several good matches \u2014 top results are somewhat differentiated.',
-                            'mid-high':'Top results stand out \u2014 your query is fairly specific.',
-                            high:'Strong match \u2014 the top result is a clear winner.'
-                        }};
-                        const color = bandColors[s.band] || '#666';
-                        const label = bandLabels[s.band] || s.band;
-                        const explainer = bandExplainers[s.band] || '';
-                        const cascadeMode = data.cascade_mode || '';
-                        let specHtml = 'Specificity: <span style="color:'+color+';font-weight:600;">'+label+'</span> \u2014 '+explainer;
-                        if (cascadeMode === 'confident') specHtml += '<br><span style="color:#555;font-size:0.95em;">Ranked by distinctive movement patterns unique to each lesson.</span>';
-                        else if (cascadeMode === 'blended') specHtml += '<br><span style="color:#555;font-size:0.95em;">Blended ranking: combining semantic meaning with distinctive movement patterns.</span>';
-                        html += '<div style="font-size:0.8em;color:#888;margin-bottom:6px;">'+specHtml+'</div>';
-                    }}
-                    const isTagSearch = data.method === 'tags';
-                    const topResults = data.results.slice(0, 10);
-                    topResults.forEach(r => {{
-                        let scoreDisplay;
-                        if (isTagSearch) scoreDisplay = r.similarity + ' matches';
-                        else scoreDisplay = Math.round(r.similarity * 100) + '%';
-                        let snippet = (r.snippet || '').replace(/</g, '&lt;').replace(/\\n/g, ' ');
-                        snippet = snippet.replace(/^Setting:\s*/i, '');
-                        html += '<div class="search-result">';
-                        html += '<div style="display:flex;justify-content:space-between;align-items:baseline;">';
-                        html += '<a href="/lesson/'+r.document_id+'">' + escHtml(r.title || '') + '</a>';
-                        html += '<span class="similarity">'+scoreDisplay+'</span>';
-                        html += '</div>';
-                        if (snippet) html += '<div class="snippet">'+snippet+'</div>';
-                        html += '</div>';
-                    }});
-                    resultsDiv.innerHTML = html;
-                    // Update All Lessons section with scored list
-                    updateAllLessons(data.results, data.method);
+                    lastResults = data.results;
+                    shownCount = 0;
+                    resultsDiv.innerHTML = '<div class="search-note">Closest matches first.' +
+                        ' <a class="clear-search" onclick="clearSearch()">Clear search</a></div>' +
+                        '<div id="result-list"></div>';
+                    showMoreResults(data.method === 'tags');
                 }} else {{
                     resultsDiv.innerHTML = '<div style="color:#999;padding:8px;">No results found.</div>';
                 }}
             }} catch (error) {{
-                resultsDiv.innerHTML = '<div style="color:red;padding:8px;">Search failed: '+error.message+'</div>';
+                resultsDiv.innerHTML = '<div style="color:red;padding:8px;">Search failed: '+escHtml(error.message)+'</div>';
             }}
             btn.disabled = false;
             btn.textContent = 'Search';
         }}
 
-        // Save original All Lessons HTML for restore
-        var originalAllLessons = document.getElementById('all-lessons').innerHTML;
+        // Snippets are the analysis summary; drop the leading title and "Setting:" label they repeat.
+        function cleanSnippet(r) {{
+            let s = (r.snippet || '').replace(/\\n/g, ' ').trim();
+            const title = (r.title || '').trim();
+            if (title && s.startsWith(title)) s = s.slice(title.length).trim();
+            return s.replace(/^Setting:\\s*/i, '');
+        }}
 
-        function updateAllLessons(results, method) {{
-            const container = document.getElementById('all-lessons');
-            const isTagSearch = method === 'tags';
-            let html = '<h2>All Lessons \u2014 sorted by relevance (' + results.length + ') <a class="clear-search" onclick="clearSearch()">Clear search</a></h2>';
-            html += '<ul class="scored-lesson-list">';
-            results.forEach(r => {{
-                let scoreDisplay;
-                if (isTagSearch) scoreDisplay = r.similarity + ' matches';
-                else scoreDisplay = Math.round(r.similarity * 100) + '%';
-                html += '<li>';
-                html += '<a href="/lesson/' + r.document_id + '">' + escHtml(r.title || '') + '</a>';
-                html += '<span class="score">' + scoreDisplay + '</span>';
-                html += '</li>';
+        function showMoreResults(isTagSearch) {{
+            const list = document.getElementById('result-list');
+            const next = lastResults.slice(shownCount, shownCount + PAGE_SIZE);
+            let html = '';
+            next.forEach(r => {{
+                const source = SOURCE_NAMES[r.category] || '';
+                const snippet = cleanSnippet(r);
+                html += '<div class="search-result">';
+                html += '<a href="/lesson/' + encodeURIComponent(r.document_id) + '">' + escHtml(r.title || '') + '</a>';
+                if (source) html += ' <span class="source">&middot; ' + escHtml(source) + '</span>';
+                if (isTagSearch) html += ' <span class="source">&middot; ' + r.similarity + ' tag matches</span>';
+                if (snippet) html += '<div class="snippet">' + escHtml(snippet) + '</div>';
+                html += '</div>';
             }});
-            html += '</ul>';
-            container.innerHTML = html;
+            const oldMore = document.getElementById('search-more');
+            if (oldMore) oldMore.remove();
+            list.insertAdjacentHTML('beforeend', html);
+            shownCount += next.length;
+            if (shownCount < lastResults.length) {{
+                list.insertAdjacentHTML('afterend', '<button type="button" class="search-more" id="search-more" ' +
+                    'onclick="showMoreResults(' + isTagSearch + ')">Show ' +
+                    Math.min(PAGE_SIZE, lastResults.length - shownCount) + ' more</button>');
+            }}
         }}
 
         function clearSearch() {{
-            document.getElementById('all-lessons').innerHTML = originalAllLessons;
             document.getElementById('search-results').innerHTML = '';
             document.getElementById('search-query').value = '';
+            const u = new URL(location.href);
+            u.searchParams.delete('q');
+            u.searchParams.delete('method');
+            history.replaceState(null, '', u.toString());
         }}
 
         function tryQuery(el) {{
-            const input = document.getElementById('search-query');
-            input.value = el.textContent;
+            document.getElementById('search-query').value = el.textContent;
             searchLessons();
+        }}
+
+        function filterLessons() {{
+            const terms = document.getElementById('lesson-filter').value.toLowerCase().split(/\\s+/).filter(Boolean);
+            let shown = 0, total = 0;
+            document.querySelectorAll('.source-block').forEach(block => {{
+                const source = block.dataset.source;
+                let visible = 0;
+                block.querySelectorAll('li').forEach(li => {{
+                    const hay = li.textContent.toLowerCase() + ' ' + source;
+                    const match = terms.every(t => hay.includes(t));
+                    li.style.display = match ? '' : 'none';
+                    if (match) visible++;
+                    total++;
+                }});
+                block.style.display = visible ? '' : 'none';
+                block.querySelector('.source-count').textContent = visible;
+                shown += visible;
+            }});
+            document.getElementById('lesson-filter-count').textContent = terms.length ? shown + ' of ' + total : '';
+            // While filtering, open every source with a match; afterwards, back to what the user had open.
+            filtering = terms.length > 0;
+            document.querySelectorAll('.source-block').forEach(block => {{
+                block.open = filtering ? block.style.display !== 'none' : block.dataset.userOpen === '1';
+            }});
+        }}
+
+        // Remember which sources the user opened by hand, so clearing the filter restores them.
+        let filtering = false;
+        document.querySelectorAll('.source-block').forEach(block => {{
+            block.addEventListener('toggle', () => {{
+                if (!filtering) block.dataset.userOpen = block.open ? '1' : '';
+            }});
+        }});
+
+        function setAllSources(open) {{
+            document.querySelectorAll('.source-block').forEach(block => {{
+                if (block.style.display === 'none') return;
+                block.open = open;
+                if (!filtering) block.dataset.userOpen = open ? '1' : '';
+            }});
         }}
 
         function escHtml(str) {{
@@ -276,15 +375,45 @@ def build_search_home_html(extra_html: str = "", user: dict | None = None, super
             d.textContent = str;
             return d.innerHTML;
         }}
+
+        // Restore a search from the URL (?q=&method=), e.g. after Back from a lesson.
+        (function restoreSearch() {{
+            const params = new URLSearchParams(location.search);
+            const q = params.get('q');
+            if (!q) return;
+            document.getElementById('search-query').value = q;
+            const m = params.get('method');
+            if (m && document.querySelector('#search-method option[value="' + m + '"]'))
+                document.getElementById('search-method').value = m;
+            searchLessons();
+        }})();
     </script>
     {extra_html}
 </body>
 </html>"""
 
 
-def build_lesson_page_html(document_id: str, user: dict | None = None, search_mode: bool = False, superuser_active: bool = False) -> str:
-    """Build the unified lesson detail page HTML."""
+def build_lesson_page_html(document_id: str, user: dict | None = None, search_mode: bool = False, superuser_active: bool = False, pipeline_visible: bool = False, default_profile: str | None = None) -> str:
+    """Build the unified lesson detail page HTML.
+
+    Every page reads one model profile's analysis: the one named by
+    ``?profile=``, else ``default_profile`` (the canonical profile when it has
+    analyzed the lesson, otherwise one that has). A selector lists every model.
+    ``pipeline_visible`` (local deployments only) adds the Pipeline tab and the
+    model comparison link.
+    """
     esc_id = html_mod.escape(document_id)
+    compare_link = f' <a href="/lesson/{esc_id}/compare">Compare models</a>' if pipeline_visible else ""
+    profile_bar = (
+        '<div class="source-line" id="profile-bar" style="display:none;">'
+        'Model: <select id="profile-select" onchange="switchProfile(this.value)"></select>'
+        f'{compare_link}</div>'
+    )
+    default_profile_js = json.dumps(default_profile or "")
+    pipeline_tab = (
+        """<button data-tab="pipeline" onclick="switchTab('pipeline')">Pipeline</button>"""
+        if pipeline_visible else ""
+    )
 
     return f"""<!DOCTYPE html>
 <html>
@@ -434,6 +563,12 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
         }}
 
         /* Segment highlight box */
+        /* Empty until playback reaches a segment: hide rather than show a blank box */
+        .segment-box:has(#segment-text:empty) {{ display: none; }}
+        .not-analyzed {{
+            background: #f5f7fa; border: 1px solid #dde3ea; border-radius: 6px;
+            padding: 10px 14px; margin: 12px 0; font-size: 0.9em; color: #444;
+        }}
         .segment-box {{
             background: #fffde7; border: 2px solid #fdd835;
             border-radius: 6px; padding: 12px 16px;
@@ -494,6 +629,21 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
         }}
         @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
 
+        /* Earlier Q&A on this lesson, above the chat */
+        .chat-earlier {{ margin-bottom: 12px; font-size: 0.9em; }}
+        .chat-earlier > summary {{ cursor: pointer; color: #555; font-weight: 600; padding: 4px 0; }}
+        .chat-earlier-turn {{ border-left: 3px solid #007bff; background: #f8f9fa; margin: 8px 0; padding: 6px 12px; }}
+        .chat-earlier-turn.outside {{ border-left-color: #8e6bbf; }}
+        .chat-earlier-turn > summary {{ cursor: pointer; font-weight: 600; color: #333; }}
+        .chat-earlier-meta {{ font-size: 0.8em; color: #888; font-weight: normal; margin-left: 6px; }}
+        .chat-earlier-answer {{ color: #555; line-height: 1.5; margin: 8px 0; }}
+        .chat-earlier-turn button {{
+            padding: 3px 10px; font-size: 0.85em; border: 1px solid #1976d2; border-radius: 4px;
+            background: #fff; color: #1976d2; cursor: pointer;
+        }}
+        #chat-earlier-list {{ max-height: 260px; overflow-y: auto; }}
+        .chat-earlier-foot {{ font-size: 0.85em; margin-top: 4px; }}
+
         /* Chat panel */
         .chat-panel {{
             border: 1px solid #e0e0e0; border-radius: 10px;
@@ -553,6 +703,14 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
     <div class="back-link"><a href="/">&larr; All lessons</a></div>
     <h1 id="lesson-title">Loading...</h1>
     <div class="source-line" id="source-line"></div>
+    {profile_bar}
+    <div class="source-line" id="context-actions">
+        Discuss elsewhere:
+        <button type="button" onclick="copyLessonContext(this)"
+                title="Copy this lesson, its transcript and the selected model's analysis, ready to paste into an AI chat">Copy for AI chat</button>
+        <button type="button" onclick="downloadLessonContext(this)"
+                title="Download the same document as a Markdown file, and copy where it was saved">Download</button>
+    </div>
 
     <div class="audio-container audio-hidden" id="audio-container">
         <audio id="audio-player" controls preload="auto"></audio>
@@ -564,23 +722,20 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
     <div id="no-audio-msg" style="display:none; color: #888; font-size: 0.9em; font-style: italic; margin-bottom: 12px;">No recording available.</div>
 
     <div class="tab-bar" id="tab-bar">
-        <button class="active" onclick="switchTab('steps')">Step by Step</button>
-        <button onclick="switchTab('condensed')">Overview</button>
-        <button onclick="switchTab('somatic')">Somatic</button>
-        <button onclick="switchTab('language')">Language</button>
-        <button onclick="switchTab('classification')">Classification</button>
-        <button onclick="switchTab('pipeline')">Pipeline</button>
-        <button onclick="switchTab('concepts')">Search Specifics</button>
-        <button onclick="switchTab('transcript')">Transcript</button>
-        <button onclick="switchTab('chat')">Q&amp;A</button>
-        <button onclick="switchTab('history')">History</button>
-        <button onclick="switchTab('rawio')">Raw I/O</button>
+        <button class="active" data-tab="steps" onclick="switchTab('steps')">Step by Step</button>
+        <button data-tab="condensed" onclick="switchTab('condensed')">Overview</button>
+        <button data-tab="somatic" onclick="switchTab('somatic')">Somatic</button>
+        <button data-tab="language" onclick="switchTab('language')">Language</button>
+        {pipeline_tab}
+        <button data-tab="transcript" onclick="switchTab('transcript')">Transcript</button>
+        <button data-tab="chat" onclick="switchTab('chat')">Q&amp;A</button>
+        <button data-tab="rawio" onclick="switchTab('rawio')">Raw I/O</button>
     </div>
     <div id="status-area"></div>
 
     <!-- Steps/Cards tab (default) -->
     <div id="tab-steps">
-        <div class="tab-intro">Follow along with the lesson one movement at a time. Each card shows what's happening biomechanically and linguistically, synced with the transcript and audio. <a href="/lesson/{esc_id}/print" target="_blank" style="margin-left:8px;">Print sequence &rarr;</a></div>
+        <div class="tab-intro">Follow along with the lesson one movement at a time. Each card shows what's happening biomechanically and linguistically, synced with the transcript and audio. <a href="/lesson/{esc_id}/print" target="_blank" style="margin-left:8px;" onclick="if (ANALYSIS_PROFILE) this.href = '/lesson/{esc_id}/print?profile=' + encodeURIComponent(ANALYSIS_PROFILE)">Print sequence &rarr;</a></div>
         <div class="card" id="card">
             <div class="card-placeholder" id="card-placeholder">
                 <span class="spinner-inline"></span> Loading analysis...
@@ -639,39 +794,11 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
         </div>
     </div>
 
-    <!-- Classification tab -->
-    <div id="tab-classification" style="display:none;">
-        <div class="tab-intro">Pass A decomposition and framework classification for this lesson.</div>
-        <div id="classification-tab-content">
-            <div style="color:#999; padding:16px;"><span class="spinner-inline"></span> Loading classification data...</div>
-        </div>
-    </div>
-
     <!-- Pipeline tab -->
     <div id="tab-pipeline" style="display:none;">
         <div class="tab-intro">Pipeline analysis status: which steps have been completed, their versions, and any errors.</div>
         <div id="pipeline-tab-content">
             <div style="color:#999; padding:16px;"><span class="spinner-inline"></span> Loading pipeline status...</div>
-        </div>
-    </div>
-
-    <!-- Search Specifics tab -->
-    <div id="tab-concepts" style="display:none;">
-        <div class="tab-intro">How this lesson is indexed for search &mdash; what makes it distinctive, and how different search methods find it.</div>
-        <div style="background:#f8f9fa;border:1px solid #e9ecef;border-radius:8px;padding:14px 18px;margin-bottom:16px;font-size:0.88em;line-height:1.6;color:#555;">
-            <div style="font-weight:600;color:#333;margin-bottom:6px;">How search works</div>
-            All Feldenkrais lessons share common vocabulary &mdash; &ldquo;lie on your back,&rdquo; &ldquo;notice the difference&rdquo; &mdash;
-            which makes them hard to distinguish by text similarity alone. To improve search, each lesson goes through a concept extraction pass
-            that identifies what is <em>specific and distinctive</em> about it. This produces three things used by four search methods:
-            <ul style="margin:8px 0 4px 0;padding-left:20px;">
-                <li><strong>Combined</strong> (default) &mdash; Fuses results from all three methods below using reciprocal rank fusion. Lessons that score well across multiple signals rise to the top.</li>
-                <li><strong>Standard</strong> &mdash; Embedding similarity against the full lesson analysis. Broadest coverage (all lessons), but generic language can make results muddy.</li>
-                <li><strong>Distinctive</strong> &mdash; Embedding similarity against a detailed physical description of what makes this lesson unique. Captures specific positions, movement sequences, and key connections.</li>
-                <li><strong>Tag Match</strong> &mdash; Direct text matching against concept tags and search terms. Best for specific queries like body parts or named movement patterns.</li>
-            </ul>
-        </div>
-        <div id="concepts-content">
-            <div style="color:#999; padding:16px;"><span class="spinner-inline"></span> Loading concept data...</div>
         </div>
     </div>
 
@@ -689,6 +816,11 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
     <!-- Q&A tab -->
     <div id="tab-chat" style="display:none;">
         <div class="tab-intro">Ask any question about this lesson. Answers draw from the transcript and all analyses.</div>
+        <details class="chat-earlier" id="chat-earlier" style="display:none;" open>
+            <summary id="chat-earlier-summary">Earlier questions on this lesson</summary>
+            <div id="chat-earlier-list"></div>
+            <div class="chat-earlier-foot"><a href="/conversations">All conversations &rarr;</a></div>
+        </details>
         <div class="chat-panel">
             <div class="chat-context-config" id="chat-context-config" {'style="display:none;"' if search_mode else ''}>
                 <strong>Context:</strong>
@@ -724,14 +856,6 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
         <div class="progress-bar" id="annotated-progress"></div>
     </div>
 
-    <!-- History tab: prior Q&A on this lesson -->
-    <div id="tab-history" style="display:none;">
-        <div class="tab-intro">Previous Q&amp;A conversations on this lesson. <a href="/conversations" style="margin-left:8px;">All conversations &rarr;</a></div>
-        <div id="history-tab-content">
-            <div style="color:#999; padding:16px;"><span class="spinner-inline"></span> Loading history...</div>
-        </div>
-    </div>
-
     <!-- Raw I/O tab -->
     <div id="tab-rawio" style="display:none;">
         <div class="tab-intro">Raw LLM prompts and responses for each analysis step. Useful for debugging and understanding what data was produced.</div>
@@ -744,6 +868,159 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
 <script>
 // ── Constants ──
 const DOCUMENT_ID = '{esc_id}';
+
+// Every analysis endpoint reads one profile's results: the one named by
+// ?profile=, else the one the server chose for this lesson.
+const ANALYSIS_PROFILE = new URLSearchParams(window.location.search).get('profile') || {default_profile_js};
+const _fetchUnprofiled = window.fetch.bind(window);
+window.fetch = (url, opts) => {{
+    if (ANALYSIS_PROFILE && typeof url === 'string' && url.startsWith('/api/lesson/')
+            && !url.includes('/profiles')) {{
+        url += (url.includes('?') ? '&' : '?') + 'profile=' + encodeURIComponent(ANALYSIS_PROFILE);
+    }}
+    return _fetchUnprofiled(url, opts);
+}};
+
+// The lesson, its transcript and one model's analysis as a self-explaining
+// Markdown document, for discussing the lesson in an outside AI chat.
+function contextUrl(download) {{
+    let url = '/api/lesson/' + encodeURIComponent(DOCUMENT_ID) + '/context';
+    const params = new URLSearchParams();
+    if (ANALYSIS_PROFILE) params.set('profile', ANALYSIS_PROFILE);
+    if (download) params.set('download', '1');
+    return params.toString() ? url + '?' + params : url;
+}}
+
+async function copyLessonContext(btn) {{
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Preparing…';
+    const text = fetch(contextUrl(false)).then(r => {{
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text();
+    }});
+    try {{
+        // Safari only allows a clipboard write that starts inside the click,
+        // so hand it the pending text rather than awaiting it first.
+        if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {{
+            await navigator.clipboard.write([new ClipboardItem({{
+                'text/plain': text.then(t => new Blob([t], {{type: 'text/plain'}})),
+            }})]);
+        }} else {{
+            await navigator.clipboard.writeText(await text);
+        }}
+        const words = (await text).split(/\s+/).length;
+        btn.textContent = 'Copied · ' + words.toLocaleString() + ' words';
+    }} catch (e) {{
+        btn.textContent = 'Copy failed · use Download';
+    }}
+    setTimeout(() => {{ btn.textContent = label; btn.disabled = false; }}, 4000);
+}}
+
+// Saves the document and copies its path. Browsers never tell a page where a
+// download went, so the path assumes the default folder (~/Downloads) and the
+// server's filename; a browser that renames a duplicate adds " (1)".
+async function downloadLessonContext(btn) {{
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Preparing…';
+    const file = fetch(contextUrl(true)).then(async r => {{
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const match = /filename="([^"]+)"/.exec(r.headers.get('Content-Disposition') || '');
+        return {{name: match ? match[1] : 'lesson.md', blob: await r.blob()}};
+    }});
+    const path = file.then(f => '~/Downloads/' + f.name);
+    // Start the clipboard write inside the click, with the path still pending,
+    // as Safari requires; await it only after the download.
+    let copied;
+    try {{
+        copied = (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write)
+            ? navigator.clipboard.write([new ClipboardItem({{
+                  'text/plain': path.then(t => new Blob([t], {{type: 'text/plain'}})),
+              }})])
+            : path.then(t => navigator.clipboard.writeText(t));
+    }} catch (e) {{
+        copied = Promise.reject(e);
+    }}
+    try {{
+        const f = await file;
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(f.blob);
+        link.download = f.name;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+    }} catch (e) {{
+        copied.catch(() => {{}});
+        btn.textContent = 'Download failed';
+        setTimeout(() => {{ btn.textContent = label; btn.disabled = false; }}, 4000);
+        return;
+    }}
+    try {{
+        await copied;
+        btn.textContent = 'Saved · path copied';
+        btn.title = 'Copied: ' + await path;
+    }} catch (e) {{
+        btn.textContent = 'Saved · ' + await path;
+    }}
+    setTimeout(() => {{ btn.textContent = label; btn.disabled = false; }}, 4000);
+}}
+
+function switchProfile(key) {{
+    const url = new URL(window.location);
+    url.searchParams.set('profile', key);
+    window.location = url.toString();
+}}
+
+// Which models have analyzed this lesson; shared by the model picker and the not-analyzed notice.
+const lessonProfiles = fetch('/api/lesson/' + encodeURIComponent(DOCUMENT_ID) + '/profiles')
+    .then(r => r.ok ? r.json() : {{profiles: []}})
+    .then(d => d.profiles || [])
+    .catch(() => []);
+
+// The picker lists only models with results here (plus the one in view, if it has none).
+(async function loadProfileBar() {{
+    const bar = document.getElementById('profile-bar');
+    if (!bar) return;
+    const profiles = await lessonProfiles;
+    const select = document.getElementById('profile-select');
+    const current = ANALYSIS_PROFILE || (profiles.find(p => p.canonical) || {{}}).key;
+    const listed = profiles.filter(p => p.completed_steps.length || p.key === current);
+    if (!listed.some(p => p.completed_steps.length)) return;
+    for (const p of listed) {{
+        const opt = document.createElement('option');
+        opt.value = p.key;
+        const done = p.completed_steps.length;
+        opt.textContent = p.key + ' · ' + p.model + (p.canonical ? ' (canonical)' : '')
+            + ' — ' + (done ? done + ' analysis step' + (done === 1 ? '' : 's') + ' done' : 'not analyzed');
+        opt.selected = p.key === current;
+        select.appendChild(opt);
+    }}
+    bar.style.display = '';
+}})();
+
+const ANALYSIS_TABS = ['steps', 'condensed', 'somatic', 'language'];
+
+// Not analyzed (by any model, or by the model in view): say so plainly, hide the
+// analysis tabs and open the transcript, instead of showing an error.
+async function showNotAnalyzed(profileKey) {{
+    const others = (await lessonProfiles).filter(p => p.completed_steps.length && p.key !== profileKey);
+    let msg;
+    if (others.length) {{
+        const links = others.map(p => '<a href="?profile=' + encodeURIComponent(p.key) + '">' + escHtml(p.key) + '</a>').join(', ');
+        msg = 'This lesson has no analysis from <strong>' + escHtml(profileKey || 'this model') + '</strong>. ' +
+              'See it as analyzed by ' + links + '.';
+    }} else {{
+        msg = 'This lesson has a transcript but has not been analyzed by any model yet. ' +
+              'The transcript and Q&amp;A work; the step-by-step views need an analysis.';
+    }}
+    document.getElementById('status-area').innerHTML = '<div class="not-analyzed">' + msg + '</div>';
+    document.querySelectorAll('.tab-bar button').forEach(b => {{
+        if (ANALYSIS_TABS.includes(b.dataset.tab)) b.style.display = 'none';
+    }});
+    switchTab('transcript');
+}}
 const PROVIDER = new URLSearchParams(window.location.search).get('provider') || '';
 
 // ── State ──
@@ -766,20 +1043,18 @@ const audioContainer = document.getElementById('audio-container');
 
 // ── Tab switching ──
 
-const TAB_ORDER = ['steps', 'condensed', 'somatic', 'language', 'classification', 'pipeline', 'concepts', 'transcript', 'chat', 'history', 'rawio'];
-let conceptsLoaded = false;
+const TAB_ORDER = ['steps', 'condensed', 'somatic', 'language', 'pipeline', 'transcript', 'chat', 'rawio'];
 let transcriptRendered = false;
 let somaticTabLoaded = false;
 let languageTabLoaded = false;
-let classificationTabLoaded = false;
 let pipelineTabLoaded = false;
 let rawioTabLoaded = false;
-let historyTabLoaded = false;
+let chatHistoryLoaded = false;
 
 function switchTab(tab) {{
     activeTab = tab;
-    document.querySelectorAll('.tab-bar button').forEach((b, i) => {{
-        b.classList.toggle('active', TAB_ORDER[i] === tab);
+    document.querySelectorAll('.tab-bar button').forEach(b => {{
+        b.classList.toggle('active', b.dataset.tab === tab);
     }});
     TAB_ORDER.concat(['annotated']).forEach(t => {{
         const el = document.getElementById('tab-' + t);
@@ -788,53 +1063,69 @@ function switchTab(tab) {{
 
     if (tab === 'condensed' && !condensedLoaded) loadCondensed();
     if (tab === 'annotated' && !annotatedLoaded) loadAnnotated();
-    if (tab === 'concepts' && !conceptsLoaded) loadConcepts();
     if (tab === 'transcript' && !transcriptRendered) renderTranscript();
 if (tab === 'steps' && analysisData) renderCard();
-    if (tab === 'chat') document.getElementById('chat-input').focus();
+    if (tab === 'chat') {{
+        document.getElementById('chat-input').focus();
+        if (!chatHistoryLoaded) loadChatHistory();
+    }}
     if (tab === 'somatic' && !somaticTabLoaded) loadSomaticTab();
     if (tab === 'language' && !languageTabLoaded) loadLanguageTab();
-    if (tab === 'classification' && !classificationTabLoaded) loadClassificationTab();
     if (tab === 'pipeline' && !pipelineTabLoaded) loadPipelineTab();
     if (tab === 'rawio' && !rawioTabLoaded) loadRawIOTab();
-    if (tab === 'history' && !historyTabLoaded) loadHistoryTab();
 }}
 
-// ── History tab (per-lesson chat history) ──
+// ── Earlier Q&A on this lesson (shown above the chat) ──
 
-async function loadHistoryTab() {{
-    historyTabLoaded = true;
-    const div = document.getElementById('history-tab-content');
+let earlierTurns = [];
+
+async function loadChatHistory() {{
+    chatHistoryLoaded = true;
+    const box = document.getElementById('chat-earlier');
+    const list = document.getElementById('chat-earlier-list');
     try {{
         const res = await fetch('/api/lesson-chat-history/' + encodeURIComponent(DOCUMENT_ID));
         const data = await res.json();
-        if (data.error) {{
-            div.innerHTML = '<div style="color:#999;padding:16px;">' + escHtml(data.error) + '</div>';
-            return;
-        }}
-        if (!data.turns || data.turns.length === 0) {{
-            div.innerHTML = '<div style="color:#999;padding:16px;">No previous Q&amp;A on this lesson yet.</div>';
-            return;
-        }}
-        const parts = [];
-        if (data.is_superuser_view) {{
-            parts.push('<div style="font-size:0.85em;color:#888;padding:0 0 12px 0;">Superuser view: showing all users.</div>');
-        }}
-        for (const t of data.turns) {{
+        if (data.error || !data.turns || data.turns.length === 0) return;
+        earlierTurns = data.turns;
+        const who = data.is_superuser_view ? ' (all users)' : '';
+        document.getElementById('chat-earlier-summary').textContent =
+            'Earlier questions on this lesson' + who + ' (' + data.turns.length + ')';
+        list.innerHTML = data.turns.map((t, i) => {{
             const ts = t.created_at ? new Date(t.created_at).toLocaleString() : '';
-            const userTag = (data.is_superuser_view && t.user_id) ? ' &middot; user ' + t.user_id : '';
-            parts.push(
-                '<div style="border-left:3px solid #007bff;padding:8px 14px;margin:14px 0;background:#f8f9fa;">' +
-                '<div style="font-size:0.8em;color:#888;margin-bottom:6px;">' + escHtml(ts) + escHtml(userTag) + '</div>' +
-                '<div style="font-weight:600;color:#333;margin-bottom:8px;white-space:pre-wrap;">' + escHtml(t.query) + '</div>' +
-                '<div style="color:#555;white-space:pre-wrap;line-height:1.5;">' + escHtml(t.response) + '</div>' +
-                '</div>'
-            );
-        }}
-        div.innerHTML = parts.join('');
+            const userTag = (data.is_superuser_view && t.user_id) ? ' · user ' + t.user_id : '';
+            const outside = t.origin === 'external';
+            const originTag = outside ? ' · ' + (t.assistant || 'Outside') + ' chat, saved from outside the app' : '';
+            const cont = outside ? '' :
+                '<button type="button" onclick="continueEarlierTurn(' + i + ')" ' +
+                'title="Reload the questions up to this one into the chat, then ask a follow-up">Continue from here</button>';
+            return '<details class="chat-earlier-turn' + (outside ? ' outside' : '') + '">' +
+                '<summary>' + escHtml(t.query) +
+                '<span class="chat-earlier-meta">' + escHtml(ts + userTag + originTag) + '</span></summary>' +
+                '<div class="chat-earlier-answer">' + marked.parse(t.response || '') + '</div>' + cont +
+                '</details>';
+        }}).join('');
+        box.style.display = '';
     }} catch (e) {{
-        div.innerHTML = '<div style="color:#c62828;padding:16px;">Failed to load history: ' + escHtml(e.message) + '</div>';
+        list.innerHTML = '<div style="color:#c62828;">Failed to load earlier questions: ' + escHtml(e.message) + '</div>';
+        box.style.display = '';
     }}
+}}
+
+// Earlier turns are saved one question at a time; rebuild the conversation up to
+// turn i from the same user's in-app turns so a follow-up keeps its context.
+function continueEarlierTurn(i) {{
+    const t = earlierTurns[i];
+    if (!t) return;
+    chatMessages = [];
+    earlierTurns.slice(0, i + 1)
+        .filter(e => e.origin !== 'external' && e.user_id === t.user_id)
+        .forEach(e => chatMessages.push({{role: 'user', content: e.query}}, {{role: 'assistant', content: e.response}}));
+    const hint = document.getElementById('chat-hint');
+    if (hint) hint.remove();
+    renderChatMessages();
+    document.getElementById('chat-earlier').open = false;
+    document.getElementById('chat-input').focus();
 }}
 
 // ── Transcript rendering ──
@@ -972,134 +1263,6 @@ function downloadTranscript() {{
     URL.revokeObjectURL(a.href);
 }}
 
-// ── Concepts loading ──
-
-async function loadConcepts() {{
-    conceptsLoaded = true;
-    const div = document.getElementById('concepts-content');
-    try {{
-        // Load concepts and positions in parallel
-        const [res, posRes] = await Promise.all([
-            fetch('/api/lesson/' + DOCUMENT_ID + '/concepts'),
-            fetch('/api/lesson/' + DOCUMENT_ID + '/positions'),
-        ]);
-        const data = await res.json();
-        const posData = await posRes.json();
-        if (data.error) {{
-            div.innerHTML = '<div style="color:#999;padding:16px;">No concept data available for this lesson.</div>';
-            return;
-        }}
-        let html = '';
-        // Distinctive summary
-        if (data.distinctive_summary) {{
-            html += '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
-            html += '<div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#1a73e8;margin-bottom:6px;">What Makes This Lesson Distinctive</div>';
-            html += '<div style="font-size:0.95em;line-height:1.6;color:#333;">' + escConcept(data.distinctive_summary) + '</div>';
-            html += '</div>';
-        }}
-        // Search terms
-        if (data.search_terms && data.search_terms.length) {{
-            html += '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
-            html += '<div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#e65100;margin-bottom:8px;">Search Terms</div>';
-            html += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
-            data.search_terms.forEach(t => {{
-                html += '<span style="padding:4px 12px;background:#fff3e0;border:1px solid #ffe0b2;border-radius:14px;font-size:0.85em;color:#e65100;">' + escConcept(t) + '</span>';
-            }});
-            html += '</div></div>';
-        }}
-        // Position sequence (spatial v3)
-        if (posData.available && posData.steps && posData.steps.length) {{
-            html += '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
-            html += '<div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#00695c;margin-bottom:8px;">Positions Through the Lesson</div>';
-            if (posData.position_summary && posData.position_summary.length) {{
-                html += '<div style="margin-bottom:12px;">';
-                posData.position_summary.forEach((p, i) => {{
-                    const pos = typeof p === 'string' ? p : p.position;
-                    const alts = (typeof p === 'object' && p.alternates) ? p.alternates : [];
-                    html += '<div style="margin-bottom:6px;">';
-                    html += '<span style="padding:4px 10px;background:#e0f2f1;border:1px solid #b2dfdb;border-radius:14px;font-size:0.82em;color:#00695c;">' + escConcept(pos) + '</span>';
-                    if (alts.length) {{
-                        html += '<div style="margin-left:16px;margin-top:3px;display:flex;flex-wrap:wrap;gap:4px;">';
-                        alts.forEach(a => {{
-                            html += '<span style="padding:2px 8px;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:10px;font-size:0.75em;color:#888;">' + escConcept(a) + '</span>';
-                        }});
-                        html += '</div>';
-                    }}
-                    html += '</div>';
-                }});
-                html += '</div>';
-            }}
-            let curGroup = -1;
-            posData.steps.forEach(s => {{
-                if (s.group_number !== curGroup) {{
-                    if (curGroup !== -1) html += '</div>';
-                    curGroup = s.group_number;
-                    html += '<div style="margin-bottom:8px;">';
-                    html += '<div style="font-size:0.78em;font-weight:600;color:#666;margin-top:8px;margin-bottom:4px;">Group ' + s.group_number + '</div>';
-                }}
-                const posStyle = 'font-weight:500;color:#00796b;';
-                const actionStyle = 'color:#555;';
-                const tagStyle = 'display:inline-block;font-size:0.7em;padding:1px 5px;border-radius:3px;margin-left:4px;';
-                let tags = '';
-                if (s.is_rest) tags += '<span style="' + tagStyle + 'background:#e8eaf6;color:#5c6bc0;">rest</span>';
-                if (s.is_transition) tags += '<span style="' + tagStyle + 'background:#fff3e0;color:#e65100;">transition</span>';
-                html += '<div style="font-size:0.85em;line-height:1.5;padding:2px 0;">';
-                html += '<span style="color:#999;font-size:0.8em;margin-right:4px;">' + s.step_number + '.</span>';
-                html += '<span style="' + posStyle + '">[' + escConcept(s.position) + ']</span> ';
-                html += '<span style="' + actionStyle + '">' + escConcept(s.action) + '</span>';
-                html += tags;
-                html += '</div>';
-            }});
-            if (curGroup !== -1) html += '</div>';
-            html += '</div>';
-        }}
-        // Concepts by category
-        if (data.concepts && data.concepts.length) {{
-            const byCategory = {{}};
-            data.concepts.forEach(c => {{
-                if (!byCategory[c.category]) byCategory[c.category] = [];
-                byCategory[c.category].push(c.value);
-            }});
-            const catColors = {{
-                body_region: '#2196f3', movement_pattern: '#4caf50', position: '#9c27b0',
-                feldenkrais_concept: '#ff9800', teaching_strategy: '#e91e63', theme: '#607d8b',
-                spatial_config: '#00897b', contact_point: '#5c6bc0', constraint: '#c62828', working_position: '#6a1b9a',
-                position_v3: '#00695c', position_alt: '#26a69a'
-            }};
-            const catLabels = {{
-                body_region: 'Body Region', movement_pattern: 'Movement Pattern', position: 'Position',
-                feldenkrais_concept: 'Feldenkrais Concept', teaching_strategy: 'Teaching Strategy', theme: 'Theme',
-                spatial_config: 'Spatial Configuration', contact_point: 'Contact Point', constraint: 'Constraint', working_position: 'Working Position',
-                position_v3: 'Position (detailed)', position_alt: 'Position (alternate phrasing)'
-            }};
-            html += '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
-            html += '<div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#333;margin-bottom:12px;">Concept Tags</div>';
-            Object.keys(byCategory).sort().forEach(cat => {{
-                const color = catColors[cat] || '#666';
-                const label = catLabels[cat] || cat.replace(/_/g, ' ');
-                html += '<div style="margin-bottom:10px;">';
-                html += '<div style="font-size:0.8em;font-weight:600;color:' + color + ';margin-bottom:4px;text-transform:capitalize;">' + label + '</div>';
-                html += '<div style="display:flex;flex-wrap:wrap;gap:5px;">';
-                byCategory[cat].forEach(v => {{
-                    html += '<span style="padding:3px 10px;border:1px solid #ddd;border-radius:12px;font-size:0.85em;color:#444;background:#fafafa;">' + escConcept(v) + '</span>';
-                }});
-                html += '</div></div>';
-            }});
-            html += '</div>';
-        }}
-        if (!html) html = '<div style="color:#999;padding:16px;">No concept data available for this lesson.</div>';
-        div.innerHTML = html;
-    }} catch (e) {{
-        div.innerHTML = '<div style="color:#999;padding:16px;">Failed to load concept data.</div>';
-    }}
-}}
-
-function escConcept(str) {{
-    const d = document.createElement('div');
-    d.textContent = str;
-    return d.innerHTML;
-}}
-
 // ── Somatic tab ──
 
 async function loadSomaticTab() {{
@@ -1214,75 +1377,6 @@ async function loadLanguageTab() {{
     }}
 }}
 
-// ── Classification tab ──
-
-async function loadClassificationTab() {{
-    classificationTabLoaded = true;
-    const div = document.getElementById('classification-tab-content');
-    try {{
-        const res = await fetch('/api/lesson/' + DOCUMENT_ID + '/classification');
-        const data = await res.json();
-        if (data.error) {{
-            div.innerHTML = '<div style="color:#999;padding:16px;">' + escHtml(data.error) + '</div>';
-            return;
-        }}
-        let html = '';
-        // Framework classification if present
-        if (data.primary_framework || data.classification) {{
-            html += '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
-            html += '<div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#e65100;margin-bottom:8px;">Framework Classification</div>';
-            if (data.primary_framework) html += '<p style="margin:0 0 8px 0;"><strong>Primary Framework:</strong> ' + escHtml(data.primary_framework) + '</p>';
-            if (data.rationale) html += '<p style="margin:0 0 12px 0;color:#555;font-size:0.9em;">' + escHtml(data.rationale) + '</p>';
-            // Bar chart for classification scores
-            const scores = data.classification || {{}};
-            const entries = Object.entries(scores).sort((a, b) => b[1] - a[1]);
-            if (entries.length) {{
-                const maxVal = Math.max(...entries.map(e => e[1]), 1);
-                html += '<div style="margin-top:8px;">';
-                entries.forEach(([name, score]) => {{
-                    const pct = Math.round((score / maxVal) * 100);
-                    const barColor = name === data.primary_framework ? '#e65100' : '#90a4ae';
-                    html += '<div style="display:flex;align-items:center;margin-bottom:6px;">';
-                    html += '<div style="width:140px;font-size:0.85em;color:#333;font-weight:500;flex-shrink:0;">' + escHtml(name) + '</div>';
-                    html += '<div style="flex:1;height:20px;background:#f0f0f0;border-radius:4px;overflow:hidden;margin:0 10px;">';
-                    html += '<div style="width:' + pct + '%;height:100%;background:' + barColor + ';border-radius:4px;transition:width 0.3s;"></div>';
-                    html += '</div>';
-                    html += '<div style="width:40px;text-align:right;font-size:0.85em;color:#666;">' + (typeof score === 'number' ? score.toFixed(2) : score) + '</div>';
-                    html += '</div>';
-                }});
-                html += '</div>';
-            }}
-            html += '</div>';
-        }}
-        // Groups summary
-        const groups = data.groups || [];
-        if (groups.length) {{
-            html += '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
-            html += '<div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#1a73e8;margin-bottom:8px;">Movement Groups (' + groups.length + ')</div>';
-            groups.forEach(g => {{
-                html += '<div style="padding:8px 0;border-bottom:1px solid #f0f0f0;">';
-                html += '<strong>Group ' + g.group_number + ':</strong> ' + escHtml(g.label || '');
-                if (g.starting_position) html += ' <span style="color:#888;font-size:0.85em;">(' + escHtml(g.starting_position) + ')</span>';
-                if (g.description) html += '<div style="color:#555;font-size:0.9em;margin-top:2px;">' + escHtml(g.description) + '</div>';
-                html += '</div>';
-            }});
-            html += '</div>';
-        }}
-        // Steps count
-        const steps = data.steps || [];
-        if (steps.length) {{
-            html += '<div style="background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">';
-            html += '<div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#333;margin-bottom:8px;">Steps (' + steps.length + ')</div>';
-            html += '<div style="font-size:0.9em;color:#555;">Pass A decomposed this lesson into ' + steps.length + ' steps across ' + groups.length + ' groups.</div>';
-            html += '</div>';
-        }}
-        if (!html) html = '<div style="color:#999;padding:16px;">No classification data available.</div>';
-        div.innerHTML = html;
-    }} catch (e) {{
-        div.innerHTML = '<div style="color:#999;padding:16px;">Failed to load classification data.</div>';
-    }}
-}}
-
 // ── Pipeline tab ──
 
 // ── Pipeline controls (shared by pipeline + raw I/O tabs) ──
@@ -1355,7 +1449,6 @@ async function _pollPipeline() {{
             condensedLoaded = false;
             somaticTabLoaded = false;
             languageTabLoaded = false;
-            classificationTabLoaded = false;
             rawioTabLoaded = false;
             // Re-fetch the main analysis data (steps/groups may have changed)
             try {{
@@ -1392,7 +1485,7 @@ async function loadPipelineTab() {{
         html += '<tr><td style="padding:4px 12px 4px 0;font-weight:600;color:#666;white-space:nowrap;">Document ID</td><td style="padding:4px 0;font-family:monospace;font-size:0.9em;">' + escHtml(doc.document_id || '') + '</td></tr>';
         html += '<tr><td style="padding:4px 12px 4px 0;font-weight:600;color:#666;">Title</td><td style="padding:4px 0;">' + escHtml(doc.title || '') + '</td></tr>';
         html += '<tr><td style="padding:4px 12px 4px 0;font-weight:600;color:#666;">Created</td><td style="padding:4px 0;">' + escHtml(doc.created_at || 'N/A') + '</td></tr>';
-        html += '<tr><td style="padding:4px 12px 4px 0;font-weight:600;color:#666;">Status</td><td style="padding:4px 0;">' + escHtml(doc.status || 'N/A') + '</td></tr>';
+        html += '<tr><td style="padding:4px 12px 4px 0;font-weight:600;color:#666;" title="Where ingestion left the document; unrelated to analysis">Ingestion status</td><td style="padding:4px 0;">' + escHtml(doc.status || 'N/A') + '</td></tr>';
         if (doc.s3_key) html += '<tr><td style="padding:4px 12px 4px 0;font-weight:600;color:#666;">Media</td><td style="padding:4px 0;font-family:monospace;font-size:0.85em;">' + escHtml(doc.s3_key) + '</td></tr>';
         html += '</table></div>';
         // Pipeline steps
@@ -1483,10 +1576,10 @@ async function loadRawIOTab() {{
             html += '<summary style="padding:14px 18px;cursor:pointer;font-weight:600;color:#333;font-size:0.95em;">';
             html += escHtml(step.name);
             if (step.has_data) {{
-                html += ' <span style="display:inline-block;padding:1px 8px;border-radius:8px;font-size:0.75em;font-weight:600;color:#fff;background:#2e7d32;margin-left:8px;">cached</span>';
+                html += ' <span style="display:inline-block;padding:1px 8px;border-radius:8px;font-size:0.75em;font-weight:600;color:#fff;background:#2e7d32;margin-left:8px;">has output</span>';
                 if (step.raw_json_length) html += ' <span style="color:#888;font-size:0.8em;font-weight:400;">(' + (step.raw_json_length / 1024).toFixed(1) + ' KB)</span>';
             }} else {{
-                html += ' <span style="display:inline-block;padding:1px 8px;border-radius:8px;font-size:0.75em;font-weight:600;color:#fff;background:#757575;margin-left:8px;">not cached</span>';
+                html += ' <span style="display:inline-block;padding:1px 8px;border-radius:8px;font-size:0.75em;font-weight:600;color:#fff;background:#757575;margin-left:8px;">not run for this model</span>';
             }}
             if (step.stale) {{
                 html += ' <span style="display:inline-block;padding:1px 8px;border-radius:8px;font-size:0.75em;font-weight:600;color:#856404;background:#fff3cd;margin-left:4px;">stale</span>';
@@ -2167,6 +2260,10 @@ async function sendChat() {{
         showStatus('<span class="spinner-inline"></span> Loading analysis...');
         const res = await fetch('/api/lesson/' + encodeURIComponent(DOCUMENT_ID) + '/combined');
         const data = await res.json();
+        if (data.not_analyzed) {{
+            await showNotAnalyzed(data.profile);
+            return;
+        }}
         if (data.error) {{
             showStatus('Error: ' + data.error, true);
             document.getElementById('card-placeholder').innerHTML = 'Analysis failed.';
@@ -2193,11 +2290,13 @@ async function sendChat() {{
 </html>"""
 
 
-def build_lesson_print_html(document_id: str, title: str | None = None) -> str:
+def build_lesson_print_html(document_id: str, title: str | None = None,
+                            profile: str | None = None) -> str:
     """Print-friendly view: numbered list of step instructions, grouped.
 
-    Client-side fetches /api/lesson/{id}/combined and renders one bullet per
-    step. No header/nav/auth bar — just the steps. Designed for browser print.
+    Client-side fetches /api/lesson/{id}/combined for one model profile's
+    analysis and renders one bullet per step. No header/nav/auth bar — just the
+    steps. Designed for browser print.
     """
     esc_id = html_mod.escape(document_id)
     esc_title = html_mod.escape(title or "Lesson")
@@ -2265,7 +2364,9 @@ function escHtml(s) {{
             document.getElementById('lesson-title').textContent = info.title;
         }}
 
-        const resp = await fetch('/api/lesson/' + encodeURIComponent(docId) + '/combined');
+        const profile = {json.dumps(profile)};
+        const resp = await fetch('/api/lesson/' + encodeURIComponent(docId) + '/combined'
+                                 + (profile ? '?profile=' + encodeURIComponent(profile) : ''));
         const data = await resp.json();
         console.log('print: data', {{ok: resp.ok, status: resp.status, err: data.error,
                                      steps: (data.steps || []).length,
@@ -2473,7 +2574,7 @@ def build_fmtt_page_html(
 </html>"""
 
 
-def build_conversations_page_html(user: dict, superuser_active: bool = False) -> str:
+def build_conversations_page_html(user: dict | None, superuser_active: bool = False) -> str:
     """Central page listing the user's chat history grouped by lesson.
 
     Superusers in superuser mode see every user's chats; everyone else sees
@@ -2542,8 +2643,9 @@ async function toggleLesson(cardId, docId, userId) {{
             }} else {{
                 container.innerHTML = filtered.map(t => {{
                     const ts = t.created_at ? new Date(t.created_at).toLocaleString() : '';
+                    const originTag = t.origin === 'external' ? ' · ' + (t.assistant || 'Outside') + ' chat, saved from outside the app' : '';
                     return '<div class="turn">' +
-                        '<div class="turn-ts">' + escHtml(ts) + '</div>' +
+                        '<div class="turn-ts">' + escHtml(ts + originTag) + '</div>' +
                         '<div class="turn-q">' + escHtml(t.query) + '</div>' +
                         '<div class="turn-a">' + escHtml(t.response) + '</div>' +
                         '</div>';

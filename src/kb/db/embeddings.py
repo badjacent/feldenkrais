@@ -2,25 +2,29 @@
 
 import json
 
+from .analysis_profiles import CANONICAL_PROFILE_SQL
+
 
 class EmbeddingsMixin:
     """Lesson embeddings, concept tags, and vector search."""
 
     def upsert_embedding(self, document_id: str, embedding: list[float],
-                         summary_text: str, summary_hash: str, method: str = "default"):
-        """Insert or update a lesson embedding."""
+                         summary_text: str, summary_hash: str, method: str = "default",
+                         profile_key: str | None = None):
+        """Insert or update a lesson embedding for a profile (canonical by default)."""
         with self.get_cursor() as cursor:
             cursor.execute(
-                """
-                INSERT INTO lesson_embedding (document_id, method, embedding, summary_text, summary_hash, updated_at)
-                VALUES (%s, %s, %s::vector, %s, %s, NOW())
-                ON CONFLICT (document_id, method) DO UPDATE SET
+                f"""
+                INSERT INTO lesson_embedding
+                    (document_id, profile_key, method, embedding, summary_text, summary_hash, updated_at)
+                VALUES (%s, COALESCE(%s, {CANONICAL_PROFILE_SQL}), %s, %s::vector, %s, %s, NOW())
+                ON CONFLICT (document_id, profile_key, method) DO UPDATE SET
                     embedding = EXCLUDED.embedding,
                     summary_text = EXCLUDED.summary_text,
                     summary_hash = EXCLUDED.summary_hash,
                     updated_at = NOW()
                 """,
-                (document_id, method, str(embedding), summary_text, summary_hash),
+                (document_id, profile_key, method, str(embedding), summary_text, summary_hash),
             )
 
     def search_lessons(
@@ -74,7 +78,7 @@ class EmbeddingsMixin:
                        d.category_name
                 FROM lesson_embedding le
                 JOIN document d ON d.id = le.document_id{source_join}{rendition_join}
-                WHERE le.method = %s{source_filter}{rendition_filter}
+                WHERE le.method = %s AND le.profile_key = {CANONICAL_PROFILE_SQL}{source_filter}{rendition_filter}
                 ORDER BY le.embedding <=> %s::vector
                 LIMIT %s
                 """,
@@ -88,18 +92,22 @@ class EmbeddingsMixin:
             return [dict(row) for row in cursor.fetchall()]
 
     def get_embedding_hashes(self, method: str = "default") -> dict[str, str]:
-        """Return {document_id: summary_hash} for all embedded lessons."""
+        """Return {document_id: summary_hash} for all lessons embedded under the canonical profile."""
         if self.allowed_source_ids is not None:
-            query = """
+            query = f"""
                 SELECT le.document_id::text, le.summary_hash
                 FROM lesson_embedding le
                 JOIN document d ON d.id = le.document_id
                 JOIN document_source ds ON ds.id = d.source_id
-                WHERE le.method = %s AND ds.id = ANY(%s)
+                WHERE le.method = %s AND le.profile_key = {CANONICAL_PROFILE_SQL}
+                  AND ds.id = ANY(%s)
             """
             params: tuple = (method, list(self.allowed_source_ids))
         else:
-            query = "SELECT document_id::text, summary_hash FROM lesson_embedding WHERE method = %s"
+            query = (
+                "SELECT document_id::text, summary_hash FROM lesson_embedding "
+                f"WHERE method = %s AND profile_key = {CANONICAL_PROFILE_SQL}"
+            )
             params = (method,)
         with self.get_cursor(commit=False) as cursor:
             cursor.execute(query, params)
@@ -107,19 +115,28 @@ class EmbeddingsMixin:
 
     # Lesson concept operations
 
-    def upsert_concepts(self, document_id: str, concepts: list[dict]):
-        """Replace all concepts for a lesson. concepts: [{"category": ..., "value": ...}, ...]"""
+    def upsert_concepts(self, document_id: str, concepts: list[dict],
+                        profile_key: str | None = None):
+        """Replace a profile's concepts for a lesson (canonical by default).
+
+        concepts: [{"category": ..., "value": ...}, ...]
+        """
+        profile_key = profile_key or self.get_canonical_profile()["key"]
         with self.get_cursor() as cursor:
-            cursor.execute("DELETE FROM lesson_concept WHERE document_id = %s", (document_id,))
+            cursor.execute(
+                "DELETE FROM lesson_concept WHERE document_id = %s AND profile_key = %s",
+                (document_id, profile_key),
+            )
             if concepts:
                 from psycopg2.extras import execute_values
                 execute_values(
                     cursor,
-                    "INSERT INTO lesson_concept (document_id, category, value) VALUES %s",
-                    [(document_id, c["category"], c["value"]) for c in concepts],
+                    "INSERT INTO lesson_concept (document_id, profile_key, category, value) VALUES %s",
+                    [(document_id, profile_key, c["category"], c["value"]) for c in concepts],
                 )
 
-    def upsert_spatial_concepts(self, document_id: str, concepts: list[dict]):
+    def upsert_spatial_concepts(self, document_id: str, concepts: list[dict],
+                                profile_key: str | None = None):
         """Replace spatial concepts for a lesson (category-scoped delete).
 
         Only deletes/replaces rows with spatial categories, leaving existing
@@ -128,17 +145,19 @@ class EmbeddingsMixin:
         concepts: [{"category": ..., "value": ...}, ...]
         """
         spatial_categories = ("spatial_config", "contact_point", "constraint", "working_position")
+        profile_key = profile_key or self.get_canonical_profile()["key"]
         with self.get_cursor() as cursor:
             cursor.execute(
-                "DELETE FROM lesson_concept WHERE document_id = %s AND category = ANY(%s)",
-                (document_id, list(spatial_categories)),
+                "DELETE FROM lesson_concept "
+                "WHERE document_id = %s AND profile_key = %s AND category = ANY(%s)",
+                (document_id, profile_key, list(spatial_categories)),
             )
             if concepts:
                 from psycopg2.extras import execute_values
                 execute_values(
                     cursor,
-                    "INSERT INTO lesson_concept (document_id, category, value) VALUES %s",
-                    [(document_id, c["category"], c["value"]) for c in concepts],
+                    "INSERT INTO lesson_concept (document_id, profile_key, category, value) VALUES %s",
+                    [(document_id, profile_key, c["category"], c["value"]) for c in concepts],
                 )
 
     def search_by_concepts(self, terms: list[str], limit: int = 10) -> list[dict]:
@@ -189,7 +208,7 @@ class EmbeddingsMixin:
                        d.category_name
                 FROM lesson_concept lc
                 JOIN document d ON d.id = lc.document_id{source_join}
-                WHERE ({where_clause}){source_filter}
+                WHERE ({where_clause}) AND lc.profile_key = {CANONICAL_PROFILE_SQL}{source_filter}
                 GROUP BY lc.document_id, d.title, d.source_id, d.category_name
                 ORDER BY (COUNT(*) + {phrase_weight} * COUNT(*) FILTER (WHERE lc.value ILIKE %s)) DESC
                 LIMIT %s
@@ -198,12 +217,16 @@ class EmbeddingsMixin:
             )
             return [dict(row) for row in cursor.fetchall()]
 
-    def get_lesson_concepts(self, document_id: str) -> list[dict]:
-        """Return concepts for a lesson as [{category, value}, ...]."""
+    def get_lesson_concepts(self, document_id: str, profile_key: str | None = None) -> list[dict]:
+        """Return a profile's concepts for a lesson as [{category, value}, ...] (canonical by default)."""
         with self.get_cursor(commit=False) as cursor:
             cursor.execute(
-                "SELECT category, value FROM lesson_concept WHERE document_id = %s ORDER BY category, value",
-                (document_id,),
+                f"""
+                SELECT category, value FROM lesson_concept
+                WHERE document_id = %s AND profile_key = COALESCE(%s, {CANONICAL_PROFILE_SQL})
+                ORDER BY category, value
+                """,
+                (document_id, profile_key),
             )
             return [dict(row) for row in cursor.fetchall()]
 

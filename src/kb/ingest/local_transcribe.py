@@ -474,8 +474,10 @@ def main():
         print(f"{len(docs)} document(s) to process")
         started = time.monotonic()
         completed = failed = skipped = 0
+        stopped_early = False
         for doc in docs:
             if time.monotonic() - started >= args.max_seconds:
+                stopped_early = True
                 break
             result = _transcribe_in_subprocess(
                 db, doc, model=args.model, language=args.language, dry_run=args.dry_run,
@@ -496,6 +498,14 @@ def main():
             "skipped": skipped,
             "elapsed_seconds": round(time.monotonic() - started, 1),
         }}, sort_keys=True))
+        # The next run must happen whatever the loader does: failures are due a
+        # retry, a full batch may have left more, or the clock cut this one short.
+        if not args.doc and (failed or stopped_early or len(docs) >= args.limit):
+            try:
+                from ingest import transcription_wake
+                transcription_wake.arm()
+            except Exception as error:  # the next marker from the loader still covers new work
+                print(json.dumps({"transcription_wake": f"could not re-arm: {error}"}))
     finally:
         db.close()
 

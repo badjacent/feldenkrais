@@ -44,6 +44,44 @@ class LessonViewsMixin:
                     pass
                 self._pool = None
 
+    def save_external_conversation(self, *, document_id: str, user_id: int | None,
+                                   conversation_id: str, profile_key: str | None,
+                                   assistant: str | None, channel: str, fmt: str, raw: str,
+                                   exchanges: list[tuple[str, str]]) -> int:
+        """Store a conversation held in an outside LLM.
+
+        Keeps the submission verbatim and writes its exchanges to the Q&A log,
+        replacing the exchanges saved earlier under the same conversation id
+        (an earlier, shorter copy of the same chat). Returns how many exchanges
+        were replaced.
+        """
+        with self.get_cursor() as cur:
+            cur.execute(
+                """INSERT INTO external_conversation
+                       (document_id, user_id, conversation_id, profile_key, assistant,
+                        channel, format, exchange_count, raw)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                (document_id, user_id, conversation_id, profile_key, assistant,
+                 channel, fmt, len(exchanges), raw),
+            )
+            cur.execute(
+                """DELETE FROM lesson_chat_log
+                   WHERE document_id = %s AND conversation_id = %s AND origin = 'external'
+                     AND user_id IS NOT DISTINCT FROM %s""",
+                (document_id, conversation_id, user_id),
+            )
+            replaced = cur.rowcount
+            for query, response in exchanges:
+                cur.execute(
+                    """INSERT INTO lesson_chat_log
+                           (document_id, user_id, query, response, origin, assistant,
+                            conversation_id, profile_key)
+                       VALUES (%s, %s, %s, %s, 'external', %s, %s, %s)""",
+                    (document_id, user_id, query, response, assistant,
+                     conversation_id, profile_key),
+                )
+            return replaced
+
     def get_lesson_chat_history(self, document_id: str, user_id: int | None,
                                 limit: int = 200) -> list[dict]:
         """Return chronological Q&A turns for a (document, user).
@@ -55,18 +93,18 @@ class LessonViewsMixin:
         with self.get_cursor(commit=False) as cur:
             if user_id is None:
                 cur.execute(
-                    """SELECT id, query, response, created_at
+                    """SELECT id, query, response, created_at, origin, assistant, conversation_id
                        FROM lesson_chat_log
                        WHERE document_id = %s AND user_id IS NULL
-                       ORDER BY created_at LIMIT %s""",
+                       ORDER BY created_at, id LIMIT %s""",
                     (document_id, limit),
                 )
             else:
                 cur.execute(
-                    """SELECT id, query, response, created_at
+                    """SELECT id, query, response, created_at, origin, assistant, conversation_id
                        FROM lesson_chat_log
                        WHERE document_id = %s AND user_id = %s
-                       ORDER BY created_at LIMIT %s""",
+                       ORDER BY created_at, id LIMIT %s""",
                     (document_id, user_id, limit),
                 )
             return [dict(r) for r in cur.fetchall()]
@@ -75,10 +113,10 @@ class LessonViewsMixin:
         """Return every chat turn on a document, across all users. Superuser only."""
         with self.get_cursor(commit=False) as cur:
             cur.execute(
-                """SELECT id, user_id, query, response, created_at
+                """SELECT user_id, id, query, response, created_at, origin, assistant, conversation_id
                    FROM lesson_chat_log
                    WHERE document_id = %s
-                   ORDER BY created_at LIMIT %s""",
+                   ORDER BY created_at, id LIMIT %s""",
                 (document_id, limit),
             )
             return [dict(r) for r in cur.fetchall()]
@@ -161,29 +199,5 @@ class LessonViewsMixin:
                        ORDER BY lv.created_at DESC
                        LIMIT %s""",
                     (limit,),
-                )
-            return cur.fetchall()
-
-    def get_lesson_chat_history(self, document_id: str, user_id: int | None = None,
-                                limit: int = 50):
-        """Get chat history for a lesson, optionally filtered by user."""
-        with self.get_cursor() as cur:
-            if user_id is not None:
-                cur.execute(
-                    """SELECT query, response, created_at
-                       FROM lesson_chat_log
-                       WHERE document_id = %s AND user_id = %s
-                       ORDER BY created_at DESC
-                       LIMIT %s""",
-                    (document_id, user_id, limit),
-                )
-            else:
-                cur.execute(
-                    """SELECT user_id, query, response, created_at
-                       FROM lesson_chat_log
-                       WHERE document_id = %s
-                       ORDER BY created_at DESC
-                       LIMIT %s""",
-                    (document_id, limit),
                 )
             return cur.fetchall()

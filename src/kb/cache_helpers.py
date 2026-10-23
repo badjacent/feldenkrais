@@ -34,6 +34,19 @@ def save_cached_analysis(cache_key: str, data: dict) -> None:
         _db.set_cache(cache_key, data)
 
 
+def profile_result_key(text: str, suffix: str, profile: dict) -> str:
+    """Cache key of a step result produced under an analysis profile."""
+    from db.analysis_profiles import profile_cache_suffix
+
+    return get_cache_key(text + suffix + profile_cache_suffix(profile))
+
+
+def load_profile_result(text: str, suffix: str, profile: dict) -> tuple[str, dict | None]:
+    """Load one profile's result for a step. Never falls back to another profile."""
+    key = profile_result_key(text, suffix, profile)
+    return key, load_cached_analysis(key)
+
+
 def save_prompt_io(cache_key: str, prompt: str, system: str, schema: dict | None = None) -> None:
     """Save the prompt/system/schema used to produce a cached result.
 

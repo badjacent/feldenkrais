@@ -189,6 +189,7 @@ def main() -> None:
             return
         if args.command == "run":
             documents = _pending_documents(db, documents, registry_version, args.limit)
+        generated_total = 0
         for document in documents:
             text = document["text"]
             status, present = _status(db, text, registry_version)
@@ -221,6 +222,13 @@ def main() -> None:
                 print(json.dumps({"document_id": str(document["id"]), "generated": generated}))
             except Exception as exc:  # one bad artifact cannot stop the resumable batch
                 print(json.dumps({"document_id": str(document["id"]), "error": str(exc)[:500]}), file=sys.stderr)
+            generated_total += len(generated)
+        # The Atlas projection is built from these artifacts; republish when the
+        # batch added any (a no-op when the projection is unchanged).
+        if args.command == "run" and args.apply:
+            from atlas_projection import maybe_publish_after_enrichment
+
+            maybe_publish_after_enrichment(db, generated_total)
     finally:
         db.close()
 

@@ -22,7 +22,6 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-import yaml
 
 # Sources whose lessons are approved for public Atlas use. Owner-editable.
 PUBLIC_SOURCES = [
@@ -51,6 +50,9 @@ def _feldenkrais_project_public_urls() -> list[str]:
 
 
 def _load_registry() -> dict:
+    # Imported lazily: routes/atlas_pages.py pulls this module in at web start-up,
+    # and PyYAML is not in the web Lambda layer.
+    import yaml
     for base in (_REPO / "private" / "data", _REPO / "data"):
         p = base / "motifs_registry.yaml"
         if p.exists():
@@ -397,16 +399,15 @@ def publish(db, dry_run: bool = False, out: str | None = None,
             "previous": current.get("projection_key") if current else None})
 
 
-PROJECTION_STEPS = {"motifs", "axes"}
+def maybe_publish_after_enrichment(db, generated_count: int) -> dict | None:
+    """Auto-publish hook for the lite enrichment worker. Fail-soft: never raises.
 
-
-def maybe_publish_after_sweep(db, completed_step_names) -> dict | None:
-    """Auto-publish hook for the analysis workers. Fail-soft: never raises.
-
-    Publishes only when the sweep completed steps that change the projection.
-    The analysis gates are the sole owner control; this runs unattended.
+    The projection is built from the lite artifacts (lite motifs, lite axes,
+    lesson cards), so a batch that generated any of them may have changed it.
+    publish() compares content hashes and does nothing when it has not. This
+    runs unattended.
     """
-    if not PROJECTION_STEPS & set(completed_step_names):
+    if not generated_count:
         return None
     try:
         result = publish(db)

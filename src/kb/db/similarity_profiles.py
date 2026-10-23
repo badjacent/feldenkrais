@@ -57,6 +57,7 @@ class SimilarityProfilesMixin:
                 ) tx ON TRUE
                 LEFT JOIN lesson_embedding le
                   ON le.document_id = d.id AND le.method = 'default'
+                 AND le.profile_key = (SELECT key FROM analysis_profile WHERE canonical)
                 ORDER BY d.id
                 """
             )
@@ -147,6 +148,7 @@ class SimilarityProfilesMixin:
                 FROM lesson_profile lp
                 LEFT JOIN lesson_embedding le
                   ON le.document_id = lp.document_id AND le.method = 'default'
+                 AND le.profile_key = (SELECT key FROM analysis_profile WHERE canonical)
                 WHERE lp.schema_version = %s
                   AND lp.extraction_model = %s
                   AND lp.weight_set = %s

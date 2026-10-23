@@ -7,6 +7,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
 import web as _web
+from cache_helpers import load_profile_result
 
 router = APIRouter()
 
@@ -91,7 +92,7 @@ async def api_lesson_chat_history(request: Request, document_id: str):
     if not _web._db:
         return JSONResponse({"error": "Database not configured"}, status_code=500)
     user = _web._auth_mod.get_current_user(request) if _web._auth_mod else None
-    is_super = bool(user and _web._is_superuser_active(request, user))
+    is_super = _web._is_superuser_active(request, user)
 
     if is_super:
         turns = _web._db.get_lesson_chat_history_all(document_id)
@@ -108,6 +109,8 @@ async def api_lesson_chat_history(request: Request, document_id: str):
                 "user_id": t.get("user_id"),
                 "query": t["query"],
                 "response": t["response"],
+                "origin": t.get("origin") or "app",
+                "assistant": t.get("assistant"),
                 "created_at": t["created_at"].isoformat() if t.get("created_at") else None,
             }
             for t in turns
@@ -121,7 +124,7 @@ async def api_conversations(request: Request):
     if not _web._db:
         return JSONResponse({"error": "Database not configured"}, status_code=500)
     user = _web._auth_mod.get_current_user(request) if _web._auth_mod else None
-    is_super = bool(user and _web._is_superuser_active(request, user))
+    is_super = _web._is_superuser_active(request, user)
 
     rows = _web._db.get_chat_lessons_summary(
         user_id=user.get("user_id") if user else None,
@@ -148,7 +151,7 @@ async def api_conversations(request: Request):
 async def conversations_page(request: Request):
     """Central page listing the current user's chat history across all lessons."""
     user = _web._set_source_access(request)
-    if not user:
+    if not user and not _web._is_trusted_local(request):
         return HTMLResponse("<h1>Sign in to view your conversations.</h1>", status_code=401)
     return HTMLResponse(_web.build_conversations_page_html(
         user=user,
@@ -163,11 +166,14 @@ async def lesson_print_page(request: Request, document_id: str):
     if _web._db and not _web._db.is_document_accessible(document_id):
         return HTMLResponse("<h1>Not Found</h1>", status_code=404)
     title = None
+    profile = request.query_params.get("profile")
     if _web._db:
         doc = _web._db.get_document(document_id)
         if doc:
             title = doc.get("title")
-    return HTMLResponse(_web.build_lesson_print_html(document_id, title=title))
+        # Without ?profile=, print what the lesson page opens on.
+        profile = profile or _web._db.default_profile_for_document(document_id)
+    return HTMLResponse(_web.build_lesson_print_html(document_id, title=title, profile=profile))
 
 
 @router.get("/lesson/{document_id}", response_class=HTMLResponse)
@@ -181,22 +187,35 @@ async def lesson_detail_page(request: Request, document_id: str):
             _web._db.log_lesson_view(document_id, user.get("user_id") if user else None)
         except Exception:
             pass
-    return HTMLResponse(_web.build_lesson_page_html(document_id, user=user, search_mode=_web._is_search_site(request), superuser_active=_web._is_superuser_active(request, user)))
+    default_profile = None
+    if _web._db:
+        try:
+            default_profile = _web._db.default_profile_for_document(document_id)
+        except Exception:
+            default_profile = None  # the page falls back to the canonical profile
+    return HTMLResponse(_web.build_lesson_page_html(
+        document_id, user=user, search_mode=_web._is_search_site(request),
+        superuser_active=_web._is_superuser_active(request, user),
+        pipeline_visible=_web.PIPELINE_LOCAL_CONTROLS,
+        default_profile=default_profile,
+    ))
 
 
 @router.get("/api/lesson/{document_id}/concepts")
-async def api_lesson_concepts(document_id: str):
-    """Get concept extraction data for a lesson."""
+async def api_lesson_concepts(document_id: str, profile: str | None = None):
+    """Get one profile's concept extraction data for a lesson (canonical by default)."""
     if not _web._db:
         return JSONResponse({"error": "No database connection"}, status_code=500)
     try:
-        concepts = _web._db.get_lesson_concepts(document_id)
+        analysis_profile = _web._db.resolve_analysis_profile(profile)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    try:
+        concepts = _web._db.get_lesson_concepts(document_id, analysis_profile["key"])
         text = _web._db.get_document_transcription(document_id)
         extra = {}
         if text:
-            from cache_helpers import get_cache_key
-            cache_key = get_cache_key(text.strip() + ":concept_tags_v2")
-            cached = _web._db.get_cache(cache_key)
+            _, cached = load_profile_result(text.strip(), ":concept_tags_v2", analysis_profile)
             if cached:
                 extra["distinctive_summary"] = cached.get("distinctive_summary", "")
                 extra["search_terms"] = cached.get("search_terms", [])
@@ -324,23 +343,52 @@ def _v2_group_to_position(v2g: dict, pa_group: dict | None = None) -> str:
     return ", ".join(parts)
 
 
-@router.get("/api/lesson/{document_id}/positions")
-async def api_lesson_positions(document_id: str):
-    """Get step-level position sequence (spatial v3) for a lesson.
+@router.get("/api/lesson/{document_id}/print-model")
+async def api_lesson_print_model(request: Request, document_id: str, profile: str | None = None):
+    """Get one profile's print model (print_prep) for a lesson, read-only.
 
-    Falls back to converting spatial v2 data if v3 isn't available.
+    Never starts an analysis: a lesson without a prepared model reports what is
+    missing.
+    """
+    if not _web._db:
+        return JSONResponse({"error": "No database connection"}, status_code=500)
+    _web._set_source_access(request)
+    if not _web._db.is_document_accessible(document_id):
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    try:
+        analysis_profile = _web._db.resolve_analysis_profile(profile)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    text = _web._db.get_document_transcription(document_id)
+    if not text:
+        return JSONResponse({"error": "No transcript"}, status_code=404)
+    _, model = load_profile_result(text.strip(), ":print_prep_v1", analysis_profile)
+    if not model:
+        return JSONResponse({"available": False, "profile": analysis_profile["key"],
+                             "needs": ["decompose", "spatial_v3", "print_prep"]})
+    state = _web._db.get_document_state(document_id, "print_prep", analysis_profile["key"])
+    return JSONResponse({"available": True, "profile": analysis_profile["key"],
+                         "stale": bool(state and state.get("stale")), "model": model})
+
+
+@router.get("/api/lesson/{document_id}/positions")
+async def api_lesson_positions(document_id: str, profile: str | None = None):
+    """Get one profile's step-level position sequence (spatial v3) for a lesson.
+
+    Falls back to converting that profile's spatial v2 data if v3 isn't available.
     """
     if not _web._db:
         return JSONResponse({"error": "No database connection"}, status_code=500)
     try:
+        analysis_profile = _web._db.resolve_analysis_profile(profile)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    try:
         text = _web._db.get_document_transcription(document_id)
         if not text:
             return JSONResponse({"error": "No transcript"}, status_code=404)
-        from cache_helpers import get_cache_key
-
         # Try v3 first
-        v3_key = get_cache_key(text.strip() + ":spatial_v3")
-        cached = _web._db.get_cache(v3_key)
+        _, cached = load_profile_result(text.strip(), ":spatial_v3", analysis_profile)
         if cached:
             return JSONResponse({
                 "steps": cached.get("steps", []),
@@ -350,14 +398,12 @@ async def api_lesson_positions(document_id: str):
             })
 
         # Fall back to v2 → convert to v3-like format
-        v2_key = get_cache_key(text.strip() + ":spatial_v2")
-        v2 = _web._db.get_cache(v2_key)
+        _, v2 = load_profile_result(text.strip(), ":spatial_v2", analysis_profile)
         if not v2:
             return JSONResponse({"steps": [], "position_summary": [], "available": False})
 
         # Also load pass_a for step-level data
-        pa_key = get_cache_key(text.strip() + ":decompose_v3")
-        pa = _web._db.get_cache(pa_key)
+        _, pa = load_profile_result(text.strip(), ":decompose_v3", analysis_profile)
 
         steps, summary = _convert_v2_to_v3(v2, pa)
         return JSONResponse({

@@ -1,12 +1,14 @@
 """Lesson data API routes: somatic, language, classification, pipeline status, raw I/O."""
 
+import html as html_mod
 import json
 import logging
 
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 
 import web as _web
+from cache_helpers import load_profile_result
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -18,6 +20,20 @@ def _get_lesson_text(document_id: str) -> str | None:
         return None
     text = _web._db.get_document_transcription(document_id)
     return text.strip() if text else None
+
+
+def _resolve_profile(profile_key: str | None) -> dict:
+    """Return the requested analysis profile, or the canonical one."""
+    return _web._db.resolve_analysis_profile(profile_key)
+
+
+def _load_cache(profile: dict, text: str, suffix: str) -> tuple[str, dict | None]:
+    """Load one profile's result for a step, with no fallback to another profile."""
+    return load_profile_result(text, suffix, profile)
+
+
+def _unknown_profile(error: ValueError) -> JSONResponse:
+    return JSONResponse({"error": str(error)}, status_code=400)
 
 
 # ── Prompt reconstruction (system prompts must match analysis code) ──────
@@ -50,12 +66,15 @@ _SYSTEM_PROMPTS = {
 }
 
 
-def _ensure_prompt_io(text: str, io_steps: list) -> None:
+def _ensure_prompt_io(profile: dict, text: str, io_steps: list) -> None:
     """Reconstruct and cache any missing prompt IO entries for a lesson.
 
     Uses current prompt templates + cached upstream data to re-assemble prompts.
-    No LLM calls — purely local formatting.
+    No LLM calls — purely local formatting. Only contract-2 profiles: the
+    templates on disk are the contract-2 prompts.
     """
+    if int(profile.get("contract_version") or 2) != 2:
+        return
     try:
         import analysis as _analysis
     except ImportError:
@@ -64,8 +83,7 @@ def _ensure_prompt_io(text: str, io_steps: list) -> None:
     # Check which steps need prompt reconstruction
     missing = []
     for step in io_steps:
-        cache_key = _web.get_cache_key(text + step["suffix"])
-        result = _web.load_cached_analysis(cache_key)
+        cache_key, result = _load_cache(profile, text, step["suffix"])
         prompt = _web.load_cached_analysis(cache_key + ":prompt")
         if result and not prompt:
             missing.append(step)
@@ -77,8 +95,7 @@ def _ensure_prompt_io(text: str, io_steps: list) -> None:
 
     try:
         # Load Pass A data (needed by most steps)
-        pa_key = _web.get_cache_key(text + ":decompose_v3")
-        pa_data = _web.load_cached_analysis(pa_key)
+        pa_key, pa_data = _load_cache(profile, text, ":decompose_v3")
 
         # --- Decompose ---
         if ":decompose_v3" in missing_suffixes and pa_data:
@@ -97,8 +114,7 @@ def _ensure_prompt_io(text: str, io_steps: list) -> None:
             return
 
         # --- Somatic ---
-        som_key = _web.get_cache_key(text.strip() + ":somatic_v2")
-        som_data = _web.load_cached_analysis(som_key)
+        som_key, som_data = _load_cache(profile, text, ":somatic_v2")
         if ":somatic_v2" in missing_suffixes and som_data:
             steps_text = _analysis.format_steps_for_0b(pa_data)
             tmpl, schema = _analysis.load_pass_0b()
@@ -109,8 +125,7 @@ def _ensure_prompt_io(text: str, io_steps: list) -> None:
             })
 
         # --- Language ---
-        lang_key = _web.get_cache_key(text.strip() + ":language_v1")
-        lang_data = _web.load_cached_analysis(lang_key)
+        lang_key, lang_data = _load_cache(profile, text, ":language_v1")
         if ":language_v1" in missing_suffixes and lang_data:
             steps_text = _analysis.format_steps_for_0b(pa_data)
             tmpl, schema = _analysis.load_pass_0b_lang()
@@ -121,8 +136,7 @@ def _ensure_prompt_io(text: str, io_steps: list) -> None:
             })
 
         # --- Concepts ---
-        ct_key = _web.get_cache_key(text.strip() + ":concept_tags_v2")
-        ct_data = _web.load_cached_analysis(ct_key)
+        ct_key, ct_data = _load_cache(profile, text, ":concept_tags_v2")
         if ":concept_tags_v2" in missing_suffixes and ct_data and som_data:
             somatic_steps = som_data.get("enriched_steps", [])
             concept_input = _analysis.format_input_for_concepts(pa_data, somatic_steps)
@@ -134,8 +148,7 @@ def _ensure_prompt_io(text: str, io_steps: list) -> None:
             })
 
         # --- Spatial ---
-        sp_key = _web.get_cache_key(text.strip() + ":spatial_v2")
-        sp_data = _web.load_cached_analysis(sp_key)
+        sp_key, sp_data = _load_cache(profile, text, ":spatial_v2")
         if ":spatial_v2" in missing_suffixes and sp_data and som_data:
             somatic_steps = som_data.get("enriched_steps", [])
             spatial_input = _analysis.format_input_for_spatial(pa_data, somatic_steps)
@@ -147,8 +160,7 @@ def _ensure_prompt_io(text: str, io_steps: list) -> None:
             })
 
         # --- Condensed ---
-        cond_key = _web.get_cache_key(text.strip() + ":condense_v4")
-        cond_data = _web.load_cached_analysis(cond_key)
+        cond_key, cond_data = _load_cache(profile, text, ":condense_v4")
         if ":condense_v4" in missing_suffixes and cond_data and som_data and lang_data:
             somatic_enriched = som_data.get("enriched_steps", [])
             somatic_summary = som_data.get("summary", {})
@@ -169,7 +181,7 @@ def _ensure_prompt_io(text: str, io_steps: list) -> None:
 
 
 @router.get("/api/lesson/{document_id}/combined")
-async def api_lesson_combined(document_id: str):
+async def api_lesson_combined(document_id: str, profile: str | None = None):
     """Return combined somatic + language analysis in the structured JSON format
     expected by the Step by Step and Transcript tabs."""
     if not _web._db:
@@ -177,21 +189,25 @@ async def api_lesson_combined(document_id: str):
     text = _get_lesson_text(document_id)
     if not text:
         return JSONResponse({"error": "No transcript available"}, status_code=404)
+    try:
+        analysis_profile = _resolve_profile(profile)
+    except ValueError as e:
+        return _unknown_profile(e)
 
     # Load cached results — try pipeline key first, then legacy
     pass_a = None
     for suffix in [":decompose_v3", ":pass_a", ":pass_a_v1"]:
-        pa_key = _web.get_cache_key(text + suffix)
-        pass_a = _web.load_cached_analysis(pa_key)
+        _, pass_a = _load_cache(analysis_profile, text, suffix)
         if pass_a:
             break
     if not pass_a:
-        return JSONResponse({"error": "Decomposition not yet available. Run the analysis pipeline first."}, status_code=404)
+        return JSONResponse({"error": "Decomposition not yet available. Run the analysis pipeline first.",
+                             "not_analyzed": True, "profile": analysis_profile["key"]}, status_code=404)
 
-    som_key = _web.get_cache_key(text + ":somatic_v2")
-    lang_key = _web.get_cache_key(text + ":language_v1")
-    somatic_result = _web.load_cached_analysis(som_key) or {}
-    lang_result = _web.load_cached_analysis(lang_key) or {}
+    _, somatic_result = _load_cache(analysis_profile, text, ":somatic_v2")
+    _, lang_result = _load_cache(analysis_profile, text, ":language_v1")
+    somatic_result = somatic_result or {}
+    lang_result = lang_result or {}
 
     # Align with whisper segments if available
     pass_0 = pass_a.get("pass_0", {})
@@ -277,22 +293,24 @@ async def api_lesson_combined(document_id: str):
 
 
 @router.get("/api/lesson/{document_id}/somatic")
-async def api_lesson_somatic(document_id: str):
+async def api_lesson_somatic(document_id: str, profile: str | None = None):
     """Return cached somatic (Pass 0b) analysis for a lesson."""
     if not _web._db:
         return JSONResponse({"error": "No database connection"}, status_code=500)
     text = _get_lesson_text(document_id)
     if not text:
         return JSONResponse({"error": "No transcript available"}, status_code=404)
+    try:
+        analysis_profile = _resolve_profile(profile)
+    except ValueError as e:
+        return _unknown_profile(e)
 
-    cache_key = _web.get_cache_key(text + ":somatic_v2")
-    cached = _web.load_cached_analysis(cache_key)
+    _, cached = _load_cache(analysis_profile, text, ":somatic_v2")
     if not cached:
         return JSONResponse({"error": "Somatic analysis not yet available. Run the analysis pipeline first."}, status_code=404)
 
     # Also load pass_a for step context
-    pa_key = _web.get_cache_key(text + ":pass_a")
-    pass_a = _web.load_cached_analysis(pa_key)
+    _, pass_a = _load_cache(analysis_profile, text, ":decompose_v3")
 
     return JSONResponse({
         "enriched_steps": cached.get("enriched_steps", []),
@@ -302,22 +320,24 @@ async def api_lesson_somatic(document_id: str):
 
 
 @router.get("/api/lesson/{document_id}/language")
-async def api_lesson_language(document_id: str):
+async def api_lesson_language(document_id: str, profile: str | None = None):
     """Return cached language (Pass 0b) analysis for a lesson."""
     if not _web._db:
         return JSONResponse({"error": "No database connection"}, status_code=500)
     text = _get_lesson_text(document_id)
     if not text:
         return JSONResponse({"error": "No transcript available"}, status_code=404)
+    try:
+        analysis_profile = _resolve_profile(profile)
+    except ValueError as e:
+        return _unknown_profile(e)
 
-    cache_key = _web.get_cache_key(text + ":language_v1")
-    cached = _web.load_cached_analysis(cache_key)
+    _, cached = _load_cache(analysis_profile, text, ":language_v1")
     if not cached:
         return JSONResponse({"error": "Language analysis not yet available. Run the analysis pipeline first."}, status_code=404)
 
     # Also load pass_a for step context
-    pa_key = _web.get_cache_key(text + ":pass_a")
-    pass_a = _web.load_cached_analysis(pa_key)
+    _, pass_a = _load_cache(analysis_profile, text, ":decompose_v3")
 
     return JSONResponse({
         "enriched_steps": cached.get("enriched_steps", []),
@@ -327,16 +347,19 @@ async def api_lesson_language(document_id: str):
 
 
 @router.get("/api/lesson/{document_id}/condensed")
-async def api_lesson_condensed(document_id: str):
+async def api_lesson_condensed(document_id: str, profile: str | None = None):
     """Return cached condensed analysis for a lesson."""
     if not _web._db:
         return JSONResponse({"error": "No database connection"}, status_code=500)
     text = _get_lesson_text(document_id)
     if not text:
         return JSONResponse({"error": "No transcript available"}, status_code=404)
+    try:
+        analysis_profile = _resolve_profile(profile)
+    except ValueError as e:
+        return _unknown_profile(e)
 
-    cache_key = _web.get_cache_key(text + ":condense_v4")
-    cached = _web.load_cached_analysis(cache_key)
+    _, cached = _load_cache(analysis_profile, text, ":condense_v4")
     if not cached:
         return JSONResponse({"error": "Condensed analysis not yet available. Run the analysis pipeline first."}, status_code=404)
 
@@ -347,18 +370,21 @@ async def api_lesson_condensed(document_id: str):
 
 
 @router.get("/api/lesson/{document_id}/classification")
-async def api_lesson_classification(document_id: str):
+async def api_lesson_classification(document_id: str, profile: str | None = None):
     """Return cached Pass A (decomposition/classification) analysis for a lesson."""
     if not _web._db:
         return JSONResponse({"error": "No database connection"}, status_code=500)
     text = _get_lesson_text(document_id)
     if not text:
         return JSONResponse({"error": "No transcript available"}, status_code=404)
+    try:
+        analysis_profile = _resolve_profile(profile)
+    except ValueError as e:
+        return _unknown_profile(e)
 
     pass_a = None
     for suffix in [":decompose_v3", ":pass_a", ":pass_a_v1"]:
-        pa_key = _web.get_cache_key(text + suffix)
-        pass_a = _web.load_cached_analysis(pa_key)
+        _, pass_a = _load_cache(analysis_profile, text, suffix)
         if pass_a:
             break
     if not pass_a:
@@ -368,10 +394,16 @@ async def api_lesson_classification(document_id: str):
 
 
 @router.get("/api/lesson/{document_id}/pipeline-status")
-async def api_lesson_pipeline_status(document_id: str):
-    """Return pipeline analysis state and document metadata for a lesson."""
+async def api_lesson_pipeline_status(document_id: str, profile: str | None = None):
+    """Return one profile's pipeline analysis state and document metadata for a lesson."""
+    if not _web.PIPELINE_LOCAL_CONTROLS:
+        return JSONResponse({"error": "Not found"}, status_code=404)
     if not _web._db:
         return JSONResponse({"error": "No database connection"}, status_code=500)
+    try:
+        analysis_profile = _resolve_profile(profile)
+    except ValueError as e:
+        return _unknown_profile(e)
 
     # Get document metadata
     doc = _web._db.get_document(document_id)
@@ -383,7 +415,7 @@ async def api_lesson_pipeline_status(document_id: str):
     # Topological order (DAG depth), alphabetical tiebreaker
     _DAG_ORDER = [
         "decompose", "extract_steps",
-        "language", "map_body_parts", "somatic", "spatial_v3",
+        "language", "map_body_parts", "somatic", "spatial_v3", "print_prep",
         "concept_tags", "condense", "language_patterns", "spatial",
         "embed", "embed_positions", "index_concepts", "index_spatial",
     ]
@@ -393,7 +425,7 @@ async def api_lesson_pipeline_status(document_id: str):
     # Get per-step state for this document
     states = []
     for step in steps:
-        state = _web._db.get_document_state(document_id, step["name"])
+        state = _web._db.get_document_state(document_id, step["name"], analysis_profile["key"])
         states.append({
             "step_name": step["name"],
             "current_version": step.get("current_version"),
@@ -416,17 +448,21 @@ async def api_lesson_pipeline_status(document_id: str):
         "status": doc.get("status"),
     }
 
-    return JSONResponse({"document": doc_meta, "steps": states})
+    return JSONResponse({"document": doc_meta, "profile": analysis_profile["key"], "steps": states})
 
 
 @router.get("/api/lesson/{document_id}/raw-io")
-async def api_lesson_raw_io(document_id: str):
+async def api_lesson_raw_io(document_id: str, profile: str | None = None):
     """Return cached debug/raw I/O logs for analysis steps if available."""
     if not _web._db:
         return JSONResponse({"error": "No database connection"}, status_code=500)
     text = _get_lesson_text(document_id)
     if not text:
         return JSONResponse({"error": "No transcript available"}, status_code=404)
+    try:
+        analysis_profile = _resolve_profile(profile)
+    except ValueError as e:
+        return _unknown_profile(e)
 
     # Check known cache suffixes for raw I/O data
     io_steps = [
@@ -439,14 +475,15 @@ async def api_lesson_raw_io(document_id: str):
     ]
 
     # Reconstruct missing prompts on demand from templates + cached upstream data
-    _ensure_prompt_io(text, io_steps)
+    _ensure_prompt_io(analysis_profile, text, io_steps)
 
     results = []
     for step in io_steps:
-        cache_key = _web.get_cache_key(text + step["suffix"])
-        cached = _web.load_cached_analysis(cache_key)
+        cache_key, cached = _load_cache(analysis_profile, text, step["suffix"])
         # Check pipeline state (stale/error/completed)
-        step_state = _web._db.get_document_state(document_id, step.get("step_name", "")) if _web._db else None
+        step_state = _web._db.get_document_state(
+            document_id, step.get("step_name", ""), analysis_profile["key"]
+        ) if _web._db else None
         is_stale = step_state.get("stale", False) if step_state else False
         is_error = bool(step_state.get("error")) if step_state else False
         entry = {
@@ -480,6 +517,222 @@ async def api_lesson_raw_io(document_id: str):
         results.append(entry)
 
     return JSONResponse({"steps": results})
+
+
+@router.get("/api/lesson/{document_id}/profiles")
+async def api_lesson_profiles(document_id: str):
+    """List analysis profiles and how far each has analyzed this lesson.
+
+    Feeds the lesson page's model selector on every deployment. Whether a
+    profile is switched on is pipeline state, so it is reported only locally.
+    """
+    if not _web._db:
+        return JSONResponse({"error": "No database connection"}, status_code=500)
+    done_by_profile: dict[str, list[str]] = {}
+    for state in _web._db.get_document_states(document_id):
+        if state.get("completed_version") is not None and not state.get("error"):
+            done_by_profile.setdefault(state["profile_key"], []).append(state["step_name"])
+    profiles = [
+        {
+            "key": p["key"],
+            "provider": p["provider"],
+            "model": p["model"],
+            "contract_version": p["contract_version"],
+            "canonical": p["canonical"],
+            "completed_steps": sorted(done_by_profile.get(p["key"], [])),
+            **({"enabled": p["enabled"]} if _web.PIPELINE_LOCAL_CONTROLS else {}),
+        }
+        for p in _web._db.get_analysis_profiles()
+    ]
+    return JSONResponse({"profiles": profiles})
+
+
+_BIOMECHANICAL_FIELDS = ("differentiation", "activation", "inhibition", "transmission_route", "ground_push")
+_PLACEHOLDERS = {"", "none", "n/a", "na", "not applicable", "null", "-", "—"}
+
+
+def _is_blank(value) -> bool:
+    return value is None or (isinstance(value, str) and value.strip().strip(".").lower() in _PLACEHOLDERS)
+
+
+def _compare_column(profile: dict, text: str) -> str:
+    """One profile's analysis of a lesson, rendered for side-by-side reading."""
+    esc = html_mod.escape
+    _, decompose = _load_cache(profile, text, ":decompose_v3")
+    _, somatic = _load_cache(profile, text, ":somatic_v2")
+    _, condensed = _load_cache(profile, text, ":condense_v4")
+    run = next((r.get("_run") for r in (condensed, somatic, decompose) if r and r.get("_run")), None)
+    head = (f'<h2>{esc(profile["key"])}</h2><div class="meta">{esc(profile["provider"])} / '
+            f'{esc(profile["model"])} · contract v{profile["contract_version"]}</div>')
+    if run and run.get("usage"):
+        usage = run["usage"]
+        head += (f'<div class="meta">last recorded step: {usage.get("tokens_in", 0)} in / '
+                 f'{usage.get("tokens_out", 0)} out tokens, {run.get("elapsed_seconds", "?")}s</div>')
+    if not decompose:
+        return head + '<p class="empty">Not analyzed under this profile.</p>'
+
+    groups = decompose.get("groups", [])
+    steps = decompose.get("steps", [])
+    parts = [head, f'<h3>Decomposition</h3><div class="meta">{len(groups)} groups, {len(steps)} steps</div><ol class="groups">']
+    by_group: dict = {}
+    for s in steps:
+        by_group.setdefault(s.get("group_number"), []).append(s)
+    for g in groups:
+        items = "".join(f'<li>{esc(s.get("instruction", ""))}</li>' for s in by_group.get(g.get("group_number"), []))
+        parts.append(f'<li><strong>{esc(g.get("label", ""))}</strong><ol>{items}</ol></li>')
+    parts.append("</ol>")
+
+    enriched = (somatic or {}).get("enriched_steps", [])
+    if enriched:
+        blanks = {f: sum(1 for e in enriched if _is_blank(e.get(f))) for f in _BIOMECHANICAL_FIELDS}
+        summary = " · ".join(f"{f.replace('_', ' ')} blank {100 * n // len(enriched)}%" for f, n in blanks.items())
+        parts.append(f'<h3>Somatic</h3><div class="meta">{len(enriched)} steps · {esc(summary)}</div><details><summary>Per step</summary><table>')
+        parts.append("<tr><th>#</th>" + "".join(f"<th>{f.replace('_', ' ')}</th>" for f in _BIOMECHANICAL_FIELDS) + "</tr>")
+        for e in enriched:
+            cells = "".join(
+                f'<td class="{"blank" if _is_blank(e.get(f)) else ""}">{esc(str(e.get(f) if e.get(f) is not None else "null"))}</td>'
+                for f in _BIOMECHANICAL_FIELDS
+            )
+            parts.append(f'<tr><td>{e.get("step_number", "")}</td>{cells}</tr>')
+        parts.append("</table></details>")
+    else:
+        parts.append('<h3>Somatic</h3><p class="empty">Not analyzed under this profile.</p>')
+
+    cards = [c for seg in (condensed or {}).get("segments", []) for c in seg.get("group_cards", [])]
+    if cards:
+        parts.append("<h3>Overview</h3>")
+        for c in cards:
+            parts.append(f'<div class="card"><strong>{esc(c.get("title", ""))}</strong>'
+                         f'<p>{esc(c.get("the_action", ""))}</p></div>')
+    else:
+        parts.append('<h3>Overview</h3><p class="empty">Not analyzed under this profile.</p>')
+    return "".join(parts)
+
+
+@router.get("/lesson/{document_id}/compare", response_class=HTMLResponse)
+async def lesson_compare(document_id: str, a: str | None = None, b: str | None = None):
+    """Two profiles' analyses of one lesson, side by side. Local deployments only.
+
+    Decompositions differ between models, so the columns are read side by side
+    rather than aligned step for step.
+    """
+    if not _web.PIPELINE_LOCAL_CONTROLS:
+        return HTMLResponse("Not Found", status_code=404)
+    if not _web._db:
+        return HTMLResponse("Database not configured", status_code=503)
+    text = _get_lesson_text(document_id)
+    if not text:
+        return HTMLResponse("No transcript available", status_code=404)
+    profiles = _web._db.get_analysis_profiles()
+    keys = [p["key"] for p in profiles]
+    if a not in keys:
+        a = next(p["key"] for p in profiles if p["canonical"])
+    if b not in keys or b == a:
+        analyzed = {s["profile_key"] for s in _web._db.get_document_states(document_id)
+                    if s.get("completed_version") is not None}
+        b = next((k for k in keys if k != a and k in analyzed), next((k for k in keys if k != a), a))
+    by_key = {p["key"]: p for p in profiles}
+    doc = _web._db.get_document(document_id) or {}
+    esc = html_mod.escape
+
+    def picker(name: str, selected: str) -> str:
+        options = "".join(f'<option value="{esc(k)}"{" selected" if k == selected else ""}>{esc(k)}</option>' for k in keys)
+        return f'<select name="{name}" onchange="this.form.submit()">{options}</select>'
+
+    return HTMLResponse(f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Compare models</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0 auto; padding: 20px; max-width: 1600px; background: #fafafa; line-height: 1.5; }}
+  .cols {{ display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }}
+  .col {{ background: white; border: 1px solid #e5e5e5; border-radius: 8px; padding: 16px; min-width: 0; }}
+  .meta {{ color: #666; font-size: 0.85em; }}
+  .empty {{ color: #999; font-style: italic; }}
+  ol.groups > li {{ margin-bottom: 8px; }}
+  ol ol {{ font-size: 0.9em; color: #333; }}
+  table {{ border-collapse: collapse; font-size: 0.8em; width: 100%; }}
+  th, td {{ border-bottom: 1px solid #eee; padding: 4px; vertical-align: top; text-align: left; }}
+  td.blank {{ color: #b0b0b0; }}
+  .card {{ margin-bottom: 10px; }}
+  .card p {{ margin: 2px 0 0; font-size: 0.9em; }}
+  @media (max-width: 900px) {{ .cols {{ grid-template-columns: 1fr; }} }}
+</style></head>
+<body>
+  <div><a href="/lesson/{esc(document_id)}">&larr; Lesson</a></div>
+  <h1>{esc(doc.get("title", "Lesson"))}</h1>
+  <form method="get" class="meta">Compare {picker("a", a)} with {picker("b", b)}</form>
+  <div class="cols">
+    <div class="col">{_compare_column(by_key[a], text)}</div>
+    <div class="col">{_compare_column(by_key[b], text)}</div>
+  </div>
+</body></html>""")
+
+
+@router.get("/api/lesson/{document_id}/context")
+async def api_lesson_context(request: Request, document_id: str, profile: str | None = None,
+                             download: bool = False):
+    """The lesson and one model's analysis as a Markdown document for an outside LLM.
+
+    Holds the full transcript, so it applies the same source-access check as the
+    lesson page itself.
+    """
+    from datetime import datetime, timezone
+    import conversation_import
+    import lesson_context
+
+    if not _web._db:
+        return JSONResponse({"error": "No database connection"}, status_code=500)
+    _web._set_source_access(request)
+    doc = _web._db.get_document(document_id)
+    if not doc or not _web._db.is_document_accessible(document_id):
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    text = _get_lesson_text(document_id)
+    if not text:
+        return JSONResponse({"error": "No transcript available"}, status_code=404)
+    try:
+        analysis_profile = _resolve_profile(profile or _web._db.default_profile_for_document(document_id))
+    except ValueError as e:
+        return _unknown_profile(e)
+
+    results = {name: _load_cache(analysis_profile, text, suffix)[1] for name, suffix in [
+        ("pass_a", ":decompose_v3"), ("somatic", ":somatic_v2"), ("language", ":language_v1"),
+        ("condensed", ":condense_v4"), ("concepts", ":concept_tags_v2"), ("positions", ":spatial_v3"),
+    ]}
+    segments = _web._db.get_document_whisper_segments(document_id)
+    if results["pass_a"] and segments and hasattr(_web, "align_pass0_with_whisper"):
+        _web.align_pass0_with_whisper(results["pass_a"].get("pass_0", {}), segments)
+
+    source_name = ""
+    if doc.get("source_id"):
+        with _web._db.get_cursor(commit=False) as cur:
+            cur.execute("SELECT category_name, name FROM document_source WHERE id = %s", (doc["source_id"],))
+            row = cur.fetchone()
+            if row:
+                source_name = row.get("category_name") or row.get("name", "")
+
+    base_url = _web._auth_mod._base_url(request)
+    lesson_url = f"{base_url}/lesson/{document_id}?profile={analysis_profile['key']}"
+    saving = None
+    if _web._auth_mod.COOKIE_SECRET:
+        user = _web._auth_mod.get_current_user(request)
+        token, expires = conversation_import.issue_token(
+            _web._auth_mod.COOKIE_SECRET, document_id=document_id,
+            user_id=user.get("user_id") if user else None, profile_key=analysis_profile["key"])
+        saving = {"endpoint": base_url + conversation_import.IMPORT_PATH, "token": token,
+                  "expires": expires.strftime("%Y-%m-%d"), "bucket": _web.KB_BUCKET}
+    body = lesson_context.build_lesson_context(
+        document=doc, source_name=source_name, lesson_url=lesson_url, profile=analysis_profile,
+        transcript=text, whisper_segments=segments,
+        field_descriptions=lesson_context.schema_field_descriptions(_web.DATA_DIR),
+        exported_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ"),
+        saving=saving,
+        **results,
+    )
+    headers = {}
+    if download:
+        name = f"{lesson_context.slug(doc.get('title'))}.{analysis_profile['key']}.md"
+        headers["Content-Disposition"] = f'attachment; filename="{name}"'
+    return PlainTextResponse(body, media_type="text/markdown; charset=utf-8", headers=headers)
 
 
 @router.get("/api/lesson-info/{document_id}")

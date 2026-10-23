@@ -49,6 +49,18 @@ LLM_CONFIGS = {
         "api_key_env": "OPENAI_API_KEY",
         "default_max_tokens": 128000,
     },
+    "openai-luna": {
+        "provider": "openai",
+        "model": "gpt-5.6-luna",
+        "api_key_env": "OPENAI_API_KEY",
+        "default_max_tokens": 128000,
+    },
+    "codex-astra": {
+        "provider": "codex",
+        "model": "gpt-6-astra",
+        "default_max_tokens": 65536,
+        "reasoning_effort": "low",
+    },
     "anthropic": {
         "provider": "anthropic",
         "model": "claude-sonnet-4-20250514",
@@ -83,12 +95,41 @@ LLM_CONFIGS = {
 
 DEFAULT_LLM = "gemini"
 
+# A one-off run can send the canonical (bare-key) profile's calls to another
+# model, e.g. ANALYSIS_LLM_OVERRIDE=codex-astra, so that model fills gaps on top
+# of results already cached under that profile. Cache keys still follow the
+# profile; each result records the model that actually ran (describe_llm).
+# Set it only on the run's own process.
+LLM_OVERRIDE_ENV = "ANALYSIS_LLM_OVERRIDE"
+
+
+def effective_llm_key(provider_key: str | None = None) -> str:
+    """Return the LLM_CONFIGS or profile key a call with this provider key uses."""
+    key = provider_key or DEFAULT_LLM
+    override = os.environ.get(LLM_OVERRIDE_ENV)
+    if override and key == DEFAULT_LLM:
+        return override
+    return key
+
+
+def describe_llm(provider_key: str | None = None) -> dict:
+    """Name the provider and model a call with this provider key runs on."""
+    key = effective_llm_key(provider_key)
+    config = LLM_CONFIGS.get(key) or (_profile_config(key) if _db else None) or {}
+    return {
+        "llm_key": key,
+        "provider": config.get("provider"),
+        "model": config.get("model"),
+        "reasoning_effort": config.get("reasoning_effort"),
+        "overridden": key != (provider_key or DEFAULT_LLM),
+    }
+
 
 def get_llm(provider_key: str | None = None) -> LLM:
     """Get configured LLM instance.
 
     Args:
-        provider_key: One of 'gemini', 'openai', 'anthropic'. Defaults to DEFAULT_LLM.
+        provider_key: A key from LLM_CONFIGS. Defaults to DEFAULT_LLM.
     """
     if not _db:
         raise RuntimeError(
@@ -99,14 +140,15 @@ def get_llm(provider_key: str | None = None) -> LLM:
         raise RuntimeError(
             "LLM calls are disabled. Run /enable-llm to enable."
         )
-    key = provider_key or DEFAULT_LLM
-    config = LLM_CONFIGS.get(key)
+    key = effective_llm_key(provider_key)
+    config = LLM_CONFIGS.get(key) or _profile_config(key)
     if not config:
         raise ValueError(f"Unknown LLM provider: {key}. Choose from: {list(LLM_CONFIGS.keys())}")
 
-    api_key = os.environ.get(config["api_key_env"])
-    if not api_key:
-        raise ValueError(f"{config['api_key_env']} environment variable not set")
+    api_key_env = config.get("api_key_env")
+    api_key = os.environ.get(api_key_env) if api_key_env else None
+    if api_key_env and not api_key:
+        raise ValueError(f"{api_key_env} environment variable not set")
 
     return LLM(
         provider=config["provider"],
@@ -114,4 +156,39 @@ def get_llm(provider_key: str | None = None) -> LLM:
         api_key=api_key,
         default_max_tokens=config["default_max_tokens"],
         thinking_level=config.get("thinking_level"),
+        reasoning_effort=config.get("reasoning_effort"),
+        schema_contract=config.get("schema_contract", 2),
     )
+
+
+# Credentials and output limits per provider, for LLM clients built from an
+# analysis profile row rather than an LLM_CONFIGS entry.
+_PROVIDER_DEFAULTS = {
+    "gemini": {"api_key_env": "GOOGLE_API_KEY", "default_max_tokens": 65536},
+    "anthropic": {"api_key_env": "ANTHROPIC_API_KEY", "default_max_tokens": 64000},
+    "openai": {"api_key_env": "OPENAI_API_KEY", "default_max_tokens": 128000},
+    "codex": {"default_max_tokens": 65536},  # uses the machine's `codex login` session
+}
+
+
+def _profile_config(provider_key: str) -> dict | None:
+    """Build an LLM config from the analysis profile with this provider key.
+
+    Analysis steps receive a profile's provider key (for example
+    ``c3:astra-medium``). Historical keys such as ``gemini`` and ``codex-astra``
+    are in LLM_CONFIGS; newer profiles live only in the analysis_profile table.
+    """
+    profile = _db.get_profile_by_provider_key(provider_key)
+    if not profile:
+        return None
+    defaults = _PROVIDER_DEFAULTS.get(profile["provider"], {})
+    params = profile.get("params") or {}
+    return {
+        "provider": profile["provider"],
+        "model": profile["model"],
+        "api_key_env": defaults.get("api_key_env"),
+        "default_max_tokens": params.get("max_tokens", defaults.get("default_max_tokens", 16000)),
+        "thinking_level": params.get("thinking_level"),
+        "reasoning_effort": params.get("reasoning_effort") or params.get("effort"),
+        "schema_contract": profile["contract_version"],
+    }

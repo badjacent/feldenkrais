@@ -62,6 +62,7 @@ from .pass0b_synthesis import run_segmentation_query, _run_condensed_for_groups,
 from .pass0b_concepts import run_pass_0b_concepts
 from .pass0b_spatial import run_pass_0b_spatial
 from .pass0b_spatial_v3 import run_pass_0b_spatial_v3, load_pass_0b_spatial_v3
+from .print_prep import run_print_prep, load_print_prep, build_print_model, PrintPrepError
 
 # ── Re-exported cache helpers (pipeline/analysis.py imports these from analysis) ──
 from cache_helpers import get_cache_key, load_cached_analysis, save_cached_analysis, save_prompt_io

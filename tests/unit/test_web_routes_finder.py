@@ -6,6 +6,7 @@ Phase 3 refactor target: web.py -> routes/finder.py
 
 import pytest
 from unittest.mock import patch, MagicMock
+from tests.unit.route_helpers import app_route_map
 
 
 class TestFinderPage:
@@ -15,7 +16,7 @@ class TestFinderPage:
         The landing page checks _is_finder_site and renders the finder
         template. This is handled in the GET / route."""
         from kb.web import app
-        routes = {r.path: r for r in app.routes if hasattr(r, "path")}
+        routes = app_route_map(app)
         assert "/" in routes
 
 
@@ -24,7 +25,7 @@ class TestFinderSearchAPI:
         """POST /api/finder/search should search external lessons."""
         from kb.web import app
         # The finder search uses GET, not POST
-        routes = {r.path: r for r in app.routes if hasattr(r, "path")}
+        routes = app_route_map(app)
         assert "/api/finder/search" in routes
 
     def test_search_returns_ranked_results(self):
@@ -56,7 +57,7 @@ class TestFinderStatsAPI:
     def test_returns_total_and_sources(self):
         """GET /api/finder/stats should return counts."""
         from kb.web import app
-        routes = {r.path: r for r in app.routes if hasattr(r, "path")}
+        routes = app_route_map(app)
         assert "/api/finder/stats" in routes
 
     def test_stats_response_format(self):

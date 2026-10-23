@@ -189,7 +189,9 @@ def download_audio(url: str, output_dir: str) -> tuple[str, str]:
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': 'mp3',
-                'preferredquality': '0',
+                # A bitrate (not 0-10) makes ffmpeg write constant-bitrate MP3. Browsers seek
+                # VBR MP3 by estimate, which puts the lesson player out of step with the transcript.
+                'preferredquality': '192',
             }],
             'quiet': True,
             'no_warnings': True,
@@ -221,7 +223,7 @@ def download_audio(url: str, output_dir: str) -> tuple[str, str]:
                 "yt-dlp",
                 "-x",  # Extract audio
                 "--audio-format", "mp3",
-                "--audio-quality", "0",  # Best quality
+                "--audio-quality", "192K",  # constant bitrate, so the player can seek
                 "-o", output_template,
                 "--print", "after_move:filepath",  # Print final path
                 url,

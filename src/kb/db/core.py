@@ -148,15 +148,31 @@ CREATE TABLE IF NOT EXISTS pipeline_node_state (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS analysis_profile (
+    key TEXT PRIMARY KEY,
+    provider TEXT NOT NULL,
+    model TEXT NOT NULL,
+    params JSONB NOT NULL DEFAULT '{}'::jsonb,
+    cache_tag TEXT UNIQUE,
+    contract_version INTEGER NOT NULL DEFAULT 2,
+    enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    canonical BOOLEAN NOT NULL DEFAULT FALSE,
+    max_concurrency INTEGER NOT NULL DEFAULT 2,
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS lesson_embedding (
     document_id UUID NOT NULL REFERENCES document(id) ON DELETE CASCADE,
+    profile_key TEXT NOT NULL REFERENCES analysis_profile(key),
     method TEXT NOT NULL DEFAULT 'default',
     embedding vector(1536),
     summary_text TEXT,
     summary_hash TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
-    PRIMARY KEY (document_id, method)
+    PRIMARY KEY (document_id, profile_key, method)
 );
 
 CREATE TABLE IF NOT EXISTS lesson_rendition (
@@ -193,9 +209,10 @@ CREATE TABLE IF NOT EXISTS lesson_profile (
 
 CREATE TABLE IF NOT EXISTS lesson_concept (
     document_id UUID NOT NULL REFERENCES document(id) ON DELETE CASCADE,
+    profile_key TEXT NOT NULL REFERENCES analysis_profile(key),
     category TEXT NOT NULL,
     value TEXT NOT NULL,
-    PRIMARY KEY (document_id, category, value)
+    PRIMARY KEY (document_id, profile_key, category, value)
 );
 
 CREATE TABLE IF NOT EXISTS analysis_step (
@@ -204,6 +221,7 @@ CREATE TABLE IF NOT EXISTS analysis_step (
     cache_suffix TEXT,
     depends_on TEXT[] NOT NULL DEFAULT '{}',
     description TEXT,
+    retired BOOLEAN NOT NULL DEFAULT FALSE,
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -223,22 +241,25 @@ CREATE TABLE IF NOT EXISTS lesson_group_member (
 
 CREATE TABLE IF NOT EXISTS group_analysis_gate (
     group_id INTEGER NOT NULL REFERENCES lesson_group(id) ON DELETE CASCADE,
+    profile_key TEXT NOT NULL REFERENCES analysis_profile(key),
     step_name TEXT NOT NULL REFERENCES analysis_step(name),
     permitted BOOLEAN NOT NULL DEFAULT FALSE,
     updated_at TIMESTAMPTZ DEFAULT NOW(),
-    PRIMARY KEY (group_id, step_name)
+    PRIMARY KEY (group_id, profile_key, step_name)
 );
 
 CREATE TABLE IF NOT EXISTS document_analysis_state (
     document_id UUID NOT NULL REFERENCES document(id) ON DELETE CASCADE,
+    profile_key TEXT NOT NULL REFERENCES analysis_profile(key),
     step_name TEXT NOT NULL REFERENCES analysis_step(name),
     completed_version INTEGER,
+    contract_version INTEGER,
     completed_at TIMESTAMPTZ,
     upstream_hash TEXT,
     stale BOOLEAN NOT NULL DEFAULT FALSE,
     error TEXT,
     updated_at TIMESTAMPTZ DEFAULT NOW(),
-    PRIMARY KEY (document_id, step_name)
+    PRIMARY KEY (document_id, profile_key, step_name)
 );
 
 CREATE TABLE IF NOT EXISTS search_query_log (
@@ -336,6 +357,22 @@ CREATE TABLE IF NOT EXISTS lesson_chat_log (
     response TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Conversations about a lesson held in an outside LLM, kept verbatim as sent.
+-- Their exchanges are stored in lesson_chat_log with origin 'external'.
+CREATE TABLE IF NOT EXISTS external_conversation (
+    id SERIAL PRIMARY KEY,
+    document_id TEXT NOT NULL,
+    user_id INTEGER,
+    conversation_id TEXT NOT NULL,
+    profile_key TEXT,
+    assistant TEXT,
+    channel TEXT NOT NULL,
+    format TEXT NOT NULL,
+    exchange_count INTEGER NOT NULL,
+    raw TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
 """
 
 INDEXES = """
@@ -359,6 +396,7 @@ CREATE INDEX IF NOT EXISTS idx_pipeline_log_created ON pipeline_log(created_at D
 CREATE INDEX IF NOT EXISTS idx_pipeline_log_document ON pipeline_log(document_id);
 CREATE INDEX IF NOT EXISTS idx_lesson_embedding_hnsw ON lesson_embedding USING hnsw (embedding vector_cosine_ops);
 CREATE INDEX IF NOT EXISTS idx_lesson_embedding_method ON lesson_embedding (method);
+CREATE INDEX IF NOT EXISTS idx_lesson_embedding_profile_method ON lesson_embedding (profile_key, method);
 CREATE INDEX IF NOT EXISTS idx_lesson_rendition_key ON lesson_rendition (lesson_key);
 CREATE INDEX IF NOT EXISTS idx_lesson_rendition_evidence_right ON lesson_rendition_evidence (right_document_id);
 CREATE INDEX IF NOT EXISTS idx_lesson_profile_lesson_key ON lesson_profile (lesson_key);
@@ -369,12 +407,15 @@ CREATE INDEX IF NOT EXISTS idx_external_lesson_source ON external_lesson (lesson
 CREATE INDEX IF NOT EXISTS idx_external_lesson_embedding_hnsw ON external_lesson USING hnsw (embedding vector_cosine_ops);
 CREATE INDEX IF NOT EXISTS idx_lgm_document ON lesson_group_member (document_id);
 CREATE INDEX IF NOT EXISTS idx_gag_permitted ON group_analysis_gate (group_id, step_name) WHERE permitted = TRUE;
+CREATE INDEX IF NOT EXISTS idx_gag_profile_permitted ON group_analysis_gate (group_id, profile_key, step_name) WHERE permitted = TRUE;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_analysis_profile_one_canonical ON analysis_profile ((TRUE)) WHERE canonical;
 CREATE INDEX IF NOT EXISTS idx_das_document ON document_analysis_state (document_id);
 CREATE INDEX IF NOT EXISTS idx_das_step ON document_analysis_state (step_name);
 CREATE INDEX IF NOT EXISTS idx_lesson_view_user ON lesson_view (user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_lesson_view_document ON lesson_view (document_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_lesson_chat_document ON lesson_chat_log (document_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_lesson_chat_user ON lesson_chat_log (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_external_conversation_doc ON external_conversation (document_id, conversation_id);
 CREATE INDEX IF NOT EXISTS idx_analysis_transcript ON analysis (document_id) WHERE type_id = 1;
 """
 
@@ -394,7 +435,9 @@ INSERT INTO analysis_step (name, current_version, cache_suffix, depends_on, desc
     ('index_concepts', 1, NULL, '{concept_tags}', 'Concept index build'),
     ('index_spatial', 1, NULL, '{spatial}', 'Spatial index build'),
     ('extract_steps', 2, ':extract_steps_v2', '{}', 'Step instruction extraction'),
-    ('map_body_parts', 3, ':map_body_parts_v3', '{extract_steps}', 'Body part mapping')
+    ('map_body_parts', 3, ':map_body_parts_v3', '{extract_steps}', 'Body part mapping'),
+    ('spatial_v3', 1, ':spatial_v3', '{decompose}', 'Step-level position sequence'),
+    ('print_prep', 1, ':print_prep_v1', '{decompose,spatial_v3}', 'Print model: positions, brief summaries, verbatim quotes')
 ON CONFLICT DO NOTHING;
 """
 
@@ -429,7 +472,8 @@ class DatabaseCore:
         named lock. The dedicated connection is never returned to the pool
         until the lock has been released.
         """
-        conn = self._get_pool().getconn()
+        connection_pool = self._get_pool()
+        conn = connection_pool.getconn()
         acquired = False
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cursor:
@@ -441,18 +485,32 @@ class DatabaseCore:
                 acquired = bool(row and row["acquired"])
             yield acquired
         finally:
-            if acquired:
-                try:
+            discard = bool(getattr(conn, "closed", False))
+            try:
+                if discard:
+                    pass
+                elif acquired:
                     with conn.cursor() as cursor:
                         cursor.execute(
                             "SELECT pg_advisory_unlock(hashtext(%s))",
                             (name,),
                         )
-                finally:
                     conn.rollback()
-            else:
-                conn.rollback()
-            self._get_pool().putconn(conn)
+                else:
+                    conn.rollback()
+            except Exception:
+                # A transient network failure can close the dedicated lock
+                # connection while the worker owns it. Never mask the original
+                # database exception with rollback/unlock cleanup, and never
+                # return a dead connection to the pool.
+                discard = True
+            finally:
+                try:
+                    connection_pool.putconn(conn, close=discard)
+                except Exception:
+                    # A closed/broken connection may already have detached
+                    # itself from the pool. There is nothing useful to return.
+                    pass
 
     @contextmanager
     def get_cursor(self, commit: bool = True):
@@ -512,6 +570,11 @@ class DatabaseCore:
                 ("youtube_queue", "attempts", "INTEGER NOT NULL DEFAULT 0"),
                 ("youtube_queue", "next_attempt_at", "TIMESTAMPTZ"),
                 ("users", "superuser_eligible", "BOOLEAN NOT NULL DEFAULT FALSE"),
+                ("lesson_chat_log", "origin", "TEXT NOT NULL DEFAULT 'app'"),
+                ("lesson_chat_log", "assistant", "TEXT"),
+                ("lesson_chat_log", "conversation_id", "TEXT"),
+                ("lesson_chat_log", "profile_key", "TEXT"),
+                ("analysis_step", "retired", "BOOLEAN NOT NULL DEFAULT FALSE"),
             ]:
                 cursor.execute(
                     """SELECT 1 FROM information_schema.columns

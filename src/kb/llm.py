@@ -23,9 +23,13 @@ Usage:
     response = claude.complete("Write a haiku", temperature=0.9, max_tokens=100)
 """
 
-import os
 import json
+import os
+import shutil
+import subprocess
+import tempfile
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Optional, Literal, Type, TypeVar
 
 from pydantic import BaseModel
@@ -62,10 +66,111 @@ def get_genai():
     return genai
 
 
-Provider = Literal["anthropic", "openai", "gemini", "zai"]
+Provider = Literal["anthropic", "openai", "gemini", "zai", "codex"]
 
 # z.ai (Zhipu GLM) exposes an OpenAI-compatible endpoint.
 ZAI_DEFAULT_BASE_URL = "https://api.z.ai/api/paas/v4"
+
+# Token usage accumulated by every structured call in this process. The
+# analysis worker runs each step in its own process, so these totals are the
+# usage of the step that is running (see pipeline.analysis._record_run).
+_PROCESS_USAGE = {"calls": 0, "unreported_calls": 0, "tokens_in": 0, "tokens_out": 0}
+
+
+def process_usage() -> dict:
+    """Return the token usage recorded by this process so far."""
+    return dict(_PROCESS_USAGE)
+
+
+# Schema contract v3: every field required, objects closed, and fields that may
+# legitimately not apply are explicitly nullable. The model is told to use null
+# rather than placeholder text, so "does not apply" becomes countable.
+NULL_WHEN_NOT_APPLICABLE = (
+    "\n\nIf a field does not apply, return null for it. Never put placeholder text "
+    "such as \"none\", \"n/a\" or an empty string in its place."
+)
+
+_SCHEMA_MAP_KEYS = ("properties", "$defs", "definitions", "patternProperties")
+_SCHEMA_LIST_KEYS = ("anyOf", "oneOf", "allOf", "prefixItems")
+_SCHEMA_CHILD_KEYS = ("items", "additionalProperties", "not", "contains")
+
+
+def _nullable(prop):
+    """Return a property schema that also admits null."""
+    if not isinstance(prop, dict):
+        return prop
+    kind = prop.get("type")
+    if kind is None:
+        # $ref, anyOf, const or enum-only schemas: admit null alongside them.
+        return {"anyOf": [prop, {"type": "null"}]}
+    prop = dict(prop)
+    if isinstance(kind, str):
+        if kind != "null":
+            prop["type"] = [kind, "null"]
+    elif "null" not in kind:
+        prop["type"] = list(kind) + ["null"]
+    if "enum" in prop and None not in prop["enum"]:
+        prop["enum"] = list(prop["enum"]) + [None]
+    return prop
+
+
+def strict_contract_schema(schema: dict) -> dict:
+    """Return the contract-v3 form of a JSON schema.
+
+    Every object is closed and lists all of its properties as required.
+    Properties that were optional become nullable, so a model can say a field
+    does not apply without inventing content for it. Required properties keep
+    their types.
+    """
+    def walk(node):
+        if not isinstance(node, dict):
+            return node
+        out = dict(node)
+        for key in _SCHEMA_MAP_KEYS:
+            if isinstance(out.get(key), dict):
+                out[key] = {name: walk(sub) for name, sub in out[key].items()}
+        for key in _SCHEMA_LIST_KEYS:
+            if isinstance(out.get(key), list):
+                out[key] = [walk(sub) for sub in out[key]]
+        for key in _SCHEMA_CHILD_KEYS:
+            if isinstance(out.get(key), dict):
+                out[key] = walk(out[key])
+        kind = out.get("type")
+        is_object = kind == "object" or (isinstance(kind, list) and "object" in kind) or "properties" in out
+        if is_object:
+            props = out.get("properties") or {}
+            required = set(node.get("required") or [])
+            out["properties"] = {
+                name: sub if name in required else _nullable(sub) for name, sub in props.items()
+            }
+            out["required"] = list(props)
+            out["additionalProperties"] = False
+        return out
+
+    return walk(schema)
+
+
+# Anthropic models that reject a forced tool_choice. Structured output for these
+# goes through output_config.format instead of a forced "output" tool.
+_ANTHROPIC_NO_FORCED_TOOL = ("claude-opus-5-5", "claude-fable-5-1", "claude-mythos-5-1")
+# JSON Schema constraints Anthropic structured outputs do not accept.
+_ANTHROPIC_UNSUPPORTED_SCHEMA_KEYS = {
+    "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "multipleOf",
+    "minLength", "maxLength", "minItems", "maxItems", "uniqueItems",
+}
+
+
+def _anthropic_output_schema(schema):
+    """Drop constraints Anthropic structured outputs reject, at every level."""
+    if isinstance(schema, dict):
+        return {
+            key: _anthropic_output_schema(value)
+            for key, value in schema.items()
+            if key not in _ANTHROPIC_UNSUPPORTED_SCHEMA_KEYS and key not in ("$schema", "$id")
+        }
+    if isinstance(schema, list):
+        return [_anthropic_output_schema(item) for item in schema]
+    return schema
 
 
 def get_embeddings(texts: list[str], model: str = "gemini-embedding-001",
@@ -105,14 +210,26 @@ class LLM:
     default_max_tokens: int = 4096
     default_temperature: float = 0.0
     thinking_level: Optional[str] = None  # Gemini 3 only: MINIMAL, LOW, MEDIUM, HIGH
+    reasoning_effort: Optional[str] = None  # Codex reasoning effort, or Anthropic output_config.effort
+    schema_contract: int = 2  # 3+: structured outputs use strict_contract_schema
 
     # Clients are created lazily
     _client: object = field(default=None, init=False, repr=False)
     last_usage: dict = field(default_factory=dict, init=False, repr=False)
 
     def __post_init__(self):
-        if self.provider not in ("anthropic", "openai", "gemini", "zai"):
+        if self.provider not in ("anthropic", "openai", "gemini", "zai", "codex"):
             raise ValueError(f"Unsupported provider: {self.provider}")
+
+    def _set_usage(self, usage: dict) -> None:
+        """Record one call's usage on the instance and in the process totals."""
+        self.last_usage = usage
+        _PROCESS_USAGE["calls"] += 1
+        if usage.get("tokens_in") is None and usage.get("tokens_out") is None:
+            _PROCESS_USAGE["unreported_calls"] += 1
+        for key in ("tokens_in", "tokens_out"):
+            if usage.get(key):
+                _PROCESS_USAGE[key] += usage[key]
 
     @property
     def client(self):
@@ -199,6 +316,8 @@ class LLM:
             return self._chat_openai(messages, system, max_tokens, temperature)
         elif self.provider == "gemini":
             return self._chat_gemini(messages, system, max_tokens, temperature)
+        elif self.provider == "codex":
+            raise NotImplementedError("Codex provider currently supports structured JSON analysis only")
 
     def _chat_anthropic(
         self,
@@ -378,6 +497,11 @@ class LLM:
             return self._structured_openai(prompt, response_model, system, max_tokens, temperature)
         elif self.provider == "gemini":
             return self._structured_gemini(prompt, response_model, system, max_tokens, temperature)
+        elif self.provider == "codex":
+            data = self._structured_json_codex(
+                prompt, response_model.model_json_schema(), system, max_tokens, temperature
+            )
+            return response_model.model_validate(data)
 
     def _structured_anthropic(
         self,
@@ -497,6 +621,9 @@ class LLM:
         """
         max_tokens = max_tokens or self.default_max_tokens
         temperature = temperature if temperature is not None else self.default_temperature
+        if self.schema_contract >= 3:
+            schema = strict_contract_schema(schema)
+            prompt = prompt + NULL_WHEN_NOT_APPLICABLE
 
         if self.provider == "anthropic":
             return self._structured_json_anthropic(prompt, schema, system, max_tokens, temperature)
@@ -504,6 +631,99 @@ class LLM:
             return self._structured_json_openai(prompt, schema, system, max_tokens, temperature)
         elif self.provider == "gemini":
             return self._structured_json_gemini(prompt, schema, system, max_tokens, temperature)
+        elif self.provider == "codex":
+            return self._structured_json_codex(prompt, schema, system, max_tokens, temperature)
+
+    def _structured_json_codex(
+        self,
+        prompt: str,
+        schema: dict,
+        system: Optional[str],
+        max_tokens: int,
+        temperature: float,
+    ) -> dict:
+        """Run a schema-constrained Codex turn using the signed-in subscription."""
+        del max_tokens, temperature  # Codex CLI owns these controls.
+        codex_bin = self._codex_bin()
+        schema = self._codex_output_schema(schema)
+        full_prompt = prompt
+        if system:
+            full_prompt = f"{system}\n\n---\n\n{prompt}"
+        full_prompt += "\n\nReturn only JSON matching the supplied output schema. Do not use tools."
+
+        schema_path = output_path = None
+        try:
+            with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as schema_file:
+                json.dump(schema, schema_file)
+                schema_path = schema_file.name
+            with tempfile.NamedTemporaryFile("w+", suffix=".json", delete=False) as output_file:
+                output_path = output_file.name
+
+            cmd = [
+                codex_bin, "exec", "--skip-git-repo-check", "--ephemeral",
+                "-s", "read-only", "--output-schema", schema_path,
+                "-o", output_path, "-m", self.model,
+            ]
+            if self.reasoning_effort:
+                cmd += ["-c", f"model_reasoning_effort={self.reasoning_effort}"]
+            cmd += ["--", full_prompt]
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=900, cwd="/tmp", check=False
+            )
+            if result.returncode:
+                detail = (result.stderr or result.stdout or "unknown error")[-1000:]
+                raise RuntimeError(f"Codex exited with status {result.returncode}: {detail}")
+            raw = Path(output_path).read_text(encoding="utf-8").strip()
+            data = json.loads(raw)
+            self._set_usage({})
+            return data
+        finally:
+            if schema_path:
+                Path(schema_path).unlink(missing_ok=True)
+            if output_path:
+                Path(output_path).unlink(missing_ok=True)
+
+    @staticmethod
+    def _codex_output_schema(schema: dict) -> dict:
+        """Close every JSON object for Codex strict structured output.
+
+        The pipeline's schemas were authored for Gemini, which permits object
+        schemas without ``additionalProperties``. Codex requires that keyword
+        to be explicitly false at every object level.
+        """
+        def close_objects(value):
+            if isinstance(value, dict):
+                result = {key: close_objects(item) for key, item in value.items()}
+                if result.get("type") == "object" or "properties" in result:
+                    result["additionalProperties"] = False
+                    # Codex strict schemas require every declared property to
+                    # appear in ``required``. Existing pipeline prompts already
+                    # ask for complete records; make that contract explicit.
+                    if "properties" in result:
+                        result["required"] = list(result["properties"])
+                return result
+            if isinstance(value, list):
+                return [close_objects(item) for item in value]
+            return value
+
+        return close_objects(schema)
+
+    @staticmethod
+    def _codex_bin() -> str:
+        """Resolve Codex with zero extra config for a standard local install."""
+        override = os.environ.get("CODEX_BIN")
+        if override:
+            return override
+        user_install = Path.home() / ".local" / "bin" / "codex"
+        if user_install.is_file():
+            return str(user_install)
+        discovered = shutil.which("codex")
+        if discovered:
+            return discovered
+        raise RuntimeError(
+            "Codex CLI not found. Install it as this worker user, then run "
+            "`codex login` and retry."
+        )
 
     def _structured_json_anthropic(
         self,
@@ -514,6 +734,8 @@ class LLM:
         temperature: float,
     ) -> dict:
         """Get structured output from Anthropic using tool_use with JSON Schema."""
+        if self.model.startswith(_ANTHROPIC_NO_FORCED_TOOL) or self.reasoning_effort:
+            return self._structured_json_anthropic_output_config(prompt, schema, system, max_tokens)
         tool = {
             "name": "output",
             "description": schema.get("description", "Output structured data"),
@@ -535,16 +757,61 @@ class LLM:
         with self.client.messages.stream(**kwargs) as stream:
             response = stream.get_final_message()
 
-        self.last_usage = {
+        self._set_usage({
             "tokens_in": getattr(response.usage, "input_tokens", None),
             "tokens_out": getattr(response.usage, "output_tokens", None),
-        }
+        })
 
         for block in response.content:
             if block.type == "tool_use":
                 return block.input
 
         raise ValueError("No tool use in response")
+
+    def _structured_json_anthropic_output_config(
+        self,
+        prompt: str,
+        schema: dict,
+        system: Optional[str],
+        max_tokens: int,
+    ) -> dict:
+        """Get structured output from Anthropic using output_config.format.
+
+        For models that reject a forced tool_choice. Thinking stays on (these
+        models cannot disable it); ``reasoning_effort`` sets its depth. No
+        sampling parameters are sent, because current models reject them.
+        """
+        output_config: dict = {
+            "format": {"type": "json_schema", "schema": _anthropic_output_schema(schema)},
+        }
+        if self.reasoning_effort:
+            output_config["effort"] = self.reasoning_effort
+        kwargs = {
+            "model": self.model,
+            "max_tokens": max_tokens,
+            "messages": [{"role": "user", "content": prompt}],
+            "output_config": output_config,
+        }
+        if system:
+            kwargs["system"] = system
+
+        with self.client.messages.stream(**kwargs) as stream:
+            response = stream.get_final_message()
+
+        self._set_usage({
+            "tokens_in": getattr(response.usage, "input_tokens", None),
+            "tokens_out": getattr(response.usage, "output_tokens", None),
+        })
+
+        if response.stop_reason == "refusal":
+            details = getattr(response, "stop_details", None)
+            raise ValueError(f"Model declined the request: {details}")
+        if response.stop_reason == "max_tokens":
+            raise ValueError(f"Structured output truncated at max_tokens={max_tokens}")
+        text = next((block.text for block in response.content if block.type == "text"), None)
+        if text is None:
+            raise ValueError("No text block in structured response")
+        return json.loads(text)
 
     def _structured_json_openai(
         self,
@@ -584,10 +851,10 @@ class LLM:
         response = self.client.chat.completions.create(**kwargs)
 
         if hasattr(response, "usage") and response.usage:
-            self.last_usage = {
+            self._set_usage({
                 "tokens_in": response.usage.prompt_tokens,
                 "tokens_out": response.usage.completion_tokens,
-            }
+            })
 
         raw_text = response.choices[0].message.content
         try:
@@ -628,10 +895,10 @@ class LLM:
 
         if hasattr(response, 'usage_metadata') and response.usage_metadata:
             u = response.usage_metadata
-            self.last_usage = {
+            self._set_usage({
                 "tokens_in": getattr(u, 'prompt_token_count', None),
                 "tokens_out": getattr(u, 'candidates_token_count', None),
-            }
+            })
 
         # Check finish reason for truncation
         finish_reason = None

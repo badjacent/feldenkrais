@@ -75,8 +75,27 @@ def _is_interiority_site(request: Request) -> bool:
 SUPERUSER_COOKIE = "fk_superuser"
 
 
+def _is_trusted_local(request: Request) -> bool:
+    """True where the site grants full, superuser access without signing in.
+
+    That is this laptop's dev server (a localhost Host header) and deployments
+    that opt in with FULL_ACCESS_WITHOUT_LOGIN=1: the Mac mini candidate, which
+    listens only on the tailnet, so tailnet membership is its access control.
+    Never under Lambda.
+    """
+    if IS_LAMBDA:
+        return False
+    host = request.headers.get("host", "")
+    if host.startswith("localhost") or host.startswith("127.0.0.1"):
+        return True
+    return os.environ.get("FULL_ACCESS_WITHOUT_LOGIN") == "1"
+
+
 def _is_superuser_active(request: Request, user: dict | None) -> bool:
-    """True if the user is superuser-eligible AND has the superuser cookie set."""
+    """True on a trusted local deployment, or for a superuser-eligible user with
+    the superuser cookie set."""
+    if _is_trusted_local(request):
+        return True
     if not user or not user.get("superuser_eligible"):
         return False
     return request.cookies.get(SUPERUSER_COOKIE) == "1"
@@ -89,9 +108,8 @@ def _set_source_access(request: Request) -> dict | None:
     """
     if not _db:
         return None
-    # Localhost gets full access (no filtering)
-    host = request.headers.get("host", "")
-    if host.startswith("localhost") or host.startswith("127.0.0.1"):
+    # Trusted local deployments (localhost, the Mini) get full access
+    if _is_trusted_local(request):
         _db.allowed_source_ids = None
         return _auth_mod.get_current_user(request)
     user = _auth_mod.get_current_user(request)
@@ -156,16 +174,6 @@ def _is_pipeline_locked() -> bool:
 _pipeline_run_lock = asyncio.Lock()
 
 
-async def _periodic_group_sync():
-    """Periodically sync auto-groups so newly transcribed lessons enter the analysis pipeline."""
-    while True:
-        await asyncio.sleep(300)  # every 5 minutes
-        try:
-            _db.sync_auto_groups()
-        except Exception as e:
-            print(f"[sync] auto-group sync error: {e}")
-
-
 @asynccontextmanager
 async def _lifespan(app):
     if _db and not IS_LAMBDA:
@@ -174,16 +182,11 @@ async def _lifespan(app):
             cur.execute(
                 "UPDATE pipeline_node_state SET status = 'stale' WHERE status = 'running'"
             )
-        print("[pipeline] on-demand mode (no background runner)")
-    sync_task = None
-    if _db and not IS_LAMBDA:
-        sync_task = asyncio.create_task(_periodic_group_sync())
-        print("[sync] auto-group sync running every 5 minutes")
-    try:
-        yield
-    finally:
-        if sync_task:
-            sync_task.cancel()
+        # Analysis runs in the dedicated worker (python -m kb.pipeline.analysis run),
+        # never in the web process. Auto-groups are synced when the worker starts
+        # a pass and when /analysis is opened, not on a timer, so an idle analyzer
+        # sends Neon no queries and it can suspend.
+    yield
 
 
 app = FastAPI(title="Feldenkrais Lesson Analyzer", lifespan=_lifespan)
@@ -260,6 +263,11 @@ async def search_site_guard(request: Request, call_next):
             return RedirectResponse("/")
         return await call_next(request)
 
+    # Outside-chat imports carry the import token from a lesson export instead
+    # of a session; the route itself refuses anything without one.
+    if path == "/api/conversations/import" and request.method == "POST":
+        return await call_next(request)
+
     # On Lambda, require login for all pages
     if IS_LAMBDA and not _auth_mod.get_current_user(request):
         return HTMLResponse(_login_page_html())
@@ -314,240 +322,6 @@ if DATABASE_URL:
     _db = Database(DATABASE_URL)
     _db.initialize()
 
-# Pipeline runner state — uses DB cache key for cross-process coordination
-import subprocess
-import threading
-
-_PIPELINE_KEY = "pipeline:analysis_running"
-_PIPELINE_ACTIVE_KEY = "pipeline:active_steps"
-_PIPELINE_PYTHON = str(Path(__file__).parent.parent.parent / ".venv" / "bin" / "python")
-_PIPELINE_MODULE = "pipeline.analysis"
-_PIPELINE_CWD = str(Path(__file__).parent)
-
-def _pipeline_is_running() -> bool:
-    """Check if pipeline is marked as running in DB."""
-    if not _db:
-        return False
-    row = _db.get_cache(_PIPELINE_KEY)
-    return bool(row and row.get("running"))
-
-def _pipeline_set_running(running: bool):
-    """Set pipeline running state in DB."""
-    if _db:
-        _db.set_cache(_PIPELINE_KEY, {"running": running})
-
-def _pipeline_update_active(active: list[dict]):
-    """Update the active steps list in DB. Preserves start times for ongoing steps."""
-    import datetime
-    # Merge with existing to preserve start times
-    existing = (_db.get_cache(_PIPELINE_ACTIVE_KEY) or {}).get("steps", [])
-    existing_lookup = {(s["step"], s["title"]): s.get("started") for s in existing}
-    now = datetime.datetime.utcnow().isoformat()
-    for s in active:
-        s["started"] = existing_lookup.get((s["step"], s["title"]), now)
-    _db.set_cache(_PIPELINE_ACTIVE_KEY, {"steps": active})
-
-def _run_step_subprocess(doc_id: str, step_name: str, title: str, timeout: int = 300) -> dict:
-    """Run a single step in a subprocess. Returns result dict."""
-    try:
-        result = subprocess.run(
-            [_PIPELINE_PYTHON, "-m", _PIPELINE_MODULE, "run-one", doc_id, step_name],
-            capture_output=True, text=True, timeout=timeout,
-            cwd=_PIPELINE_CWD,
-        )
-        if result.returncode == 0:
-            return {"ok": True, "doc_id": doc_id, "step": step_name, "title": title}
-        else:
-            return {"ok": False, "doc_id": doc_id, "step": step_name, "title": title,
-                    "error": result.stderr[:200] if result.stderr else "exit code " + str(result.returncode)}
-    except subprocess.TimeoutExpired:
-        return {"ok": False, "doc_id": doc_id, "step": step_name, "title": title,
-                "error": f"Timed out after {timeout}s"}
-
-# ── Priority queue for single-lesson runs ────────────────────────────────
-# Thread-safe list of document_ids that should be processed first.
-# When run-step is triggered for a lesson, it's added here and the worker
-# is started if not already running. Priority lessons are drained before
-# the worker falls back to processing all runnable work.
-
-import threading as _threading
-_priority_lock = _threading.Lock()
-_priority_lessons: list[str] = []  # document_ids, front = highest priority
-_pending_step_keys: set[tuple[str, str]] = set()  # (doc_id, step_name) currently in flight
-
-
-def queue_lesson(document_id: str):
-    """Add a lesson to the priority queue. Starts the worker if needed."""
-    with _priority_lock:
-        if document_id not in _priority_lessons:
-            _priority_lessons.insert(0, document_id)
-    _ensure_worker_running()
-
-
-_worker_thread: _threading.Thread | None = None
-
-
-def _ensure_worker_running():
-    """Start the pipeline worker thread if it's not already running.
-
-    Checks both the DB flag AND whether the actual thread is alive.
-    This handles the case where a hot-reload kills the daemon thread
-    but leaves the DB flag set.
-    """
-    global _worker_thread
-    thread_alive = _worker_thread is not None and _worker_thread.is_alive()
-    if not thread_alive:
-        _pipeline_set_running(True)
-        _worker_thread = _threading.Thread(target=_pipeline_worker, daemon=True)
-        _worker_thread.start()
-
-
-def _get_next_step() -> dict | None:
-    """Get the next step to run, respecting the priority queue.
-
-    Priority lessons are checked first. Within each priority lesson,
-    runnable steps are returned in dependency order. Once a priority
-    lesson has no more runnable steps, it's removed from the queue.
-
-    Falls back to all runnable work when the priority queue is empty.
-    """
-    with _priority_lock:
-        # Phase 1: priority lessons
-        while _priority_lessons:
-            lesson_id = _priority_lessons[0]
-            runnable = _db.get_runnable_steps(document_id=lesson_id)
-            for r in runnable:
-                key = (str(r["document_id"]), r["step_name"])
-                if key not in _pending_step_keys:
-                    return r
-            # No more runnable work for this lesson — done
-            _priority_lessons.pop(0)
-
-    # Phase 2: all runnable work
-    runnable = _db.get_runnable_steps()
-    for r in runnable:
-        key = (str(r["document_id"]), r["step_name"])
-        if key not in _pending_step_keys:
-            return r
-    return None
-
-
-def _pipeline_worker():
-    """Run the web-triggered worker only while holding the cross-host lease."""
-    with _db.advisory_lock("feldenkrais:analysis-worker") as acquired:
-        if not acquired:
-            print("[pipeline] analysis worker lease is held elsewhere", flush=True)
-            _pipeline_set_running(False)
-            return
-        _pipeline_worker_locked()
-
-
-def _pipeline_worker_locked():
-    """Background pipeline worker using subprocesses.
-
-    Supports two modes:
-      - Priority mode: processes steps for specific lessons (from queue_lesson)
-      - Bulk mode: processes all runnable steps across all groups
-
-    Priority lessons are drained first without pre-empting in-flight work.
-    Each step runs in its own subprocess with a 5-minute hard timeout.
-    Up to 4 steps run concurrently via a thread pool.
-    """
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-    max_workers = 4
-    step_timeout = 300  # 5 minutes per step
-    _sweep_completed_steps: set[str] = set()
-
-    try:
-        while _pipeline_is_running():
-            # Get initial batch
-            initial = []
-            for _ in range(max_workers):
-                r = _get_next_step()
-                if not r:
-                    break
-                key = (str(r["document_id"]), r["step_name"])
-                _pending_step_keys.add(key)
-                initial.append(r)
-
-            if not initial:
-                # Check if priority queue has items (deps might not be ready yet)
-                with _priority_lock:
-                    if _priority_lessons:
-                        # Wait briefly for in-flight deps to complete
-                        import time as _time_mod
-                        _time_mod.sleep(2)
-                        continue
-                break
-
-            with ThreadPoolExecutor(max_workers=max_workers) as pool:
-                pending = {}  # future -> info dict
-
-                for r in initial:
-                    doc_id = str(r["document_id"])
-                    step = r["step_name"]
-                    title = r["document_title"][:50]
-                    f = pool.submit(_run_step_subprocess, doc_id, step, title, step_timeout)
-                    pending[f] = {"step": step, "title": title, "doc_id": doc_id}
-
-                _pipeline_update_active(list(pending.values()))
-
-                while pending:
-                    if not _pipeline_is_running():
-                        break
-                    try:
-                        done = next(as_completed(pending, timeout=step_timeout + 30))
-                    except (StopIteration, TimeoutError):
-                        for f, info in list(pending.items()):
-                            if not f.done():
-                                _db.mark_step_error(info["doc_id"], info["step"],
-                                                    f"Timed out after {step_timeout}s")
-                                _pending_step_keys.discard((info["doc_id"], info["step"]))
-                        break
-
-                    info = pending.pop(done)
-                    _pending_step_keys.discard((info["doc_id"], info["step"]))
-
-                    try:
-                        result = done.result()
-                        if result["ok"]:
-                            _sweep_completed_steps.add(result["step"])
-                        elif "Timed out" in result.get("error", ""):
-                            _db.mark_step_error(result["doc_id"], result["step"], result["error"])
-                    except Exception:
-                        pass
-
-                    # Feed next item (re-queries DB, picks up newly-runnable downstream)
-                    if _pipeline_is_running():
-                        r = _get_next_step()
-                        if r:
-                            key = (str(r["document_id"]), r["step_name"])
-                            _pending_step_keys.add(key)
-                            doc_id = str(r["document_id"])
-                            step = r["step_name"]
-                            title = r["document_title"][:50]
-                            f = pool.submit(_run_step_subprocess, doc_id, step, title, step_timeout)
-                            pending[f] = {"step": step, "title": title, "doc_id": doc_id}
-
-                    _pipeline_update_active(list(pending.values()))
-    finally:
-        _pending_step_keys.clear()
-        _pipeline_update_active([])
-        _pipeline_set_running(False)
-        # Auto-publish the Atlas projection when this sweep changed it (the
-        # analysis gates are the sole owner control; fail-soft, never raises).
-        if _sweep_completed_steps:
-            try:
-                from atlas_projection import maybe_publish_after_sweep
-                maybe_publish_after_sweep(_db, _sweep_completed_steps)
-            except Exception as e:
-                print(f"[atlas-projection] hook error (non-fatal): {e}", flush=True)
-
-# On startup, if pipeline was running, restart the worker thread
-if _db:
-    _pipeline_update_active([])
-    if _pipeline_is_running():
-        _ensure_worker_running()
 
 # ── Initialize extracted modules ──────────────────────────────────────────
 import auth as _auth_mod
@@ -585,6 +359,7 @@ PROMPTS_DIR = _analysis_mod.PROMPTS_DIR
 # ── Page builders (extracted to web_pages.py) ─────────────────────────────
 from web_pages import (  # noqa: E402
     _AUTH_BAR_CSS, _auth_bar_html,
+    UNANALYZED_COOKIE,
     build_search_home_html,
     build_lesson_page_html,
     build_conversations_page_html,
@@ -695,7 +470,37 @@ def align_pass0_with_whisper(pass_0_result: dict, whisper_segments: list) -> Non
 
 
 
-def get_available_lessons() -> tuple[dict[str, list[tuple[str, str]]], dict[str, str]]:
+def _show_unanalyzed(request: Request) -> bool:
+    """Whether lesson lists include transcript-only lessons. Hidden by default.
+
+    ``?unanalyzed=show|hide`` overrides the remembered cookie for one view.
+    """
+    requested = request.query_params.get("unanalyzed")
+    if requested in ("show", "hide"):
+        return requested == "show"
+    return request.cookies.get(UNANALYZED_COOKIE) == "1"
+
+
+def _natural_key(text: str | None) -> list:
+    """Sort key that orders "part 2" before "part 10"."""
+    import re
+    return [(0, int(part), "") if part.isdigit() else (1, 0, part)
+            for part in re.split(r"(\d+)", (text or "").lower()) if part]
+
+
+def _lesson_order_key(doc: dict) -> tuple:
+    """Series order within a source: dated lessons first by date, then index, then title."""
+    date = doc.get("lesson_date")
+    return (date is None, date or "", _natural_key(doc.get("lesson_index")), _natural_key(doc.get("title")))
+
+
+def get_available_lessons() -> tuple[dict[str, list[tuple]], dict[str, str]]:
+    """Every lesson with content, as (categories, display_names); see get_lesson_listing."""
+    categories, display_names, _ = get_lesson_listing(include_unanalyzed=True)
+    return categories, display_names
+
+
+def get_lesson_listing(include_unanalyzed: bool = True) -> tuple[dict[str, list[tuple]], dict[str, str], int]:
     """Get categories and their display names.
 
     DB documents with category_name set are grouped under that name (override).
@@ -703,18 +508,26 @@ def get_available_lessons() -> tuple[dict[str, list[tuple[str, str]]], dict[str,
 
     Uses _db.allowed_source_ids (set by _set_source_access) to filter sources.
 
-    Returns (categories_dict, display_names_dict).
-    - categories: category_key -> [(lesson_key, display_name)]
+    Transcript-only lessons (never analyzed) are dropped unless
+    ``include_unanalyzed``.
+
+    Returns (categories_dict, display_names_dict, unanalyzed_count).
+    - categories: category_key -> [(lesson_key, display_name, source_url, analyzed)]
     - display_names: category_key -> display_name
+    - unanalyzed_count: transcript-only lessons hidden, or included when shown
     All DB keys start with 'db:'.
     """
     categories = {}
     display_names = {}
+    unanalyzed_count = 0
 
     # 1. Database sources (if available)
     if _db:
         try:
-            for src in _db.get_lesson_categories():
+            sources = _db.get_lesson_categories()
+            lessons_by_source = _db.get_lessons_by_source(
+                [src["source_id"] for src in sources if src["source_id"] != 3])
+            for src in sources:
                 source_display = (
                     src.get("source_category_name")
                     or src["source_name"].replace("_", " ").title()
@@ -727,19 +540,23 @@ def get_available_lessons() -> tuple[dict[str, list[tuple[str, str]]], dict[str,
                 # /fmtt page — drop it from the home-page browse.
                 if src["source_id"] == 3:
                     continue
-                for doc in _db.get_source_lessons(src["source_id"]):
+                for doc in sorted(lessons_by_source.get(src["source_id"], []), key=_lesson_order_key):
                     lesson_type = doc.get("lesson_type")
                     title = doc["title"]
                     instructor = doc.get("instructor")
                     display = f"{title} ({instructor})" if instructor else title
                     source_url = doc.get("source_url") or ""
+                    analyzed = bool(doc.get("analyzed"))
+                    if not analyzed:
+                        unanalyzed_count += 1
+                        if not include_unanalyzed:
+                            continue
                     doc_cat = doc.get("category_name")
+                    entry = (str(doc["id"]), display, source_url, analyzed)
                     if doc_cat:
-                        override_buckets.setdefault(doc_cat, []).append(
-                            (str(doc["id"]), display, source_url)
-                        )
+                        override_buckets.setdefault(doc_cat, []).append(entry)
                     else:
-                        source_bucket.append((str(doc["id"]), display, source_url))
+                        source_bucket.append(entry)
 
                 # Add override buckets as separate categories
                 for cat_name, lessons in override_buckets.items():
@@ -760,15 +577,11 @@ def get_available_lessons() -> tuple[dict[str, list[tuple[str, str]]], dict[str,
     # Skip empty sources (e.g. OTHER with no documents)
     categories = {k: v for k, v in categories.items() if v}
 
-    # Sort lessons within each category alphabetically by display name
-    for key in categories:
-        categories[key].sort(key=lambda x: x[1].lower())
-
     # Sort categories alphabetically by display name
     sorted_keys = sorted(categories.keys(), key=lambda k: display_names.get(k, k).lower())
     categories = {k: categories[k] for k in sorted_keys}
 
-    return categories, display_names
+    return categories, display_names, unanalyzed_count
 
 
 def load_lesson(category: str, lesson_key: str) -> str:
@@ -1098,6 +911,9 @@ from routes.finder import router as finder_router
 from routes.admin import router as admin_router
 from routes.pages import router as pages_router
 from routes.lesson_data import router as lesson_data_router
+from routes.atlas_pages import router as atlas_pages_router
+from routes.nyc_admin import router as nyc_admin_router
+from routes.conversations import router as conversations_router
 
 app.include_router(auth_router)
 app.include_router(ingestion_router)
@@ -1107,6 +923,9 @@ app.include_router(finder_router)
 app.include_router(admin_router)
 app.include_router(pages_router)
 app.include_router(lesson_data_router)
+app.include_router(atlas_pages_router)
+app.include_router(nyc_admin_router)
+app.include_router(conversations_router)
 
 
 # ── Conditional book router mount ─────────────────────────────────────
@@ -1159,6 +978,14 @@ def handler(event, context):
         except ImportError:
             return {"statusCode": 501, "body": json.dumps({"error": "web_book not available"})}
         return {"statusCode": 200, "body": json.dumps({"processed": job_id})}
+
+    # Conversations dropped in the bucket's conversations/inbox/
+    import conversation_import
+    if conversation_import.is_s3_event(event):
+        import boto3
+        outcomes = conversation_import.handle_s3_event(
+            event, _db, boto3.client("s3"), _auth_mod.COOKIE_SECRET)
+        return {"statusCode": 200, "body": json.dumps(outcomes, default=str)}
 
     # Otherwise, handle as HTTP request
     return _http_handler(event, context)

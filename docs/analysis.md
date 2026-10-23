@@ -208,9 +208,58 @@ The analysis dashboard at `/analysis` shows a matrix of documents x steps:
 # Run all runnable steps
 .venv/bin/python -m kb.pipeline.analysis run
 
-# Run for one document
-.venv/bin/python -m kb.pipeline.analysis run --document <doc_id>
+# Run one step under one profile
+.venv/bin/python -m kb.pipeline.analysis run-one <doc_id> <step> --profile <profile_key>
 ```
+
+## Model profiles
+
+Analysis runs per document **per model profile**. A profile is one model
+configuration: provider, model, parameters, the schema contract its results are
+produced under, and a cache tag that keeps its results apart from every other
+profile's. Progress (`document_analysis_state`), gates (`group_analysis_gate`)
+and derived rows (`lesson_embedding`, `lesson_concept`) are all keyed by
+profile, so one lesson can carry an analysis from each model.
+
+| Profile | Cache keys | Contract | Starts |
+|---|---|---|---|
+| `gemini-3-flash` | bare (all historical results) | 2 | off, canonical |
+| `astra-low` | `:codex-astra` | 2 | off |
+| `gemini-3.1`, `astra-medium`, `opus-5.5` | `:c3:<key>` | 3 | off |
+
+Every profile was released switched off (2026-09-23): nothing is routed to a
+model until it is turned on at `/analysis`.
+
+A step runs for a (document, profile) when a group containing the document has
+that step's gate open **for that profile** and the profile's global switch is
+on. Both are controlled on the `/analysis` page, which is visible only on local
+deployments (the laptop and the Mac mini), never on the production site.
+
+Lesson pages read the canonical profile unless `?profile=<key>` names another,
+and never fall back from one profile to another. `/lesson/<id>/compare` shows
+two profiles' analyses of one lesson side by side.
+
+**Schema contract 3.** Every field required, every object closed, and fields
+that may legitimately not apply explicitly nullable; the prompt asks for null
+instead of placeholder text. It is applied in one place,
+`LLM.complete_structured_json`, for clients built from a contract-3 profile.
+Contracts are pinned per profile, so moving new models to contract 3 never
+re-runs `gemini-3-flash`. Bumping an `analysis_step.current_version`, by
+contrast, marks that step stale for every profile.
+
+**Providers.** Astra runs through `codex exec` on the machine's `codex login`
+session (`~/.local/bin/codex`), not `OPENAI_API_KEY`. Opus 5.5 uses
+Anthropic structured outputs (`output_config.format`), because it rejects the
+forced tool choice other Anthropic models use. Each result records the
+profile, model, parameters, contract, time taken and token usage under `_run`.
+
+**Adding a model.** Insert an `analysis_profile` row with `enabled = false`,
+contract 3, and a new `cache_tag`; open its gates on a pilot group; switch it on.
+Never edit a profile that has produced results: a different model or effort is
+a new profile.
+
+The worker runs each profile up to its `max_concurrency`, within the overall
+`--workers` limit (eight on the Mini).
 
 ## Key Files
 

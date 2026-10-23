@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PrintPrepResult",
+  "description": "Per-step print content for a decomposed Feldenkrais lesson: position, brief summary and verbatim quotes",
+  "type": "object",
+  "properties": {
+    "steps": {
+      "type": "array",
+      "description": "One entry for every step in the input, in order",
+      "items": {
+        "type": "object",
+        "properties": {
+          "step_number": {
+            "type": "integer",
+            "description": "Step number from the decomposition, unchanged"
+          },
+          "position": {
+            "type": "string",
+            "description": "Short body configuration, e.g. 'On back; feet standing'; empty if unknown"
+          },
+          "brief_summary": {
+            "type": "string",
+            "description": "One or two actionable sentences: movement, side, direction, coordination, observation"
+          },
+          "notable_quotes": {
+            "type": "array",
+            "description": "Zero to seven exact excerpts from this step's own segments",
+            "items": {
+              "type": "object",
+              "properties": {
+                "segment_id": {
+                  "type": "integer",
+                  "description": "A segment assigned to this step"
+                },
+                "text": {
+                  "type": "string",
+                  "description": "Exact contiguous substring of that segment, copied verbatim"
+                }
+              },
+              "required": ["segment_id", "text"]
+            }
+          }
+        },
+        "required": ["step_number", "position", "brief_summary", "notable_quotes"]
+      }
+    },
+    "editorial_notes": {
+      "type": "array",
+      "description": "Material ambiguities a reader should see; usually empty",
+      "items": {"type": "string"}
+    }
+  },
+  "required": ["steps", "editorial_notes"]
+}

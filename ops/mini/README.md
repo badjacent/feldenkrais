@@ -17,6 +17,48 @@ The queues remain domain-specific. A future operational status projection may
 join their run IDs and heartbeats, but it must not replace their authoritative
 tables.
 
+## The analysis worker sleeps when there is nothing to do
+
+At the end of each pass the worker switches off every model profile that has
+nothing left to run; it never switches one on. When no profile is left on it
+removes `~/ops/analysis-active`, and from then on its scheduled runs print
+`{"status":"asleep"}` and exit without touching the database, so Neon can
+suspend. To start analysis again, switch a profile on in `/analysis` on the Mini
+(or re-run a step there): that recreates the file and the next pass, within five
+minutes, picks the work up. By hand: `touch ~/ops/analysis-active` after
+switching the profile on.
+
+## Jobs are system launch daemons
+
+Since 2026-10-21 every `com.feldenkrais.*` job is a system launch daemon in
+`/Library/LaunchDaemons/` that runs as `hermes`, so the Mini's servers and
+workers start at boot with nobody logged in. (As launch agents they started only
+inside a hermes login session, so after the 2026-10-19 reboot nothing ran for two
+days.) `install-launch-daemons.sh` did the conversion; the old agent plists are
+in `~hermes/Library/LaunchAgents/retired-to-daemons/`.
+
+The plist files under `ops/mini/launchd/` and the agent commands in the sections
+below describe each job's program and schedule. On the Mini, install a new or
+changed job by placing its agent plist in `~/Library/LaunchAgents/` and running
+`sudo /Users/hermes/ops/install-launch-daemons.sh`; do not `launchctl bootstrap
+gui/...` it there.
+
+As hermes, without sudo:
+
+- Status: `launchctl print system/com.feldenkrais.<job> | head -20`
+- Restart a server (`analyzer-web`, `ff-capture`, `operations-dashboard`): stop
+  its process, `kill <pid>`, and launchd starts it again.
+- An interval job cannot be started early without sudo
+  (`sudo launchctl kickstart system/com.feldenkrais.<job>`); otherwise it runs on
+  its schedule.
+
+Tailscale is the `tailscaled` system daemon (Homebrew formula), installed the
+same day, so the tailnet is also up at boot without a login; the Tailscale app it
+replaced ran only inside `localmini`'s session. The servers bind to the tailnet
+address and exit if it is not up yet; launchd retries them, so they start once
+Tailscale connects. If the address changes while they run, restart them (kill
+their processes) so they bind to the new one.
+
 ## Atlas lesson intake
 
 The Atlas catalog feeds newly discovered free media into durable private ingest
@@ -74,6 +116,93 @@ first projection manually and inspect its commit before enabling it:
 ops/mini/run-atlas-projection-worker.sh
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.feldenkrais.atlas-projection.plist
 ```
+
+## Three tiers
+
+| Tier | Where | What runs it | Reload |
+|---|---|---|---|
+| development | this laptop | `ops/dev/run-analyzer.sh` | autoreload on edits |
+| candidate | the Mini, tailnet only | `ops/promote-candidate.sh` | promoted revisions only |
+| production | Lambda, `aionyourside.net` | `terraform apply` | deploys only |
+
+The capture server for the Chrome extension has no production tier. The
+candidate is its only deployment, and the extension points at it.
+
+Candidate addresses, reachable from the owner's devices and from nothing on the
+LAN or the internet:
+
+| Service | Address | launchd job |
+|---|---|---|
+| Analyzer web app | `http://locals-mac-mini.tailed6642.ts.net:8000` | `com.feldenkrais.analyzer-web` |
+| Chrome capture server | `http://locals-mac-mini.tailed6642.ts.net:7890` | `com.feldenkrais.ff-capture` |
+
+### Layout on the Mini
+
+The candidate has its own checkout at `/Users/hermes/src/feldenkrais-candidate`,
+separate from the worker checkout, so a promotion cannot disturb transcription,
+analysis, or the crawler. It carries its own `.venv-web` (the worker environment
+has no web framework) and symlinks the worker `.env` rather than holding a second
+copy of the secrets.
+
+The runner scripts live at `/Users/hermes/ops/`, outside the deployed trees,
+so that promoting or rolling back a tree can never strand the launchd jobs.
+`ops/promote-candidate.sh` reinstalls them from whatever revision it promotes.
+
+### The analysis worker
+
+Analysis runs in one dedicated launchd job, `com.feldenkrais.analysis`, from its
+own checkout at `/Users/hermes/src/feldenkrais-analysis` with its own
+`.venv-mini`. It is promoted with the same build step, `--target analysis`. The
+web app never runs analysis.
+
+Each pass drains what is runnable and exits; launchd starts the next pass up to
+five minutes later. Work is claimed as (document, model profile, step): a step
+runs when its group's gate is open for that profile and the profile is switched
+on at `/analysis`. Each profile is held to its own `max_concurrency`, within
+eight workers overall. See `docs/analysis.md` for profiles.
+
+`ANALYSIS_ENABLED=1` in the job's environment is the machine-level kill switch;
+the per-model switches are the everyday control.
+
+### Promoting
+
+From the laptop, on committed and pushed code:
+
+```sh
+ops/promote-candidate.sh                      # promote HEAD to the web app
+ops/promote-candidate.sh --target analysis    # promote HEAD to the analysis worker
+ops/promote-candidate.sh --rev <ref>          # promote a specific revision
+ops/promote-candidate.sh --status             # what is deployed right now
+ops/promote-candidate.sh --rollback           # return to the previous revision
+```
+
+`--target analysis` does not interrupt a pass already running: it finishes on
+its own code and the next pass uses the new revision. Add `--restart` to stop
+it instead; its in-flight steps become runnable again.
+
+The build step refuses to ship uncommitted work, refuses a revision that is not
+on a remote, checks that the private submodule pointer is pushed too, and runs
+the unit suite. Pass `--allow-test-failures` to proceed anyway, which the release
+record then shows.
+
+On the Mini it checks out the revision, updates the submodule to the pointer that
+revision carries, installs dependencies, and imports both applications in the
+deployed environment *before* restarting anything. A failure at any of those
+points restores the previous revision, and the running services never stop,
+because they hold their code in memory. After the restart it polls both health
+endpoints, and writes `var/candidate-release.json` recording the revision, the
+one it replaced, and the test result.
+
+Off-Lambda the web app applies no login gate and keeps its pipeline controls
+enabled, which is why the bind address is the tailnet interface and never
+`0.0.0.0`. Under Lambda the analysis pipeline answers 404: it is visible only
+on the laptop and the Mini.
+
+### The Chrome extension
+
+Loaded unpacked on the laptop, pointed at the candidate through `SERVER_URL` in
+`background.js` and `popup.js`, with matching entries in the manifest's
+`host_permissions`. Changing either file needs a reload at `chrome://extensions`.
 
 ## Install without enabling
 

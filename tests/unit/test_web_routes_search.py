@@ -8,6 +8,7 @@ Search routes require _db, embeddings (LLM calls), and _auth_mod.
 
 import pytest
 from unittest.mock import patch, MagicMock
+from tests.unit.route_helpers import app_route_map
 
 
 class TestSearchAPI:
@@ -17,7 +18,7 @@ class TestSearchAPI:
         The route requires _db for queries and calls get_embeddings for semantic
         search. Full testing requires mocking both."""
         from kb.web import app
-        routes = {r.path: r for r in app.routes if hasattr(r, "path")}
+        routes = app_route_map(app)
         assert "/api/search" in routes
 
     def test_search_empty_query(self):
@@ -54,5 +55,5 @@ class TestSearchPage:
         The landing page route (GET /) checks _is_search_site and renders
         accordingly. The search UI is part of the main landing page template."""
         from kb.web import app
-        routes = {r.path: r for r in app.routes if hasattr(r, "path")}
+        routes = app_route_map(app)
         assert "/" in routes
