@@ -1,10 +1,12 @@
 """Search routes: search API, lesson page, lesson chat, lesson text/concepts."""
 
 import asyncio
+import html
 import json
+import re
 
 from fastapi import APIRouter, Form, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 import web as _web
 from cache_helpers import load_profile_result
@@ -159,21 +161,95 @@ async def conversations_page(request: Request):
     ))
 
 
+PRINT_NEEDS = ["decompose", "spatial_v3", "print_prep"]
+
+
+def _print_model(document_id: str, profile: str | None) -> dict:
+    """One profile's cached print model and what the print views need around it.
+
+    Read-only: never starts an analysis. Raises ValueError for an unknown profile.
+    """
+    doc = _web._db.get_document(document_id) or {}
+    text = (_web._db.get_document_transcription(document_id) or "").strip()
+    if profile:
+        candidates = [_web._db.resolve_analysis_profile(profile)]
+    else:
+        # Without ?profile=, print what the lesson page opens on, or else the
+        # first profile that has prepared the lesson.
+        opens_on = _web._db.resolve_analysis_profile(_web._db.default_profile_for_document(document_id))
+        candidates = [opens_on] + [p for p in _web._db.get_analysis_profiles() if p["key"] != opens_on["key"]]
+    analysis_profile, model = candidates[0], None
+    for candidate in candidates if text else []:
+        model = load_profile_result(text, ":print_prep_v1", candidate)[1]
+        if model:
+            analysis_profile = candidate
+            break
+    state = _web._db.get_document_state(document_id, "print_prep", analysis_profile["key"]) if model else None
+    # A requested profile without a model: name the ones that have one.
+    others = [] if model or not text else [
+        p["key"] for p in _web._db.get_analysis_profiles()
+        if p["key"] != analysis_profile["key"] and load_profile_result(text, ":print_prep_v1", p)[1]]
+    meta = [str(doc[field]) for field in ("presenter", "lesson_date") if doc.get(field)]
+    return {"doc": doc, "profile": analysis_profile, "text": text, "model": model,
+            "stale": bool(state and state.get("stale")), "meta": meta, "others": others}
+
+
 @router.get("/lesson/{document_id}/print", response_class=HTMLResponse)
 async def lesson_print_page(request: Request, document_id: str):
-    """Print-friendly numbered step list for a lesson."""
+    """Lesson Step Table (print_prep) for one profile, printable offline."""
     _web._set_source_access(request)
-    if _web._db and not _web._db.is_document_accessible(document_id):
+    if not _web._db:
+        return HTMLResponse("<h1>No database connection</h1>", status_code=500)
+    if not _web._db.is_document_accessible(document_id):
         return HTMLResponse("<h1>Not Found</h1>", status_code=404)
-    title = None
-    profile = request.query_params.get("profile")
-    if _web._db:
-        doc = _web._db.get_document(document_id)
-        if doc:
-            title = doc.get("title")
-        # Without ?profile=, print what the lesson page opens on.
-        profile = profile or _web._db.default_profile_for_document(document_id)
-    return HTMLResponse(_web.build_lesson_print_html(document_id, title=title, profile=profile))
+    try:
+        prepared = _print_model(document_id, request.query_params.get("profile"))
+    except ValueError as e:
+        return HTMLResponse(f"<p>{html.escape(str(e))}</p>", status_code=400)
+    return HTMLResponse(_web.build_lesson_print_html(
+        document_id, title=prepared["doc"].get("title"), model=prepared["model"],
+        profile=prepared["profile"]["key"], meta=prepared["meta"], stale=prepared["stale"],
+        missing=PRINT_NEEDS, other_profiles=prepared["others"],
+        analysis_url=f"/analysis?profile={prepared['profile']['key']}" if _web.PIPELINE_LOCAL_CONTROLS else None))
+
+
+@router.get("/lesson/{document_id}/print.docx")
+async def lesson_print_docx(request: Request, document_id: str):
+    """Annotated Step Transcript (DOCX) for one profile, built on request."""
+    _web._set_source_access(request)
+    if not _web._db:
+        return JSONResponse({"error": "No database connection"}, status_code=500)
+    if not _web._db.is_document_accessible(document_id):
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    try:
+        prepared = _print_model(document_id, request.query_params.get("profile"))
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    profile_key = prepared["profile"]["key"]
+    if not prepared["model"]:
+        return JSONResponse({"error": f"No print model for this lesson under {profile_key}",
+                             "needs": PRINT_NEEDS}, status_code=404)
+    pass_a = load_profile_result(prepared["text"], ":decompose_v3", prepared["profile"])[1]
+    if not pass_a:
+        return JSONResponse({"error": f"No decomposition for this lesson under {profile_key}",
+                             "needs": ["decompose"]}, status_code=404)
+    try:
+        # Imported here: python-docx is installed on the Mini, not in the web Lambda layer.
+        from print_docx import IncompleteTranscriptError, build_annotated_transcript
+    except ImportError:
+        return JSONResponse({"error": "Word export is not available on this deployment"},
+                            status_code=503)
+    title = prepared["doc"].get("title") or "Lesson"
+    try:
+        data = build_annotated_transcript(prepared["model"], pass_a, title,
+                                          source_label=" · ".join(prepared["meta"]) or None)
+    except IncompleteTranscriptError as e:
+        return JSONResponse({"error": f"The decomposition does not cover the transcript: {e}"},
+                            status_code=409)
+    slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:80] or "lesson"
+    return Response(content=data, headers={
+        "Content-Disposition": f'attachment; filename="{slug}-annotated-step-transcript.docx"'},
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 
 
 @router.get("/lesson/{document_id}", response_class=HTMLResponse)

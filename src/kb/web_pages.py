@@ -735,7 +735,7 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
 
     <!-- Steps/Cards tab (default) -->
     <div id="tab-steps">
-        <div class="tab-intro">Follow along with the lesson one movement at a time. Each card shows what's happening biomechanically and linguistically, synced with the transcript and audio. <a href="/lesson/{esc_id}/print" target="_blank" style="margin-left:8px;" onclick="if (ANALYSIS_PROFILE) this.href = '/lesson/{esc_id}/print?profile=' + encodeURIComponent(ANALYSIS_PROFILE)">Print sequence &rarr;</a></div>
+        <div class="tab-intro">Follow along with the lesson one movement at a time. Each card shows what's happening biomechanically and linguistically, synced with the transcript and audio. <a href="/lesson/{esc_id}/print" target="_blank" style="margin-left:8px;" onclick="if (ANALYSIS_PROFILE) this.href = '/lesson/{esc_id}/print?profile=' + encodeURIComponent(ANALYSIS_PROFILE)">Lesson Step Table &rarr;</a> <a href="/lesson/{esc_id}/print.docx" style="margin-left:8px;" onclick="if (ANALYSIS_PROFILE) this.href = '/lesson/{esc_id}/print.docx?profile=' + encodeURIComponent(ANALYSIS_PROFILE)">Annotated Step Transcript (Word)</a></div>
         <div class="card" id="card">
             <div class="card-placeholder" id="card-placeholder">
                 <span class="spinner-inline"></span> Loading analysis...
@@ -2291,170 +2291,114 @@ async function sendChat() {{
 
 
 def build_lesson_print_html(document_id: str, title: str | None = None,
-                            profile: str | None = None) -> str:
-    """Print-friendly view: numbered list of step instructions, grouped.
+                            model: dict | None = None, profile: str | None = None,
+                            meta: list[str] | None = None, stale: bool = False,
+                            missing: list[str] | None = None,
+                            analysis_url: str | None = None,
+                            other_profiles: list[str] | None = None) -> str:
+    """Lesson Step Table: one profile's print model as a printable page.
 
-    Client-side fetches /api/lesson/{id}/combined for one model profile's
-    analysis and renders one bullet per step. No header/nav/auth bar — just the
-    steps. Designed for browser print.
+    docs/LESSON_PRINT_FORMATS_SPEC.md, Output A. Rendered on the server from the
+    cached print_prep result, so the page needs no API calls once open and
+    prints or saves offline. Without a prepared model it says which analysis is
+    missing; it never starts one.
     """
-    esc_id = html_mod.escape(document_id)
-    esc_title = html_mod.escape(title or "Lesson")
+    esc = html_mod.escape
+    esc_id = esc(document_id)
+    esc_title = esc(title or "Lesson")
+    query = f"?profile={esc(profile)}" if profile else ""
+    can_docx = bool(model) and not (model.get("validation") or {}).get("coverage_errors")
+    toolbar = ['<button onclick="window.print()">Print / Save as PDF</button>']
+    if can_docx:
+        toolbar.append(f'<a href="/lesson/{esc_id}/print.docx{query}">Download Word</a>')
+    toolbar.append(f'<a href="/lesson/{esc_id}">Back to lesson</a>')
+
+    notices = []
+    if stale:
+        notices.append('<p class="notice">Out of date: the lesson\'s analysis changed after this '
+                       'guide was prepared. It is shown as it was prepared.</p>')
+    if model and not can_docx:
+        notices.append('<p class="notice">The annotated transcript is not available: the lesson\'s '
+                       'decomposition does not cover the whole transcript exactly once.</p>')
+
+    if not model:
+        needed = ", ".join(f"<code>{esc(step)}</code>" for step in (missing or ["print_prep"]))
+        link = (f' Run them from <a href="{esc(analysis_url)}">the analysis page</a>.'
+                if analysis_url else "")
+        body = (f'<p class="notice">This lesson has no step table yet'
+                f'{" for the " + esc(profile) + " analysis" if profile else ""}. '
+                f'It needs these analysis steps: {needed}.{link}</p>')
+        if other_profiles:
+            body += ('<p>Prepared under: ' + ", ".join(
+                f'<a href="/lesson/{esc_id}/print?profile={esc(key)}">{esc(key)}</a>'
+                for key in other_profiles) + '</p>')
+    else:
+        steps = {step["step_number"]: step for step in model.get("steps", [])}
+        rows = []
+        for group in model.get("groups", []):
+            label = group.get("label") or ""
+            heading = f"Group {group.get('group_number')}" + (f": {label}" if label else "")
+            rows.append(f'<tr class="group"><th colspan="3">{esc(heading)}</th></tr>')
+            for number in group.get("step_numbers", []):
+                step = steps.get(number)
+                if not step:
+                    continue
+                rows.append(f'<tr><td class="num">{esc(str(number))}</td>'
+                            f'<td>{esc(step.get("position", ""))}</td>'
+                            f'<td>{esc(step.get("brief_summary", ""))}</td></tr>')
+        body = ('<table><thead><tr><th class="num">Step</th><th class="pos">Position</th>'
+                f'<th>Instructions</th></tr></thead><tbody>{"".join(rows)}</tbody></table>')
+        notes = model.get("editorial_notes") or []
+        if notes:
+            body += ('<div class="notes"><strong>Notes</strong><ul>'
+                     + "".join(f"<li>{esc(note)}</li>" for note in notes) + "</ul></div>")
+
+    subtitle = " · ".join(esc(m) for m in ["Lesson step table — a concise guide", *(meta or [])])
     return f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
-    <title>{esc_title} — Print</title>
+    <title>{esc_title} — Step Table</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-               max-width: 760px; margin: 0 auto; padding: 32px 28px;
-               color: #222; line-height: 1.55; font-size: 13.5pt; }}
+        @page {{ size: letter portrait; margin: 0.6in; }}
+        body {{ font-family: Georgia, 'Times New Roman', serif; max-width: 820px;
+               margin: 0 auto; padding: 32px 24px; color: #222; line-height: 1.45;
+               font-size: 12pt; }}
         h1 {{ font-size: 1.5em; margin: 0 0 4px; }}
-        .subtitle {{ color: #888; font-size: 0.85em; margin-bottom: 24px; }}
-        h2 {{ font-size: 1.1em; margin: 22px 0 8px; color: #555;
-              border-bottom: 1px solid #e0e0e0; padding-bottom: 4px; }}
-        h2 .pos {{ color: #999; font-weight: 400; font-size: 0.85em; margin-left: 8px; }}
-        ol.steps {{ list-style: none; padding-left: 0; counter-reset: step; margin: 0; }}
-        ol.steps li {{ position: relative; padding: 4px 0 4px 38px; margin-bottom: 4px;
-                       break-inside: avoid; page-break-inside: avoid; }}
-        ol.steps li::before {{ counter-increment: step; content: counter(step) ".";
-                                position: absolute; left: 0; top: 4px;
-                                color: #999; font-variant-numeric: tabular-nums;
-                                width: 30px; text-align: right; }}
-        ol.steps .pos {{ display: inline; color: #aaa; font-style: italic;
-                          font-size: 0.85em; margin-right: 6px; }}
-        .toolbar {{ position: fixed; top: 12px; right: 12px;
-                    background: #fff; padding: 6px 10px; border: 1px solid #ddd;
-                    border-radius: 6px; font-size: 0.85em; }}
-        .toolbar a, .toolbar button {{ color: #007bff; text-decoration: none;
-                                       background: none; border: none; cursor: pointer;
-                                       padding: 0 4px; font-size: 1em; }}
+        .subtitle {{ color: #777; font-size: 0.85em; margin-bottom: 20px; }}
+        table {{ width: 100%; border-collapse: collapse; }}
+        thead {{ display: table-header-group; }}
+        th, td {{ text-align: left; vertical-align: top; padding: 6px 8px;
+                  border-bottom: 1px solid #ddd; }}
+        thead th {{ border-bottom: 2px solid #999; font-size: 0.9em; }}
+        th.num, td.num {{ width: 3em; text-align: right; color: #666;
+                          font-variant-numeric: tabular-nums; }}
+        th.pos {{ width: 30%; }}
+        tr {{ break-inside: avoid; page-break-inside: avoid; }}
+        tr.group th {{ background: #f3f3f3; padding-top: 10px; font-size: 0.95em;
+                       break-after: avoid; page-break-after: avoid; }}
+        .notes {{ margin-top: 18px; font-size: 0.9em; color: #444; }}
+        .notice {{ background: #fff8e1; border: 1px solid #f0d58c; border-radius: 6px;
+                   padding: 10px 14px; font-size: 0.95em; }}
+        .toolbar {{ position: fixed; top: 12px; right: 12px; background: #fff;
+                    padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px;
+                    font: 0.85em -apple-system, BlinkMacSystemFont, sans-serif; }}
+        .toolbar a, .toolbar button {{ color: #007bff; text-decoration: none; background: none;
+                                       border: none; cursor: pointer; padding: 0 6px; font: inherit; }}
         .toolbar a:hover, .toolbar button:hover {{ text-decoration: underline; }}
         @media print {{
             .toolbar {{ display: none; }}
-            body {{ padding: 16px; font-size: 11pt; }}
-            h1 {{ font-size: 1.3em; }}
-            h2 {{ font-size: 1.0em; margin-top: 14px; }}
+            body {{ padding: 0; max-width: none; font-size: 10.5pt; }}
         }}
-        #status {{ color: #888; padding: 20px 0; }}
     </style>
 </head>
 <body>
-    <div class="toolbar">
-        <button onclick="window.print()">Print</button>
-        &middot; <a href="/lesson/{esc_id}">Back to lesson</a>
-    </div>
-    <h1 id="lesson-title">{esc_title}</h1>
-    <div class="subtitle" id="subtitle"></div>
-    <div id="content"><div id="status">Loading…</div></div>
-
-<script>
-function escHtml(s) {{
-    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}}
-
-(async function init() {{
-    const docId = {json.dumps(document_id)};
-    try {{
-        const info = await fetch('/api/lesson-info/' + encodeURIComponent(docId)).then(r => r.json());
-        if (info.title) {{
-            document.title = info.title + ' — Print';
-            document.getElementById('lesson-title').textContent = info.title;
-        }}
-
-        const profile = {json.dumps(profile)};
-        const resp = await fetch('/api/lesson/' + encodeURIComponent(docId) + '/combined'
-                                 + (profile ? '?profile=' + encodeURIComponent(profile) : ''));
-        const data = await resp.json();
-        console.log('print: data', {{ok: resp.ok, status: resp.status, err: data.error,
-                                     steps: (data.steps || []).length,
-                                     groups: (data.groups || []).length}});
-        if (data.error) {{
-            document.getElementById('content').innerHTML =
-                '<div style="color:#c62828;padding:20px;">' + escHtml(data.error) + '</div>';
-            return;
-        }}
-        const steps = data.steps || [];
-        const groups = data.groups || [];
-
-        document.getElementById('subtitle').textContent =
-            steps.length + ' steps across ' + groups.length + ' group' +
-            (groups.length === 1 ? '' : 's');
-
-        if (!steps.length) {{
-            document.getElementById('content').innerHTML =
-                '<div style="color:#888;padding:20px;">No steps found in the decomposition for this lesson.</div>';
-            return;
-        }}
-
-        // Map step_number -> step
-        const stepByNum = {{}};
-        for (const s of steps) stepByNum[s.step_number] = s;
-
-        // Track which steps have been rendered so we can fall back to ungrouped
-        // listing if group.steps[] doesn't cover everything.
-        const rendered = new Set();
-
-        const parts = [];
-        if (groups.length > 0) {{
-            let openOl = false;
-            for (const g of groups) {{
-                const stepNums = g.steps || [];
-                if (!stepNums.length) continue;
-                if (openOl) parts.push('</ol>');
-                const pos = g.starting_position
-                    ? '<span class="pos">(' + escHtml(g.starting_position) + ')</span>'
-                    : '';
-                parts.push('<h2>Group ' + escHtml(String(g.group_number)) + ': ' +
-                           escHtml(g.label || '') + pos + '</h2>');
-                const first = stepNums[0];
-                parts.push('<ol class="steps" start="' + first + '" style="counter-reset: step ' + (first - 1) + ';">');
-                openOl = true;
-                for (const n of stepNums) {{
-                    const s = stepByNum[n];
-                    if (!s) continue;
-                    rendered.add(n);
-                    const sp = s.starting_position && s.starting_position !== (g.starting_position || '')
-                        ? '<span class="pos">[' + escHtml(s.starting_position) + ']</span> '
-                        : '';
-                    parts.push('<li>' + sp + escHtml(s.instruction || '') + '</li>');
-                }}
-            }}
-            if (openOl) parts.push('</ol>');
-        }}
-
-        // Catch any steps that weren't covered by the group structure (or render
-        // all steps if there were no groups at all).
-        const orphans = steps.filter(s => !rendered.has(s.step_number));
-        if (orphans.length) {{
-            if (groups.length > 0) parts.push('<h2>Other steps</h2>');
-            const first = orphans[0].step_number || 1;
-            parts.push('<ol class="steps" start="' + first + '" style="counter-reset: step ' + (first - 1) + ';">');
-            for (const s of orphans) {{
-                const sp = s.starting_position
-                    ? '<span class="pos">[' + escHtml(s.starting_position) + ']</span> '
-                    : '';
-                parts.push('<li>' + sp + escHtml(s.instruction || '') + '</li>');
-            }}
-            parts.push('</ol>');
-        }}
-
-        if (!parts.length) {{
-            document.getElementById('content').innerHTML =
-                '<div style="color:#888;padding:20px;">Rendered 0 steps. data.steps=' +
-                steps.length + ' data.groups=' + groups.length + '. Check console.</div>';
-            return;
-        }}
-        document.getElementById('content').innerHTML = parts.join('');
-    }} catch (e) {{
-        console.error('print: failed', e);
-        document.getElementById('content').innerHTML =
-            '<div style="color:#c62828;padding:20px;">Failed: ' + escHtml(e.message || String(e)) + '<br><small>(see browser console for details)</small></div>';
-    }}
-}})();
-</script>
+    <div class="toolbar">{" &middot; ".join(toolbar)}</div>
+    <h1>{esc_title}</h1>
+    <div class="subtitle">{subtitle}</div>
+    {"".join(notices)}
+    {body}
 </body>
 </html>"""
 
