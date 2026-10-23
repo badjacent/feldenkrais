@@ -225,8 +225,13 @@ def _move(storage: Storage, key: str, dest_key: str) -> None:
 
 
 def _main_keys(storage: Storage, prefix: str) -> list[str]:
-    """Main files under a prefix (sidecars are found from their main file)."""
-    return [obj["key"] for obj in storage.list_objects(prefix) if not obj["key"].endswith(".json")]
+    """Main files under a prefix (sidecars are found from their main file).
+
+    Folder placeholders (keys ending in "/", such as the console's empty
+    ``staging/`` object) are not files.
+    """
+    return [obj["key"] for obj in storage.list_objects(prefix)
+            if not obj["key"].endswith((".json", "/"))]
 
 
 def retry_from_errors(storage: Storage, db: Database) -> list[dict]:
