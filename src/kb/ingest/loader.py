@@ -215,11 +215,27 @@ def process_file(
             return {"status": "error", "reason": str(e)}
 
 
+def _move(storage: Storage, key: str, dest_key: str) -> None:
+    """Move a main file and its sidecar (if any) to another prefix."""
+    storage.copy_object(key, dest_key)
+    storage.delete_object(key)
+    if storage.object_exists(f"{key}.json"):
+        storage.copy_object(f"{key}.json", f"{dest_key}.json")
+        storage.delete_object(f"{key}.json")
+
+
+def _main_keys(storage: Storage, prefix: str) -> list[str]:
+    """Main files under a prefix (sidecars are found from their main file)."""
+    return [obj["key"] for obj in storage.list_objects(prefix) if not obj["key"].endswith(".json")]
+
+
 def retry_from_errors(storage: Storage, db: Database) -> list[dict]:
     """Move eligible files from errors/ back to staging/ for retry.
 
     Checks each file's load_error count in pipeline_log. If under
-    MAX_LOAD_RETRIES, moves back to staging/. Otherwise logs permanent_failure.
+    MAX_LOAD_RETRIES, moves back to staging/. Otherwise logs permanent_failure
+    and parks the file in failed/, so errors/ empties and an idle run never
+    needs the database.
 
     Returns list of retry/failure results.
     """
@@ -245,6 +261,10 @@ def retry_from_errors(storage: Storage, db: Database) -> list[dict]:
                              detail={"filename": filename, "stage": "loader",
                                      "error_count": error_count})
                 logger.warning(f"Permanent failure for {filename} ({error_count} errors)")
+            try:
+                _move(storage, error_key, error_key.replace("errors/", "failed/", 1))
+            except Exception as e:
+                logger.error(f"Failed to park {error_key} in failed/: {e}")
             results.append({"filename": filename, "status": "permanent_failure"})
             continue
 
@@ -280,6 +300,12 @@ def handler(event, context):
 
     config = Config.from_env()
     storage = Storage(config.bucket)
+
+    # The schedule fires every minute. With nothing to load, stop before
+    # connecting, so the database can suspend between captures.
+    if not _main_keys(storage, "staging/") and not _main_keys(storage, "errors/"):
+        logger.info("Nothing in staging/ or errors/")
+        return {"statusCode": 200, "body": json.dumps({"message": "Nothing to load"})}
 
     # Initialize DB with PostgreSQL connection
     db = Database(config.database_url)
