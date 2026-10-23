@@ -186,10 +186,10 @@ git submodule update --init --force -q
 # Dependencies, runners, import checks and restart differ by target.
 if [[ $TARGET == web ]]; then
   /opt/homebrew/bin/uv pip install -q --python .venv-web/bin/python \
-    -r terraform/lambda_web_requirements.txt uvicorn boto3 requests pyyaml yt-dlp
+    -r terraform/lambda_web_requirements.txt uvicorn boto3 requests pyyaml yt-dlp python-docx
   runners=(run-candidate-analyzer.sh run-candidate-capture.sh)
   checks=(
-    "src/kb|.venv-web/bin/python|import web; assert web.app"
+    "src/kb|.venv-web/bin/python|import web; assert web.app; import print_docx"
     "private/products/ff_capture|.venv-web/bin/python|import server; assert server.main"
   )
 else
