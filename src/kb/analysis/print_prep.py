@@ -48,7 +48,7 @@ def _complete_structure(pass_a: dict) -> dict:
     """Give every step a unique number and a group, without touching the cache.
 
     Decompose sometimes leaves a step out of every group, or numbers two
-    different steps alike. Such a step takes the next free number if needed and
+    different steps alike. Such a step takes the free number after its neighbour if needed and
     joins the group of the step before it; opening steps join the first group.
     Idempotent, so the prompt and the merge see the same structure.
     """
@@ -58,12 +58,18 @@ def _complete_structure(pass_a: dict) -> dict:
         groups = [{"group_number": 1, "label": "", "steps": []}]
 
     seen: set = set()
-    next_number = max((s["step_number"] for s in steps), default=0) + 1
+    taken = {s["step_number"] for s in steps}
+    previous = 0
     for step in steps:
         if step["step_number"] in seen:
-            step["step_number"] = next_number
-            next_number += 1
+            # The number after its neighbour is usually the one it was meant to have.
+            number = previous + 1
+            while number in taken:
+                number = max(taken) + 1
+            step["step_number"] = number
+            taken.add(number)
         seen.add(step["step_number"])
+        previous = step["step_number"]
     for group in groups:
         group["steps"] = [n for n in group["steps"] if n in seen]
 

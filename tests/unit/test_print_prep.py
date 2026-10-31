@@ -164,3 +164,17 @@ def test_a_complete_structure_is_left_alone():
     )
     assert _complete_structure(pass_a) == pass_a
     assert _complete_structure(_complete_structure(pass_a)) == pass_a
+
+
+def test_a_misnumbered_step_takes_the_gap_its_group_still_lists():
+    pass_a = _lesson(
+        [{"step_number": 1, "instruction": "One", "segments": [1]},
+         {"step_number": 2, "instruction": "Two", "segments": [2]},
+         {"step_number": 1, "instruction": "Really three", "segments": [3]},
+         {"step_number": 4, "instruction": "Four", "segments": [4]}],
+        [{"group_number": 1, "label": "A", "steps": [1, 2]},
+         {"group_number": 2, "label": "B", "steps": [3, 4]}],
+    )
+    fixed = _complete_structure(pass_a)
+    assert [s["step_number"] for s in fixed["steps"]] == [1, 2, 3, 4]
+    assert [g["steps"] for g in fixed["groups"]] == [[1, 2], [3, 4]]
