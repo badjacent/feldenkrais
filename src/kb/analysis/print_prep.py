@@ -44,11 +44,56 @@ def _provider_suffix(provider_key: str | None) -> str:
     return f":{provider_key}" if provider_key and provider_key != DEFAULT_LLM else ""
 
 
+def _complete_structure(pass_a: dict) -> dict:
+    """Give every step a unique number and a group, without touching the cache.
+
+    Decompose sometimes leaves a step out of every group, or numbers two
+    different steps alike. Such a step takes the next free number if needed and
+    joins the group of the step before it; opening steps join the first group.
+    Idempotent, so the prompt and the merge see the same structure.
+    """
+    steps = [dict(s) for s in pass_a.get("steps", [])]
+    groups = [{**g, "steps": list(g.get("steps", []))} for g in pass_a.get("groups", [])]
+    if steps and not groups:
+        groups = [{"group_number": 1, "label": "", "steps": []}]
+
+    seen: set = set()
+    next_number = max((s["step_number"] for s in steps), default=0) + 1
+    for step in steps:
+        if step["step_number"] in seen:
+            step["step_number"] = next_number
+            next_number += 1
+        seen.add(step["step_number"])
+    for group in groups:
+        group["steps"] = [n for n in group["steps"] if n in seen]
+
+    placed = {n for g in groups for n in g["steps"]}
+    previous = None
+    opening = 0
+    for step in steps:
+        number = step["step_number"]
+        if number not in placed:
+            if previous is None:
+                groups[0]["steps"].insert(opening, number)
+                opening += 1
+            else:
+                group = next(g for g in groups if previous in g["steps"])
+                group["steps"].insert(group["steps"].index(previous) + 1, number)
+            placed.add(number)
+        previous = number
+    return {**pass_a, "steps": steps, "groups": groups}
+
+
 def _format_input(pass_a: dict, spatial_v3: dict) -> str:
     """Groups and steps with their positions and every assigned segment."""
+    original = [s["step_number"] for s in pass_a.get("steps", [])]
+    # A shared number cannot say which of its steps the spatial entry describes.
+    ambiguous = {n for n in original if original.count(n) > 1}
+    pass_a = _complete_structure(pass_a)
     seg_text = {s["id"]: s.get("text", "") for s in pass_a.get("pass_0", {}).get("segments", [])}
     steps = {s["step_number"]: s for s in pass_a.get("steps", [])}
-    positions = {s.get("step_number"): s for s in spatial_v3.get("steps", [])}
+    positions = {s.get("step_number"): s for s in spatial_v3.get("steps", [])
+                 if s.get("step_number") not in ambiguous}
 
     lines = []
     for group in pass_a.get("groups", []):
@@ -98,6 +143,7 @@ def build_print_model(pass_a: dict, llm_result: dict) -> dict:
     that are not exact pieces of their own step's segments are dropped and
     reported under ``validation``; they never reach the model.
     """
+    pass_a = _complete_structure(pass_a)
     seg_text = {s["id"]: s.get("text", "") for s in pass_a.get("pass_0", {}).get("segments", [])}
     source_steps = pass_a.get("steps", [])
     expected = [s["step_number"] for s in source_steps]
