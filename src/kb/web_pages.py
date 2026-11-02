@@ -1775,6 +1775,70 @@ function navigate(delta) {{
     setTimeout(() => {{ autoAdvance = true; }}, 500);
 }}
 
+// ── Audio URL refresh ──
+// The audio is a presigned S3 URL that expires. Chrome keeps reading an open
+// connection past expiry, but any new Range request (a seek outside the buffer,
+// or a reconnect after a long pause) then gets a 403: the seek never lands, or
+// playback stops at the end of the buffer and looks like the lesson ended.
+// So fetch a fresh URL before seeking or playing on an expired one, and recover
+// from a network error by swapping in a fresh URL at the same position.
+
+let audioUrlExpiresAt = 0;
+let audioRefreshing = null;
+let audioRefreshFailures = 0;
+let audioWantsPlay = false;  // the player reports paused by the time 'error' fires
+
+async function fetchAudioUrl() {{
+    const res = await fetch('/api/audio-url/' + encodeURIComponent(DOCUMENT_ID));
+    const data = await res.json();
+    if (!data.audio_url) return null;
+    audioUrlExpiresAt = data.expires_at || 0;
+    return data.audio_url;
+}}
+
+function audioUrlExpired() {{
+    return audioUrlExpiresAt && Date.now() / 1000 > audioUrlExpiresAt - 120;
+}}
+
+function refreshAudioSrc(resume) {{
+    if (audioRefreshing) return audioRefreshing;
+    if (audioRefreshFailures >= 3) return Promise.resolve();
+    const t = audio.currentTime;
+    audioRefreshing = (async () => {{
+        try {{
+            const url = await fetchAudioUrl();
+            if (!url) {{ audioRefreshFailures++; return; }}
+            audio.src = url;
+            await new Promise(resolve => audio.addEventListener('loadedmetadata', resolve, {{ once: true }}));
+            audio.currentTime = t;
+            if (resume) audio.play().catch(() => {{}});
+        }} catch (e) {{
+            audioRefreshFailures++;
+        }} finally {{
+            audioRefreshing = null;
+        }}
+    }})();
+    return audioRefreshing;
+}}
+
+audio.addEventListener('error', function() {{
+    if (audio.error && audio.error.code === MediaError.MEDIA_ERR_NETWORK) {{
+        audioRefreshFailures++;
+        refreshAudioSrc(audioWantsPlay);
+    }}
+}});
+audio.addEventListener('playing', function() {{ audioRefreshFailures = 0; }});
+audio.addEventListener('play', function() {{
+    audioWantsPlay = true;
+    if (audio.error || audioUrlExpired()) refreshAudioSrc(true);
+}});
+audio.addEventListener('pause', function() {{
+    if (!audio.error && !audioRefreshing) audioWantsPlay = false;
+}});
+audio.addEventListener('seeking', function() {{
+    if (audioUrlExpired()) refreshAudioSrc(!audio.paused || audioWantsPlay);
+}});
+
 // ── Audio sync ──
 
 audio.addEventListener('timeupdate', function() {{
@@ -2233,16 +2297,15 @@ async function sendChat() {{
 
         // 2. Load audio + whisper (parallel) if has_audio
         if (info.has_audio) {{
-            const [audioRes, segRes, wordRes] = await Promise.all([
-                fetch('/api/audio-url/' + encodeURIComponent(DOCUMENT_ID)),
+            const [audioUrl, segRes, wordRes] = await Promise.all([
+                fetchAudioUrl(),
                 fetch('/api/whisper-segments/' + encodeURIComponent(DOCUMENT_ID)),
                 fetch('/api/whisper-words/' + encodeURIComponent(DOCUMENT_ID)),
             ]);
-            const audioData = await audioRes.json();
             const segData = await segRes.json();
             const wordData = await wordRes.json();
-            if (audioData.audio_url) {{
-                audio.src = audioData.audio_url;
+            if (audioUrl) {{
+                audio.src = audioUrl;
                 audioContainer.classList.remove('audio-hidden');
                 audioReady = true;
             }}
