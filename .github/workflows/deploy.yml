@@ -49,6 +49,21 @@ jobs:
       - name: Build web Lambda package
         run: cd terraform && ./build_web_lambda.sh
 
+      # Refuse to deploy a package that cannot cold-start. This imports web.py
+      # with exactly the layer and package about to ship, on the same Python
+      # and platform Lambda uses. A module-level import of anything the layer
+      # lacks (this has taken the site down three times with PyYAML) fails here
+      # instead of in production.
+      - name: Cold-start check
+        run: |
+          set -euo pipefail
+          rm -rf _coldstart && mkdir -p _coldstart/layer _coldstart/pkg
+          unzip -q terraform/lambda_web_deps.zip -d _coldstart/layer
+          unzip -q terraform/lambda_web.zip -d _coldstart/pkg
+          cd _coldstart/pkg
+          PYTHONPATH="$PWD/../layer/python" AWS_LAMBDA_FUNCTION_NAME=cold-start-check \
+            python -c "import web; assert web.app.routes; print('cold start ok:', len(web.app.routes), 'routes')"
+
       - name: Terraform Init
         run: cd terraform && terraform init
 
