@@ -759,7 +759,7 @@ async def lesson_info(document_id: str):
         try:
             from storage import Storage
             storage = Storage(_web.KB_BUCKET)
-            source_url = storage.generate_presigned_url(doc["s3_key"], expiry_seconds=7200)
+            source_url = storage.generate_presigned_url(doc["s3_key"], expiry_seconds=43200)
         except Exception:
             pass
 
@@ -792,7 +792,7 @@ async def api_audio_url(document_id: str):
         return JSONResponse({"error": "Document or audio not found"}, status_code=404)
     from storage import Storage
     storage = Storage(_web.KB_BUCKET)
-    url = storage.generate_presigned_url(doc["s3_key"], expiry_seconds=7200)
+    url = storage.generate_presigned_url(doc["s3_key"], expiry_seconds=43200)
     return JSONResponse({"audio_url": url})
 
 

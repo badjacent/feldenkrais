@@ -1,1 +1,1 @@
-/Users/michaelhollander/github/feldenkrais/private/commands/improve-book.md
+../../private/ops/commands/improve-book.md

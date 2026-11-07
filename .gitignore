@@ -127,3 +127,6 @@ terraform/*.tfvars
 # terraform/.terraform.lock.hcl
 terraform/*.zip
 data/model_eval/
+
+# Scratch and generated output belong in ~/feldenkrais-files (docs/REPO_LAYOUT.md)
+tmp/

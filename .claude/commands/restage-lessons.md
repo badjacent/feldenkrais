@@ -1,1 +1,1 @@
-/Users/michaelhollander/github/feldenkrais/private/commands/restage-lessons.md
+../../private/ops/commands/restage-lessons.md

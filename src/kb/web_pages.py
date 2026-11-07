@@ -1041,6 +1041,69 @@ let activeTab = 'steps';
 const audio = document.getElementById('audio-player');
 const audioContainer = document.getElementById('audio-container');
 
+// ── Audio URL lifetime ──
+// The audio src is a presigned S3 link. If it expires while the page is open,
+// the next unbuffered range request fails and the element resets to 0:00.
+// Refresh the link proactively before play, and recover on error/stall.
+const AUDIO_URL_MAX_AGE_MS = 90 * 60 * 1000;
+let audioUrlIssuedAt = 0;
+let audioLastGoodTime = 0;
+let audioRefreshing = false;
+
+async function refreshAudioUrl(resumeAt, resumePlaying) {{
+    if (audioRefreshing) return;
+    audioRefreshing = true;
+    try {{
+        const res = await fetch('/api/audio-url/' + encodeURIComponent(DOCUMENT_ID));
+        const data = await res.json();
+        if (!data.audio_url) return;
+        audio.src = data.audio_url;
+        audioUrlIssuedAt = Date.now();
+        audio.addEventListener('loadedmetadata', function onMeta() {{
+            audio.removeEventListener('loadedmetadata', onMeta);
+            if (resumeAt > 0) audio.currentTime = resumeAt;
+            if (resumePlaying) audio.play().catch(() => {{}});
+        }});
+        audio.load();
+    }} catch (e) {{
+        console.warn('audio url refresh failed', e);
+    }} finally {{
+        audioRefreshing = false;
+    }}
+}}
+
+function audioUrlStale() {{
+    return audioUrlIssuedAt > 0 && (Date.now() - audioUrlIssuedAt) > AUDIO_URL_MAX_AGE_MS;
+}}
+
+audio.addEventListener('play', function() {{
+    if (audioRefreshing || !audioUrlStale()) return;
+    const t = audio.currentTime || audioLastGoodTime;
+    audio.pause();
+    refreshAudioUrl(t, true);
+}});
+
+audio.addEventListener('seeking', function() {{
+    if (audioRefreshing || !audioUrlStale()) return;
+    const t = audio.currentTime;
+    const playing = !audio.paused;
+    audio.pause();
+    refreshAudioUrl(t, playing);
+}});
+
+audio.addEventListener('error', function() {{
+    if (!audioReady || audioRefreshing) return;
+    // A link issued moments ago that still fails is not an expiry; don't loop.
+    if (Date.now() - audioUrlIssuedAt < 30000) return;
+    refreshAudioUrl(audioLastGoodTime, false);
+}});
+
+audio.addEventListener('stalled', function() {{
+    if (!audioReady || audioRefreshing || !audioUrlStale()) return;
+    const playing = !audio.paused;
+    refreshAudioUrl(audio.currentTime || audioLastGoodTime, playing);
+}});
+
 // ── Tab switching ──
 
 const TAB_ORDER = ['steps', 'condensed', 'somatic', 'language', 'pipeline', 'transcript', 'chat', 'rawio'];
@@ -1779,6 +1842,7 @@ function navigate(delta) {{
 
 audio.addEventListener('timeupdate', function() {{
     const t = audio.currentTime;
+    if (t > 0) audioLastGoodTime = t;
     updateSegmentForTime(t);
     if (analysisData && autoAdvance) {{
         const stepIdx = findStepForTime(t);
@@ -2243,6 +2307,7 @@ async function sendChat() {{
             const wordData = await wordRes.json();
             if (audioData.audio_url) {{
                 audio.src = audioData.audio_url;
+                audioUrlIssuedAt = Date.now();
                 audioContainer.classList.remove('audio-hidden');
                 audioReady = true;
             }}
