@@ -3,6 +3,7 @@
 import html as html_mod
 import json
 import logging
+import time
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
@@ -759,7 +760,7 @@ async def lesson_info(document_id: str):
         try:
             from storage import Storage
             storage = Storage(_web.KB_BUCKET)
-            source_url = storage.generate_presigned_url(doc["s3_key"], expiry_seconds=43200)
+            source_url = storage.generate_presigned_url(doc["s3_key"], expiry_seconds=7200)
         except Exception:
             pass
 
@@ -792,8 +793,11 @@ async def api_audio_url(document_id: str):
         return JSONResponse({"error": "Document or audio not found"}, status_code=404)
     from storage import Storage
     storage = Storage(_web.KB_BUCKET)
-    url = storage.generate_presigned_url(doc["s3_key"], expiry_seconds=43200)
-    return JSONResponse({"audio_url": url})
+    expiry = 7200
+    url = storage.generate_presigned_url(doc["s3_key"], expiry_seconds=expiry)
+    # The lesson page refreshes the URL once this passes; a seek or reconnect
+    # on an expired URL gets a 403 and the player stalls.
+    return JSONResponse({"audio_url": url, "expires_at": int(time.time()) + expiry})
 
 
 @router.get("/api/whisper-segments/{document_id}")
