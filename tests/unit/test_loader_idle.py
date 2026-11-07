@@ -33,7 +33,7 @@ def _run(storage):
 
 def test_an_idle_run_never_connects_to_the_database():
     # Sidecars left behind without their main file do not count as work.
-    result, database = _run(_Storage({"staging/old.mp3.json", "failed/x.mp3"}))
+    result, database = _run(_Storage({"staging/", "staging/old.mp3.json", "failed/x.mp3"}))
     assert result["statusCode"] == 200
     assert "Nothing to load" in result["body"]
     database.assert_not_called()
