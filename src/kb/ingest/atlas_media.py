@@ -21,6 +21,7 @@ from urllib.parse import urljoin, urlsplit
 
 from config import Config
 from database import Database
+from media_identity import media_identity
 from storage import Storage
 
 logger = logging.getLogger("atlas_media")
@@ -174,10 +175,27 @@ def _finish(db: Database, item_id: str, status: str, error: str | None = None) -
         )
 
 
+def _existing_document(db: Database, url: str) -> str | None:
+    """The id of a document already made from the same media file, if any."""
+    identity = media_identity(url)
+    prefix = identity.split("?", 1)[0].replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    with db.get_cursor(commit=False) as cursor:
+        cursor.execute("SELECT id, source_url FROM document WHERE source_url LIKE %s", (prefix + "%",))
+        for row in cursor.fetchall():
+            if media_identity(row["source_url"]) == identity:
+                return str(row["id"])
+    return None
+
+
 def process(db: Database, storage: Storage, item: dict) -> dict:
     started = time.monotonic()
     if _is_collection_url(item["url"]):
         reason = "collection URL is not a single lesson recording"
+        _finish(db, str(item["id"]), "ineligible", reason)
+        return {"id": str(item["id"]), "url": item["url"], "status": "ineligible",
+                "reason": reason, "elapsed_seconds": round(time.monotonic() - started, 1)}
+    if existing := _existing_document(db, item["url"]):
+        reason = f"already ingested as document {existing}"
         _finish(db, str(item["id"]), "ineligible", reason)
         return {"id": str(item["id"]), "url": item["url"], "status": "ineligible",
                 "reason": reason, "elapsed_seconds": round(time.monotonic() - started, 1)}

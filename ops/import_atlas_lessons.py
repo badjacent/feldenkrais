@@ -15,6 +15,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from kb.database import Database
+from kb.media_identity import media_identity
 
 
 def youtube_id(url: str) -> str | None:
@@ -48,7 +49,11 @@ def eligible_urls(catalog: list[dict]) -> dict[str, str]:
 
 
 def eligible_media(catalog: list[dict]) -> dict[str, dict]:
-    """Return non-YouTube, free, on-demand media suitable for local intake."""
+    """Return non-YouTube, free, on-demand media suitable for local intake.
+
+    Keyed by media identity, so a file the catalog lists under several signed
+    URLs is one entry.
+    """
     result = {}
     supported_kinds = {"audio_lesson", "podcast_episode", "video_lesson"}
     media_suffixes = {".mp3", ".m4a", ".aac", ".ogg", ".opus", ".wav", ".mp4", ".webm"}
@@ -73,18 +78,23 @@ def eligible_media(catalog: list[dict]) -> dict[str, dict]:
             and platform in {"website", "soundcloud", "podcast"}
             and media_evidence
         ):
-            result.setdefault(url, item)
+            result.setdefault(media_identity(url), item)
     return result
 
 
 def plan_media_intake(db: Database, catalog: list[dict]) -> dict:
+    """Split eligible media into already ingested, already queued and pending.
+
+    Compares media identities, not URLs: a signed URL changes on every crawl,
+    and comparing it whole re-queued the same file daily (Eumov, 2026-10).
+    """
     eligible = eligible_media(catalog)
     with db.get_cursor(commit=False) as cursor:
-        cursor.execute("SELECT source_url FROM document WHERE source_url = ANY(%s)", (list(eligible),))
-        documents = {row["source_url"] for row in cursor.fetchall()}
-        cursor.execute("SELECT url FROM atlas_media_queue WHERE url = ANY(%s)", (list(eligible),))
-        queued = {row["url"] for row in cursor.fetchall()}
-    pending = [eligible[url] for url in sorted(set(eligible) - documents - queued)]
+        cursor.execute("SELECT source_url FROM document WHERE source_url IS NOT NULL")
+        documents = {media_identity(row["source_url"]) for row in cursor.fetchall()}
+        cursor.execute("SELECT url FROM atlas_media_queue")
+        queued = {media_identity(row["url"]) for row in cursor.fetchall()}
+    pending = [eligible[key] for key in sorted(set(eligible) - documents - queued)]
     return {
         "eligible": len(eligible),
         "already_document": len(set(eligible) & documents),
@@ -119,14 +129,18 @@ def queue_media(db: Database, items: list[dict]) -> int:
 
 def reconcile_media_eligibility(db: Database, catalog: list[dict]) -> int:
     """Retain but quarantine pending URLs no longer supported by the intake gate."""
-    eligible = list(eligible_media(catalog))
+    eligible = set(eligible_media(catalog))
     with db.get_cursor() as cursor:
+        cursor.execute("SELECT id, url FROM atlas_media_queue WHERE status='pending'")
+        stale = [row["id"] for row in cursor.fetchall() if media_identity(row["url"]) not in eligible]
+        if not stale:
+            return 0
         cursor.execute(
             """UPDATE atlas_media_queue
                SET status='ineligible', error='catalog media eligibility changed',
                    updated_at=NOW()
-               WHERE status='pending' AND NOT (url = ANY(%s))""",
-            (eligible,),
+               WHERE id = ANY(%s)""",
+            (stale,),
         )
         return cursor.rowcount
 

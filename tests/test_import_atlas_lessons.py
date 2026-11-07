@@ -1,6 +1,7 @@
 from ops.import_atlas_lessons import (
     eligible_media,
     eligible_urls,
+    plan_media_intake,
     plan_intake,
     reconcile_atlas_origins,
     youtube_id,
@@ -126,3 +127,49 @@ def test_reconcile_atlas_origins_marks_previously_queued_eligible_lessons():
 
     assert updated == 1
     assert db.queue[0]["origin"] == "feldenkrais_atlas"
+
+
+EUMOV = "https://ams3.digitaloceanspaces.com/eumov/private/uploads/audio/2020/01/27/200126_1203.mp3"
+
+
+def signed(url, n):
+    return f"{url}?AWSAccessKeyId=KEY&Signature=sig{n}%3D&Expires=17{n}"
+
+
+def media(url, **overrides):
+    value = {
+        "url": url, "entry_kind": "resource", "access": "free", "content_kind": "audio_lesson",
+        "status": "live", "platform": "website", "title": "Eumov lesson",
+    }
+    value.update(overrides)
+    return value
+
+
+def test_signed_media_url_reissued_by_a_crawl_is_not_queued_again():
+    """The same file under a fresh signature is already ingested, not new."""
+    db = FakeDatabase()
+    db.documents = [{"source_url": signed(EUMOV, 1)}]
+    db.queue = [{"id": "q1", "url": signed(EUMOV, 2), "origin": None}]
+    other = "https://ams3.digitaloceanspaces.com/eumov/private/uploads/audio/2020/03/28/Esalen1.ogg"
+    queued_only = "https://example.com/queued.mp3"
+    db.queue.append({"id": "q2", "url": signed(queued_only, 1), "origin": None})
+
+    report = plan_media_intake(db, [
+        media(signed(EUMOV, 3)), media(signed(queued_only, 4)), media(signed(other, 5)),
+        media(signed(other, 6)),
+    ])
+
+    assert report["eligible"] == 3
+    assert report["already_document"] == 1
+    assert report["already_queued"] == 1
+    assert [entry["url"] for entry in report["pending"]] == [signed(other, 5)]
+
+
+def test_unsigned_query_strings_still_tell_files_apart():
+    db = FakeDatabase()
+    db.documents = [{"source_url": "https://example.com/play.mp3?track=1"}]
+    db.queue = []
+
+    report = plan_media_intake(db, [media("https://example.com/play.mp3?track=2")])
+
+    assert [entry["url"] for entry in report["pending"]] == ["https://example.com/play.mp3?track=2"]
