@@ -116,3 +116,24 @@ class TestFormatTextWithSegments:
         """Should handle missing segments key gracefully."""
         result = analysis_module.format_text_with_segments({})
         assert result == ""
+
+
+class TestLongUnpunctuatedRuns:
+    def test_a_long_run_is_split_at_spaces_without_changing_the_text(self, analysis_module):
+        run = " ".join(f"word{i}" for i in range(600))  # ~4,500 chars, no punctuation
+        text = f"Lie on your back. {run}. Rest."
+        segments = analysis_module.run_pass_0(text)["segments"]
+
+        assert [s["id"] for s in segments] == list(range(1, len(segments) + 1))
+        assert max(len(s["text"]) for s in segments) <= 600
+        assert len(segments) > 10
+        # Joining the pieces gives back the run exactly, and offsets point at
+        # them (segment offsets may include the trailing space, as before).
+        assert " ".join(s["text"] for s in segments) == text
+        for s in segments:
+            assert text[s["start"]:s["end"]].strip() == s["text"]
+
+    def test_ordinary_sentences_are_left_alone(self, analysis_module):
+        text = "Lie on your back. Bend your knees. Rest."
+        segments = analysis_module.run_pass_0(text)["segments"]
+        assert [s["text"] for s in segments] == ["Lie on your back.", "Bend your knees.", "Rest."]

@@ -5,6 +5,31 @@ Rule-based segmentation of lesson text into sentence-level chunks.
 
 import re
 
+# Whisper sometimes returns long stretches with no punctuation at all. A
+# segment is the smallest unit a step can own, so one huge segment would be
+# shared by many steps. Segments longer than LONG_SEGMENT_CHARS are broken at
+# spaces into pieces of about SPLIT_TARGET_CHARS.
+LONG_SEGMENT_CHARS = 600
+SPLIT_TARGET_CHARS = 250
+
+
+def _split_long(segment: dict, cleaned: str) -> list[dict]:
+    """Break one over-long segment at spaces; joined with spaces it is unchanged."""
+    text = segment["text"]
+    if len(text) <= LONG_SEGMENT_CHARS:
+        return [segment]
+    raw = cleaned[segment["start"]:segment["end"]]
+    base = segment["start"] + (len(raw) - len(raw.lstrip()))
+    pieces, start = [], 0
+    while len(text) - start > LONG_SEGMENT_CHARS:
+        cut = text.find(" ", start + SPLIT_TARGET_CHARS)
+        if cut < 0 or len(text) - cut < SPLIT_TARGET_CHARS // 2:
+            break
+        pieces.append((start, cut))
+        start = cut + 1
+    pieces.append((start, len(text)))
+    return [{"id": 0, "text": text[a:b], "start": base + a, "end": base + b} for a, b in pieces]
+
 
 def run_pass_0(text: str) -> dict:
     """
@@ -94,6 +119,10 @@ def run_pass_0(text: str) -> dict:
                     "start": last_end,
                     "end": len(cleaned)
                 })
+
+    segments = [piece for segment in segments for piece in _split_long(segment, cleaned)]
+    for number, segment in enumerate(segments, start=1):
+        segment["id"] = number
 
     return {
         "segments": segments,
