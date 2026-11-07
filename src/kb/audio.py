@@ -161,6 +161,45 @@ def split_audio(
     return chunks
 
 
+def is_vbr_mp3(file_path: str) -> bool:
+    """True when an MP3's first frame carries a Xing or VBRI (variable bitrate) header.
+
+    Browsers seek VBR MP3 by byte estimate, so the lesson player's position drifts
+    from the transcript after a seek. LAME marks constant-bitrate files "Info".
+    """
+    with open(file_path, "rb") as f:
+        head = f.read(10)
+        offset = 0
+        if head[:3] == b"ID3" and len(head) == 10:
+            offset = 10 + ((head[6] & 0x7F) << 21 | (head[7] & 0x7F) << 14
+                           | (head[8] & 0x7F) << 7 | (head[9] & 0x7F))
+        f.seek(offset)
+        data = f.read(16384)
+    for i in range(len(data) - 1):
+        if data[i] == 0xFF and data[i + 1] & 0xE0 == 0xE0:
+            first_frame = data[i:i + 200]
+            return b"Xing" in first_frame or b"VBRI" in first_frame
+    return False
+
+
+def ensure_cbr_mp3(file_path: str, bitrate: str = "192k") -> str:
+    """Return a constant-bitrate MP3 of the file, re-encoding only when needed.
+
+    A non-MP3 file, or a VBR MP3, is re-encoded beside the original
+    (`<stem>.cbr.mp3`); a CBR MP3 is returned as is.
+    """
+    path = Path(file_path)
+    if path.suffix.lower() == ".mp3" and not is_vbr_mp3(str(path)):
+        return str(path)
+    output = path.with_name(f"{path.stem}.cbr.mp3")
+    subprocess.run(
+        [_find_ffmpeg(), "-v", "error", "-y", "-i", str(path), "-map", "0:a:0",
+         "-c:a", "libmp3lame", "-b:a", bitrate, str(output)],
+        capture_output=True, check=True,
+    )
+    return str(output)
+
+
 def needs_chunking(file_path: str, max_size_bytes: int = DEFAULT_MAX_SIZE_BYTES) -> bool:
     """Check if a file needs to be chunked based on size."""
     size = Path(file_path).stat().st_size

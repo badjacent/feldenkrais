@@ -19,6 +19,7 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit
 
+from audio import ensure_cbr_mp3
 from config import Config
 from database import Database
 from media_identity import media_identity
@@ -111,7 +112,9 @@ def _extract_audio(url: str, output: Path) -> tuple[Path, dict]:
         "postprocessors": [{
             "key": "FFmpegExtractAudio",
             "preferredcodec": "mp3",
-            "preferredquality": "0",
+            # A bitrate, not "0": "0" means -q:a 0, which writes VBR, and the
+            # lesson player cannot seek VBR MP3 accurately.
+            "preferredquality": "192",
         }],
         "quiet": True,
         "no_warnings": True,
@@ -130,7 +133,9 @@ def _extract_audio(url: str, output: Path) -> tuple[Path, dict]:
         if len(matches) != 1:
             raise FileNotFoundError("yt-dlp did not produce exactly one audio file")
         result = matches[0]
-    return result, info
+    # A source that is already MP3 is copied, not re-encoded, so a publisher's
+    # VBR file would come through unchanged.
+    return Path(ensure_cbr_mp3(str(result))), info
 
 
 def _claim(db: Database, limit: int) -> list[dict]:
