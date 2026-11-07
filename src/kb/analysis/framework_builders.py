@@ -4,6 +4,8 @@ Contains _derive_key, build_classification_table, build_pass_a_schema,
 ROUTER_SYSTEM_PROMPT, and helper derivation functions.
 """
 
+from .core import _resolve_data_path
+
 import json
 import sys
 
@@ -37,7 +39,7 @@ def build_classification_table(framework_version: str | None = None) -> str:
 def build_pass_a_schema(framework_version: str | None = None) -> dict:
     """Build Pass A schema with dynamic classification properties from registry."""
     _pkg = sys.modules["analysis"]
-    schema = json.loads((_state["_data_dir"] / "pass_a.schema.json").read_text())
+    schema = json.loads((_resolve_data_path("pass_a.schema.json")).read_text())
     active = _pkg.get_active_frameworks_config(framework_version)
     cls_props = {}
     cls_required = []

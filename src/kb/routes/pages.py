@@ -1,6 +1,6 @@
 """Landing page route."""
 
-from pathlib import Path
+from resources import resolve_resource
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
@@ -36,10 +36,7 @@ async def landing_page(request: Request):
     """Landing page: search home, plus dev tools for admin or local dev."""
     # Interiority subdomain serves the research booklet
     if _web._is_interiority_site(request):
-        candidates = [
-            Path(__file__).parent.parent / "docs" / "interiority" / "index.html",
-            Path(__file__).parent.parent.parent.parent / "docs" / "interiority" / "index.html",
-        ]
+        candidates = [resolve_resource(_web.DATA_DIR, "interiority/index.html")]
         for p in candidates:
             if p.exists():
                 return HTMLResponse(p.read_text(encoding="utf-8"))
@@ -70,7 +67,9 @@ async def landing_page(request: Request):
         if _web._book_available:
             links.append('<li><a href="/pipeline">Pipeline Dashboard</a></li>')
     if user and user.get("tier") == "admin":
-        links.append('<li><a href="/admin/nyc">NYC Directory (crawler admin)</a></li>')
+        import html
+        for label, url in _web.app.state.extension_links:
+            links.append(f'<li><a href="{html.escape(url, quote=True)}">{html.escape(label)}</a></li>')
     dev_section = f"""<h2 style="margin-top:40px; border-top:1px solid #e0e0e0; padding-top:20px;">Dev Tools</h2>
 <ul style="list-style:none; padding:0;">{"".join(links)}</ul>"""
     return HTMLResponse(_web.build_search_home_html(extra_html=dev_section, user=user, superuser_active=su_active, get_lessons_fn=_web.get_lesson_listing, include_unanalyzed=show_unanalyzed))

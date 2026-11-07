@@ -1,5 +1,7 @@
 """Transcript-direct, public-safe lesson display cards."""
 
+from .core import _resolve_data_path
+
 import json
 import re
 import sys
@@ -23,7 +25,7 @@ APPLICATION_IDS = {
 
 
 def _data_path(name: str) -> Path:
-    configured = _state["_data_dir"] / name
+    configured = _resolve_data_path(name)
     return configured if configured.exists() else Path(__file__).resolve().parents[3] / "data" / name
 
 

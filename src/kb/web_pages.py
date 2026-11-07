@@ -399,15 +399,13 @@ def build_lesson_page_html(document_id: str, user: dict | None = None, search_mo
     Every page reads one model profile's analysis: the one named by
     ``?profile=``, else ``default_profile`` (the canonical profile when it has
     analyzed the lesson, otherwise one that has). A selector lists every model.
-    ``pipeline_visible`` (local deployments only) adds the Pipeline tab and the
-    model comparison link.
+    ``pipeline_visible`` (local deployments only) adds the Pipeline tab.
     """
     esc_id = html_mod.escape(document_id)
-    compare_link = f' <a href="/lesson/{esc_id}/compare">Compare models</a>' if pipeline_visible else ""
     profile_bar = (
         '<div class="source-line" id="profile-bar" style="display:none;">'
         'Model: <select id="profile-select" onchange="switchProfile(this.value)"></select>'
-        f'{compare_link}</div>'
+        '</div>'
     )
     default_profile_js = json.dumps(default_profile or "")
     pipeline_tab = (

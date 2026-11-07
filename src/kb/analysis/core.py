@@ -13,6 +13,8 @@ import json
 import sys
 from pathlib import Path
 
+from resources import resolve_resource
+
 from cache_helpers import get_cache_key, load_cached_analysis, save_cached_analysis
 from llm_config import DEFAULT_LLM
 
@@ -62,18 +64,8 @@ def init(db, data_dir: Path, get_llm_fn):
 
 
 def _resolve_data_path(relative_path: str) -> Path:
-    """Resolve a data file path, checking private/data/ submodule first, then public data/.
-
-    This supports the public/private repo split where some data files live in
-    the private submodule at <project_root>/private/data/.
-    """
-    data_dir = _state["_data_dir"]
-    # Check private submodule data dir first
-    private_data = data_dir.parent / "private" / "data"
-    candidate = private_data / relative_path
-    if candidate.exists():
-        return candidate
-    return data_dir / relative_path
+    """Resolve a configured resource, then fall back to built-in data."""
+    return resolve_resource(_state["_data_dir"], relative_path)
 
 
 def _resolve_prompts_dir(version: str | None = None) -> tuple[Path, str]:

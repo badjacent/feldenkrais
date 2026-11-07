@@ -1,0 +1,18 @@
+services:
+  database:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: analyzer
+      POSTGRES_PASSWORD: local-example-only
+      POSTGRES_DB: analyzer
+    ports:
+      - "127.0.0.1:55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U analyzer -d analyzer"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - example-database:/var/lib/postgresql/data
+volumes:
+  example-database:

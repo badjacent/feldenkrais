@@ -185,7 +185,7 @@ def test_lesson_without_progress_opens_on_the_canonical_model(mock_db):
     assert mock_db.default_profile_for_document("doc-1") == "gemini-3-flash"
 
 
-def test_every_lesson_page_has_the_model_selector_but_only_local_pages_compare():
+def test_every_lesson_page_has_the_model_selector_and_local_pipeline():
     from kb.web_pages import build_lesson_page_html
 
     production = build_lesson_page_html("doc-1", default_profile="astra-low")
@@ -196,7 +196,8 @@ def test_every_lesson_page_has_the_model_selector_but_only_local_pages_compare()
         assert "|| \"astra-low\";" in page  # the server's choice is the default
     assert "Compare models" not in production
     assert "switchTab('pipeline')" not in production
-    assert "Compare models" in local
+    assert "Compare models" not in local
+    assert "switchTab('pipeline')" in local
 
 
 def test_lesson_context_explains_itself_and_keeps_the_transcript():

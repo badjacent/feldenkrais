@@ -1,0 +1,13 @@
+# Exact false positives: a public lesson slug, synthetic S3 object path,
+# and a framework classification key. Default secret rules stay enabled.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Reviewed non-credential identifiers"
+regexTarget = "secret"
+regexes = [
+    '''^conversations/inbox/my$''',
+    '''^tcf\-10\-year\-celebration$''',
+    '''^vl4_proximal_distal$''',
+]

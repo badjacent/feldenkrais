@@ -1,5 +1,7 @@
 """Pass 0b Spatial v3: Step-level position sequence extraction."""
 
+from .core import _resolve_data_path
+
 import json
 import sys
 
@@ -64,8 +66,8 @@ def _format_input_for_spatial_v3(pass_a_result: dict) -> str:
 
 def load_pass_0b_spatial_v3() -> tuple[str, dict]:
     """Load spatial v3 prompt and schema."""
-    prompt_path = _state["_data_dir"] / "pass_0b_spatial_v3.md"
-    schema_path = _state["_data_dir"] / "pass_0b_spatial_v3.schema.json"
+    prompt_path = _resolve_data_path("pass_0b_spatial_v3.md")
+    schema_path = _resolve_data_path("pass_0b_spatial_v3.schema.json")
     prompt = prompt_path.read_text() if prompt_path.exists() else ""
     schema = json.loads(schema_path.read_text()) if schema_path.exists() else {}
     return prompt, schema

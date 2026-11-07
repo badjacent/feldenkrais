@@ -1,220 +1,55 @@
-# Feldenkrais Knowledge Base
+# Feldenkrais lesson analyzer
 
-A system for scraping, transcribing, analyzing, and publishing Feldenkrais lesson content as structured booklets.
+A personal application for organizing lesson material, transcribing audio,
+analyzing lesson structure, searching a collection, and discussing it through
+an LLM-backed chat interface. It is intended for an individual working with
+material they have permission to use. The Atlas website is a separate project;
+this application supplies its versioned analysis export interface.
 
-## Architecture
+Built with Python, FastAPI, PostgreSQL/pgvector, and optional model-provider APIs.
+The public example is entirely synthetic. No lesson collection, user database,
+provider credential, or recording is included.
 
-```
-                                    +------------------+
-                                    |   Web Page       |
-                                    +--------+---------+
-                                             |
-                                             v
-+------------------+              +----------+---------+
-|  Manual Invoke   | -----------> |  Scraper Lambda    |
-+------------------+              |  - Discovers media |
-                                  |  - Downloads files |
-                                  +----------+---------+
-                                             |
-                                             v
-                                  +----------+---------+
-                                  |  S3: staging/      |
-                                  |  - media files     |
-                                  |  - sidecar JSON    |
-                                  +----------+---------+
-                                             |
-                                             | (S3 Event Trigger)
-                                             v
-                                  +----------+---------+
-                                  |  Loader Lambda     |
-                                  |  - Validates files |
-                                  |  - Creates records |
-                                  |  - Moves to archive|
-                                  +----------+---------+
-                                             |
-                            +----------------+----------------+
-                            |                                 |
-                            v                                 v
-                 +----------+---------+            +----------+---------+
-                 |  S3: archive/      |            |  S3: db/           |
-                 |  - UUID-named files|            |  - knowledge.db    |
-                 +--------------------+            +----------+---------+
-                                                              |
-                                                              |
-+------------------+                               +----------+---------+
-|  EventBridge     | ----------------------------> | Transcription      |
-|  (every minute)  |                               | Lambda             |
-+------------------+                               |  - Chunks audio    |
-                                                   |  - Calls Groq API  |
-                                                   |  - Saves to DB     |
-                                                   +--------------------+
+## Run locally
+
+Requires Python 3.11+ (3.12 recommended), uv, and Docker Compose.
+
+```sh
+uv sync --extra web --extra worker
+cp .env.example .env
+docker compose up -d --wait
+uv run python scripts/seed_example.py --database-url postgresql://analyzer:local-example-only@127.0.0.1:55432/analyzer
+uv run --extra web uvicorn web:app --app-dir src/kb --host 127.0.0.1 --port 8000
 ```
 
-## Lambdas
+Open http://127.0.0.1:8000 and the `/lesson/...` link printed by the seed command.
+The original one-second test tone is at http://127.0.0.1:8000/examples/sample.wav;
+it is a playback fixture, not a lesson recording. Saved synthetic analysis lets
+you inspect the lesson steps without a model call.
 
-| Lambda | Trigger | Description |
-|--------|---------|-------------|
-| `feldenkrais-scraper-{env}` | Manual | Scrapes URLs for media, stages to S3 |
-| `feldenkrais-loader-{env}` | S3 staging/ upload | Processes files, creates DB records |
-| `feldenkrais-transcription-{env}` | Scheduled (1 min) | Transcribes audio using Groq Whisper |
+Seeding is idempotent and restricted to a local database. Browsing the example
+and its transcript needs no AWS or model credentials. Generating new analyses,
+embeddings or chat responses requires a configured provider; audio ingestion
+also requires storage and transcription configuration. No live jobs run during
+setup. The built-in Observer framework is a minimal original example.
 
-## Usage
+With an existing local PostgreSQL installation, enable pgvector and use its
+connection URL instead of Docker. The app initializes its schema on startup.
+Use a dedicated development database. Stop the example with `docker compose down`;
+add `--volumes` only when you want to delete that example database.
 
-### Scrape a page
+## Tests and packaging
 
-```bash
-# Dry run (preview without downloading)
-aws lambda invoke --function-name feldenkrais-scraper-prod \
-  --payload '{"url":"https://example.com/page","dry_run":true}' \
-  --cli-binary-format raw-in-base64-out /tmp/result.json
-
-# Actually scrape
-aws lambda invoke --function-name feldenkrais-scraper-prod \
-  --payload '{"url":"https://example.com/page"}' \
-  --cli-binary-format raw-in-base64-out /tmp/result.json
+```sh
+uv run --extra web --extra worker pytest tests/unit
+bash terraform/build_web_lambda.sh
 ```
 
-### Manually trigger transcription
+Tests mock external services. Additional tests under `tests/` include integration
+checks with their own prerequisites. The Lambda builder creates a local package
+and performs no deployment. Public CI runs tests and verifies the package.
 
-```bash
-aws lambda invoke --function-name feldenkrais-transcription-prod \
-  --payload '{"action":"transcribe_pending"}' \
-  --cli-binary-format raw-in-base64-out /tmp/result.json
-```
-
-### Check logs
-
-```bash
-aws logs tail /aws/lambda/feldenkrais-transcription-prod --since 10m
-```
-
-## Servers
-
-This project runs the analyzer on three tiers, and it is not the only project
-with servers on the Mac mini. The inventory of every long-running server across
-products lives at `~/github/servers`, which is deliberately local to this
-machine and is in no repository and on no remote. Nothing here depends on it.
-Check it before claiming a port, since `lsof` on the mini only reports the
-current account's processes.
-
-| Tier | Where | Command |
-|---|---|---|
-| development | this laptop, autoreload | `ops/dev/run-analyzer.sh` |
-| candidate | the mini, tailnet only | `ops/promote-candidate.sh` |
-| production | Lambda, aionyourside.net | `terraform apply`, below |
-
-See `ops/mini/README.md` for the mini layout and the promote gate, and
-`~/github/servers/status.sh` to probe everything that should be up.
-
-## Deployment
-
-### Prerequisites
-
-- AWS CLI configured
-- Terraform >= 1.0
-- Python 3.12
-- ffmpeg Lambda layer deployed
-
-### Deploy
-
-```bash
-cd terraform
-
-# Build Python dependencies layer
-./build_deps_layer.sh
-
-# Deploy (first time - creates ffmpeg layer via serverless repo)
-terraform apply \
-  -var="environment=prod" \
-  -var="groq_api_key=YOUR_KEY" \
-  -var="ffmpeg_layer_arn=arn:aws:lambda:us-east-1:ACCOUNT:layer:ffmpeg:1"
-```
-
-## The Book
-
-A Feldenkrais lesson is typically an hour of spoken movement instructions. The goal of this system is to turn each lesson into a rich, multi-perspective *experience* — not just a transcript, but a guide that helps the reader understand what the lesson is doing to them and why.
-
-Each lesson is analyzed through five "Vital Lenses" (VLs), each representing a different point of view on the same movement experience:
-
-| Lens | Name | Sees |
-|------|------|------|
-| VL-1 | The Riser | Weight, gravity, and the ground's upward push through the skeleton |
-| VL-2 | The Cartographer | Body mapping — what regions are detailed vs. blurred |
-| VL-3 | The Tuner | Signal quality between intention and action |
-| VL-4 | The Engine | Power flow from center to periphery through the kinetic chain |
-| VL-5 | The Soft Front | The state of the front body — open or defended, armored or soft |
-
-The five analyses are synthesized and compiled into a **booklet** for each lesson. Booklets are then assembled into the **book**.
-
-## Publishing Pipeline
-
-The publishing pipeline analyzes a transcribed lesson through all five VL frameworks and renders a booklet.
-
-```
-lesson transcription
-        |
-        v
-   Analysis A
-   (segmentation, classification, SPIFFER-Q decomposition)
-        |
-        v
-   Analysis B  ×5 in parallel
-   (one per VL framework: somatic narrative + analytical table)
-        |
-        v
-   Cross-Query Enrichment  ×5 in parallel
-   (each VL reviews peer analyses, asks focused follow-ups)
-        |
-        v
-   VL Synthesis
-   (merges all 5 enriched analyses)
-        |
-        v
-   Booklet Template
-   (renders HTML with unfilled query blocks using primary VL)
-        |
-        v
-   Booklet
-   (LLM fills query blocks via QueryAgent)
-        |
-        v
-   Book Assembly
-```
-
-### Key files
-
-| File | Role |
-|------|------|
-| `src/kb/pipeline_graph.py` | Pipeline DAG definition (source nodes, transforms, dependencies) |
-| `src/kb/pipeline.py` | Pipeline runner (hash-based change detection, scheduling) |
-| `src/kb/web.py` | Analysis passes, booklet rendering, web UI |
-| `src/kb/query_agent.py` | QueryAgent that fills LLM query blocks in booklet HTML |
-| `src/kb/cross_query.py` | Cross-query enrichment pass |
-| `data/frameworks/v1/` | VL framework prompts (`vl1.md`–`vl5.md`) and metadata (`frameworks.json`) |
-| `data/pass_a.schema.json` | JSON schema for Analysis A output |
-| `data/pass_b.schema.json` | JSON schema for Analysis B output |
-
-### Running the pipeline
-
-```bash
-.venv/bin/python src/kb/pipeline.py
-```
-
-The pipeline uses hash-based change detection — nodes only re-run when their inputs change.
-
-## Database
-
-Neon PostgreSQL (connection string in `.env` as `DATABASE_URL`). Key tables:
-
-- **document**: Media files with metadata (title, source_url, s3_key)
-- **analysis**: Transcriptions linked to documents
-- **transcription_job**: Tracks async transcription jobs
-- **cache**: Pipeline results, booklet HTML, and pipeline coordination state
-
-## Audio Processing
-
-Large audio files (>20MB) are automatically:
-1. Downloaded from S3
-2. Split into 20-minute chunks using ffmpeg
-3. Transcribed chunk by chunk via Groq Whisper API
-4. Reassembled with adjusted timestamps
+See [repository layout](docs/REPO_LAYOUT.md) for resource overrides and trusted
+extension hooks. See [roadmap](ROADMAP.md) for proposed application work.
+Do not add personal data or third-party lesson content to fixtures. MIT license;
+see [LICENSE](LICENSE).

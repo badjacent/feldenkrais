@@ -8,6 +8,8 @@ registry involved; the cache key depends only on the prompt version.
 Prompt/schema: data/axes.md + data/axes.schema.json (house pairing).
 """
 
+from .core import _resolve_data_path
+
 import json
 import sys
 import time
@@ -32,8 +34,8 @@ AXIS_VALUES = {
 
 def load_axes() -> tuple[str, dict]:
     """Load the movement-axes prompt template and schema."""
-    prompt_path = _state["_data_dir"] / "axes.md"
-    schema_path = _state["_data_dir"] / "axes.schema.json"
+    prompt_path = _resolve_data_path("axes.md")
+    schema_path = _resolve_data_path("axes.schema.json")
     prompt = prompt_path.read_text() if prompt_path.exists() else ""
     schema = json.loads(schema_path.read_text()) if schema_path.exists() else {}
     return prompt, schema
@@ -62,8 +64,8 @@ def run_axes_lite(
     if cached:
         return {**cached, "cached": True}
 
-    prompt_path = _state["_data_dir"] / "axes_lite.md"
-    schema_path = _state["_data_dir"] / "axes_lite.schema.json"
+    prompt_path = _resolve_data_path("axes_lite.md")
+    schema_path = _resolve_data_path("axes_lite.schema.json")
     prompt = prompt_path.read_text().format(lesson_text=lesson_text)
     schema = json.loads(schema_path.read_text())
     system_prompt = (

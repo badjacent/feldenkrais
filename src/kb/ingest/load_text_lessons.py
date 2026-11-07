@@ -6,9 +6,9 @@ Splits on lesson boundaries, preserves full text, uses LLM for brief summaries o
 Stores full text in extras JSONB, generates embeddings.
 
 Usage:
-    .venv/bin/python src/kb/ingest/load_text_lessons.py private/data/siegel_yaron/doc.txt \
+    .venv/bin/python src/kb/ingest/load_text_lessons.py /path/to/lessons.txt \
         --source-id 139 --dry-run
-    .venv/bin/python src/kb/ingest/load_text_lessons.py private/data/siegel_yaron/doc.txt \
+    .venv/bin/python src/kb/ingest/load_text_lessons.py /path/to/lessons.txt \
         --source-id 139 --embed
 """
 

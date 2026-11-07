@@ -39,6 +39,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from llm import LLM
 from storage import Storage
+from resources import resolve_resource
 
 # ── Subdomain detection ───────────────────────────────────────────────
 SEARCH_DOMAIN = os.environ.get("SEARCH_DOMAIN", "")
@@ -302,7 +303,13 @@ if IS_LAMBDA:
 else:
     # Local development
     DATA_DIR = Path(__file__).parent.parent.parent / "data"
-LESSONS_DIR = DATA_DIR / "lessons"
+LESSONS_DIR = resolve_resource(DATA_DIR, "lessons")
+
+# Only the bundled, original examples are exposed here; resource overrides do
+# not affect this mount. Deployments need not package the examples directory.
+if (DATA_DIR / "examples").is_dir():
+    from fastapi.staticfiles import StaticFiles
+    app.mount("/examples", StaticFiles(directory=DATA_DIR / "examples"), name="examples")
 
 
 # ── Extracted modules ──────────────────────────────────────────────────────
@@ -912,7 +919,6 @@ from routes.admin import router as admin_router
 from routes.pages import router as pages_router
 from routes.lesson_data import router as lesson_data_router
 from routes.atlas_pages import router as atlas_pages_router
-from routes.nyc_admin import router as nyc_admin_router
 from routes.conversations import router as conversations_router
 
 app.include_router(auth_router)
@@ -924,36 +930,19 @@ app.include_router(admin_router)
 app.include_router(pages_router)
 app.include_router(lesson_data_router)
 app.include_router(atlas_pages_router)
-app.include_router(nyc_admin_router)
 app.include_router(conversations_router)
 
 
-# ── Conditional book router mount ─────────────────────────────────────
-# The book pipeline is dormant — its code lives in the private submodule
-# at private/products/book/src/. It mounts only when explicitly enabled
-# via BOOK_PIPELINE_ENABLED=1 AND the private submodule is present.
-# Production Lambda has neither, so the book routes are never exposed there.
+# Optional web components are registered by trusted deployment configuration.
+# A configured component that cannot load is a startup error.
+import importlib
 
 _book_available = False
-_project_root = Path(__file__).parent.parent.parent
-_private_data = _project_root / "private" / "data"
-_book_src = _project_root / "private" / "products" / "book" / "src"
-if (
-    os.environ.get("BOOK_PIPELINE_ENABLED") == "1"
-    and _private_data.exists()
-    and _book_src.exists()
-):
-    sys.path.insert(0, str(_book_src))
-    try:
-        from web_book import create_book_router
-        _book_router = create_book_router(db=_db, data_dir=_private_data)
-        app.include_router(_book_router)
-        # Expose the book pipeline section builder for build_pipeline_html()
-        from web_book import _build_book_pipeline_section
-        app.state.build_book_pipeline_section = _build_book_pipeline_section
-        _book_available = True
-    except ImportError:
-        pass
+app.state.extension_links = []
+for extension in filter(None, os.environ.get("KB_WEB_EXTENSIONS", "").split(",")):
+    module_name, function_name = extension.strip().split(":", 1)
+    register = getattr(importlib.import_module(module_name), function_name)
+    register(sys.modules[__name__])
 
 
 # Lambda handler
@@ -969,15 +958,11 @@ def handler(event, context):
     1. HTTP requests via API Gateway (normal web traffic)
     2. Async invocations for background job processing
     """
-    # Check if this is an async job processing invocation
-    if isinstance(event, dict) and event.get("action") == "process" and event.get("job_id"):
-        job_id = event["job_id"]
-        try:
-            from web_book import process_job
-            process_job(job_id)
-        except ImportError:
-            return {"statusCode": 501, "body": json.dumps({"error": "web_book not available"})}
-        return {"statusCode": 200, "body": json.dumps({"processed": job_id})}
+    # Optional components can claim non-HTTP events at deployment time.
+    for event_handler in getattr(app.state, "event_handlers", []):
+        result = event_handler(event, context)
+        if result is not None:
+            return result
 
     # Conversations dropped in the bucket's conversations/inbox/
     import conversation_import

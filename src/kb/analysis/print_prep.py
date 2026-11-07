@@ -10,6 +10,8 @@ assigned to its own step, stored as segment ID and character offsets. The full
 transcript is never regenerated; renderers rebuild it from the segments.
 """
 
+from .core import _resolve_data_path
+
 import hashlib
 import json
 import sys
@@ -35,8 +37,8 @@ class PrintPrepError(ValueError):
 
 def load_print_prep() -> tuple[str, dict]:
     """Load the print preparation prompt and schema."""
-    prompt_path = _state["_data_dir"] / "print_prep.md"
-    schema_path = _state["_data_dir"] / "print_prep.schema.json"
+    prompt_path = _resolve_data_path("print_prep.md")
+    schema_path = _resolve_data_path("print_prep.schema.json")
     return prompt_path.read_text(), json.loads(schema_path.read_text())
 
 

@@ -21,6 +21,7 @@ import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
+from resources import resolve_resource
 
 
 # Sources whose lessons are approved for public Atlas use. Owner-editable.
@@ -45,7 +46,7 @@ _NON_ATM = re.compile(r"\btalk\b|discussion|interview", re.I)
 
 def _feldenkrais_project_public_urls() -> list[str]:
     """Return the owner-verified free Feldenkrais Project lesson allowlist."""
-    path = _REPO / "data" / "fp_free_lessons.json"
+    path = resolve_resource(_REPO / "data", "fp_free_lessons.json")
     return [row["url"] for row in json.loads(path.read_text())]
 
 
@@ -53,11 +54,8 @@ def _load_registry() -> dict:
     # Imported lazily: routes/atlas_pages.py pulls this module in at web start-up,
     # and PyYAML is not in the web Lambda layer.
     import yaml
-    for base in (_REPO / "private" / "data", _REPO / "data"):
-        p = base / "motifs_registry.yaml"
-        if p.exists():
-            return yaml.safe_load(p.read_text())
-    raise FileNotFoundError("motifs_registry.yaml not found")
+    path = resolve_resource(_REPO / "data", "motifs_registry.yaml")
+    return yaml.safe_load(path.read_text())
 
 
 def _prompt_versions() -> tuple[str, str]:

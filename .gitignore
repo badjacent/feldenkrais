@@ -130,3 +130,16 @@ data/model_eval/
 
 # Scratch and generated output belong in ~/feldenkrais-files (docs/REPO_LAYOUT.md)
 tmp/
+
+# Local credentials and runtime artifacts
+.env.*
+!.env.example
+!*.env.example
+*.pem
+*.key
+*cookies*.txt
+.venv-*/
+publication-audit/
+
+# Original redistributable tone used by the public example
+!data/examples/sample.wav

@@ -24,7 +24,6 @@ from .external_lessons import ExternalLessonsMixin
 from .lesson_views import LessonViewsMixin
 from .renditions import RenditionsMixin
 from .similarity_profiles import SimilarityProfilesMixin
-from .nyc import NycAdminMixin
 
 
 class Database(
@@ -48,7 +47,6 @@ class Database(
     LessonViewsMixin,
     RenditionsMixin,
     SimilarityProfilesMixin,
-    NycAdminMixin,
 ):
     """PostgreSQL database wrapper for the knowledge base.
 
@@ -59,3 +57,13 @@ class Database(
 
 
 __all__ = ["Database", "SCHEMA", "INDEXES", "SEED_DATA"]
+
+# Deployment-selected mixins provide optional domain-specific database methods.
+# These module names come exclusively from trusted process configuration.
+import importlib
+import os
+
+for _name in filter(None, os.environ.get("KB_DATABASE_MIXINS", "").split(",")):
+    _module, _attribute = _name.strip().split(":", 1)
+    _mixin = getattr(importlib.import_module(_module), _attribute)
+    Database = type("Database", (_mixin, Database), {"__module__": __name__})

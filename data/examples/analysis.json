@@ -1,0 +1,62 @@
+{
+  "_fixture": true,
+  "provenance": "Original synthetic analysis, not a model result. MIT licensed.",
+  "groups": [
+    {
+      "group_number": 1,
+      "label": "Example sequence",
+      "description": "Fictional pause and comparison.",
+      "steps": [
+        1,
+        2
+      ]
+    }
+  ],
+  "steps": [
+    {
+      "step_number": 1,
+      "group_number": 1,
+      "instruction": "Imagine a hand movement, then pause.",
+      "segments": [
+        2
+      ],
+      "tags": []
+    },
+    {
+      "step_number": 2,
+      "group_number": 1,
+      "instruction": "Compare the beginning and the end.",
+      "segments": [
+        3
+      ],
+      "tags": []
+    }
+  ],
+  "classifications": {
+    "observer_observer": 1.0
+  },
+  "primary_framework": "observer",
+  "secondary_frameworks": [],
+  "pass_0": {
+    "segments": [
+      {
+        "id": 1,
+        "text": "This is fictional software test content, not a recorded lesson.",
+        "time_start": 0.0,
+        "time_end": 10.0
+      },
+      {
+        "id": 2,
+        "text": "Imagine a small movement of one hand. Pause.",
+        "time_start": 10.0,
+        "time_end": 20.0
+      },
+      {
+        "id": 3,
+        "text": "Compare the beginning and the end. The example ends here.",
+        "time_start": 20.0,
+        "time_end": 30.0
+      }
+    ]
+  }
+}

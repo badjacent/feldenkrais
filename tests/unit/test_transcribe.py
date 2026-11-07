@@ -6,6 +6,8 @@ Tests transcription logic with mocked Groq API.
 
 import json
 from unittest.mock import MagicMock, patch
+from pathlib import Path
+from audio import AudioChunk
 
 import pytest
 
@@ -63,6 +65,8 @@ class TestTranscriptionService:
         db = MagicMock()
         db.get_untranscribed_documents.return_value = []
         db.get_document.return_value = None
+        db.get_analysis.return_value = None
+        db.create_transcription_job.return_value = "job-1"
         db.get_failed_transcription_job.return_value = None
         return db
 
@@ -71,6 +75,7 @@ class TestTranscriptionService:
         """Create a mock storage."""
         storage = MagicMock()
         storage.generate_presigned_url.return_value = "https://presigned.url/audio.mp3"
+        storage.download_file.side_effect = lambda key, path: Path(path).write_bytes(b"synthetic audio")
         return storage
 
     @pytest.fixture
@@ -81,12 +86,12 @@ class TestTranscriptionService:
     @pytest.fixture
     def service(self, mock_db, mock_storage, mock_groq):
         """Create a TranscriptionService with mocks."""
-        return TranscriptionService(
-            db=mock_db,
-            storage=mock_storage,
-            groq_client=mock_groq,
-            config=TranscriptionConfig(),
-        )
+        with patch("ingest.transcribe.prepare_audio_for_transcription",
+                   side_effect=lambda path, **kwargs: [AudioChunk(path, 0, 0.0, 15)]):
+            yield TranscriptionService(
+                db=mock_db, storage=mock_storage, groq_client=mock_groq,
+                config=TranscriptionConfig(),
+            )
 
     def test_get_documents_to_transcribe_empty(self, service, mock_db):
         mock_db.get_untranscribed_documents.return_value = []
@@ -164,9 +169,10 @@ class TestTranscriptionService:
         batch_id = service.create_batch()
 
         assert batch_id == "batch-456"
-        # Should update existing job, not create new
-        mock_db.update_transcription_job.assert_called_once()
-        mock_db.create_transcription_job.assert_not_called()
+        # Retries claim a new placeholder before processing, then attach the batch.
+        mock_db.create_transcription_job.assert_called_once_with(
+            document_id="doc-1", chunk_index=0, total_chunks=1)
+        mock_db.update_transcription_job.assert_called()
 
     def test_check_batch_status(self, service, mock_groq):
         mock_batch = MagicMock()
@@ -214,7 +220,7 @@ class TestTranscriptionService:
         # Setup output file content
         output_content = MagicMock()
         output_content.text = json.dumps({
-            "custom_id": "doc-1",
+            "custom_id": "job-1",
             "response": {
                 "status_code": 200,
                 "body": {
@@ -224,17 +230,21 @@ class TestTranscriptionService:
                 },
             },
         })
+        output_content.read.return_value = output_content.text.encode()
         mock_groq.files.content.return_value = output_content
 
         # Setup job lookup
         mock_db.get_transcription_jobs_by_batch.return_value = [
-            {"id": "job-1", "document_id": "doc-1"},
+            {"id": "job-1", "document_id": "doc-1", "status": "completed",
+             "total_chunks": 1, "chunk_index": 0, "result_data": {
+                 "text": "Hello world", "segments": [{"start": 0, "end": 1, "text": "Hello world"}],
+             }},
         ]
 
         results = service.process_batch_results("batch-123")
 
-        assert len(results["completed"]) == 1
-        assert results["completed"][0]["document_id"] == "doc-1"
+        assert len(results["documents_completed"]) == 1
+        assert results["documents_completed"][0]["document_id"] == "doc-1"
         mock_db.create_analysis.assert_called_once()
         mock_db.update_transcription_job.assert_called()
 

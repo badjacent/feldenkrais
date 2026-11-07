@@ -4,7 +4,7 @@ Implements docs/DISTINCTIVE_MOTIFS.md. One versioned, cached LLM extraction
 per lesson; assigns only registry motif ids (two lanes: assignments +
 candidate observations). Empty results are valid and expected.
 
-Registry: private/data/motifs_registry.yaml (resolved private-first).
+Registry: motifs_registry.yaml in configured resources.
 Prompt/schema: data/motifs.md + data/motifs.schema.json (house pairing).
 """
 
@@ -28,15 +28,15 @@ _CERTAINTIES = {"clear", "probable", "uncertain"}
 
 def load_motifs() -> tuple[str, dict]:
     """Load the motifs prompt template and schema (house .md/.schema.json pair)."""
-    prompt_path = _state["_data_dir"] / "motifs.md"
-    schema_path = _state["_data_dir"] / "motifs.schema.json"
+    prompt_path = _resolve_data_path("motifs.md")
+    schema_path = _resolve_data_path("motifs.schema.json")
     prompt = prompt_path.read_text() if prompt_path.exists() else ""
     schema = json.loads(schema_path.read_text()) if schema_path.exists() else {}
     return prompt, schema
 
 
 def load_motif_registry() -> dict:
-    """Load the controlled motif registry (private/data first, then data/).
+    """Load the controlled motif registry (configured overrides, then built-in resources).
 
     PyYAML is imported here, not at module scope: the web Lambda's layer does
     not carry it (and does not package the registry either), and a top-level
@@ -95,8 +95,8 @@ def _condensed_block(condensed: dict) -> list[dict]:
 
 def load_motifs_raw() -> tuple[str, dict]:
     """Load the registry-blind raw-motifs prompt template and schema."""
-    prompt_path = _state["_data_dir"] / "motifs_raw.md"
-    schema_path = _state["_data_dir"] / "motifs_raw.schema.json"
+    prompt_path = _resolve_data_path("motifs_raw.md")
+    schema_path = _resolve_data_path("motifs_raw.schema.json")
     prompt = prompt_path.read_text() if prompt_path.exists() else ""
     schema = json.loads(schema_path.read_text()) if schema_path.exists() else {}
     return prompt, schema
@@ -302,12 +302,12 @@ def run_motifs_lite(
     if cached:
         return {**cached, "cached": True}
 
-    prompt = (_state["_data_dir"] / "motifs_lite.md").read_text().format(
+    prompt = (_resolve_data_path("motifs_lite.md")).read_text().format(
         registry_version=registry_version,
         registry_block=_registry_block(established),
         lesson_text=lesson_text,
     )
-    schema = json.loads((_state["_data_dir"] / "motifs_lite.schema.json").read_text())
+    schema = json.loads((_resolve_data_path("motifs_lite.schema.json")).read_text())
     ids = [motif["id"] for motif in established]
     schema["properties"]["assignments"]["items"]["properties"]["motif_id"]["enum"] = ids
     system_prompt = (

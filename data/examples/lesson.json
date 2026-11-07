@@ -1,0 +1,24 @@
+{
+  "title": "Synthetic example: notice, pause, compare",
+  "source_url": "https://example.invalid/synthetic-lesson",
+  "text": "This is fictional software test content, not a recorded lesson. Imagine a small movement of one hand. Pause. Compare the beginning and the end. The example ends here.",
+  "segments": [
+    {
+      "start": 0.0,
+      "end": 10.0,
+      "text": "This is fictional software test content, not a recorded lesson."
+    },
+    {
+      "start": 10.0,
+      "end": 20.0,
+      "text": "Imagine a small movement of one hand. Pause."
+    },
+    {
+      "start": 20.0,
+      "end": 30.0,
+      "text": "Compare the beginning and the end. The example ends here."
+    }
+  ],
+  "language": "en",
+  "provenance": "Original synthetic fixture created for this repository; MIT licensed. No real person, recording, or lesson is represented."
+}

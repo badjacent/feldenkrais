@@ -1,5 +1,7 @@
 """Pass 0b synthesis: segmentation query and condensed card generation."""
 
+from .core import _resolve_data_path
+
 import json
 import sys
 
@@ -132,7 +134,7 @@ def _run_condensed_for_groups(
             for s in all_segs
         )
 
-        segment_template_path = _state["_data_dir"] / "pass_0b_condensed_segment.md"
+        segment_template_path = _resolve_data_path("pass_0b_condensed_segment.md")
         segment_preamble = segment_template_path.read_text() if segment_template_path.exists() else ""
         segment_preamble += (
             f"You are synthesizing **Segment {seg_num}: {seg_theme}**.\n\n"

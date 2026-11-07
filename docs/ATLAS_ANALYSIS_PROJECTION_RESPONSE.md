@@ -49,12 +49,11 @@ this document or the handoff that implied per-publication owner approval.
 
 ## Fixture (build against this today)
 
-`docs/atlas-analysis-projection.sample.json` — a real projection generated
-from cached analysis of the 78 free Feldenkrais Project lessons
-(registry motifs-v5, 67 ATM lessons, 85 motif assignments, ~53 KB). It is
-exactly the shape the published projection will have. Copy it into the Atlas
-repo as a test fixture; do not fetch anything from the main project at
-runtime.
+`docs/atlas-analysis-projection.sample.json` is an original synthetic projection
+with a fictional lesson, example.invalid URL, and placeholder registry hash.
+It illustrates the transport shape without exposing any lesson collection.
+Copy it into the Atlas repo as a test fixture; do not fetch application resources
+at runtime. Production registry hashes are computed from the real registry.
 
 ## Contract amendments (now frozen as schema_version 1)
 

@@ -1,0 +1,30 @@
+name: Application checks
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      database:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: analyzer
+          POSTGRES_PASSWORD: local-example-only
+          POSTGRES_DB: analyzer
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U analyzer -d analyzer"
+          --health-interval 2s --health-timeout 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.12'
+      - run: uv sync --locked --extra web --extra worker
+      - run: uv run pytest tests/unit
+      - run: uv run python scripts/export_requirements.py && git diff --exit-code -- terraform/lambda_requirements.txt terraform/lambda_web_requirements.txt
+      - run: bash terraform/build_web_lambda.sh
+      - run: uv run python scripts/check_web_package.py
+      - run: uv run python scripts/smoke_example.py --database-url postgresql://analyzer:local-example-only@127.0.0.1:55432/analyzer

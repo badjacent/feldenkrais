@@ -22,6 +22,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from resources import resolve_resource
 from database import Database
 from llm import LLM, get_embeddings
 
@@ -31,7 +32,7 @@ PROMPTS_DIR = DATA_DIR / "search_doc_prompts"
 
 def load_prompt(version: int) -> str:
     """Load the search doc prompt for a given version."""
-    path = PROMPTS_DIR / f"v{version}.md"
+    path = resolve_resource(DATA_DIR, f"search_doc_prompts/v{version}.md")
     if not path.exists():
         raise FileNotFoundError(f"Prompt not found: {path}")
     return path.read_text()

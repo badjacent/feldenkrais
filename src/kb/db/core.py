@@ -322,6 +322,13 @@ CREATE TABLE IF NOT EXISTS group_source_access (
     PRIMARY KEY (group_id, source_id)
 );
 
+-- External catalog source registry, also required on a fresh database.
+CREATE TABLE IF NOT EXISTS lesson_source (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    url TEXT
+);
+
 CREATE TABLE IF NOT EXISTS external_lesson (
     id SERIAL PRIMARY KEY,
     lesson_source_id INTEGER REFERENCES lesson_source(id) ON DELETE SET NULL,

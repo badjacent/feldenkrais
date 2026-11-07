@@ -49,7 +49,7 @@ where `transcript` is `Database.get_document_transcription(document_id)` and:
 | Movement axes | `:movement_axes:axes-p2` | registry-independent |
 
 Load the registry with `analysis.load_motif_registry()` (reads
-`private/data/motifs_registry.yaml`, private-first resolution). Registry
+`motifs_registry.yaml`, configured resource resolution). Registry
 fields you need: `version`, and per motif `id`, `label`, `definition`,
 `status` (only `established` are assignable; `merged` stubs like
 `pelvic_clock`/`heel_clock` are never assignable and must be ignored), and

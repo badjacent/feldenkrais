@@ -39,14 +39,15 @@ def analysis_module():
 
 
 class TestResolveDataPath:
-    def test_private_path_preferred(self, tmp_path, analysis_module):
-        """Should check private/data/ first, fall back to data/."""
-        # Set up directory structure: project/private/data/ and project/data/
+    def test_configured_path_preferred(self, tmp_path, analysis_module, monkeypatch):
+        """Should check configured resource directory first, fall back to data/."""
+        # Set up directory structure: project/configured resource directory and project/data/
         project = tmp_path / "project"
         data_dir = project / "data"
         data_dir.mkdir(parents=True)
-        private_data = project / "private" / "data"
+        private_data = tmp_path / "resources"
         private_data.mkdir(parents=True)
+        monkeypatch.setenv("KB_RESOURCE_DIRS", str(private_data))
 
         # Create file in both locations
         (data_dir / "test.md").write_text("public")

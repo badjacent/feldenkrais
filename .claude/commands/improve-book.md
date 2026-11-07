@@ -1,1 +1,0 @@
-../../private/ops/commands/improve-book.md

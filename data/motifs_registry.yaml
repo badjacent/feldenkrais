@@ -1,0 +1,13 @@
+# Original minimal vocabulary for the synthetic example; MIT licensed.
+registry_version: example-v1
+motifs:
+  - id: example_pause_compare
+    label: Pause and compare
+    definition: An explicit pause followed by comparing observations.
+    status: established
+    public: true
+    aliases: []
+    include_when:
+      - The text explicitly calls for a pause and a comparison.
+    exclude_when:
+      - Only one of these actions is mentioned.

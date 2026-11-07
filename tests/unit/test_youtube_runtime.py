@@ -25,10 +25,10 @@ def test_youtube_dl_runtime_options_prefers_deno(monkeypatch):
 
 
 def test_youtube_dl_session_options(monkeypatch):
-    monkeypatch.setenv("YOUTUBE_COOKIES_PATH", "/private/cookies.txt")
+    monkeypatch.setenv("YOUTUBE_COOKIES_PATH", "/tmp/example/cookies.txt")
     monkeypatch.setenv("YOUTUBE_PLAYER_CLIENT", "web_safari")
 
     assert youtube._youtube_dl_session_options() == {
-        "cookiefile": "/private/cookies.txt",
+        "cookiefile": "/tmp/example/cookies.txt",
         "extractor_args": {"youtube": {"player_client": ["web_safari"]}},
     }
