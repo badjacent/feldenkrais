@@ -234,7 +234,7 @@ async def lesson_print_docx(request: Request, document_id: str):
         return JSONResponse({"error": f"No decomposition for this lesson under {profile_key}",
                              "needs": ["decompose"]}, status_code=404)
     try:
-        # Imported here: python-docx is installed on the Mini, not in the web Lambda layer.
+        # Imported lazily so deployments without the web extra can still load other routes.
         from print_docx import IncompleteTranscriptError, build_annotated_transcript
     except ImportError:
         return JSONResponse({"error": "Word export is not available on this deployment"},
